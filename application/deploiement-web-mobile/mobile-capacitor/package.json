@@ -1,0 +1,22 @@
+{
+  "name": "immopilot-mobile",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Applications Android et iPhone d'ImmoPilot (Capacitor). Elles affichent le site ImmoPilot : mêmes comptes, mêmes données que la version web.",
+  "scripts": {
+    "sync": "cap sync",
+    "android": "cap open android",
+    "ios": "cap open ios",
+    "icons": "capacitor-assets generate --iconBackgroundColor #13233d --splashBackgroundColor #13233d"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "8.5.3"
+  },
+  "engines": { "node": ">=22" }
+}

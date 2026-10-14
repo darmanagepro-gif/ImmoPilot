@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ImmoPilot</title>
+<?!= include("Styles"); ?>
+</head>
+<body>
+<div id="app" aria-live="polite"><div class="loading">Chargement…</div></div>
+<div class="toasts" id="toasts" role="status"></div>
+<script>window.BOOT = <?!= boot.replace(/</g, "\\u003c") ?>;</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<?!= include("Components"); ?>
+<?!= include("I18n"); ?>
+<?!= include("Login"); ?>
+<?!= include("Dashboard"); ?>
+<?!= include("Pages"); ?>
+<?!= include("Scripts"); ?>
+<?!= include("Assistant"); ?>
+</body>
+</html>

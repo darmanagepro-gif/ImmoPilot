@@ -1,0 +1,388 @@
+<script>
+"use strict";
+/* =====================================================================================
+   Coque de l'application, navigation selon le rôle, routeur, et pages d'administration
+   (utilisateurs, notifications, abonnements, paramètres, administration globale, audit).
+   La navigation masquée n'est qu'un confort : chaque route serveur revérifie les droits.
+   ===================================================================================== */
+const NAV = [
+  { g: "Pilotage", items: [
+    { r: "dashboard", l: "Tableau de bord", i: "◧", show: function () { return true; } },
+    { r: "finance", l: "Finances", i: "₫", show: function () { return can("finance.view"); } },
+    { r: "reports", l: "Rapports", i: "▤", show: function () { return can("report.view") || can("cleaning.manage") || S.me.isSuper; } },
+    { r: "pareto", l: "Analyses Pareto", i: "▥", show: function () { return can("report.view") || can("incident.view") || can("finance.view"); } } ] },
+  { g: "Patrimoine", items: [
+    { r: "properties", l: "Biens", i: "⌂", show: function () { return can("property.create") || can("reservation.view") || can("incident.view") || can("lease.view"); } },
+    { r: "calendar", l: "Calendrier", i: "▦", show: function () { return can("reservation.view") || can("checkin.operate"); } },
+    { r: "leases", l: "Locations longue durée", i: "✎", show: function () { return can("lease.view"); } },
+    { r: "tenants", l: "Locataires", i: "☺", show: function () { return can("lease.view"); } },
+    { r: "agencies", l: "Mes agences", i: "⌘", show: function () { return (S.me.roles || []).some(function (r) { return r.role === "OWNER"; }); } } ] },
+  { g: "Locations courte durée", items: [
+    { r: "reservations", l: "Réservations", i: "◷", show: function () { return can("reservation.view"); } },
+    { r: "guests", l: "Voyageurs", i: "☷", show: function () { return can("guest.view"); } },
+    { r: "checkin", l: "Arrivées et départs", i: "⇄", show: function () { return can("checkin.operate"); } } ] },
+  { g: "Opérations", items: [
+    { r: "cleaning", l: "Ménage", i: "✦", show: function () { return can("cleaning.manage") || can("cleaning.operate"); } },
+    { r: "incidents", l: "Incidents", i: "!", show: function () { return can("incident.view") || can("incident.report"); } },
+    { r: "contractors", l: "Prestataires", i: "⚒", show: function () { return S.me.isSuper || can("contractor.manage") || can("workorder.manage") || can("cleaning.manage") || can("workorder.operate"); } },
+    { r: "quotes", l: "Devis", i: "❏", show: function () { return can("workorder.manage") || can("quote.submit") || can("quote.decide"); } },
+    { r: "workorders", l: "Interventions", i: "⚙", show: function () { return can("workorder.manage") || can("workorder.operate"); } },
+    { r: "invoices", l: "Factures", i: "€", show: function () { return can("invoice.view") || can("invoice.submit"); } } ] },
+  { g: "Mon espace", items: [
+    { r: "mylease", l: "Mon bail", i: "✉", show: function () { return can("lease.self"); } },
+    { r: "notifications", l: "Notifications", i: "🔔", show: function () { return true; }, badge: function () { return S.me.unreadNotifications; } } ] },
+  { g: "Administration", items: [
+    { r: "users", l: "Utilisateurs", i: "☰", show: function () { return can("user.invite") || can("user.manage") || S.me.isSuper; } },
+    { r: "subscriptions", l: "Abonnements", i: "◈", show: function () { return can("subscription.view") || S.me.isSuper; } },
+    { r: "settings", l: "Paramètres", i: "⚙", show: function () { return true; } },
+    { r: "admin", l: "Administration globale", i: "♛", show: function () { return S.me.isSuper; } },
+    { r: "audit", l: "Journal d'audit", i: "≡", show: function () { return can("audit.view.org") || S.me.isSuper; } } ] }
+];
+const TITLES = {};
+NAV.forEach(function (g) { g.items.forEach(function (i) { TITLES[i.r] = i.l; }); });
+
+/** Anti-clickjacking : l'application ne s'affiche que dans Google Apps Script ou dans les sites autorisés (IMMO_EMBED_ORIGINS). */
+function frameGuardOk() {
+  try {
+    const anc = window.location.ancestorOrigins;
+    if (!anc || !anc.length) return true; // navigateur sans cette information : la protection serveur (X-Frame-Options) s'applique
+    const allowed = ["https://script.google.com"].concat((S.boot && S.boot.embed) || []);
+    for (let i = 0; i < anc.length; i++) {
+      const o = anc[i];
+      if (allowed.indexOf(o) < 0 && !/^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.googleusercontent\.com$/i.test(o) && o !== window.location.origin) return false;
+    }
+    return true;
+  } catch (e) { return true; }
+}
+const App = window.App = {
+  start: function () {
+    setLang(lstore("ip_lang") || "fr");
+    if (!frameGuardOk()) { clear($("app")).appendChild(h("div", { class: "alert bad", style: { margin: "40px auto", maxWidth: "560px" } }, t("Affichage refusé : ce site n'est pas autorisé à intégrer ImmoPilot. Ouvrez l'application depuis son adresse officielle."))); return; }
+    const b = S.boot || {};
+    if (b.mode === "accept" && b.token) return Public.invite(b.token);
+    if (b.mode === "reset" && b.token) return Public.reset(b.token);
+    if (b.mode === "guest" && b.token) return Public.guest(b.token);
+    S.token = store("ip_token");
+    if (!S.token) return Public.login();
+    clear($("app")).appendChild(h("div", { class: "loading" }, t("Chargement…")));
+    api("me.get").then(function (me) { S.me = me; App.enter(); }).catch(function (e) { if (e.code !== "AUTH") Public.login(errMsg(e)); });
+  },
+  renderLogin: function (msg) { Public.login(msg); },
+  enter: function () {
+    if (!lstore("ip_lang") && S.me.locale) setLang(S.me.locale);
+    api("meta.get").then(function (m) { S.meta = m; App.shell(); App.go(location.hash.replace(/^#/, "") || "dashboard"); }).catch(showErr);
+  },
+  shell: function () {
+    const app = clear($("app"));
+    const nav = h("nav", { class: "nav", "aria-label": t("Navigation principale") });
+    NAV.forEach(function (g) {
+      const items = g.items.filter(function (i) { try { return i.show(); } catch (e) { return false; } });
+      if (!items.length) return;
+      nav.appendChild(h("div", { class: "nav-group" }, t(g.g)));
+      items.forEach(function (i) {
+        const badge = i.badge ? i.badge() : 0;
+        nav.appendChild(h("a", { href: "#" + i.r, "data-r": i.r, onclick: function () { document.querySelector(".sidebar").classList.remove("open"); const s = document.querySelector(".scrim"); if (s) s.remove(); } },
+          h("span", { class: "ico", "aria-hidden": "true" }, i.i), t(i.l), badge ? h("span", { class: "badge" }, String(badge)) : null));
+      });
+    });
+    const roleTxt = S.me.isSuper ? t("Super administrateur") : (S.me.roles[0] ? roleLabel(S.me.roles[0].role) + " · " + S.me.roles[0].organizationName : "");
+    const sidebar = h("aside", { class: "sidebar" }, h("div", { class: "brand" }, h("div", { class: "brand-mark" }, "IP"), h("div", null, h("b", null, "ImmoPilot"), h("small", null, t("Gestion immobilière")))), nav,
+      h("div", { class: "sidebar-foot" }, "v" + S.me.version + " · " + S.me.timezone));
+    const langSel = h("select", { class: "lang", "aria-label": t("Langue"), onchange: function (e) { setLang(e.target.value); api("me.updateProfile", { locale: S.lang }).catch(function () {}); App.shell(); App.go(S.route || "dashboard"); } },
+      [["fr", "FR"], ["en", "EN"], ["ar", "ع"]].map(function (l) { return h("option", { value: l[0] }, l[1]); }));
+    langSel.value = S.lang;
+    const bell = h("button", { class: "bell", type: "button", "aria-label": t("Notifications"), onclick: function () { NAV_HASH.v = "notifications"; } }, "🔔", S.me.unreadNotifications ? h("span", { class: "dot" }, String(S.me.unreadNotifications)) : null);
+    const top = h("header", { class: "topbar" }, h("button", { class: "menu-btn", type: "button", "aria-label": t("Menu"), onclick: function () {
+      sidebar.classList.add("open"); document.body.appendChild(h("div", { class: "scrim", onclick: function (e) { sidebar.classList.remove("open"); e.target.remove(); } }));
+    } }, "☰"), h("h1", { id: "page-title" }, ""), h("div", { class: "spacer" }), langSel, bell,
+      h("button", { class: "user-chip", type: "button", onclick: function () { NAV_HASH.v = "settings"; } }, h("div", { class: "avatar" }, (S.me.displayName || "?").slice(0, 1).toUpperCase()), h("div", null, h("span", { class: "uname" }, S.me.displayName), h("small", null, roleTxt))));
+    app.appendChild(h("div", { class: "shell" }, sidebar, h("div", { class: "main" }, top, h("main", { class: "content", id: "content" }))));
+  },
+  go: function (hash) {
+    destroyCharts();
+    const parts = String(hash || "dashboard").split("/"), route = parts[0], param = decodeURIComponent(parts.slice(1).join("/") || "");
+    S.route = hash;
+    const el = clear($("content"));
+    document.querySelectorAll(".nav a").forEach(function (a) { a.classList.toggle("active", a.dataset.r === route || (route.indexOf(a.dataset.r.replace(/s$/, "")) === 0 && a.dataset.r !== "dashboard")); });
+    const fn = PAGES[route];
+    $("page-title").textContent = t(TITLES[route] || TITLES[route + "s"] || "ImmoPilot");
+    if (!fn) { el.appendChild(h("div", { class: "alert warn" }, t("Page introuvable."))); return; }
+    try { const r = fn(el, param); if (r && r.catch) r.catch(function (e) { el.appendChild(h("div", { class: "alert bad" }, errMsg(e))); }); }
+    catch (e) { el.appendChild(h("div", { class: "alert bad" }, errMsg(e))); console.error(e); }
+    window.scrollTo(0, 0);
+  },
+  refreshMe: function () { return api("me.get").then(function (me) { S.me = me; }); }
+};
+window.addEventListener("hashchange", function () { if (S.me) App.go(location.hash.replace(/^#/, "")); });
+// Bouton Retour / Suivant du navigateur dans Apps Script.
+try { if (window.google && google.script && google.script.history && google.script.history.setChangeHandler) google.script.history.setChangeHandler(function (e) { if (S.me) App.go((e && e.location && e.location.hash) || "dashboard"); }); } catch (e) { /* hors Google */ }
+
+/* =============================== Utilisateurs =============================== */
+PAGES.users = function (el) {
+  el.appendChild(pageHead(t("Utilisateurs et invitations"), t("Invitez des collaborateurs et gérez leurs droits. Les invitations sont personnelles, à usage unique et expirent après 7 jours."),
+    [btn("+ " + t("Inviter"), function () { inviteDialog().then(function (r) { if (r) { invitesList.reload(); } }); }, "primary")]));
+  const orgOpts = function () { return S.me.isSuper ? api("org.list", { pageSize: 200 }).then(function (r) { return r.items.map(function (o) { return [o.organizationId, o.name]; }); }) : myOrgs(["OWNER", "AGENCY_ADMIN"]); };
+  const tb = tabs(el, [
+    { id: "users", label: "Comptes", render: function (b) {
+      listView(b, { route: "user.list", filters: [{ k: "organizationId", l: "Organisation", t: "select", opts: orgOpts }, { k: "role", l: "Rôle", t: "select", opts: function () { return (S.meta.roles || []).map(function (r) { return [r, roleLabel(r)]; }); } },
+        { k: "status", l: "Statut", t: "select", opts: [["ACTIVE", st("ACTIVE")], ["SUSPENDED", st("SUSPENDED")], ["REVOKED", st("REVOKED")]] }],
+        columns: [{ l: "Nom", k: "displayName" }, { l: "E-mail", k: "email" }, { l: "Organisation", k: "organizationName" }, { l: "Rôle", f: function (r) { return roleLabel(r.role); } },
+          { l: "Statut", f: function (r) { return h("span", null, stTag(r.roleStatus), r.userStatus !== "ACTIVE" ? [" ", stTag(r.userStatus)] : null, !r.activated ? [" ", tag(t("Non activé"), "warn")] : null); } },
+          { l: "Dernière connexion", dt: true, k: "lastLoginAt" }, { l: "", f: function (r) { return userActions(r, function () { tb.show("users"); }); } }] });
+    } },
+    { id: "invites", label: "Invitations", render: function (b) { invitesList = listView(b, { route: "invite.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["PENDING", "ACCEPTED", "REVOKED", "EXPIRED", "EMAIL_FAILED"] }],
+      columns: [{ l: "E-mail", k: "email" }, { l: "Organisation", k: "organizationName" }, { l: "Rôle", f: function (r) { return roleLabel(r.role); } }, { l: "Statut", status: true, k: "status" }, { l: "Expire le", dt: true, k: "expiresAt" }, { l: "Créée par", k: "createdBy" },
+        { l: "", f: function (r) { return h("span", { class: "actions" }, ["PENDING", "EMAIL_FAILED", "EXPIRED"].indexOf(r.status) >= 0 ? btn(t("Renvoyer"), function () { api("invite.resend", { invitationId: r.invitationId }).then(function (x) { toast(x.emailSent ? t("Invitation renvoyée.") : t("E-mail non envoyé") + " : " + x.emailError, x.emailSent ? "good" : "bad"); invitesList.reload(); }).catch(showErr); }, "sm") : null,
+          ["PENDING", "EMAIL_FAILED"].indexOf(r.status) >= 0 ? btn(t("Révoquer"), function () { confirmBox(t("Révoquer cette invitation ? Le lien ne fonctionnera plus."), { danger: true }).then(function (ok) { if (ok) api("invite.revoke", { invitationId: r.invitationId }).then(function () { invitesList.reload(); }).catch(showErr); }); }, "sm danger") : null); } }] }); } }
+  ], "users");
+  let invitesList = { reload: function () { tb.show("invites"); } };
+};
+function inviteDialog(preset) {
+  preset = preset || {};
+  const orgs = S.me.isSuper ? api("org.list", { pageSize: 200 }).then(function (r) { return r.items.filter(function (o) { return o.status === "ACTIVE" && o.type !== "PLATFORM"; }).map(function (o) { return [o.organizationId, o.name]; }); }) : Promise.resolve(myOrgs(["OWNER", "AGENCY_ADMIN"]));
+  const rolesFor = function (orgId) { return (S.me.isSuper ? S.meta.superInviteRoles : (S.meta.inviteRoles[orgId] || [])).map(function (r) { return [r, roleLabel(r)]; }); };
+  return orgs.then(function (o) {
+    return formModal(t("Inviter un utilisateur"), [
+      { k: "email", l: "E-mail", t: "email", req: true }, { k: "displayName", l: "Nom affiché" },
+      { k: "organizationId", l: "Organisation", t: "select", req: true, opts: o, onchange: function (v, inputs) { const sel = inputs.role; clear(sel); rolesFor(v).forEach(function (r) { sel.appendChild(h("option", { value: r[0] }, r[1])); }); } },
+      { k: "role", l: "Rôle", t: "select", req: true, opts: function () { return rolesFor(preset.organizationId || (o[0] || [])[0]); } },
+      { k: "propertyId", l: "Lier à un bien (personnel de terrain)", t: "select", opts: function () { return propChoices("property.assign"); }, show: function (v) { return ["GUARD", "CLEANER", "ARTISAN", "TENANT"].indexOf(v.role) >= 0; } }
+    ], preset, function (v) { return api("invite.create", v).then(function (r) { toast(r.emailSent ? t("Invitation envoyée.") : t("Invitation enregistrée mais e-mail non envoyé") + " : " + r.emailError, r.emailSent ? "good" : "bad"); return r; }); }, { submitLabel: t("Envoyer l'invitation") });
+  });
+}
+function userActions(r, reload) {
+  const out = h("span", { class: "actions" });
+  if (r.role !== "SUPER_ADMIN" && r.userId !== S.me.userId) {
+    out.appendChild(btn(r.roleStatus === "ACTIVE" ? t("Suspendre") : t("Réactiver"), function () {
+      const to = r.roleStatus === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+      confirmBox(to === "SUSPENDED" ? t("Suspendre ce rôle ? La personne perdra immédiatement l'accès correspondant.") : t("Réactiver ce rôle ?"), { danger: to === "SUSPENDED" }).then(function (ok) { if (ok) api("role.setStatus", { userRoleId: r.userRoleId, status: to }).then(reload).catch(showErr); });
+    }, "sm"));
+    out.appendChild(btn(t("Droits"), function () {
+      api("role.caps", { role: r.role }).then(function (c) {
+        const removed = (r.removedCaps || []).map(function (x) { return String(x).replace(/^-/, ""); });
+        formModal(t("Droits de") + " " + r.email, [{ k: "keep", l: "Capacités accordées (décochez pour retirer)", t: "multi", opts: c.caps.map(function (x) { return [x, st("cap." + x) === "cap." + x ? x : st("cap." + x)]; }) }],
+          { keep: c.caps.filter(function (x) { return removed.indexOf(x) < 0; }) }, function (v) { return api("role.setPermissions", { userRoleId: r.userRoleId, removedCaps: c.caps.filter(function (x) { return v.keep.indexOf(x) < 0; }) }).then(reload); },
+          { intro: t("Les droits ne peuvent que restreindre ceux du rôle : aucune élévation n'est possible.") });
+      }).catch(showErr);
+    }, "sm"));
+  }
+  if (!r.activated) out.appendChild(btn(t("Lien d'activation"), function () { api("user.sendActivation", { userId: r.userId }).then(function () { toast(t("Lien envoyé."), "good"); }).catch(showErr); }, "sm"));
+  if (S.me.isSuper && r.userId !== S.me.userId && r.userStatus !== "DISABLED") out.appendChild(btn(t("Supprimer le compte"), function () {
+    formModal(t("Supprimer le compte de") + " " + r.email, [{ k: "confirm", l: "Tapez SUPPRIMER pour confirmer", req: true }, { k: "reason", l: "Motif (ex. demande de l'utilisateur du …)" }], {}, function (v) {
+      return api("user.erase", { userId: r.userId, confirm: String(v.confirm || "").trim().toUpperCase(), reason: v.reason }).then(reload); }, { intro: t("Irréversible : nom, e-mail, téléphone et mot de passe sont effacés ; accès, sessions et invitations sont révoqués. Les réservations, paiements et factures sont conservés pour les obligations légales, sans identité."), success: "Compte supprimé." });
+  }, "sm danger"));
+  if (S.me.isSuper && r.userId !== S.me.userId) out.appendChild(btn(r.userStatus === "ACTIVE" ? t("Bloquer le compte") : t("Débloquer"), function () {
+    const to = r.userStatus === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+    formModal(t("Statut du compte"), [{ k: "reason", l: "Motif", req: to !== "ACTIVE" }], {}, function (v) { return api("user.setStatus", { userId: r.userId, status: to, reason: v.reason }).then(reload); });
+  }, "sm danger"));
+  return out;
+}
+
+/* =============================== Notifications =============================== */
+PAGES.notifications = function (el) {
+  let lv;
+  el.appendChild(pageHead(t("Notifications"), t("Alertes et événements qui vous concernent."), [btn(t("Tout marquer comme lu"), function () { api("notif.read", { all: true }).then(function () { App.refreshMe().then(function () { App.shell(); App.go("notifications"); }); }).catch(showErr); })]));
+  lv = listView(el, { route: "notif.list", search: false, filters: [{ k: "unread", l: "Non lues uniquement", t: "checkbox" }],
+    render: function (items) {
+      if (!items.length) return h("div", { class: "empty" }, t("Aucune notification."));
+      return h("div", { class: "cards", style: { gridTemplateColumns: "1fr" } }, items.map(function (n) {
+        return h("div", { class: "card", style: { borderInlineStart: n.readAt ? "" : "3px solid var(--primary)" } }, h("div", { class: "actions", style: { justifyContent: "space-between" } }, h("h4", null, n.title), h("span", { class: "small muted" }, fmtDT(n.createdAt))),
+          n.body ? h("div", { class: "meta", style: { whiteSpace: "pre-wrap" } }, n.body) : null,
+          h("div", { class: "actions" }, n.link ? btn(t("Ouvrir"), function () { api("notif.read", { notificationId: n.notificationId }).catch(function () {}); NAV_HASH.v = n.link.replace(/^#/, ""); }, "sm") : null,
+            !n.readAt ? btn(t("Marquer comme lue"), function () { api("notif.read", { notificationId: n.notificationId }).then(function () { lv.reload(); }).catch(showErr); }, "sm ghost") : null));
+      }));
+    } });
+  const prefs = S.me.notifPrefs || {};
+  el.appendChild(panel("Préférences", h("div", null, h("p", { class: "muted small" }, t("Les notifications restent visibles dans l'application ; vous choisissez lesquelles déclenchent aussi un e-mail.")),
+    btn(t("Modifier mes préférences"), function () {
+      const types = ["RESERVATION_CONFIRMED", "ARRIVAL_SOON", "ARRIVAL_LATE", "DEPARTURE_LATE", "CHECK_IN", "CHECK_OUT", "CLEANING_OFFER", "CLEANING_EXPIRED", "CLEANING_DONE", "INCIDENT", "INCIDENT_SEVERE", "QUOTE_TO_VALIDATE", "WORK_ORDER", "WORK_ORDER_SCHEDULED", "INVOICE_PENDING", "RENT_DUE", "RENT_LATE", "LEASE_ENDING", "SUBSCRIPTION"];
+      formModal(t("Préférences de notification"), [{ k: "email", l: "Recevoir les notifications par e-mail", t: "checkbox" }, { k: "muted", l: "Types désactivés (ni application ni e-mail)", t: "multi", opts: types.map(function (x) { return [x, st("ntf." + x) === "ntf." + x ? x : st("ntf." + x)]; }) }],
+        { email: prefs.email !== false, muted: prefs.mutedTypes || [] }, function (v) { return api("me.updateProfile", { notifPrefs: { email: v.email, mutedTypes: v.muted } }).then(App.refreshMe); }, { success: "Préférences enregistrées." });
+    }))));
+};
+
+/* =============================== Abonnements =============================== */
+PAGES.subscriptions = function (el) {
+  el.appendChild(pageHead(t("Abonnements"), t("Forfaits, utilisation et historique de facturation.")));
+  if (!S.me.isSuper) return mySubscriptions(el);
+  tabs(el, [
+    { id: "subs", label: "Abonnements clients", render: function (b) {
+      const lv = listView(b, { route: "sub.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["TRIAL", "ACTIVE", "PAST_DUE", "SUSPENDED", "EXPIRED", "CANCELLED"] }, { k: "includeClosed", l: "Inclure les clos", t: "checkbox" }, { k: "includeDemo", l: "Inclure la démo", t: "checkbox" }],
+        columns: [{ l: "Organisation", k: "organizationName" }, { l: "Forfait", k: "planCode" }, { l: "Statut", status: true, k: "status" }, { l: "Fin de période", date: true, k: "periodEnd" }, { l: "Échéance", date: true, k: "nextDueDate" },
+          { l: "Retard (j)", num: true, k: "daysOverdue" }, { l: "Prix", money: true, k: "price" }, { l: "Biens", num: true, f: function (r) { return r.usage.properties; } }, { l: "Utilisateurs", num: true, f: function (r) { return r.usage.users; } },
+          { l: "", f: function (r) { return h("span", { class: "actions" }, btn(t("Paiement"), function () {
+            formModal(t("Enregistrer un paiement d'abonnement"), [{ k: "amount", l: "Montant (MAD)", t: "number", req: true, def: r.price }, { k: "periods", l: "Nombre de périodes", t: "number", def: 1, min: 1 }, { k: "paidAt", l: "Date", t: "date", def: today() },
+              { k: "method", l: "Mode", t: "select", opts: (S.meta.payMethods || []).map(function (m) { return [m, st(m)]; }) }, { k: "reference", l: "Référence (virement, reçu…)", req: true }], {},
+              function (v) { v.subscriptionId = r.subscriptionId; v.requestKey = rk(); return api("sub.recordPayment", v).then(function (x) { if (x.warning) toast(x.warning, "bad"); lv.reload(); }); }, { intro: t("Aucun paiement en ligne n'est simulé : enregistrez un règlement réellement reçu.") });
+          }, "sm"), btn(t("Contrat (PDF)"), function () { api("sub.contractPdf", { organizationId: r.organizationId }).then(download).catch(showErr); }, "sm"), h("select", { class: "btn sm", onchange: function (e) { const a = e.target.value; e.target.value = ""; if (!a) return; confirmBox(t("Confirmer l'action") + " : " + st("sub." + a) + " ?", { danger: a !== "REACTIVATE" && a !== "UNDO_CANCEL" }).then(function (ok) { if (ok) api("sub.setStatus", { subscriptionId: r.subscriptionId, action: a }).then(lv.reload).catch(showErr); }); } },
+            h("option", { value: "" }, t("Action…")), ["SUSPEND", "REACTIVATE", "CANCEL_AT_END", "UNDO_CANCEL", "CANCEL_NOW"].map(function (a) { return h("option", { value: a }, st("sub." + a)); }))); } }],
+        after: function (r) { clear(hist).appendChild(table([{ l: "Organisation", k: "organizationName" }, { l: "Montant", money: true, k: "amount" }, { l: "Date", date: true, k: "paidAt" }, { l: "Mode", f: function (x) { return st(x.method); } }, { l: "Référence", k: "reference" }], r.billing || [])); } });
+      const hist = h("div"); b.appendChild(panel("Historique de facturation", hist));
+      b.insertBefore(h("div", { class: "actions", style: { marginBottom: "10px" } }, btn("+ " + t("Attribuer un forfait"), function () { assignPlan().then(function (x) { if (x) lv.reload(); }); }, "primary")), b.firstChild);
+    } },
+    { id: "plans", label: "Forfaits", render: function (b) {
+      const box = h("div"); b.appendChild(h("div", { class: "actions", style: { marginBottom: "10px" } }, btn("+ " + t("Nouveau forfait"), function () { planDialog({}).then(load); }, "primary"))); b.appendChild(box);
+      const load = function () { api("plan.list").then(function (pl) { clear(box).appendChild(table([{ l: "Code", k: "planCode" }, { l: "Nom", k: "name" }, { l: "Prix", money: true, k: "price" }, { l: "Périodicité", f: function (x) { return st(x.periodicity); } },
+        { l: "Biens max.", num: true, k: "maxProperties" }, { l: "Utilisateurs max.", num: true, k: "maxUsers" }, { l: "Stockage (Mo)", num: true, k: "storageMb" }, { l: "Essai (j)", num: true, k: "trialDays" }, { l: "Statut", status: true, k: "status" },
+        { l: "Fonctionnalités", f: function (x) { return x.features.map(function (f) { return st("feat." + f); }).join(", "); } }], pl, { onRow: function (x) { planDialog(x).then(load); } })); }).catch(showErr); };
+      load();
+    } }
+  ]);
+};
+function planDialog(p) {
+  return formModal(p.planCode ? t("Forfait") + " " + p.planCode : t("Nouveau forfait"), [{ k: "planCode", l: "Code", req: true }, { k: "name", l: "Nom", req: true }, { k: "price", l: "Prix (MAD)", t: "number", req: true },
+    { k: "periodicity", l: "Périodicité", t: "select", opts: ["MONTHLY", "QUARTERLY", "YEARLY"] }, { k: "maxProperties", l: "Nombre de biens", t: "number" }, { k: "maxUsers", l: "Nombre d'utilisateurs", t: "number" },
+    { k: "storageMb", l: "Stockage (Mo)", t: "number" }, { k: "trialDays", l: "Jours d'essai", t: "number" }, { k: "exportRows", l: "Lignes d'export max.", t: "number" }, { k: "sortOrder", l: "Ordre d'affichage", t: "number" },
+    { k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "RETIRED"] }, { k: "features", l: "Fonctionnalités", t: "multi", opts: (S.meta.planFeatures || []).map(function (f) { return [f, st("feat." + f)]; }) }],
+  Object.assign({}, p, { exportRows: (p.quotas || {}).exportRows }), function (v) { v.quotas = { exportRows: v.exportRows }; return api("plan.save", v); }, { success: "Forfait enregistré." });
+}
+function assignPlan(orgId) {
+  return Promise.all([api("org.list", { pageSize: 200 }), api("plan.list")]).then(function (r) {
+    return formModal(t("Attribuer un forfait"), [{ k: "organizationId", l: "Organisation", t: "select", req: true, opts: r[0].items.filter(function (o) { return o.type !== "PLATFORM"; }).map(function (o) { return [o.organizationId, o.name]; }) },
+      { k: "planCode", l: "Forfait", t: "select", req: true, opts: r[1].filter(function (x) { return x.status === "ACTIVE"; }).map(function (x) { return [x.planCode, x.name + " — " + fmtMoney(x.price)]; }) },
+      { k: "trial", l: "Démarrer par la période d'essai", t: "checkbox", def: true }, { k: "startDate", l: "Date de début", t: "date", def: today() }], { organizationId: orgId }, function (v) { return api("sub.assign", v); }, { success: "Forfait attribué." });
+  });
+}
+function mySubscriptions(el) {
+  api("sub.mine").then(function (list) {
+    if (!list.length) { el.appendChild(h("div", { class: "empty" }, t("Aucune organisation à afficher."))); return; }
+    list.forEach(function (o) {
+      const s = o.subscription, pl = o.plan;
+      el.appendChild(panel(o.organizationName, h("div", null,
+        o.readOnly ? h("div", { class: "alert bad" }, t("Abonnement suspendu ou expiré : votre compte est en lecture seule. Contactez l'administrateur ImmoPilot.")) : null,
+        !s ? h("div", { class: "alert info" }, t("Aucun abonnement enregistré pour cette organisation.")) :
+          kv([["Forfait", pl ? pl.name : s.planCode], ["Statut", stTag(s.status)], ["Fin de période", fmtDate(s.periodEnd)], ["Prochaine échéance", fmtDate(s.nextDueDate)], ["Tarif", fmtMoney(s.price) + " / " + st(s.periodicity)], ["Paiement", o.paymentProvider]]),
+        h("h3", { style: { marginTop: "16px" } }, t("Utilisation")),
+        kpis([{ l: "Biens", v: fmtNum(o.usage.properties, 0) + (pl ? " / " + pl.maxProperties : ""), tone: pl && o.usage.properties >= pl.maxProperties ? "bad" : "" },
+          { l: "Utilisateurs", v: fmtNum(o.usage.users, 0) + (pl ? " / " + pl.maxUsers : ""), tone: pl && o.usage.users >= pl.maxUsers ? "bad" : "" },
+          { l: "Stockage", v: fmtNum(o.usage.storageMb, 1) + " Mo" + (pl ? " / " + pl.storageMb : "") }]),
+        pl ? h("p", { class: "small muted" }, t("Fonctionnalités") + " : " + pl.features.map(function (f) { return st("feat." + f); }).join(", ")) : null,
+        h("h3", null, t("Historique de facturation")), table([{ l: "Date", date: true, k: "paidAt" }, { l: "Montant", money: true, k: "amount" }, { l: "Mode", f: function (x) { return st(x.method); } }, { l: "Référence", k: "reference" }], o.billing),
+        h("div", { class: "actions", style: { marginTop: "12px" } }, s ? btn(t("Contrat et historique (PDF)"), function () { api("sub.contractPdf", { organizationId: o.organizationId }).then(download).catch(showErr); }) : null, btn(t("Demander un changement de forfait"), function () {
+          api("plan.list").then(function (pls) { formModal(t("Changer de forfait"), [{ k: "planCode", l: "Forfait souhaité", t: "select", req: true, opts: pls.map(function (x) { return [x.planCode, x.name + " — " + fmtMoney(x.price)]; }) }, { k: "message", l: "Message", t: "textarea" }], {},
+            function (v) { v.organizationId = o.organizationId; return api("sub.requestChange", v); }, { success: "Demande transmise à l'équipe ImmoPilot." }); });
+        }), s && ["ACTIVE", "TRIAL"].indexOf(s.status) >= 0 ? btn(s.cancelAtPeriodEnd ? t("Annuler la résiliation") : t("Résilier en fin de période"), function () {
+          confirmBox(s.cancelAtPeriodEnd ? t("Maintenir l'abonnement ?") : t("Résilier à la fin de la période en cours ? Vos données restent conservées."), { danger: !s.cancelAtPeriodEnd }).then(function (ok) { if (ok) api("sub.setStatus", { subscriptionId: s.subscriptionId, action: s.cancelAtPeriodEnd ? "UNDO_CANCEL" : "CANCEL_AT_END" }).then(function () { App.go("subscriptions"); }).catch(showErr); });
+        }, "danger") : null))));
+    });
+  }).catch(function (e) { el.appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+}
+
+/* =============================== Paramètres =============================== */
+PAGES.settings = function (el) {
+  el.appendChild(pageHead(t("Paramètres"), ""));
+  const orgAdmin = myOrgs(["OWNER", "AGENCY_ADMIN"]);
+  tabs(el, [
+    { id: "profile", label: "Mon profil", render: function (b) {
+      b.appendChild(panel("Profil", h("div", null, kv([["Nom", S.me.displayName], ["E-mail", S.me.email], ["Rôles", S.me.roles.map(function (r) { return roleLabel(r.role) + " (" + r.organizationName + ")"; }).join(" · ")]]),
+        h("div", { class: "actions", style: { marginTop: "14px" } },
+          btn(t("Modifier"), function () { formModal(t("Mon profil"), [{ k: "displayName", l: "Nom affiché", req: true }, { k: "phone", l: "Téléphone", t: "tel" }, { k: "locale", l: "Langue", t: "select", opts: [["fr", "Français"], ["en", "English"], ["ar", "العربية"]] }],
+            { displayName: S.me.displayName, locale: S.lang }, function (v) { return api("me.updateProfile", v).then(function () { setLang(v.locale); return App.refreshMe(); }).then(function () { App.shell(); App.go("settings"); }); }); }),
+          btn(t("Changer le mot de passe"), function () { formModal(t("Changer le mot de passe"), [{ k: "currentPassword", l: "Mot de passe actuel", t: "password", req: true }, { k: "newPassword", l: "Nouveau mot de passe", t: "password", req: true, help: "10 caractères minimum, avec lettres et chiffres." }], {},
+            function (v) { return api("me.changePassword", v); }, { success: "Mot de passe modifié. Vos autres sessions ont été fermées." }); }),
+          btn(t("Déconnecter mes autres appareils"), function () { api("me.logoutAll").then(function () { localLogout(t("Toutes vos sessions ont été fermées.")); }).catch(showErr); }),
+          btn(t("Se déconnecter"), function () { api("me.logout").catch(function () {}).then(function () { localLogout(); }); }, "danger"))),
+        h("p", { class: "small muted", style: { marginTop: "18px" } }, t("Vous pouvez demander la suppression de votre compte et de vos données personnelles à tout moment."), " ",
+          h("a", { href: "#settings", onclick: function (e) { e.preventDefault(); formModal(t("Supprimer mon compte"), [{ k: "reason", l: "Motif (facultatif)", t: "textarea" }], {}, function (v) {
+            return api("me.requestDeletion", v).then(function (r) { toast(r.message, "good"); }); }, { intro: t("Votre demande est transmise à l'administrateur ImmoPilot. Le compte et les données personnelles associées sont supprimés sous 30 jours ; certaines données comptables peuvent être conservées pour des obligations légales."), submitLabel: t("Demander la suppression") }); } }, t("Supprimer mon compte")))));
+    } },
+    orgAdmin.length || S.me.isSuper ? { id: "org", label: S.me.isSuper ? "Paramètres de la plateforme" : "Paramètres de l'organisation", render: function (b) { settingsEditor(b, S.me.isSuper && !orgAdmin.length ? "" : (orgAdmin[0] || [""])[0], orgAdmin); } } : null,
+    orgAdmin.length ? { id: "support", label: "Accès d'assistance", render: function (b) {
+      b.appendChild(h("p", { class: "muted" }, t("L'équipe ImmoPilot ne peut consulter vos données qu'avec votre accord explicite, en lecture seule, pour une durée limitée. Chaque accès est journalisé.")));
+      const lv = listView(b, { route: "support.list", search: false, columns: [{ l: "Demandée le", dt: true, k: "requestedAt" }, { l: "Organisation", k: "organizationName" }, { l: "Justification", k: "justification" }, { l: "Statut", status: true, k: "status" }, { l: "Expire le", dt: true, k: "expiresAt" },
+        { l: "", f: function (g) { return h("span", { class: "actions" }, g.status === "REQUESTED" ? [btn(t("Accorder"), function () { api("support.decide", { grantId: g.grantId, decision: "APPROVE" }).then(lv.reload).catch(showErr); }, "sm primary"), btn(t("Refuser"), function () { api("support.decide", { grantId: g.grantId, decision: "DENY" }).then(lv.reload).catch(showErr); }, "sm")] : null,
+          ["REQUESTED", "ACTIVE"].indexOf(g.status) >= 0 ? btn(t("Révoquer"), function () { api("support.revoke", { grantId: g.grantId }).then(lv.reload).catch(showErr); }, "sm danger") : null); } }] });
+    } } : null
+  ]);
+};
+function settingsEditor(b, orgId, orgAdmin) {
+  const box = h("div");
+  if (orgAdmin.length > 1 || (S.me.isSuper && orgAdmin.length)) {
+    const sel = h("select", { class: "lang", onchange: function (e) { load(e.target.value); } }, S.me.isSuper ? h("option", { value: "" }, t("Plateforme (valeurs par défaut)")) : null, orgAdmin.map(function (o) { return h("option", { value: o[0] }, o[1]); }));
+    sel.value = orgId; b.appendChild(h("div", { class: "toolbar" }, t("Portée") + " :", sel));
+  }
+  b.appendChild(box);
+  const load = function (org) {
+    clear(box).appendChild(h("div", { class: "loading" }, t("Chargement…")));
+    api("settings.get", { organizationId: org }).then(function (r) {
+      const keys = org ? S.meta.orgEditableSettings : S.meta.settingsKeys;
+      clear(box).appendChild(table([{ l: "Paramètre", f: function (x) { return h("div", null, h("b", null, st("set." + x.k) === "set." + x.k ? x.k : st("set." + x.k)), h("div", { class: "small muted" }, x.k)); } },
+        { l: "Valeur", f: function (x) { const v = x.v; return Array.isArray(v) ? v.map(function (y) { return typeof y === "object" ? JSON.stringify(y) : y; }).join(", ") : (typeof v === "boolean" ? (v ? t("Oui") : t("Non")) : String(v === "" ? "—" : v)); } },
+        { l: "", f: function (x) { return btn(t("Modifier"), function () { editSetting(org, x.k, x.v).then(function (ok) { if (ok) load(org); }); }, "sm"); } }],
+        keys.map(function (k) { return { k: k, v: r.settings[k] }; })));
+    }).catch(function (e) { clear(box).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+  };
+  load(orgId);
+}
+function editSetting(org, key, cur) {
+  let field = { k: "value", l: "Valeur" }, val = cur;
+  if (typeof cur === "boolean") field.t = "checkbox";
+  else if (typeof cur === "number") field.t = "number";
+  else if (key === "reservation.cancellationPolicy") { field.t = "textarea"; field.help = "Une règle par ligne : jours avant l'arrivée ; pourcentage retenu (ex. 7;0)"; val = cur.map(function (r) { return r.daysBefore + ";" + r.penaltyPercent; }).join("\n"); }
+  else if (Array.isArray(cur)) { field.t = "textarea"; field.help = "Valeurs séparées par des virgules."; val = cur.join(", "); }
+  else if (/^template\./.test(key)) field.help = "Identifiant d'un document Google Docs (modèle avec balises {{cle}}).";
+  return formModal(t("Paramètre") + " " + key, [field], { value: val }, function (v) {
+    let value = v.value;
+    if (key === "reservation.cancellationPolicy") value = String(value).split("\n").map(function (l) { const p = l.split(";"); return { daysBefore: Number(p[0]), penaltyPercent: Number(p[1]) }; }).filter(function (x) { return !isNaN(x.daysBefore); });
+    return api("settings.set", { organizationId: org, key: key, value: value });
+  }, { success: "Paramètre enregistré." });
+}
+
+/* =============================== Administration globale =============================== */
+PAGES.admin = function (el) {
+  el.appendChild(pageHead(t("Administration globale"), t("Organisations, diagnostic, erreurs techniques, tâches planifiées et sauvegardes. Les données privées des clients ne sont accessibles qu'avec un accès d'assistance accordé.")));
+  tabs(el, [
+    { id: "orgs", label: "Organisations", render: function (b) {
+      const lv = listView(b, { route: "org.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "SUSPENDED", "INACTIVE"] }, { k: "type", l: "Type", t: "select", opts: ["OWNER_ORG", "AGENCY", "PROVIDER", "PLATFORM"] }],
+        tools: function () { return [btn("+ " + t("Organisation"), function () { formModal(t("Nouvelle organisation"), [{ k: "name", l: "Nom", req: true }, { k: "type", l: "Type", t: "select", req: true, opts: ["OWNER_ORG", "AGENCY", "PROVIDER"] },
+          { k: "city", l: "Ville", def: "Marrakech" }, { k: "billingEmail", l: "E-mail de facturation", t: "email" }, { k: "locale", l: "Langue", t: "select", opts: [["fr", "Français"], ["en", "English"], ["ar", "العربية"]] },
+          { k: "planCode", l: "Forfait (essai)", t: "select", opts: function () { return api("plan.list").then(function (p) { return p.map(function (x) { return [x.planCode, x.name]; }); }); } }], {}, function (v) { return api("org.create", v).then(lv.reload); }, { success: "Organisation créée." }); }, "primary")]; },
+        columns: [{ l: "Nom", k: "name" }, { l: "Type", f: function (o) { return st(o.type); } }, { l: "Statut", status: true, k: "status" }, { l: "Ville", k: "city" }, { l: "Utilisateurs", num: true, k: "userCount" }, { l: "Biens", num: true, k: "propertyCount" },
+          { l: "Abonnement", f: function (o) { return o.planCode ? o.planCode + " · " + st(o.subscriptionStatus) : "—"; } }, { l: "Créée le", date: true, k: "createdAt" },
+          { l: "", f: function (o) { return o.type === "PLATFORM" ? null : h("span", { class: "actions" },
+            btn(o.status === "ACTIVE" ? t("Suspendre") : t("Réactiver"), function () { const to = o.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+              formModal(to === "SUSPENDED" ? t("Suspendre l'organisation") : t("Réactiver l'organisation"), to === "SUSPENDED" ? [{ k: "reason", l: "Motif", req: true }] : [], {}, function (v) { return api("org.setStatus", { organizationId: o.organizationId, status: to, reason: v.reason }).then(lv.reload); },
+                { intro: to === "SUSPENDED" ? t("Les membres perdent l'accès ; aucune donnée n'est supprimée.") : "" }); }, "sm" + (o.status === "ACTIVE" ? " danger" : "")),
+            btn(t("Inviter"), function () { inviteDialog({ organizationId: o.organizationId }); }, "sm"), btn(t("Forfait"), function () { assignPlan(o.organizationId).then(function (x) { if (x) lv.reload(); }); }, "sm"),
+            btn(t("Assistance"), function () { formModal(t("Demander un accès d'assistance"), [{ k: "justification", l: "Justification (ticket, motif)", t: "textarea", req: true }, { k: "hours", l: "Durée (heures, 24 max.)", t: "number", def: 4, min: 1, max: 24 }], {},
+              function (v) { v.organizationId = o.organizationId; return api("support.request", v); }, { success: "Demande envoyée aux administrateurs de l'organisation.", intro: t("L'accès ne sera effectif qu'après accord de l'organisation. Il est en lecture seule et journalisé.") }); }, "sm")); } }] });
+    } },
+    { id: "diag", label: "Diagnostic", render: function (b) {
+      b.appendChild(h("div", { class: "loading" }, t("Analyse…")));
+      api("admin.diagnostics").then(function (d) {
+        clear(b);
+        b.appendChild(kpis([{ l: "État du schéma", v: d.ok ? t("Conforme") : t("À corriger"), tone: d.ok ? "good" : "bad" }, { l: "Version", v: d.version + " / schéma " + d.schemaVersion }, { l: "Déclencheurs", v: d.triggersOk ? t("Installés") : t("Manquants"), tone: d.triggersOk ? "good" : "bad" },
+          { l: "Quota e-mail restant", v: String(d.mailQuotaRemaining) }, { l: "Dossier Drive privé", v: d.driveRoot.ok ? t("Privé") : t("À vérifier"), tone: d.driveRoot.ok ? "good" : "bad" },
+          { l: "Cellules utilisées", v: fmtNum(d.spreadsheetCells, 0) + " / " + fmtNum(d.cellLimit, 0), tone: d.spreadsheetCells > d.cellLimit * 0.7 ? "warn" : "" }]));
+        if (d.missingSheets.length || Object.keys(d.missingColumns).length) b.appendChild(h("div", { class: "alert bad" }, t("Feuilles ou colonnes manquantes : exécutez setupProject() depuis l'éditeur.") + " " + JSON.stringify({ sheets: d.missingSheets, columns: d.missingColumns })));
+        if (d.integrity && !d.integrity.ok) b.appendChild(h("div", { class: "alert warn" }, t("Intégrité") + " : " + JSON.stringify(d.integrity)));
+        b.appendChild(panel("Volumétrie par table", table([{ l: "Table", k: "t" }, { l: "Lignes", num: true, k: "n" }], Object.keys(d.rows).map(function (k) { return { t: k, n: d.rows[k] }; }).sort(function (x, y) { return y.n - x.n; }))));
+      }).catch(function (e) { clear(b).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+    } },
+    { id: "errors", label: "Erreurs techniques", render: function (b) { listView(b, { route: "admin.errors", search: false, columns: [{ l: "Date", dt: true, k: "timestamp" }, { l: "Référence", k: "errorId" }, { l: "Route", k: "route" }, { l: "Message", k: "message" }, { l: "Utilisateur", k: "actorEmail" }] }); } },
+    { id: "jobs", label: "Tâches planifiées", render: function (b) { listView(b, { route: "admin.jobs", search: false, columns: [{ l: "Tâche", k: "jobName" }, { l: "Début", dt: true, k: "startedAt" }, { l: "Fin", dt: true, k: "finishedAt" }, { l: "Statut", status: true, k: "status" }, { l: "Résultat", f: function (j) { return h("code", { class: "small" }, JSON.stringify(j.result)); } }, { l: "Erreur", k: "error" }] }); } },
+    { id: "backups", label: "Sauvegardes", render: function (b) {
+      const box = h("div");
+      b.appendChild(h("div", { class: "actions", style: { marginBottom: "10px" } }, btn(t("Créer une sauvegarde maintenant"), function (ev) { ev.target.disabled = true; api("admin.backup").then(function (x) { toast(t("Sauvegarde créée") + " : " + x.name, "good"); load(); }).catch(showErr).then(function () { ev.target.disabled = false; }); }, "primary")));
+      b.appendChild(h("p", { class: "muted small" }, t("La restauration se fait depuis l'éditeur Apps Script avec restoreFromBackup(identifiant) : elle est non destructive (la base actuelle est d'abord sauvegardée).")));
+      b.appendChild(box);
+      const load = function () { api("admin.backups").then(function (l) { clear(box).appendChild(table([{ l: "Nom", k: "name" }, { l: "Créée le", dt: true, k: "createdAt" }, { l: "Identifiant", f: function (x) { return h("code", { class: "small" }, x.fileId); } }], l)); }).catch(showErr); };
+      load();
+    } }
+  ]);
+};
+
+/* =============================== Journal d'audit =============================== */
+PAGES.audit = function (el) {
+  const head = pageHead(t("Journal d'audit"), t("Actions sensibles horodatées. Les données personnelles et secrets sont masqués."));
+  el.appendChild(head);
+  const lv = listView(el, { route: "audit.list", filters: [{ k: "from", l: "Du", t: "date" }, { k: "to", l: "Au", t: "date" }, { k: "action", l: "Action contient", t: "text" }],
+    columns: [{ l: "Horodatage", dt: true, k: "timestamp" }, { l: "Acteur", k: "actorEmail" }, { l: "Action", k: "action" }, { l: "Type", k: "entityType" }, { l: "Élément", f: function (l) { return h("code", { class: "small" }, l.entityId || ""); } }, { l: "Résultat", status: true, k: "result" },
+      { l: "Détails", f: function (l) { return h("code", { class: "small", style: { whiteSpace: "pre-wrap" } }, JSON.stringify(l.details).slice(0, 300)); } }] });
+  head.querySelector(".actions").appendChild(btn(t("Exporter (CSV)"), function () { api("report.export", Object.assign({ type: "AUDIT", format: "csv" }, lv.state)).then(download).catch(showErr); }));
+};
+
+/* =============================== Démarrage =============================== */
+document.addEventListener("DOMContentLoaded", function () { App.start(); });
+if (document.readyState !== "loading") App.start();
+</script>

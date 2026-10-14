@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ma.immopilot.app",
+      "sha256_cert_fingerprints": ["REMPLACEZ_PAR_L_EMPREINTE_SHA256_FOURNIE_PAR_PWABUILDER_OU_GOOGLE_PLAY"]
+    }
+  }
+]

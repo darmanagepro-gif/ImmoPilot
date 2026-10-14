@@ -1,0 +1,418 @@
+<script>
+"use strict";
+/* =====================================================================================
+   ImmoPilot — bibliothèque client : état, appels serveur, i18n, formatage, composants.
+   Aucune décision de sécurité n'est prise côté client : le serveur revérifie tout.
+   Les données sont insérées dans le DOM uniquement comme texte (pas d'innerHTML de données).
+   ===================================================================================== */
+const S = { token: null, me: null, meta: null, lang: "fr", cache: {}, charts: [], route: "", boot: window.BOOT || {} };
+const IP = window.IP = { S: S };
+/** Registre des pages (rempli par Dashboard.html, Pages.html et Scripts.html, chargés après ce fichier). */
+const PAGES = {};
+
+/* Navigation interne.
+   Dans Apps Script, l'application tourne dans un cadre protégé de Google : un lien <a href="#…"> peut y être traité comme
+   l'ouverture d'une nouvelle page (page blanche). Toute la navigation passe donc par navTo(), qui utilise
+   google.script.history (historique et bouton Retour du navigateur) et, hors Google (prévisualisation locale), l'ancre de l'URL. */
+function navTo(route) {
+  const r = String(route == null ? "" : route).replace(/^#/, "") || "dashboard";
+  const hist = window.google && google.script && google.script.history;
+  if (hist && typeof hist.push === "function") {
+    try { hist.push(null, null, r); } catch (e) { /* historique indisponible : la navigation continue */ }
+    App.go(r);
+    return;
+  }
+  if (location.hash.replace(/^#/, "") === r) App.go(r); else location.hash = r;
+}
+const NAV_HASH = { set v(route) { navTo(route); } };
+document.addEventListener("click", function (e) {
+  const a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null;
+  if (!a) return;
+  e.preventDefault();
+  const r = a.getAttribute("href").slice(1);
+  if (r && typeof S !== "undefined" && S.me) navTo(r);
+});
+
+function store(k, v) {
+  try { if (v === undefined) return window.sessionStorage.getItem(k); if (v === null) window.sessionStorage.removeItem(k); else window.sessionStorage.setItem(k, v); } catch (e) { return null; }
+  return null;
+}
+function lstore(k, v) { try { if (v === undefined) return window.localStorage.getItem(k); window.localStorage.setItem(k, v); } catch (e) { return null; } return null; }
+
+/* ------------------------------- i18n ------------------------------- */
+const I18N = { fr: {}, en: {}, ar: {} };
+function t(s) { const d = I18N[S.lang]; return (d && d[s]) || s; }
+function st(code) { if (code === null || code === undefined || code === "") return "—"; const k = "st." + code; const v = (I18N[S.lang] || {})[k] || I18N.fr[k]; return v || String(code); }
+function setLang(l) {
+  S.lang = ["fr", "en", "ar"].indexOf(l) >= 0 ? l : "fr";
+  lstore("ip_lang", S.lang);
+  document.documentElement.lang = S.lang;
+  document.documentElement.dir = S.lang === "ar" ? "rtl" : "ltr";
+}
+function locale() { return S.lang === "ar" ? "ar-MA" : (S.lang === "en" ? "en-GB" : "fr-FR"); }
+
+/* ----------------------------- formatage ----------------------------- */
+function isNil(v) { return v === null || v === undefined || v === ""; }
+function fmtNum(v, d) { if (isNil(v) || isNaN(Number(v))) return "—"; return new Intl.NumberFormat(locale(), { maximumFractionDigits: d === undefined ? 2 : d }).format(Number(v)); }
+function fmtMoney(v) { if (isNil(v) || isNaN(Number(v))) return "—"; return new Intl.NumberFormat(locale(), { style: "currency", currency: (S.me && S.me.currency) || "MAD", maximumFractionDigits: 2 }).format(Number(v)); }
+function fmtPct(v) { return isNil(v) ? "—" : fmtNum(v, 1) + " %"; }
+function tz() { return (S.me && S.me.timezone) || "Africa/Casablanca"; }
+function fmtDate(s) { if (!s) return "—"; const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + "T12:00:00Z") : new Date(s); if (isNaN(d)) return String(s); return new Intl.DateTimeFormat(locale(), { timeZone: /^\d{4}-\d{2}-\d{2}$/.test(s) ? "UTC" : tz(), day: "2-digit", month: "2-digit", year: "numeric" }).format(d); }
+function fmtDT(s) { if (!s) return "—"; const d = new Date(s); if (isNaN(d)) return String(s); return new Intl.DateTimeFormat(locale(), { timeZone: tz(), day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(d); }
+function fmtTime(s) { if (!s) return "—"; const d = new Date(s); return isNaN(d) ? "—" : new Intl.DateTimeFormat(locale(), { timeZone: tz(), hour: "2-digit", minute: "2-digit" }).format(d); }
+function today() { return (S.me && S.me.today) || new Date().toISOString().slice(0, 10); }
+function addDays(s, n) { const d = new Date(s + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function monthStart(s) { return String(s || today()).slice(0, 8) + "01"; }
+function monthEnd(s) { const d = new Date(monthStart(s) + "T00:00:00Z"); d.setUTCMonth(d.getUTCMonth() + 1); d.setUTCDate(0); return d.toISOString().slice(0, 10); }
+function rk() { const a = new Uint8Array(16); (window.crypto || window.msCrypto).getRandomValues(a); return "k_" + Array.from(a, function (b) { return ("0" + b.toString(16)).slice(-2); }).join(""); }
+function can(cap) { return !!(S.me && S.me.caps.indexOf(cap) >= 0); }
+function hasRole(r) { return !!(S.me && S.me.roles.some(function (x) { return x.role === r; })); }
+function errMsg(e) { return (e && e.message) || t("Une erreur est survenue."); }
+
+/* ------------------------------ DOM sûr ------------------------------ */
+function h(tag, attrs) {
+  const el = document.createElement(tag);
+  if (attrs) Object.keys(attrs).forEach(function (k) {
+    const v = attrs[k];
+    if (v === null || v === undefined || v === false) return;
+    if (k === "class") el.className = v;
+    else if (k === "text") el.textContent = v;
+    else if (k.indexOf("on") === 0 && typeof v === "function") el.addEventListener(k.slice(2), v);
+    else if (k === "style" && typeof v === "object") Object.assign(el.style, v);
+    else if (k === "value") el.value = v;
+    else if (k === "checked") el.checked = !!v;
+    else el.setAttribute(k, v === true ? "" : v);
+  });
+  for (let i = 2; i < arguments.length; i++) append(el, arguments[i]);
+  return el;
+}
+function append(el, c) {
+  if (c === null || c === undefined || c === false) return;
+  if (Array.isArray(c)) { c.forEach(function (x) { append(el, x); }); return; }
+  el.appendChild(c instanceof Node ? c : document.createTextNode(String(c)));
+}
+function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); return el; }
+function $(id) { return document.getElementById(id); }
+function tag(text, tone) { return h("span", { class: "tag " + (tone || "") }, text); }
+const STATUS_TONE = { ACTIVE: "good", CONFIRMED: "info", PAID: "good", VALIDATED: "good", VERIFIED: "good", COMPLETED: "good", APPROVED: "good", CLOSED: "", RESOLVED: "good", ACCEPTED: "info",
+  IN_PROGRESS: "info", OFFERED: "warn", PENDING: "warn", PARTIAL: "warn", SUBMITTED: "warn", REQUESTED: "warn", QUOTE_PENDING: "warn", AWAITING_OWNER: "warn", DUE: "warn", TRIAL: "info", NOTICE: "warn",
+  PAST_DUE: "bad", LATE: "bad", EXPIRED: "bad", CANCELLED: "", SUSPENDED: "bad", REJECTED: "bad", DECLINED: "bad", UNPAID: "bad", NO_SHOW: "bad", CRITICAL: "bad", HIGH: "bad", MEDIUM: "warn", LOW: "",
+  OPEN: "warn", CREATED: "warn", DRAFT: "", REVOKED: "", EMAIL_FAILED: "bad", FAILED: "bad", REFUNDED: "", OVERPAID: "warn", UPCOMING: "", RECORDED: "good", VOID: "", HELD: "info", RETURNED: "good" };
+function roleLabel(r) { const v = st("role." + r); return v === "role." + r ? r : v; }
+function stTag(code) { return tag(st(code), STATUS_TONE[code] || ""); }
+
+/* ----------------------------- appels serveur ----------------------------- */
+function run(fn, args) {
+  return new Promise(function (res, rej) {
+    if (!window.google || !google.script) { rej({ code: "NETWORK", message: t("Service Google indisponible.") }); return; }
+    const r = google.script.run.withSuccessHandler(res).withFailureHandler(function (e) { rej({ code: "NETWORK", message: (e && e.message) || t("Erreur de communication avec le serveur.") }); });
+    r[fn].apply(r, args);
+  });
+}
+function api(route, args) {
+  return run("api", [S.token, route, args || {}]).then(function (r) {
+    if (r && r.ok) return r.data;
+    const e = (r && r.error) || { code: "INTERNAL", message: t("Réponse invalide.") };
+    if (e.code === "AUTH" && route !== "me.logout") { localLogout(e.message); }
+    throw e;
+  });
+}
+function apiP(route, args) { return run("apiPublic", [route, args || {}]).then(function (r) { if (r && r.ok) return r.data; throw (r && r.error) || { message: t("Réponse invalide.") }; }); }
+IP.api = api;
+function localLogout(msg) { S.token = null; S.me = null; store("ip_token", null); if (window.App) App.renderLogin(msg); }
+
+/* ------------------------------ retours ------------------------------ */
+function toast(msg, tone) {
+  const el = h("div", { class: "toast " + (tone || "") }, msg);
+  $("toasts").appendChild(el);
+  setTimeout(function () { el.remove(); }, tone === "bad" ? 7000 : 3500);
+}
+function showErr(e) { toast(errMsg(e), "bad"); }
+
+/* ------------------------------ modales ------------------------------ */
+function modal(opts) {
+  const back = h("div", { class: "modal-back", role: "dialog", "aria-modal": "true" });
+  const close = function () { back.remove(); document.removeEventListener("keydown", esc); if (opts.onClose) opts.onClose(); };
+  const esc = function (ev) { if (ev.key === "Escape") close(); };
+  const foot = h("footer");
+  (opts.buttons || []).forEach(function (b) {
+    const btn = h("button", { class: "btn " + (b.primary ? "primary" : "") + (b.danger ? " danger" : ""), type: "button" }, b.label);
+    btn.addEventListener("click", function () { b.onClick ? b.onClick(btn, close) : close(); });
+    foot.appendChild(btn);
+  });
+  const m = h("div", { class: "modal " + (opts.size || "") }, h("header", null, h("h3", null, opts.title), h("button", { class: "x", type: "button", "aria-label": t("Fermer"), onclick: close }, "×")),
+    h("div", { class: "body" }, opts.body), opts.buttons && opts.buttons.length ? foot : null);
+  back.appendChild(m);
+  back.addEventListener("mousedown", function (ev) { if (ev.target === back) close(); });
+  document.addEventListener("keydown", esc);
+  document.body.appendChild(back);
+  const first = m.querySelector("input,select,textarea"); if (first) setTimeout(function () { first.focus(); }, 30);
+  return { close: close, el: m, body: m.querySelector(".body") };
+}
+function confirmBox(msg, opts) {
+  opts = opts || {};
+  return new Promise(function (res) {
+    modal({ title: opts.title || t("Confirmation"), size: "sm", body: h("p", null, msg), onClose: function () { res(false); },
+      buttons: [{ label: t("Annuler") }, { label: opts.confirmLabel || t("Confirmer"), primary: !opts.danger, danger: !!opts.danger, onClick: function (b, close) { res(true); close(); } }] });
+  });
+}
+
+/* ------------------------------ formulaires ------------------------------
+   Champ : { k, l, t: text|number|date|time|datetime|select|textarea|checkbox|email|tel|password|multi|lines|file,
+             opts: [[valeur, libellé]] ou fonction async, req, full, min, max, step, ph, help, show(values) } */
+function optionsOf(f, values) { if (typeof f.opts === "function") return Promise.resolve(f.opts(values)); return Promise.resolve(f.opts || []); }
+function buildForm(fields, values) {
+  values = values || {};
+  const form = h("form", { class: "form", novalidate: true }), inputs = {}, wraps = {};
+  fields.forEach(function (f) {
+    const id = "f_" + f.k + "_" + Math.random().toString(36).slice(2, 7);
+    const lab = h("label", { for: id }, t(f.l), f.req ? h("span", { class: "req" }, " *") : null);
+    let input;
+    const v = values[f.k] === undefined || values[f.k] === null ? (f.def === undefined ? "" : f.def) : values[f.k];
+    if (f.t === "select") {
+      input = h("select", { id: id }); if (!f.req || f.empty) input.appendChild(h("option", { value: "" }, f.empty || "—"));
+      optionsOf(f, values).then(function (opts) { opts.forEach(function (o) { const a = Array.isArray(o) ? o : [o, st(o)]; input.appendChild(h("option", { value: a[0] }, a[1])); }); input.value = v === "" && f.req && opts.length ? (Array.isArray(opts[0]) ? opts[0][0] : opts[0]) : String(v); if (f.onchange) f.onchange(input.value, inputs); });
+      if (f.onchange) input.addEventListener("change", function () { f.onchange(input.value, inputs); });
+    } else if (f.t === "multi") {
+      input = h("div", { id: id, class: "multi", style: { display: "flex", flexWrap: "wrap", gap: "6px 14px" } });
+      const sel = Array.isArray(v) ? v : String(v || "").split(",").filter(Boolean);
+      optionsOf(f, values).then(function (opts) { opts.forEach(function (o) { const a = Array.isArray(o) ? o : [o, st(o)]; input.appendChild(h("label", { class: "small", style: { display: "flex", gap: "4px", alignItems: "center" } }, h("input", { type: "checkbox", value: a[0], checked: sel.indexOf(a[0]) >= 0 }), a[1])); }); });
+    } else if (f.t === "textarea") input = h("textarea", { id: id, rows: f.rows || 3, placeholder: f.ph || "" }, String(v));
+    else if (f.t === "checkbox") input = h("input", { id: id, type: "checkbox", checked: v === true || v === "true" });
+    else if (f.t === "lines") input = linesEditor(Array.isArray(v) ? v : []);
+    else if (f.t === "file") input = h("input", { id: id, type: "file", accept: f.accept || "image/*,application/pdf", multiple: f.multiple ? true : null, capture: f.capture || null });
+    else input = h("input", { id: id, type: f.t === "datetime" ? "datetime-local" : (f.t || "text"), value: f.t === "datetime" && v ? toLocalInput(v) : v, placeholder: f.ph || "", min: f.min, max: f.max, step: f.step, maxlength: f.maxlength || null, autocomplete: f.ac || null });
+    inputs[f.k] = input;
+    const wrap = f.t === "checkbox" ? h("div", { class: "field check" + (f.full ? " full" : "") }, input, lab) : h("div", { class: "field" + (f.full || f.t === "textarea" || f.t === "lines" || f.t === "multi" ? " full" : "") }, lab, input, f.help ? h("div", { class: "help" }, t(f.help)) : null);
+    wraps[f.k] = wrap; form.appendChild(wrap);
+  });
+  const get = function () {
+    const out = {};
+    fields.forEach(function (f) {
+      const i = inputs[f.k];
+      if (f.t === "checkbox") out[f.k] = i.checked;
+      else if (f.t === "multi") out[f.k] = Array.from(i.querySelectorAll("input:checked")).map(function (x) { return x.value; });
+      else if (f.t === "lines") out[f.k] = i.getLines();
+      else if (f.t === "file") out[f.k] = Array.from(i.files || []);
+      else if (f.t === "datetime") out[f.k] = i.value ? new Date(i.value).toISOString() : "";
+      else if (f.t === "number") out[f.k] = i.value === "" ? "" : Number(i.value);
+      else out[f.k] = i.value.trim();
+    });
+    return out;
+  };
+  const refresh = function () { const vals = get(); fields.forEach(function (f) { if (f.show) wraps[f.k].classList.toggle("hidden", !f.show(vals)); }); };
+  form.addEventListener("change", refresh); setTimeout(refresh, 0);
+  return { el: form, get: get, inputs: inputs, validate: function () {
+    const vals = get();
+    const miss = fields.filter(function (f) { return f.req && (!f.show || f.show(vals)) && (vals[f.k] === "" || vals[f.k] === undefined || (Array.isArray(vals[f.k]) && !vals[f.k].length)); }).map(function (f) { return t(f.l); });
+    return miss.length ? t("Champs obligatoires") + " : " + miss.join(", ") : "";
+  } };
+}
+function toLocalInput(iso) { const d = new Date(iso); if (isNaN(d)) return ""; const off = d.getTimezoneOffset(); return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16); }
+function linesEditor(lines) {
+  const wrap = h("div", { class: "lines-editor" }), tb = h("tbody"), total = h("span", { class: "num" });
+  const addRow = function (l) {
+    l = l || {};
+    const tr = h("tr", null, h("td", null, h("input", { class: "d", value: l.description || "", placeholder: t("Désignation") })),
+      h("td", { style: { width: "90px" } }, h("input", { class: "q", type: "number", min: "0", step: "0.01", value: l.quantity || 1 })),
+      h("td", { style: { width: "120px" } }, h("input", { class: "u", type: "number", min: "0", step: "0.01", value: l.unitPrice || "" })),
+      h("td", { style: { width: "36px" } }, h("button", { type: "button", class: "btn sm ghost", onclick: function () { tr.remove(); calc(); } }, "×")));
+    tr.addEventListener("input", calc); tb.appendChild(tr);
+  };
+  const calc = function () { let s = 0; tb.querySelectorAll("tr").forEach(function (tr) { s += (Number(tr.querySelector(".q").value) || 0) * (Number(tr.querySelector(".u").value) || 0); }); total.textContent = fmtMoney(s) + " " + t("HT"); };
+  wrap.appendChild(h("table", null, h("thead", null, h("tr", null, h("th", null, t("Désignation")), h("th", null, t("Qté")), h("th", null, t("PU HT")), h("th"))), tb));
+  wrap.appendChild(h("div", { class: "actions", style: { justifyContent: "space-between", marginTop: "6px" } }, h("button", { type: "button", class: "btn sm", onclick: function () { addRow(); } }, "+ " + t("Ligne")), total));
+  (lines.length ? lines : [{}]).forEach(addRow); calc();
+  wrap.getLines = function () { return Array.from(tb.querySelectorAll("tr")).map(function (tr) { return { description: tr.querySelector(".d").value.trim(), quantity: Number(tr.querySelector(".q").value), unitPrice: Number(tr.querySelector(".u").value) }; }).filter(function (l) { return l.description; }); };
+  return wrap;
+}
+/** Formulaire en modale : soumission protégée contre le double clic, erreurs serveur affichées dans la modale. */
+function formModal(title, fields, values, submit, opts) {
+  opts = opts || {};
+  const f = buildForm(fields, values), err = h("div", { class: "alert bad hidden" });
+  const body = h("div", null, opts.intro ? h("p", { class: "muted" }, opts.intro) : null, err, f.el);
+  return new Promise(function (resolve) {
+    const m = modal({ title: title, body: body, size: opts.size, onClose: function () { resolve(null); }, buttons: [{ label: t("Annuler") }, { label: opts.submitLabel || t("Enregistrer"), primary: true, onClick: function (btn, close) {
+      const miss = f.validate(); if (miss) { err.textContent = miss; err.classList.remove("hidden"); return; }
+      btn.disabled = true; btn.textContent = t("Traitement…"); err.classList.add("hidden");
+      Promise.resolve(submit(f.get(), f)).then(function (r) { resolve(r === undefined ? true : r); m.close(); if (opts.success) toast(t(opts.success), "good"); })
+        .catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); btn.disabled = false; btn.textContent = opts.submitLabel || t("Enregistrer"); });
+    } }] });
+    f.el.addEventListener("submit", function (ev) { ev.preventDefault(); });
+  });
+}
+
+/* ------------------------------ tableaux & listes ------------------------------ */
+function table(columns, rows, opts) {
+  opts = opts || {};
+  if (!rows || !rows.length) return h("div", { class: "table-wrap" }, h("div", { class: "empty" }, t(opts.empty || "Aucune donnée.")));
+  const thead = h("thead", null, h("tr", null, columns.map(function (c) { return h("th", { class: c.num ? "num" : "" }, t(c.l)); })));
+  const tbody = h("tbody");
+  rows.forEach(function (r) {
+    const tr = h("tr", { class: (opts.onRow ? "click " : "") + (opts.rowClass ? opts.rowClass(r) : "") });
+    columns.forEach(function (c) {
+      let v = c.f ? c.f(r) : r[c.k];
+      if (!(v instanceof Node)) v = c.money ? fmtMoney(v) : c.pct ? fmtPct(v) : c.date ? fmtDate(v) : c.dt ? fmtDT(v) : c.status ? stTag(v) : (c.num && typeof v === "number" ? fmtNum(v) : (isNil(v) ? "—" : v));
+      tr.appendChild(h("td", { class: (c.num || c.money || c.pct ? "num " : "") + (c.cls || "") }, v));
+    });
+    if (opts.onRow) tr.addEventListener("click", function (ev) { if (ev.target.closest("button,a,input,select")) return; opts.onRow(r); });
+    tbody.appendChild(tr);
+  });
+  return h("div", { class: "table-wrap" }, h("table", { class: "t" }, thead, tbody));
+}
+/** Liste paginée et filtrable branchée sur une route serveur qui renvoie { items, total, page, pageSize }. */
+function listView(container, cfg) {
+  const state = Object.assign({ page: 1, pageSize: cfg.pageSize || 25, q: "" }, cfg.initial || {});
+  const bar = h("div", { class: "toolbar" }), out = h("div"), pager = h("div", { class: "pager" });
+  let timer = null;
+  if (cfg.search !== false) bar.appendChild(h("input", { type: "search", placeholder: t("Rechercher…"), value: state.q, oninput: function (e) { clearTimeout(timer); timer = setTimeout(function () { state.q = e.target.value; state.page = 1; load(); }, 350); } }));
+  (cfg.filters || []).forEach(function (f) {
+    let el;
+    if (f.t === "select") { el = h("select", { title: t(f.l) }, h("option", { value: "" }, t(f.l) + " : " + t("tous")));
+      optionsOf(f, state).then(function (opts) { opts.forEach(function (o) { const a = Array.isArray(o) ? o : [o, st(o)]; el.appendChild(h("option", { value: a[0] }, a[1])); }); if (state[f.k]) el.value = state[f.k]; }); }
+    else if (f.t === "checkbox") el = h("label", { class: "small", style: { display: "flex", gap: "6px", alignItems: "center" } }, h("input", { type: "checkbox", checked: !!state[f.k], onchange: function (e) { state[f.k] = e.target.checked; state.page = 1; load(); } }), t(f.l));
+    else el = h("input", { type: f.t || "text", title: t(f.l), "aria-label": t(f.l), value: state[f.k] || "" });
+    if (f.t !== "checkbox") el.addEventListener("change", function (e) { state[f.k] = e.target.value; state.page = 1; load(); });
+    bar.appendChild(f.t === "date" ? h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center" } }, t(f.l), el) : el);
+  });
+  if (cfg.tools) append(bar, cfg.tools(state));
+  container.appendChild(bar); container.appendChild(out); container.appendChild(pager);
+  function load() {
+    clear(out).appendChild(h("div", { class: "loading" }, t("Chargement…")));
+    const args = Object.assign({}, cfg.args || {}, state);
+    return api(cfg.route, args).then(function (r) {
+      clear(out); const items = Array.isArray(r) ? r : r.items;
+      out.appendChild(cfg.render ? cfg.render(items, r) : table(cfg.columns, items, { onRow: cfg.onRow, empty: cfg.empty, rowClass: cfg.rowClass }));
+      clear(pager);
+      if (!Array.isArray(r) && r.total > r.pageSize) {
+        const pages = Math.ceil(r.total / r.pageSize);
+        pager.appendChild(h("span", null, fmtNum(r.total, 0) + " " + t("éléments") + " — " + t("page") + " " + r.page + "/" + pages));
+        pager.appendChild(h("span", { class: "actions" }, h("button", { class: "btn sm", disabled: r.page <= 1, onclick: function () { state.page--; load(); } }, "‹"), h("button", { class: "btn sm", disabled: r.page >= pages, onclick: function () { state.page++; load(); } }, "›")));
+      } else if (!Array.isArray(r)) pager.appendChild(h("span", null, fmtNum(r.total || items.length, 0) + " " + t("éléments")));
+      if (cfg.after) cfg.after(r);
+    }).catch(function (e) { clear(out).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+  }
+  load();
+  return { reload: load, state: state };
+}
+
+function kpis(list) {
+  return h("div", { class: "kpis" }, list.filter(Boolean).map(function (k) {
+    let d = null;
+    if (k.delta !== undefined && k.delta !== null && !isNaN(k.delta)) { const up = Number(k.delta) >= 0, good = k.invert ? !up : up; d = h("div", { class: "delta " + (Number(k.delta) === 0 ? "" : (good ? "up" : "down")) }, (up ? "▲ " : "▼ ") + (k.deltaFmt ? k.deltaFmt(Math.abs(k.delta)) : fmtNum(Math.abs(k.delta))) + " " + t("vs période précédente")); }
+    return h("div", { class: "kpi " + (k.tone || "") }, h("div", { class: "label" }, t(k.l)), h("div", { class: "value" }, k.v), d, k.sub ? h("div", { class: "small muted" }, k.sub) : null);
+  }));
+}
+function panel(title, body, tools) { return h("section", { class: "panel" }, title || tools ? h("div", { class: "panel-head" }, h("h3", null, t(title || "")), tools ? h("div", { class: "actions" }, tools) : null) : null, body); }
+function pageHead(title, sub, actions) { return h("div", { class: "page-head" }, h("div", null, h("h2", null, title), sub ? h("p", null, sub) : null), h("div", { class: "actions" }, actions || [])); }
+function btn(label, onclick, cls) { return h("button", { type: "button", class: "btn " + (cls || ""), onclick: onclick }, label); }
+function kv(pairs) { const dl = h("dl", { class: "kv" }); pairs.filter(Boolean).forEach(function (p) { dl.appendChild(h("dt", null, t(p[0]))); dl.appendChild(h("dd", null, p[1] instanceof Node ? p[1] : (isNil(p[1]) ? "—" : String(p[1])))); }); return dl; }
+function tabs(container, list, active) {
+  const bar = h("div", { class: "tabs", role: "tablist" }), body = h("div");
+  const show = function (id) { Array.from(bar.children).forEach(function (b) { b.classList.toggle("active", b.dataset.id === id); }); clear(body); const tb = list.find(function (x) { return x.id === id; }); if (tb) tb.render(body); };
+  list.filter(Boolean).forEach(function (x) { const b = h("button", { type: "button", role: "tab", onclick: function () { show(x.id); } }, t(x.label)); b.dataset.id = x.id; bar.appendChild(b); });
+  container.appendChild(bar); container.appendChild(body); show(active || list.filter(Boolean)[0].id);
+  return { show: show };
+}
+
+/* ------------------------------ graphiques ------------------------------ */
+const PALETTE = { primary: "#3D4FD1", palm: "#1E7A55", saffron: "#D9A21B", clay: "#B4432F", grey: "#9AA7B8", navy: "#10233C" };
+function chart(canvasParent, config) {
+  if (!window.Chart) { canvasParent.appendChild(h("div", { class: "muted small" }, t("Graphique indisponible (bibliothèque Chart.js non chargée)."))); return null; }
+  const c = h("canvas"); clear(canvasParent).appendChild(h("div", { class: "chart-box" }, c));
+  config.options = Object.assign({ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom", rtl: S.lang === "ar" } } }, config.options || {});
+  const ch = new Chart(c.getContext("2d"), config); S.charts.push(ch); return ch;
+}
+function destroyCharts() { S.charts.forEach(function (c) { try { c.destroy(); } catch (e) { /* déjà détruit */ } }); S.charts = []; }
+
+/* ------------------------------ fichiers ------------------------------ */
+function pickFiles(opts) {
+  opts = opts || {};
+  return new Promise(function (res) {
+    const i = h("input", { type: "file", accept: opts.accept || "image/*,application/pdf", multiple: opts.multiple ? true : null, capture: opts.capture || null, style: { display: "none" } });
+    i.addEventListener("change", function () { res(Array.from(i.files || [])); i.remove(); });
+    document.body.appendChild(i); i.click();
+  });
+}
+/** Lit un fichier ; les photos sont réduites (1600 px, JPEG) côté client pour limiter le volume transféré. */
+function fileToPayload(file) {
+  return new Promise(function (res, rej) {
+    if (file.size > 12 * 1024 * 1024) { rej({ message: t("Fichier trop volumineux.") }); return; }
+    const r = new FileReader();
+    r.onerror = function () { rej({ message: t("Lecture du fichier impossible.") }); };
+    r.onload = function () {
+      const dataUrl = r.result;
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { res({ fileName: file.name, mimeType: file.type, base64: String(dataUrl).split(",")[1] }); return; }
+      const img = new Image();
+      img.onload = function () {
+        const max = 1600, sc = Math.min(1, max / Math.max(img.width, img.height));
+        const cv = h("canvas", { width: Math.round(img.width * sc), height: Math.round(img.height * sc) });
+        cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        res({ fileName: file.name.replace(/\.[^.]+$/, "") + ".jpg", mimeType: "image/jpeg", base64: cv.toDataURL("image/jpeg", 0.82).split(",")[1] });
+      };
+      img.onerror = function () { res({ fileName: file.name, mimeType: file.type, base64: String(dataUrl).split(",")[1] }); };
+      img.src = dataUrl;
+    };
+    r.readAsDataURL(file);
+  });
+}
+function uploadFiles(files, ownerType, ownerId, category) {
+  const ids = [];
+  return files.reduce(function (p, f) {
+    return p.then(function () { return fileToPayload(f); }).then(function (pl) { return api("doc.upload", Object.assign(pl, { ownerType: ownerType, ownerId: ownerId, category: category })); }).then(function (r) { ids.push(r.documentId); });
+  }, Promise.resolve()).then(function () { if (ids.length) toast(ids.length + " " + t("fichier(s) envoyé(s)."), "good"); return ids; });
+}
+function b64ToBlob(b64, mime) { const bin = atob(b64), arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return new Blob([arr], { type: mime }); }
+/** Téléchargement d'un contenu renvoyé par le serveur (après contrôle des droits). */
+function download(payload) {
+  const blob = payload.base64 ? b64ToBlob(payload.base64, payload.mimeType) : new Blob(["﻿" + payload.content], { type: (payload.mimeType || "text/plain") + ";charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = h("a", { href: url, download: payload.fileName || "fichier", target: "_blank", rel: "noopener" });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+}
+function openDoc(documentId) { return api("doc.get", { documentId: documentId }).then(download).catch(showErr); }
+const IMG_CACHE = {};
+function docImg(documentId) {
+  const img = h("img", { alt: "", loading: "lazy" });
+  (IMG_CACHE[documentId] ? Promise.resolve(IMG_CACHE[documentId]) : api("doc.get", { documentId: documentId }).then(function (d) { IMG_CACHE[documentId] = /^image\//.test(d.mimeType) ? URL.createObjectURL(b64ToBlob(d.base64, d.mimeType)) : ""; return IMG_CACHE[documentId]; }))
+    .then(function (u) { if (u) img.src = u; else img.replaceWith(h("div", { class: "empty" }, "PDF")); }).catch(function () { img.alt = t("Accès refusé"); });
+  return img;
+}
+function gallery(docs, opts) {
+  opts = opts || {};
+  if (!docs || !docs.length) return h("div", { class: "empty" }, t("Aucun fichier."));
+  return h("div", { class: "gallery" }, docs.map(function (d) {
+    const isImg = /^image\//.test(d.mimeType || "") || /\.(jpe?g|png|webp)$/i.test(d.fileName || "");
+    return h("figure", null, isImg ? (function () { const im = docImg(d.documentId); im.addEventListener("click", function () { openDoc(d.documentId); }); return im; })() :
+      h("div", { class: "empty", style: { cursor: "pointer" }, onclick: function () { openDoc(d.documentId); } }, "📄"), h("figcaption", { title: d.fileName }, (d.category ? st(d.category) + " · " : "") + d.fileName));
+  }));
+}
+function docList(docs) {
+  return table([{ l: "Fichier", k: "fileName" }, { l: "Catégorie", f: function (d) { return st(d.category); } }, { l: "Ajouté le", dt: true, k: "createdAt" }, { l: "", f: function (d) { return btn(t("Télécharger"), function () { openDoc(d.documentId); }, "sm"); } }], docs, { empty: "Aucun document." });
+}
+
+/* ------------------------------ signature tactile ------------------------------ */
+function signaturePad() {
+  const cv = h("canvas", { class: "sig", width: 600, height: 160 }); let drawing = false, dirty = false;
+  const ctx = cv.getContext("2d"); ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.strokeStyle = "#10233C";
+  const pos = function (e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
+  cv.addEventListener("pointerdown", function (e) { drawing = true; dirty = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p[0], p[1]); cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", function (e) { if (!drawing) return; const p = pos(e); ctx.lineTo(p[0], p[1]); ctx.stroke(); });
+  cv.addEventListener("pointerup", function () { drawing = false; });
+  const wrap = h("div", null, cv, h("button", { type: "button", class: "btn sm ghost", onclick: function () { ctx.clearRect(0, 0, cv.width, cv.height); dirty = false; } }, t("Effacer")));
+  wrap.getPayload = function () { return dirty ? { fileName: "signature.png", mimeType: "image/png", base64: cv.toDataURL("image/png").split(",")[1] } : null; };
+  return wrap;
+}
+
+/* ------------------------------ cache de listes ------------------------------ */
+function propChoices(cap) {
+  const k = "props:" + (cap || "");
+  if (!S.cache[k]) S.cache[k] = api("property.choices", { cap: cap || "" }).then(function (l) { return l.map(function (p) { return [p.propertyId, p.name + " — " + p.city]; }); });
+  return S.cache[k];
+}
+function invalidate() { S.cache = {}; }
+function listOpts(name) { return ((S.me && S.me.lists && S.me.lists[name]) || []).map(function (x) { return [x, st(x)]; }); }
+function enumOpts(table, field) { return ((S.meta && S.meta.enums[table] && S.meta.enums[table][field]) || []).map(function (x) { return [x, st(x)]; }); }
+function myOrgs(roleList) { return (S.me.roles || []).filter(function (r) { return !roleList || roleList.indexOf(r.role) >= 0; }).map(function (r) { return [r.organizationId, r.organizationName]; }).filter(function (v, i, a) { return a.findIndex(function (x) { return x[0] === v[0]; }) === i; }); }
+</script>

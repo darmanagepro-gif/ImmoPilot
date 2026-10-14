@@ -1,0 +1,786 @@
+<script>
+"use strict";
+/* Pages opérationnelles : biens, calendrier, réservations, voyageurs, arrivées/départs, ménage, incidents,
+   prestataires, devis, interventions, factures, baux, locataires et espace locataire. */
+
+/* =============================== Biens =============================== */
+function propertyFields(isCreate) {
+  const f = [
+    isCreate ? { k: "organizationId", l: "Organisation propriétaire", t: "select", req: true, opts: function () { return api("property.orgChoices").then(function (l) { return l.map(function (o) { return [o.organizationId, o.name]; }); }); } } : null,
+    { k: "name", l: "Nom commercial", req: true }, { k: "propertyType", l: "Type de bien", t: "select", req: true, opts: function () { return (S.meta.propertyTypes || []).map(function (x) { return [x, st(x)]; }); } },
+    { k: "rentalMode", l: "Mode de location", t: "select", req: true, opts: [["SHORT_TERM", st("SHORT_TERM")], ["LONG_TERM", st("LONG_TERM")], ["BOTH", st("BOTH")]] },
+    !isCreate ? { k: "status", l: "Statut", t: "select", opts: [["ACTIVE", st("ACTIVE")], ["INACTIVE", st("INACTIVE")], ["MAINTENANCE", st("MAINTENANCE")]] } : null,
+    { k: "address", l: "Adresse complète", full: true }, { k: "city", l: "Ville", req: true, def: "Marrakech" }, { k: "neighborhood", l: "Quartier" },
+    { k: "building", l: "Immeuble / résidence" }, { k: "floor", l: "Étage" }, { k: "doorNumber", l: "N° de porte" },
+    { k: "latitude", l: "Latitude", t: "number", step: "any" }, { k: "longitude", l: "Longitude", t: "number", step: "any" },
+    { k: "surfaceM2", l: "Surface (m²)", t: "number", min: 0 }, { k: "bedrooms", l: "Chambres", t: "number", min: 0 }, { k: "bathrooms", l: "Salles de bain", t: "number", min: 0 }, { k: "capacity", l: "Capacité maximale", t: "number", min: 0 },
+    { k: "nightlyPrice", l: "Prix par nuit (MAD)", t: "number", min: 0, step: "0.01", show: function (v) { return v.rentalMode !== "LONG_TERM"; } },
+    { k: "cleaningFee", l: "Frais de ménage (MAD)", t: "number", min: 0, step: "0.01", show: function (v) { return v.rentalMode !== "LONG_TERM"; } },
+    { k: "touristTaxPerNight", l: "Taxe de séjour / nuit / personne", t: "number", min: 0, step: "0.01", show: function (v) { return v.rentalMode !== "LONG_TERM"; } },
+    { k: "monthlyRent", l: "Loyer mensuel (MAD)", t: "number", min: 0, show: function (v) { return v.rentalMode !== "SHORT_TERM"; } }, { k: "charges", l: "Charges mensuelles", t: "number", min: 0, show: function (v) { return v.rentalMode !== "SHORT_TERM"; } },
+    { k: "managementCommissionRate", l: "Commission de gestion (%)", t: "number", min: 0, max: 100, step: "0.01" },
+    { k: "checkInTime", l: "Heure d'arrivée", t: "time", def: "15:00" }, { k: "checkOutTime", l: "Heure de départ", t: "time", def: "11:00" },
+    { k: "minTurnaroundMinutes", l: "Battement minimal entre séjours (min)", t: "number", min: 0, help: "Vide = paramètre de l'organisation (120 min par défaut)." },
+    { k: "equipment", l: "Équipements (séparés par des virgules)", t: "textarea" }, { k: "rooms", l: "Pièces (pour le ménage et les photos)", t: "textarea", help: "Une par ligne ou séparées par des virgules." },
+    { k: "cleaningChecklist", l: "Checklist ménage", t: "textarea" }, { k: "description", l: "Description", t: "textarea" }, { k: "houseRules", l: "Règlement intérieur", t: "textarea" },
+    { k: "arrivalInstructions", l: "Instructions d'arrivée", t: "textarea" }, { k: "departureInstructions", l: "Instructions de départ", t: "textarea" },
+    { k: "accessInstructions", l: "Codes et consignes d'accès (confidentiels)", t: "textarea", help: "Visibles des voyageurs à partir de la veille de l'arrivée." }
+  ];
+  return f.filter(Boolean);
+}
+function propertyPayload(v) { ["equipment", "rooms", "cleaningChecklist"].forEach(function (k) { if (typeof v[k] === "string") v[k] = v[k].split(/[\n,]/).map(function (x) { return x.trim(); }).filter(Boolean); }); return v; }
+PAGES.properties = function (el) {
+  let view = lstore("ip_prop_view") || "list", lv;
+  const head = pageHead(t("Biens"), t("Votre catalogue, cloisonné selon votre organisation et vos attributions."), [
+    h("select", { class: "btn", onchange: function (e) { view = e.target.value; lstore("ip_prop_view", view); lv.reload(); } }, [["list", t("Vue liste")], ["cards", t("Vue cartes")], ["map", t("Vue carte")]].map(function (o) { return h("option", { value: o[0], selected: o[0] === view ? true : null }, o[1]); })),
+    can("property.create") ? btn(t("Importer"), function () { importProperties().then(function () { lv.reload(); }); }) : null,
+    btn(t("Exporter"), function () { api("property.export", lv.state).then(download).catch(showErr); }),
+    can("property.create") ? btn("+ " + t("Ajouter un bien"), function () { formModal(t("Nouveau bien"), propertyFields(true), {}, function (v) { return api("property.create", propertyPayload(v)).then(function (r) { invalidate(); NAV_HASH.v = "property/" + r.propertyId; }); }, { size: "", success: "Bien créé." }); }, "primary") : null]);
+  el.appendChild(head);
+  lv = listView(el, { route: "property.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "INACTIVE", "MAINTENANCE", "ARCHIVED"] }, { k: "rentalMode", l: "Mode", t: "select", opts: ["SHORT_TERM", "LONG_TERM", "BOTH"] }, { k: "city", l: "Ville", t: "text" }],
+    render: function (items) {
+      if (view === "cards") return items.length ? h("div", { class: "cards" }, items.map(function (p) { return h("div", { class: "card", style: { cursor: "pointer" }, onclick: function () { NAV_HASH.v = "property/" + p.propertyId; } },
+        h("div", { class: "actions", style: { justifyContent: "space-between" } }, h("h4", null, p.name), stTag(p.status)), h("div", { class: "meta" }, [p.neighborhood, p.city].filter(Boolean).join(", ")),
+        h("div", { class: "meta" }, st(p.propertyType) + " · " + st(p.rentalMode) + (p.bedrooms !== null && p.bedrooms !== undefined ? " · " + p.bedrooms + " " + t("ch.") : "") + (p.surfaceM2 ? " · " + p.surfaceM2 + " m²" : "")),
+        p.nightlyPrice ? h("div", null, fmtMoney(p.nightlyPrice) + " / " + t("nuit")) : (p.monthlyRent ? h("div", null, fmtMoney(p.monthlyRent) + " / " + t("mois")) : null)); })) : h("div", { class: "empty" }, t("Aucun bien."));
+      if (view === "map") return propertyMap(items);
+      return table([{ l: "Bien", k: "name" }, { l: "Ville", f: function (p) { return [p.neighborhood, p.city].filter(Boolean).join(", "); } }, { l: "Type", f: function (p) { return st(p.propertyType); } }, { l: "Mode", f: function (p) { return st(p.rentalMode); } },
+        { l: "Ch.", num: true, k: "bedrooms" }, { l: "Surface", f: function (p) { return p.surfaceM2 ? p.surfaceM2 + " m²" : "—"; } }, { l: "Accès", f: function (p) { return p.access.map(function (a) { return st("via." + a); }).join(", "); } }, { l: "Statut", status: true, k: "status" }],
+        items, { onRow: function (p) { NAV_HASH.v = "property/" + p.propertyId; }, empty: "Aucun bien." });
+    } });
+};
+function propertyMap(items) {
+  const box = h("div", { class: "map" }), pts = items.filter(function (p) { return p.latitude && p.longitude; });
+  if (!window.L) return h("div", { class: "alert warn" }, t("Carte indisponible (bibliothèque Leaflet non chargée)."));
+  setTimeout(function () {
+    const m = L.map(box).setView(pts.length ? [pts[0].latitude, pts[0].longitude] : [31.6295, -7.9811], 12);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(m);
+    pts.forEach(function (p) { const mk = L.marker([p.latitude, p.longitude]).addTo(m); const a = h("a", { href: "#property/" + p.propertyId }, p.name); mk.bindPopup(a); });
+    if (pts.length > 1) m.fitBounds(pts.map(function (p) { return [p.latitude, p.longitude]; }), { padding: [30, 30] });
+  }, 50);
+  return h("div", null, pts.length < items.length ? h("p", { class: "small muted" }, (items.length - pts.length) + " " + t("bien(s) sans coordonnées géographiques.")) : null, box);
+}
+function importProperties() {
+  return api("property.orgChoices").then(function (orgs) {
+    return formModal(t("Importer des biens (CSV)"), [{ k: "organizationId", l: "Organisation", t: "select", req: true, opts: orgs.map(function (o) { return [o.organizationId, o.name]; }) }, { k: "file", l: "Fichier CSV", t: "file", accept: ".csv,text/csv", req: true },
+      { k: "real", l: "Importer réellement (sinon simulation)", t: "checkbox" }], {}, function (v) {
+      return v.file[0].text().then(function (csv) { return api("property.import", { organizationId: v.organizationId, csv: csv, dryRun: !v.real }); }).then(function (r) {
+        if (r.dryRun) { modal({ title: t("Résultat de la simulation"), body: h("div", null, h("p", null, r.valid + " " + t("ligne(s) valide(s)") + ", " + r.invalid + " " + t("en erreur") + "."), table([{ l: "Ligne", k: "line" }, { l: "Bien", k: "name" }, { l: "Résultat", f: function (x) { return x.ok ? tag("OK", "good") : tag(x.error, "bad"); } }], r.results)) }); }
+        else toast(r.imported + " " + t("bien(s) importé(s)."), "good");
+      });
+    }, { intro: t("Colonnes : name, city, neighborhood, address, propertyType, rentalMode, bedrooms, bathrooms, surfaceM2, capacity, nightlyPrice, cleaningFee, monthlyRent, charges, managementCommissionRate, checkInTime, checkOutTime. Séparateur virgule ou point-virgule.") });
+  });
+}
+PAGES.property = function (el, id) {
+  el.appendChild(h("div", { class: "loading" }, t("Chargement…")));
+  return api("property.get", { propertyId: id }).then(function (p) {
+    clear(el); $("page-title").textContent = p.name;
+    const has = function (c) { return p.caps.indexOf(c) >= 0; };
+    el.appendChild(pageHead(p.name, [p.address, p.neighborhood, p.city].filter(Boolean).join(", "), [stTag(p.status),
+      has("reservation.edit") ? btn("+ " + t("Réservation"), function () { reservationDialog({ propertyId: p.propertyId }); }) : null,
+      has("incident.report") || has("incident.manage") ? btn(t("Signaler un incident"), function () { incidentDialog({ propertyId: p.propertyId }); }) : null,
+      p.canEdit ? btn(t("Modifier"), function () { formModal(t("Modifier le bien"), propertyFields(false), Object.assign({}, p, { equipment: (p.equipment || []).join(", "), rooms: (p.rooms || []).join("\n"), cleaningChecklist: (p.cleaningChecklist || []).join("\n") }),
+        function (v) { return api("property.update", Object.assign(propertyPayload(v), { propertyId: p.propertyId })).then(function () { App.go("property/" + p.propertyId); }); }, { success: "Bien mis à jour." }); }, "primary") : null,
+      has("property.archive") ? btn(p.status === "ARCHIVED" ? t("Restaurer") : t("Archiver"), function () { confirmBox(p.status === "ARCHIVED" ? t("Restaurer ce bien ?") : t("Archiver ce bien ? Il ne sera plus proposé mais ses données sont conservées."), { danger: p.status !== "ARCHIVED" }).then(function (ok) { if (ok) api("property.archive", { propertyId: p.propertyId, restore: p.status === "ARCHIVED" }).then(function () { invalidate(); App.go("property/" + p.propertyId); }).catch(showErr); }); }, "danger") : null]));
+    tabs(el, [
+      { id: "info", label: "Fiche", render: function (b) {
+        const g = h("div", { class: "grid c2" });
+        g.appendChild(panel("Caractéristiques", kv([["Type", st(p.propertyType)], ["Mode de location", st(p.rentalMode)], ["Surface", p.surfaceM2 ? p.surfaceM2 + " m²" : "—"], ["Chambres", p.bedrooms], ["Salles de bain", p.bathrooms], ["Capacité", p.capacity],
+          ["Immeuble / étage / porte", [p.building, p.floor, p.doorNumber].filter(Boolean).join(" · ")], ["Coordonnées", p.latitude ? p.latitude + ", " + p.longitude : "—"], ["Équipements", (p.equipment || []).join(", ")], ["Pièces", (p.rooms || []).join(", ")],
+          ["Créé le", fmtDT(p.createdAt)], ["Modifié le", fmtDT(p.updatedAt)]])));
+        g.appendChild(panel("Conditions", kv([["Prix par nuit", fmtMoney(p.nightlyPrice)], ["Frais de ménage", fmtMoney(p.cleaningFee)], ["Taxe de séjour", fmtMoney(p.touristTaxPerNight)], ["Loyer mensuel", fmtMoney(p.monthlyRent)], ["Charges", fmtMoney(p.charges)],
+          ["Commission de gestion", isNil(p.managementCommissionRate) ? "—" : p.managementCommissionRate + " %"], ["Arrivée / départ", (p.checkInTime || "15:00") + " / " + (p.checkOutTime || "11:00")]])));
+        b.appendChild(g);
+        if (p.finance12m) b.appendChild(panel("12 derniers mois", kpis([{ l: "Revenus prévus", v: fmtMoney(p.finance12m.expected) }, { l: "Encaissé", v: fmtMoney(p.finance12m.collected), tone: "good" }, { l: "Dépenses", v: fmtMoney(p.finance12m.expenses), tone: "warn" },
+          { l: "Résultat", v: fmtMoney(p.finance12m.result), tone: p.finance12m.result >= 0 ? "good" : "bad" }, { l: "Occupation", v: fmtPct(p.finance12m.occupancyRate) }])));
+        b.appendChild(h("div", { class: "grid c2" }, panel("Description et règlement", h("div", null, h("p", { style: { whiteSpace: "pre-wrap" } }, p.description || "—"), h("h3", null, t("Règlement intérieur")), h("p", { style: { whiteSpace: "pre-wrap" } }, p.houseRules || "—"))),
+          panel("Instructions", kv([["Arrivée", p.arrivalInstructions], ["Départ", p.departureInstructions], ["Accès (confidentiel)", p.accessInstructions]]))));
+      } },
+      { id: "photos", label: "Photos", render: function (b) { b.appendChild(panel("Galerie", gallery(p.photos), p.canEdit ? [btn("+ " + t("Ajouter des photos"), function () { pickFiles({ accept: "image/*", multiple: true }).then(function (f) { return uploadFiles(f, "PROPERTY", p.propertyId, "PHOTO"); }).then(function () { App.go("property/" + p.propertyId); }).catch(showErr); })] : null)); } },
+      p.documents ? { id: "docs", label: "Documents", render: function (b) { b.appendChild(panel("Documents", docList(p.documents), p.canEdit ? [btn("+ " + t("Ajouter un document"), function () {
+        formModal(t("Ajouter un document"), [{ k: "category", l: "Catégorie", t: "select", req: true, opts: [["CONTRACT", st("CONTRACT")], ["TITLE_DEED", st("TITLE_DEED")], ["INSURANCE", st("INSURANCE")], ["CERTIFICATE", st("CERTIFICATE")], ["OTHER", st("OTHER")]] }, { k: "file", l: "Fichier", t: "file", req: true, multiple: true }], {},
+          function (v) { return uploadFiles(v.file, "PROPERTY", p.propertyId, v.category).then(function () { App.go("property/" + p.propertyId); }); });
+      })] : null)); } } : null,
+      p.accessManagement ? { id: "access", label: "Agences et équipes", render: function (b) { propertyAccessTab(b, p); } } : null,
+      { id: "activity", label: "Historique", render: function (b) {
+        if (p.reservations) b.appendChild(panel("Réservations récentes", table([{ l: "Voyageur", k: "guestName" }, { l: "Arrivée", date: true, k: "checkIn" }, { l: "Départ", date: true, k: "checkOut" }, { l: "Statut", status: true, k: "status" }, { l: "Montant", money: true, k: "totalPrice" }], p.reservations, { onRow: function (r) { NAV_HASH.v = "reservation/" + r.reservationId; } })));
+        if (p.incidents) b.appendChild(panel("Incidents", table([{ l: "Incident", k: "title" }, { l: "Catégorie", f: function (x) { return st(x.category); } }, { l: "Gravité", status: true, k: "severity" }, { l: "Statut", status: true, k: "status" }, { l: "Déclaré le", dt: true, k: "createdAt" }, { l: "Coût", money: true, k: "finalCost" }], p.incidents, { onRow: function (x) { NAV_HASH.v = "incident/" + x.incidentId; } })));
+        if (p.history) b.appendChild(panel("Modifications", table([{ l: "Date", dt: true, k: "timestamp" }, { l: "Par", k: "actorEmail" }, { l: "Action", k: "action" }, { l: "Détail", f: function (x) { return h("code", { class: "small" }, JSON.stringify(x.details).slice(0, 240)); } }], p.history)));
+      } }
+    ], (function () { const t0 = S.cache.propertyTab; S.cache.propertyTab = null; return t0 === "access" && p.accessManagement ? "access" : null; })());
+  });
+};
+function propertyAccessTab(b, p) {
+  const am = p.accessManagement;
+  b.appendChild(panel("Agences autorisées", h("div", null, h("p", { class: "muted small" }, t("Chaque agence ne voit que les biens qui lui sont attribués, avec les droits cochés. Les réservations restent protégées contre les doublons entre agences.")),
+    table([{ l: "Agence", k: "agencyName" }, { l: "Consultation", f: function (a) { return a.canView ? "✔" : "—"; } }, { l: "Réservations", f: function (a) { return a.canManageReservations ? "✔" : "—"; } }, { l: "Opérations", f: function (a) { return a.canManageOperations ? "✔" : "—"; } },
+      { l: "Finances", f: function (a) { return a.canViewFinance ? "✔" : "—"; } }, { l: "Commission", f: function (a) { return isNil(a.commissionRate) ? "—" : a.commissionRate + " %"; } }, { l: "Période", f: function (a) { return (a.validFrom ? fmtDate(a.validFrom) : "…") + " → " + (a.validTo ? fmtDate(a.validTo) : "…"); } }, { l: "Statut", status: true, k: "status" },
+      { l: "", f: function (a) { return btn(t("Modifier"), function () { agencyDialog(p, a); }, "sm"); } }], am.agencies, { empty: "Aucune agence attribuée." })), [btn("+ " + t("Créer une agence"), function () { agencyCreateDialog(p); }, "primary"), btn("+ " + t("Attribuer une agence existante"), function () { agencyDialog(p, {}); })]));
+  b.appendChild(panel("Gardiens, ménage, artisans, locataires", h("div", null, table([{ l: "E-mail", k: "email" }, { l: "Rôle", f: function (x) { return roleLabel(x.role); } }, { l: "Réservation", k: "reservationId" }, { l: "Statut", status: true, k: "status" }, { l: "Depuis", dt: true, k: "createdAt" },
+    { l: "", f: function (x) { return x.status === "ACTIVE" ? btn(t("Retirer"), function () { confirmBox(t("Retirer cette affectation ? L'accès est coupé immédiatement."), { danger: true }).then(function (ok) { if (ok) api("property.staffRevoke", { assignmentId: x.assignmentId }).then(function () { (S.cache.propertyTab = "access", App.go("property/" + p.propertyId)); }).catch(showErr); }); }, "sm danger") : null; } }], am.staff, { empty: "Aucune affectation." })),
+  [btn("+ " + t("Affecter une personne"), function () {
+    formModal(t("Affecter au bien"), [{ k: "email", l: "E-mail du compte", t: "email", req: true }, { k: "role", l: "Rôle", t: "select", req: true, opts: ["GUARD", "CLEANER", "ARTISAN", "TENANT"].map(function (r) { return [r, roleLabel(r)]; }) },
+      { k: "reservationId", l: "Limiter à une réservation (gardien)", show: function (v) { return v.role === "GUARD"; }, help: "Laisser vide pour toutes les réservations du bien." }], {},
+      function (v) { v.propertyId = p.propertyId; return api("property.staffAssign", v).then(function () { (S.cache.propertyTab = "access", App.go("property/" + p.propertyId)); }); }, { intro: t("La personne doit déjà avoir un compte avec ce rôle. Sinon, invitez-la depuis Utilisateurs en liant l'invitation à ce bien.") });
+  }), btn(t("Inviter une personne"), function () { inviteDialog({ propertyId: p.propertyId, organizationId: p.organizationId }); })]));
+}
+/** Le propriétaire crée une agence, invite son responsable et lui attribue ce bien, en une seule fois. */
+function agencyCreateDialog(p, back) {
+  return formModal(t("Créer une agence pour ce bien"), [
+    { k: "name", l: "Nom de l'agence", req: true },
+    { k: "adminEmail", l: "E-mail du responsable de l'agence", t: "email", req: true, help: "Il recevra une invitation personnelle (valable 7 jours) pour créer son mot de passe." },
+    { k: "adminName", l: "Nom du responsable" },
+    { k: "city", l: "Ville", def: "Marrakech" },
+    { k: "canManageReservations", l: "Peut gérer les réservations et arrivées", t: "checkbox", def: true }, { k: "canManageOperations", l: "Peut gérer ménage, incidents, devis et baux", t: "checkbox" },
+    { k: "canViewFinance", l: "Peut consulter les finances du bien", t: "checkbox" }, { k: "commissionRate", l: "Commission de l'agence (%)", t: "number", min: 0, max: 100, step: "0.01", help: "Vide = commission de gestion du bien." },
+    { k: "validFrom", l: "Valable du", t: "date" }, { k: "validTo", l: "au", t: "date" }], {}, function (v) {
+    v.propertyId = p.propertyId;
+    return api("property.agencyCreate", v).then(function (r) {
+      toast(r.emailSent ? t("Agence créée et invitation envoyée.") : t("Agence créée, mais l'e-mail d'invitation n'est pas parti. Renvoyez-le depuis Utilisateurs › Invitations."), r.emailSent ? "good" : "bad");
+      if (back) back(); else { S.cache.propertyTab = "access"; App.go("property/" + p.propertyId); }
+      return r;
+    });
+  }, { intro: t("L'agence aura accès à ce bien uniquement, avec les droits cochés. Vous pourrez la retirer à tout moment, ou lui confier d'autres biens avec « Attribuer une agence existante ».") });
+}
+function agencyDialog(p, a, back) {
+  return formModal(t("Droits de l'agence"), [
+    a.agencyOrganizationId ? null : { k: "agencyOrganizationId", l: "Agence", t: "select", req: true, opts: function () { return api("property.agencyChoices", { propertyId: p.propertyId }).then(function (l) { return l.map(function (o) { return [o.organizationId, o.name]; }); }); } },
+    { k: "canView", l: "Peut consulter le bien", t: "checkbox", def: true }, { k: "canManageReservations", l: "Peut gérer les réservations et arrivées", t: "checkbox" }, { k: "canManageOperations", l: "Peut gérer ménage, incidents, devis et baux", t: "checkbox" },
+    { k: "canViewFinance", l: "Peut consulter les finances du bien", t: "checkbox" }, { k: "commissionRate", l: "Commission de l'agence (%)", t: "number", min: 0, max: 100, step: "0.01", help: "Vide = commission de gestion du bien." },
+    { k: "validFrom", l: "Valable du", t: "date" }, { k: "validTo", l: "au", t: "date" }].filter(Boolean), a, function (v) {
+    v.propertyId = p.propertyId; if (a.agencyOrganizationId) v.agencyOrganizationId = a.agencyOrganizationId;
+    return api("property.agencySet", v).then(function () { if (back) back(); else { S.cache.propertyTab = "access"; App.go("property/" + p.propertyId); } });
+  }, { intro: t("Décocher « consulter » retire l'attribution.") });
+}
+
+
+/* =============================== Mes agences (propriétaire) =============================== */
+PAGES.agencies = function (el) {
+  el.appendChild(pageHead(t("Mes agences"), t("Toutes les agences qui gèrent vos biens : leurs droits bien par bien, leur fiche, et la possibilité de couper leurs accès à tout moment."),
+    [btn("+ " + t("Créer une agence"), function () {
+      formModal(t("Créer une agence"), [{ k: "propertyId", l: "Premier bien confié", t: "select", req: true, opts: function () { return propChoices("property.assign"); } }], {}, function (v) {
+        return api("property.get", { propertyId: v.propertyId }).then(function (p) { setTimeout(function () { agencyCreateDialog(p, function () { App.go("agencies"); }); }, 50); });
+      }, { intro: t("Choisissez le bien que l'agence gérera en premier ; vous pourrez lui en confier d'autres ensuite.") });
+    }, "primary")]));
+  const box = h("div", null, h("div", { class: "loading" }, t("Chargement…")));
+  el.appendChild(box);
+  const reload = function () { App.go("agencies"); };
+  return api("agency.mine").then(function (list) {
+    clear(box);
+    if (!list.length) { box.appendChild(panel(null, h("p", { class: "muted" }, t("Aucune agence pour le moment. Créez-en une, ou attribuez une agence existante depuis la fiche d'un bien (onglet « Agences et équipes »).")))); return; }
+    list.sort(function (a, b) { return (a.status === "ACTIVE" ? 0 : 1) - (b.status === "ACTIVE" ? 0 : 1); });
+    list.forEach(function (ag) {
+      const rights = function (x) { return [x.canView ? t("Consultation") : null, x.canManageReservations ? t("Réservations") : null, x.canManageOperations ? t("Opérations") : null, x.canViewFinance ? t("Finances") : null].filter(Boolean).join(", ") || "—"; };
+      const live = ag.status === "ACTIVE";
+      const tools = [
+        live ? btn("+ " + t("Confier un bien"), function () {
+          formModal(t("Confier un bien à") + " " + ag.name, [{ k: "propertyId", l: "Bien", t: "select", req: true, opts: function () { return propChoices("property.assign"); } }], {}, function (v) {
+            return api("property.get", { propertyId: v.propertyId }).then(function (p) { const ex = ag.properties.find(function (x) { return String(x.propertyId) === String(v.propertyId); });
+              setTimeout(function () { agencyDialog(p, Object.assign({ agencyOrganizationId: ag.organizationId, canView: true }, ex || {}), reload); }, 50); });
+          });
+        }, "sm") : null,
+        ag.createdByMe && live ? btn(t("Modifier la fiche"), function () {
+          formModal(t("Fiche de l'agence"), [{ k: "name", l: "Nom de l'agence", req: true }, { k: "city", l: "Ville" }, { k: "contactEmail", l: "E-mail de contact", t: "email" },
+            { k: "locale", l: "Langue", t: "select", opts: [["fr", "Français"], ["en", "English"], ["ar", "العربية"]] }], ag, function (v) {
+            v.agencyOrganizationId = ag.organizationId; return api("agency.update", v).then(reload);
+          }, { success: "Fiche mise à jour." });
+        }, "sm") : null,
+        ag.activeProperties ? btn(t("Retirer tous les accès"), function () {
+          confirmBox(t("Retirer à cette agence l'accès à TOUS vos biens ? L'accès est coupé immédiatement ; l'historique est conservé."), { danger: true }).then(function (ok) {
+            if (ok) api("agency.revokeAll", { agencyOrganizationId: ag.organizationId }).then(function (r) { toast(t("Accès retirés :") + " " + r.revoked, "good"); reload(); }).catch(showErr); });
+        }, "sm danger") : null,
+        ag.createdByMe && ag.status === "ACTIVE" ? btn(t("Supprimer l'agence"), function () {
+          confirmBox(t("Supprimer cette agence ? Ses accès à vos biens et ses invitations en attente sont annulés, ses comptes sont désactivés. L'historique (réservations, interventions…) est conservé."), { danger: true }).then(function (ok) {
+            if (ok) api("agency.delete", { agencyOrganizationId: ag.organizationId }).then(function () { toast(t("Agence supprimée."), "good"); reload(); }).catch(showErr); });
+        }, "sm danger") : null
+      ].filter(Boolean);
+      const info = h("div", { class: "small muted" }, [ag.city, ag.contactEmail, ag.admins.length ? t("Responsable :") + " " + ag.admins.join(", ") : null, ag.pendingInvitations.length ? t("Invitation en attente :") + " " + ag.pendingInvitations.join(", ") : null].filter(Boolean).join(" · "));
+      box.appendChild(panel(ag.name, h("div", null, h("div", { style: { display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" } }, stTag(ag.status), ag.createdByMe ? tag(t("Créée par vous"), "info") : tag(t("Agence partagée"), "")), info,
+        table([{ l: "Bien", f: function (x) { return x.propertyName + (x.propertyCity ? " — " + x.propertyCity : ""); } }, { l: "Droits", f: rights }, { l: "Commission", f: function (x) { return isNil(x.commissionRate) || x.commissionRate === "" ? "—" : x.commissionRate + " %"; } },
+          { l: "Statut", status: true, k: "status" },
+          { l: "", f: function (x) { return !live ? null : h("span", { class: "actions" },
+            btn(t("Modifier les droits"), function () { api("property.get", { propertyId: x.propertyId }).then(function (p) { agencyDialog(p, Object.assign({ agencyOrganizationId: ag.organizationId }, x), reload); }).catch(showErr); }, "sm"),
+            x.status === "ACTIVE" ? btn(t("Retirer"), function () { confirmBox(t("Retirer l'accès de cette agence à ce bien ?"), { danger: true }).then(function (ok) {
+              if (ok) api("property.agencySet", { propertyId: x.propertyId, agencyOrganizationId: ag.organizationId, canView: false }).then(reload).catch(showErr); }); }, "sm danger") : null); } }],
+          ag.properties, { empty: "Aucun bien confié." })), tools));
+    });
+  }).catch(function (e) { clear(box).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+};
+
+/* =============================== Calendrier =============================== */
+PAGES.calendar = function (el) {
+  let month = today().slice(0, 7), propertyId = "";
+  const out = h("div");
+  const label = h("b", { style: { minWidth: "140px", textAlign: "center" } });
+  const shift = function (n) { const d = new Date(month + "-01T00:00:00Z"); d.setUTCMonth(d.getUTCMonth() + n); month = d.toISOString().slice(0, 7); load(); };
+  const ps = h("select", { onchange: function (e) { propertyId = e.target.value; load(); } }, h("option", { value: "" }, t("Tous les biens")));
+  propChoices().then(function (l) { l.forEach(function (o) { ps.appendChild(h("option", { value: o[0] }, o[1])); }); });
+  el.appendChild(pageHead(t("Calendrier"), t("Réservations et blocages. Le jour de départ peut accueillir une nouvelle arrivée selon le battement configuré."), [
+    can("property.edit") ? btn(t("Bloquer une période"), function () { formModal(t("Bloquer une période"), [{ k: "propertyId", l: "Bien", t: "select", req: true, opts: function () { return propChoices("property.edit"); } }, { k: "startDate", l: "Du", t: "date", req: true }, { k: "endDate", l: "Jusqu'au (jour de libération)", t: "date", req: true },
+      { k: "blockType", l: "Type", t: "select", opts: ["OWNER", "MAINTENANCE", "OTHER"] }, { k: "reason", l: "Motif" }], {}, function (v) { return api("block.create", v).then(load); }); }) : null,
+    can("reservation.edit") ? btn("+ " + t("Réservation"), function () { reservationDialog({}).then(function (r) { if (r) load(); }); }, "primary") : null]));
+  el.appendChild(h("div", { class: "toolbar" }, btn("‹", function () { shift(-1); }, "sm"), label, btn("›", function () { shift(1); }, "sm"), btn(t("Aujourd'hui"), function () { month = today().slice(0, 7); load(); }, "sm"), ps));
+  el.appendChild(out);
+  const load = function () {
+    label.textContent = new Intl.DateTimeFormat(locale(), { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(month + "-15T00:00:00Z"));
+    clear(out).appendChild(h("div", { class: "loading" }, t("Chargement…")));
+    api("resv.calendar", { month: month, propertyId: propertyId }).then(function (c) {
+      const days = []; for (let i = 0; i < c.days; i++) days.push(addDays(c.from, i));
+      const head = h("tr", null, h("th", { class: "prop" }, t("Bien")), days.map(function (d) { const wd = new Date(d + "T12:00:00Z").getUTCDay(); return h("th", { class: wd === 0 || wd === 6 ? "we" : "" }, d.slice(8)); }));
+      const rows = c.properties.map(function (p) {
+        const tr = h("tr", null, h("td", { class: "prop" }, h("a", { href: "#property/" + p.propertyId }, p.name)));
+        let i = 0;
+        const evs = c.events.filter(function (e) { return e.propertyId === p.propertyId; }).sort(function (a, b) { return a.start.localeCompare(b.start); });
+        while (i < days.length) {
+          const d = days[i], ev = evs.find(function (e) { return e.start <= d && e.end > d && (e.start === d || i === 0); });
+          if (ev) {
+            let span = 0; while (i + span < days.length && days[i + span] < ev.end) span++;
+            span = Math.max(span, 1);
+            tr.appendChild(h("td", { colspan: span }, h("span", { class: "ev " + ev.status, title: ev.label + " · " + fmtDate(ev.start) + " → " + fmtDate(ev.end), onclick: function () {
+              if (ev.type === "RESERVATION") NAV_HASH.v = "reservation/" + ev.id;
+              else if (ev.canCancel) confirmBox(t("Supprimer ce blocage ?")).then(function (ok) { if (ok) api("block.cancel", { blockId: ev.id }).then(load).catch(showErr); });
+            } }, ev.label || st(ev.status))));
+            i += span;
+          } else { tr.appendChild(h("td")); i++; }
+        }
+        return tr;
+      });
+      clear(out).appendChild(c.properties.length ? h("div", { class: "cal" }, h("table", null, h("thead", null, head), h("tbody", null, rows))) : h("div", { class: "empty" }, t("Aucun bien.")));
+      out.appendChild(h("p", { class: "small muted" }, [["CONFIRMED", "Confirmée"], ["PENDING", "En attente"], ["IN_PROGRESS", "En cours"], ["COMPLETED", "Terminée"], ["BLOCKED", "Bloqué"]].map(function (x) { return h("span", { style: { marginInlineEnd: "14px" } }, h("span", { class: "ev " + x[0], style: { display: "inline-block", width: "14px", height: "10px", margin: "0 4px 0 0" } }), t(x[1])); })));
+    }).catch(function (e) { clear(out).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+  };
+  load();
+};
+
+/* =============================== Réservations =============================== */
+function reservationDialog(preset) {
+  const fields = [{ k: "propertyId", l: "Bien", t: "select", req: true, opts: function () { return propChoices("reservation.edit"); } },
+    { k: "status", l: "Statut", t: "select", opts: [["CONFIRMED", st("CONFIRMED")], ["PENDING", st("PENDING")], ["DRAFT", st("DRAFT")]], def: "CONFIRMED" },
+    { k: "checkIn", l: "Arrivée", t: "date", req: true }, { k: "checkInTime", l: "Heure d'arrivée", t: "time", help: "Vide = heure du bien." },
+    { k: "checkOut", l: "Départ", t: "date", req: true }, { k: "checkOutTime", l: "Heure de départ", t: "time" },
+    { k: "guestName", l: "Nom et prénom du voyageur principal", req: true }, { k: "guestCount", l: "Nombre de voyageurs", t: "number", def: 1, min: 1 },
+    { k: "guestEmail", l: "E-mail du voyageur", t: "email" }, { k: "guestPhone", l: "Téléphone (WhatsApp)", t: "tel" },
+    { k: "source", l: "Origine", t: "select", opts: function () { return (S.meta.sources || []).map(function (x) { return [x, st(x)]; }); }, def: "DIRECT" },
+    { k: "totalPrice", l: "Prix de l'hébergement (MAD)", t: "number", min: 0, step: "0.01", help: "Vide = nuits × prix du bien." }, { k: "fees", l: "Frais (ménage…)", t: "number", min: 0, step: "0.01" },
+    { k: "taxes", l: "Taxes de séjour", t: "number", min: 0, step: "0.01" }, { k: "deposit", l: "Caution demandée", t: "number", min: 0, step: "0.01" },
+    { k: "agencyOrganizationId", l: "Agence gestionnaire (facultatif)", t: "select", opts: function () { return myOrgs(["AGENCY_ADMIN", "AGENCY_USER"]); } },
+    { k: "notes", l: "Notes internes (ne pas y saisir de pièce d'identité)", t: "textarea" }];
+  const key = rk();
+  return formModal(t("Nouvelle réservation"), fields, preset || {}, function (v) {
+    return api("resv.availability", { propertyId: v.propertyId, checkIn: v.checkIn, checkOut: v.checkOut, checkInTime: v.checkInTime, checkOutTime: v.checkOutTime }).then(function (a) {
+      if (!a.available && v.status !== "DRAFT") throw { message: a.message };
+      return api("resv.create", Object.assign(v, { requestKey: key }));
+    }).then(function (r) { invalidate(); toast(t("Réservation enregistrée."), "good"); NAV_HASH.v = "reservation/" + (r.reservationId || r.id); return r; });
+  }, { submitLabel: t("Vérifier et enregistrer"), intro: t("La disponibilité est revérifiée par le serveur au moment de l'enregistrement, sous verrou, pour toutes les agences.") });
+}
+PAGES.reservations = function (el) {
+  const head = pageHead(t("Réservations"), t("Location courte durée : séjours, paiements et cautions."), [btn(t("Exporter"), function () { api("report.export", Object.assign({ type: "RESERVATIONS", format: "csv", from: lv.state.from || addDays(today(), -365), to: lv.state.to || addDays(today(), 365) }, { propertyId: lv.state.propertyId, status: lv.state.status })).then(download).catch(showErr); }),
+    can("reservation.edit") ? btn("+ " + t("Nouvelle réservation"), function () { reservationDialog({}); }, "primary") : null]);
+  el.appendChild(head);
+  const lv = listView(el, { route: "resv.list", initial: { sort: "desc" }, filters: [{ k: "from", l: "Du", t: "date" }, { k: "to", l: "Au", t: "date" }, { k: "propertyId", l: "Bien", t: "select", opts: function () { return propChoices("reservation.view"); } },
+    { k: "status", l: "Statut", t: "select", opts: ["DRAFT", "PENDING", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"] }, { k: "paymentStatus", l: "Paiement", t: "select", opts: ["UNPAID", "PARTIAL", "PAID", "REFUNDED", "OVERPAID"] },
+    { k: "agencyOrganizationId", l: "Agence", t: "select", opts: function () { return myOrgs(["AGENCY_ADMIN", "AGENCY_USER"]); } }],
+    columns: [{ l: "Voyageur", k: "guestName" }, { l: "Bien", k: "propertyName" }, { l: "Arrivée", date: true, k: "checkIn" }, { l: "Départ", date: true, k: "checkOut" }, { l: "Pers.", num: true, k: "guestCount" },
+      { l: "Statut", status: true, k: "status" }, { l: "Paiement", f: function (r) { return r.paymentStatus ? stTag(r.paymentStatus) : "—"; } }, { l: "Total", money: true, k: "amountDue" }, { l: "Solde", money: true, k: "balance" }, { l: "Origine", f: function (r) { return r.source ? st(r.source) : "—"; } }],
+    onRow: function (r) { NAV_HASH.v = "reservation/" + r.reservationId; } });
+};
+PAGES.reservation = function (el, id) {
+  el.appendChild(h("div", { class: "loading" }, t("Chargement…")));
+  return api("resv.get", { reservationId: id }).then(function (r) {
+    clear(el); $("page-title").textContent = r.guestName;
+    const full = r.totalPrice !== undefined;
+    const acts = [stTag(r.status), r.paymentStatus ? stTag(r.paymentStatus) : null];
+    if (r.canEdit) {
+      if (["DRAFT", "PENDING"].indexOf(r.status) >= 0) acts.push(btn(t("Confirmer"), function () { api("resv.setStatus", { reservationId: r.reservationId, status: "CONFIRMED" }).then(function () { App.go("reservation/" + id); }).catch(showErr); }, "primary"));
+      if (r.status === "CONFIRMED") acts.push(btn(t("No-show"), function () { confirmBox(t("Déclarer ce voyageur absent (no-show) ?"), { danger: true }).then(function (ok) { if (ok) api("resv.setStatus", { reservationId: r.reservationId, status: "NO_SHOW" }).then(function () { App.go("reservation/" + id); }).catch(showErr); }); }));
+      if (["DRAFT", "PENDING", "CONFIRMED", "IN_PROGRESS"].indexOf(r.status) >= 0) acts.push(btn(t("Modifier"), function () { editReservation(r); }));
+      acts.push(btn(t("Envoyer la confirmation"), function () { api("resv.sendConfirmation", { reservationId: r.reservationId }).then(function (x) { toast(x.duplicate ? t("Confirmation déjà envoyée pour cette version.") : t("Confirmation envoyée."), "good"); }).catch(showErr); }));
+      acts.push(btn(t("Lien voyageur"), function () { api("guest.tokenCreate", { reservationId: r.reservationId, sendEmail: !!r.guestEmail }).then(function (x) {
+        modal({ title: t("Portail voyageur"), body: h("div", null, h("p", null, t("Lien personnel, valable jusqu'au lendemain du départ.") + (x.emailed ? " " + t("Envoyé par e-mail.") : "")), h("input", { value: x.url, readonly: true, style: { width: "100%" }, onfocus: function (e) { e.target.select(); } }),
+          h("div", { class: "actions", style: { marginTop: "10px" } }, x.whatsapp ? h("a", { class: "btn", href: x.whatsapp, target: "_blank", rel: "noopener" }, t("Ouvrir dans WhatsApp")) : null, btn(t("Révoquer le lien"), function () { api("guest.tokenRevoke", { reservationId: r.reservationId }).then(function () { toast(t("Lien révoqué."), "good"); }).catch(showErr); }, "danger"))) });
+      }).catch(showErr); }));
+    }
+    if (full) acts.push(btn(t("Fiche PDF"), function () { api("resv.sheet", { reservationId: r.reservationId }).then(download).catch(showErr); }));
+    if (r.guestPhone && full) acts.push(btn("WhatsApp", function () { api("notif.whatsapp", { reservationId: r.reservationId }).then(function (x) { window.open(x.url, "_blank", "noopener"); }).catch(showErr); }));
+    if (r.canCancel && ["DRAFT", "PENDING", "CONFIRMED"].indexOf(r.status) >= 0) acts.push(btn(t("Annuler"), function () {
+      formModal(t("Annuler la réservation"), [{ k: "reason", l: "Motif", t: "select", req: true, opts: listOpts("cancelReasons") }, { k: "note", l: "Commentaire", t: "textarea" }, { k: "waivePenalty", l: "Renoncer à la pénalité (geste commercial)", t: "checkbox" }], {},
+        function (v) { v.reservationId = r.reservationId; return api("resv.cancel", v).then(function (x) { modal({ title: t("Réservation annulée"), size: "sm", body: kv([["Pénalité appliquée", x.penaltyPercent + " % (" + fmtMoney(x.penalty) + ")"], ["Remboursement dû", fmtMoney(x.refundDue)], ["", x.note || ""]]), onClose: function () { App.go("reservation/" + id); } }); }); },
+        { intro: t("La pénalité est calculée selon la politique d'annulation de l'organisation. Aucun remboursement n'est effectué automatiquement.") });
+    }, "danger"));
+    el.appendChild(pageHead(r.guestName, r.propertyName + " · " + fmtDate(r.checkIn) + " → " + fmtDate(r.checkOut) + (r.nights ? " · " + r.nights + " " + t("nuits") : ""), acts));
+    const g = h("div", { class: "grid c2" });
+    g.appendChild(panel("Séjour", kv([["Bien", h("a", { href: "#property/" + r.propertyId }, r.propertyName)], ["Arrivée prévue", fmtDT(r.checkInAt)], ["Départ prévu", fmtDT(r.checkOutAt)], ["Voyageurs", r.guestCount], ["Téléphone", r.guestPhone],
+      full ? ["E-mail", r.guestEmail] : null, full ? ["Origine", st(r.source)] : null, full ? ["Notes internes", r.notes] : null, r.cancelReason ? ["Motif d'annulation", st(r.cancelReason)] : null])));
+    if (full) g.appendChild(panel("Montants", h("div", null, kv([["Hébergement", fmtMoney(r.totalPrice)], ["Frais", fmtMoney(r.fees)], ["Taxes de séjour", fmtMoney(r.taxes)], ["Total dû", h("b", null, fmtMoney(r.amountDue))], ["Encaissé net", fmtMoney(r.paid)],
+      ["Solde restant", h("b", null, fmtMoney(r.balance))], ["Commission", fmtMoney(r.commissionAmount) + " (" + fmtNum(r.commissionRate) + " %)"], ["Caution", fmtMoney(r.deposit) + " · " + st(r.depositStatus) + (r.depositHeld ? " · " + t("détenue") + " " + fmtMoney(r.depositHeld) : "")],
+      r.refundDue ? ["Remboursement dû", fmtMoney(r.refundDue)] : null]))));
+    else g.appendChild(panel("Consignes", kv([["Accès", r.accessInstructions], ["Arrivée", r.arrivalInstructions], ["Départ", r.departureInstructions]])));
+    el.appendChild(g);
+    if (r.canOperate && ["CONFIRMED", "IN_PROGRESS"].indexOf(r.status) >= 0) el.appendChild(h("div", { class: "actions", style: { marginBottom: "16px" } }, r.status === "CONFIRMED" ? btn(t("Effectuer le check-in"), function () { checkDialog(r, "IN"); }, "primary lg") : btn(t("Effectuer le check-out"), function () { checkDialog(r, "OUT"); }, "primary lg")));
+    if (r.payments) el.appendChild(panel("Paiements et caution", table([{ l: "Date", date: true, k: "paidAt" }, { l: "Nature", f: function (x) { return st(x.kind); } }, { l: "Sens", f: function (x) { return x.direction === "IN" ? t("Entrée") : t("Sortie"); } }, { l: "Montant", money: true, k: "amount" }, { l: "Mode", f: function (x) { return st(x.method); } }, { l: "Référence", k: "reference" }, { l: "Statut", status: true, k: "status" }], r.payments, { empty: "Aucun paiement enregistré." }),
+      r.canEdit ? [btn("+ " + t("Paiement"), function () { payDialog({ refType: "RESERVATION", refId: r.reservationId, kind: "RESERVATION", kinds: ["RESERVATION", "DEPOSIT", "REFUND", "DEPOSIT_REFUND"], amount: r.balance > 0 ? r.balance : "" }).then(function (x) { if (x) App.go("reservation/" + id); }); }, "primary")] : null));
+    if (r.guests) el.appendChild(panel("Voyageurs", guestTable(r), r.canEdit ? [btn("+ " + t("Voyageur"), function () { guestDialog(r, {}); })] : null));
+    const ops = (r.checkIns || []).map(function (x) { return Object.assign({ kind: t("Arrivée") }, x); }).concat((r.checkOuts || []).map(function (x) { return Object.assign({ kind: t("Départ") }, x); }));
+    if (ops.length) el.appendChild(panel("Arrivée et départ", table([{ l: "Type", k: "kind" }, { l: "Prévu", dt: true, k: "plannedAt" }, { l: "Réel", dt: true, k: "actualAt" }, { l: "Retard", f: function (x) { return x.lateMinutes ? x.lateMinutes + " min" : "—"; } }, { l: "Agent", k: "agentEmail" }, { l: "État", k: "conditionNotes" },
+      { l: "Incident", f: function (x) { return x.incidentId ? h("a", { href: "#incident/" + x.incidentId }, t("Voir")) : "—"; } }], ops), [btn(t("Rapport PDF"), function () { api("ops.report", { reservationId: r.reservationId }).then(download).catch(showErr); })]));
+    if (r.documents) el.appendChild(panel("Documents et photos", gallery(r.documents), r.canEdit ? [btn("+ " + t("Ajouter"), function () { pickFiles({ multiple: true }).then(function (f) { return uploadFiles(f, "RESERVATION", r.reservationId, "GENERAL"); }).then(function () { App.go("reservation/" + id); }).catch(showErr); })] : null));
+    if (r.history) el.appendChild(panel("Historique des modifications", table([{ l: "Date", dt: true, k: "timestamp" }, { l: "Par", k: "actorEmail" }, { l: "Action", k: "action" }, { l: "Détail", f: function (x) { return h("code", { class: "small" }, JSON.stringify(x.details).slice(0, 260)); } }], r.history)));
+  });
+};
+function editReservation(r) {
+  formModal(t("Modifier la réservation"), [{ k: "checkIn", l: "Arrivée", t: "date", req: true }, { k: "checkOut", l: "Départ", t: "date", req: true }, { k: "guestName", l: "Voyageur principal", req: true }, { k: "guestCount", l: "Voyageurs", t: "number", min: 1 },
+    { k: "guestEmail", l: "E-mail", t: "email" }, { k: "guestPhone", l: "Téléphone", t: "tel" }, { k: "totalPrice", l: "Prix de l'hébergement", t: "number", step: "0.01" }, { k: "fees", l: "Frais", t: "number", step: "0.01" },
+    { k: "taxes", l: "Taxes", t: "number", step: "0.01" }, { k: "deposit", l: "Caution", t: "number", step: "0.01" }, { k: "source", l: "Origine", t: "select", opts: function () { return (S.meta.sources || []).map(function (x) { return [x, st(x)]; }); } }, { k: "notes", l: "Notes internes", t: "textarea" }], r,
+    function (v) { v.reservationId = r.reservationId; v.version = r.version; return api("resv.update", v).then(function () { App.go("reservation/" + r.reservationId); }); }, { success: "Réservation mise à jour." });
+}
+function guestTable(r) {
+  return table([{ l: "Nom", f: function (g) { return [g.lastName, g.firstName].filter(Boolean).join(" ") + (g.isPrimary ? " ★" : ""); } }, { l: "Contact", f: function (g) { return [g.email, g.phone].filter(Boolean).join(" · ") || "—"; } },
+    { l: "Pièce", f: function (g) { return g.idType ? st(g.idType) + " " + (g.idRef || "") : (g.idType === undefined ? t("masqué") : "—"); } }, { l: "Statut", status: true, k: "status" },
+    { l: "", f: function (g) { if (!r.canEdit || g.status !== "ACTIVE") return null; return h("span", { class: "actions" }, btn(t("Modifier"), function () { guestDialog(r, g); }, "sm"),
+      g.documents !== undefined ? btn(t("Pièce d'identité") + (g.documents.length ? " (" + g.documents.length + ")" : ""), function () {
+        if (g.documents.length) { modal({ title: t("Documents d'identité"), body: h("div", null, h("div", { class: "alert warn" }, t("Document sensible : ne le transférez pas par e-mail ordinaire. Accès journalisé.")), docList(g.documents)) }); return; }
+        pickFiles({ capture: "environment" }).then(function (f) { return uploadFiles(f, "GUEST", g.guestId, "ID_DOCUMENT"); }).then(function () { App.go("reservation/" + r.reservationId); }).catch(showErr);
+      }, "sm") : null, g.documents !== undefined ? btn(t("Effacer les données d'identité"), function () { confirmBox(t("Effacer définitivement la pièce d'identité et ses références ?"), { danger: true }).then(function (ok) { if (ok) api("guest.purge", { guestId: g.guestId }).then(function () { App.go("reservation/" + r.reservationId); }).catch(showErr); }); }, "sm danger") : null); } }], r.guests);
+}
+function guestDialog(r, g) {
+  const sens = r.guests && r.guests[0] && r.guests[0].idType !== undefined;
+  formModal(g.guestId ? t("Modifier le voyageur") : t("Ajouter un voyageur"), [{ k: "lastName", l: "Nom", req: true }, { k: "firstName", l: "Prénom" }, { k: "email", l: "E-mail", t: "email" }, { k: "phone", l: "Téléphone", t: "tel" },
+    sens ? { k: "nationality", l: "Nationalité" } : null, sens ? { k: "idType", l: "Type de pièce", t: "select", opts: function () { return (S.meta.idTypes || []).map(function (x) { return [x, st(x)]; }); } } : null,
+    sens ? { k: "idRef", l: "Numéro de pièce", help: "Seuls les 3 derniers caractères sont conservés sauf obligation légale configurée." } : null].filter(Boolean), g,
+  function (v) { v.reservationId = r.reservationId; v.guestId = g.guestId; if (!v.idRef) delete v.idRef; return api("guest.save", v).then(function () { App.go("reservation/" + r.reservationId); }); });
+}
+PAGES.guests = function (el) {
+  el.appendChild(pageHead(t("Voyageurs"), t("Fiches voyageurs (données minimisées). Les pièces d'identité ne sont visibles que des personnes autorisées.")));
+  listView(el, { route: "guest.list", filters: [{ k: "propertyId", l: "Bien", t: "select", opts: function () { return propChoices("guest.view"); } }, { k: "from", l: "Du", t: "date" }, { k: "to", l: "Au", t: "date" }],
+    columns: [{ l: "Nom", f: function (g) { return [g.lastName, g.firstName].filter(Boolean).join(" "); } }, { l: "Bien", k: "propertyName" }, { l: "Arrivée", date: true, k: "checkIn" }, { l: "Départ", date: true, k: "checkOut" },
+      { l: "Contact", f: function (g) { return [g.email, g.phone].filter(Boolean).join(" · ") || "—"; } }, { l: "Pièce fournie", f: function (g) { return g.idProvided ? tag(t("Oui"), "good") : "—"; } }],
+    onRow: function (g) { NAV_HASH.v = "reservation/" + g.reservationId; } });
+};
+
+/* =============================== Arrivées / départs (terrain) =============================== */
+PAGES.checkin = function (el) {
+  let day = today();
+  const out = h("div"), d = h("input", { type: "date", value: day, onchange: function (e) { day = e.target.value; load(); } });
+  el.appendChild(pageHead(t("Arrivées et départs"), t("Interface terrain : check-in, check-out, photos, signature et anomalies.")));
+  el.appendChild(h("div", { class: "toolbar" }, btn("‹", function () { day = addDays(day, -1); d.value = day; load(); }, "sm"), d, btn("›", function () { day = addDays(day, 1); d.value = day; load(); }, "sm"), btn(t("Aujourd'hui"), function () { day = today(); d.value = day; load(); }, "sm")));
+  el.appendChild(out);
+  const card = function (x, kind) {
+    return h("div", { class: "card" }, h("div", { class: "actions", style: { justifyContent: "space-between" } }, h("h4", null, x.guestName), x.done ? tag(t("Fait") + " " + fmtTime(x.actualAt), "good") : (x.late ? tag(t("En retard"), "bad") : tag(fmtTime(x.plannedAt), "info"))),
+      h("div", { class: "meta" }, x.propertyName + (x.address ? " — " + x.address : "")), h("div", { class: "meta" }, x.guestCount + " " + t("pers.") + (x.guestPhone ? " · " + x.guestPhone : "")),
+      h("div", { class: "actions" }, !x.done && (kind === "IN" ? x.status === "CONFIRMED" : x.status === "IN_PROGRESS") ? btn(kind === "IN" ? t("Check-in") : t("Check-out"), function () { checkDialog(x, kind).then(function (ok) { if (ok) load(); }); }, "primary lg") : null,
+        btn(t("Détail"), function () { NAV_HASH.v = "reservation/" + x.reservationId; }, "lg"), x.guestPhone ? h("a", { class: "btn lg", href: "tel:" + x.guestPhone, target: "_top" }, t("Appeler")) : null));
+  };
+  const load = function () {
+    clear(out).appendChild(h("div", { class: "loading" }, t("Chargement…")));
+    api("ops.today", { date: day }).then(function (r) {
+      clear(out);
+      if (r.overdue.length) out.appendChild(panel("Retards et absences", h("div", { class: "cards" }, r.overdue.map(function (x) { return card(x, x.kind === "ARRIVAL_MISSING" ? "IN" : "OUT"); }))));
+      out.appendChild(panel(t("Arrivées") + " (" + r.arrivals.length + ")", r.arrivals.length ? h("div", { class: "cards" }, r.arrivals.map(function (x) { return card(x, "IN"); })) : h("div", { class: "empty" }, t("Aucune arrivée."))));
+      out.appendChild(panel(t("Départs") + " (" + r.departures.length + ")", r.departures.length ? h("div", { class: "cards" }, r.departures.map(function (x) { return card(x, "OUT"); })) : h("div", { class: "empty" }, t("Aucun départ."))));
+      const hist = h("div"); out.appendChild(panel("Historique", hist));
+      listView(hist, { route: "ops.history", search: false, filters: [{ k: "lateOnly", l: "Retards uniquement", t: "checkbox" }], columns: [{ l: "Type", f: function (x) { return x.kind === "CHECK_IN" ? t("Arrivée") : t("Départ"); } }, { l: "Bien", k: "propertyName" }, { l: "Voyageur", k: "guestName" },
+        { l: "Prévu", dt: true, k: "plannedAt" }, { l: "Réel", dt: true, k: "actualAt" }, { l: "Retard", f: function (x) { return x.lateMinutes ? x.lateMinutes + " min" : "—"; } }, { l: "Agent", k: "agentEmail" }], onRow: function (x) { NAV_HASH.v = "reservation/" + x.reservationId; } });
+    }).catch(function (e) { clear(out).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+  };
+  load();
+};
+/** Check-in / check-out : photos par pièce, checklist, compteurs, signature, anomalie. Clé anti-doublon générée une fois par ouverture. */
+function checkDialog(x, kind) {
+  const key = rk(), rooms = (x.rooms && x.rooms.length ? x.rooms : ["Séjour", "Chambre", "Cuisine", "Salle de bain"]);
+  const items = kind === "IN" ? ["Clés / badges remis", "Logement propre", "Équipements fonctionnels", "Linge présent", "Consignes expliquées", "Compteurs relevés"] : ["Clés / badges rendus", "Pas de dégradation visible", "Équipements fonctionnels", "Inventaire complet", "Compteurs relevés"];
+  const photos = []; const photoBox = h("div", { class: "small muted" }, t("Aucune photo."));
+  const sig = signaturePad();
+  const roomSel = h("select", null, rooms.map(function (r) { return h("option", { value: r }, r); }));
+  const f = buildForm(items.map(function (it, i) { return { k: "c" + i, l: it, t: "checkbox" }; }).concat([{ k: "conditionNotes", l: "État du logement", t: "textarea" }, { k: "meterElec", l: "Compteur électricité" }, { k: "meterWater", l: "Compteur eau" },
+    { k: "comments", l: "Commentaires", t: "textarea" }, { k: "incident", l: "Signaler une anomalie", t: "checkbox" }, { k: "incCategory", l: "Catégorie", t: "select", opts: listOpts("incidentCategories"), show: function (v) { return v.incident; } },
+    { k: "incSeverity", l: "Gravité", t: "select", opts: ["LOW", "MEDIUM", "HIGH", "CRITICAL"], def: "MEDIUM", show: function (v) { return v.incident; } }, { k: "incDescription", l: "Description de l'anomalie", t: "textarea", show: function (v) { return v.incident; } }]));
+  const addPhoto = btn("📷 " + t("Photo de la pièce"), function () {
+    pickFiles({ accept: "image/*", capture: "environment", multiple: true }).then(function (files) { return uploadFiles(files.map(function (fl) { return new File([fl], roomSel.value + "_" + fl.name, { type: fl.type }); }), "RESERVATION", x.reservationId, kind === "IN" ? "CHECKIN" : "CHECKOUT"); })
+      .then(function (ids) { ids.forEach(function (i) { photos.push({ id: i, room: roomSel.value }); }); clear(photoBox).appendChild(h("span", null, photos.map(function (p) { return p.room; }).join(" · ") + " (" + photos.length + ")")); }).catch(showErr);
+  });
+  const body = h("div", null, h("div", { class: "alert info" }, x.propertyName + " — " + x.guestName), h("h3", null, t("Photos par pièce")), h("div", { class: "toolbar" }, roomSel, addPhoto), photoBox,
+    h("h3", null, t("Checklist et état")), f.el, h("h3", null, t("Signature du voyageur (facultatif)")), sig);
+  return new Promise(function (resolve) {
+    const m = modal({ title: kind === "IN" ? t("Check-in") : t("Check-out"), body: body, onClose: function () { resolve(false); }, buttons: [{ label: t("Annuler") }, { label: t("Valider"), primary: true, onClick: function (b, close) {
+      const v = f.get(), checklist = {}; items.forEach(function (it, i) { checklist[it] = v["c" + i]; });
+      b.disabled = true; b.textContent = t("Envoi…");
+      const sp = sig.getPayload();
+      (sp ? api("doc.upload", Object.assign(sp, { ownerType: "RESERVATION", ownerId: x.reservationId, category: "SIGNATURE" })) : Promise.resolve(null)).then(function (s) {
+        return api(kind === "IN" ? "ops.checkIn" : "ops.checkOut", { reservationId: x.reservationId, requestKey: key, checklist: checklist, conditionNotes: v.conditionNotes, comments: v.comments, meters: { electricity: v.meterElec, water: v.meterWater },
+          photoDocIds: photos.map(function (p) { return p.id; }), signatureDocId: s ? s.documentId : "", incident: v.incident ? { category: v.incCategory, severity: v.incSeverity, description: v.incDescription } : null });
+      }).then(function (r) { toast((kind === "IN" ? t("Arrivée enregistrée") : t("Départ enregistré")) + (r.cleaningMissionId ? " — " + t("mission de ménage créée") : ""), "good"); resolve(true); close(); if (S.route.indexOf("reservation/") === 0) App.go(S.route); })
+        .catch(function (e) { showErr(e); b.disabled = false; b.textContent = t("Valider"); });
+    } }] });
+    return m;
+  });
+}
+
+/* =============================== Ménage =============================== */
+PAGES.cleaning = function (el, id) {
+  if (id) return cleaningDetail(el, id);
+  const manager = can("cleaning.manage"), provider = can("cleaning.operate");
+  el.appendChild(pageHead(t("Ménage"), t("Délai d'acceptation calculé par le serveur ; l'expiration est vérifiée toutes les 15 minutes par une tâche planifiée."), [manager ? btn("+ " + t("Mission"), function () {
+    const cleanPk = providerPicker(function (inputs) { return inputs.propertyId ? inputs.propertyId.value : ""; }, { key: "providerEmail", label: "Entreprise de ménage", fixedType: "CLEANING", valueKey: "email", emptyLabel: "— À attribuer plus tard —" });
+    formModal(t("Nouvelle mission de ménage"), [{ k: "propertyId", l: "Bien", t: "select", req: true, opts: function () { return propChoices("cleaning.manage"); }, onchange: function (v, inputs) { cleanPk.load(inputs); } }, { k: "startAt", l: "Date et heure prévues", t: "datetime", req: true },
+      { k: "estimatedMinutes", l: "Durée estimée (min)", t: "number", min: 15 }, { k: "priority", l: "Priorité", t: "select", opts: ["NORMAL", "HIGH", "URGENT", "LOW"] }, ].concat(cleanPk.fields).concat([
+      { k: "price", l: "Tarif convenu (MAD)", t: "number", min: 0 }, { k: "reservationId", l: "Réservation liée (facultatif)" }, { k: "notes", l: "Consignes", t: "textarea" }]), {}, function (v) { return api("clean.create", v).then(function (r) { NAV_HASH.v = "cleaning/" + r.missionId; }); }, { success: "Mission créée." });
+  }, "primary") : null]));
+  if (provider && !manager) {
+    listView(el, { route: "clean.list", initial: { mine: true }, search: false, filters: [{ k: "status", l: "Statut", t: "select", opts: ["OFFERED", "ACCEPTED", "IN_PROGRESS", "COMPLETED", "VALIDATED"] }],
+      render: function (items) { return items.length ? h("div", { class: "cards" }, items.map(missionCard)) : h("div", { class: "empty" }, t("Aucune mission.")); } });
+    return;
+  }
+  listView(el, { route: "clean.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["CREATED", "OFFERED", "ACCEPTED", "IN_PROGRESS", "COMPLETED", "VALIDATED", "EXPIRED", "CANCELLED"] }, { k: "propertyId", l: "Bien", t: "select", opts: function () { return propChoices("cleaning.manage"); } }, { k: "from", l: "Du", t: "date" }, { k: "to", l: "Au", t: "date" }],
+    columns: [{ l: "Bien", k: "propertyName" }, { l: "Prévue", dt: true, k: "startAt" }, { l: "Équipe", f: function (m) { return m.providerEmail || tag(t("À attribuer"), "warn"); } }, { l: "Priorité", f: function (m) { return st(m.priority); } },
+      { l: "Statut", f: function (m) { return h("span", null, stTag(m.status), m.late ? [" ", tag(t("En retard"), "bad")] : null); } }, { l: "Échéance d'acceptation", f: function (m) { return m.status === "OFFERED" ? fmtDT(m.expiresAt) : "—"; } }, { l: "Durée réelle", f: function (m) { return m.actualMinutes ? m.actualMinutes + " min" : "—"; } }, { l: "Anomalies", num: true, f: function (m) { return (m.anomalies || []).length; } }],
+    onRow: function (m) { NAV_HASH.v = "cleaning/" + m.missionId; } });
+};
+function countdown(expiresAt, serverNow) {
+  const span = h("span", { class: "small" }), skew = Date.now() - new Date(serverNow).getTime();
+  const tick = function () { const ms = new Date(expiresAt).getTime() - (Date.now() - skew); if (ms <= 0) { span.textContent = t("Délai dépassé"); return; } const m = Math.floor(ms / 60000); span.textContent = t("Réponse attendue sous") + " " + Math.floor(m / 60) + " h " + (m % 60) + " min"; if (document.body.contains(span)) setTimeout(tick, 30000); };
+  setTimeout(tick, 0); return span;
+}
+function missionCard(m) {
+  return h("div", { class: "card" }, h("div", { class: "actions", style: { justifyContent: "space-between" } }, h("h4", null, m.propertyName), stTag(m.status)), h("div", { class: "meta" }, fmtDT(m.startAt) + " · " + (m.estimatedMinutes || "?") + " min" + (m.price ? " · " + fmtMoney(m.price) : "")),
+    m.address ? h("div", { class: "meta" }, m.address) : null, m.status === "OFFERED" ? countdown(m.expiresAt, m.serverNow) : null,
+    h("div", { class: "actions" }, m.status === "OFFERED" ? [btn(t("Accepter"), function () { api("clean.respond", { missionId: m.missionId, decision: "ACCEPTED" }).then(function () { App.go("cleaning"); }).catch(showErr); }, "primary lg"),
+      btn(t("Refuser"), function () { formModal(t("Refuser la mission"), [{ k: "reason", l: "Motif" }], {}, function (v) { return api("clean.respond", { missionId: m.missionId, decision: "DECLINED", reason: v.reason }).then(function () { App.go("cleaning"); }); }); }, "lg")] : null,
+      btn(t("Ouvrir"), function () { NAV_HASH.v = "cleaning/" + m.missionId; }, "lg")));
+}
+function cleaningDetail(el, id) {
+  el.appendChild(h("div", { class: "loading" }, t("Chargement…")));
+  return api("clean.get", { missionId: id }).then(function (m) {
+    clear(el); $("page-title").textContent = t("Mission de ménage");
+    const go = function () { App.go("cleaning/" + id); }, A = [stTag(m.status)];
+    if (m.isMine && m.status === "OFFERED") { A.push(btn(t("Accepter"), function () { api("clean.respond", { missionId: id, decision: "ACCEPTED" }).then(go).catch(showErr); }, "primary")); A.push(btn(t("Refuser"), function () { formModal(t("Refuser"), [{ k: "reason", l: "Motif" }], {}, function (v) { return api("clean.respond", { missionId: id, decision: "DECLINED", reason: v.reason }).then(function () { NAV_HASH.v = "cleaning"; }); }); })); }
+    if (m.isMine && m.status === "ACCEPTED") { A.push(btn(t("Démarrer"), function () { api("clean.start", { missionId: id }).then(go).catch(showErr); }, "primary")); A.push(btn(t("Signaler un empêchement"), function () { formModal(t("Empêchement"), [{ k: "reason", l: "Motif", req: true }], {}, function (v) { return api("clean.respond", { missionId: id, decision: "UNAVAILABLE", reason: v.reason }).then(function () { NAV_HASH.v = "cleaning"; }); }); }, "danger")); }
+    if (m.isMine && m.status === "IN_PROGRESS") A.push(btn(t("Terminer la mission"), function () { formModal(t("Terminer"), [{ k: "actualMinutes", l: "Durée réelle (min)", t: "number", min: 1, help: "Vide = durée mesurée depuis le démarrage." }, { k: "notes", l: "Commentaire", t: "textarea" }], {}, function (v) { return api("clean.complete", Object.assign(v, { missionId: id })).then(go); }); }, "primary"));
+    if (m.canManage && ["CREATED", "EXPIRED", "OFFERED"].indexOf(m.status) >= 0) A.push(btn(m.providerEmail ? t("Réattribuer") : t("Attribuer"), function () { const apk = providerPicker(function () { return m.propertyId; }, { key: "providerEmail", label: "Entreprise de ménage", fixedType: "CLEANING", valueKey: "email", required: true });
+      formModal(t("Attribuer la mission"), apk.fields, {}, function (v) { return api("clean.assign", { missionId: id, providerEmail: v.providerEmail }).then(go); }, { intro: t("Un nouveau délai d'acceptation démarre.") }); }, "primary"));
+    if (m.canManage && m.status === "COMPLETED") { A.push(btn(t("Valider"), function () { formModal(t("Valider la mission"), [{ k: "qualityScore", l: "Note qualité (1 à 5)", t: "number", min: 1, max: 5 }, { k: "price", l: "Coût final (MAD)", t: "number", def: m.price, min: 0 }, { k: "note", l: "Commentaire", t: "textarea" }], {}, function (v) { return api("clean.validate", Object.assign(v, { missionId: id, decision: "VALIDATE" })).then(go); }, { intro: t("La dépense de ménage est enregistrée une seule fois à la validation.") }); }, "primary"));
+      A.push(btn(t("À reprendre"), function () { formModal(t("Renvoyer la mission"), [{ k: "note", l: "Motif", req: true }], {}, function (v) { return api("clean.validate", { missionId: id, decision: "REJECT", note: v.note }).then(go); }); })); }
+    if (m.canManage && ["CREATED", "OFFERED", "ACCEPTED", "EXPIRED"].indexOf(m.status) >= 0) A.push(btn(t("Annuler"), function () { formModal(t("Annuler la mission"), [{ k: "reason", l: "Motif" }], {}, function (v) { return api("clean.cancel", { missionId: id, reason: v.reason }).then(go); }); }, "danger"));
+    if (m.canManage || m.isMine) A.push(btn(t("Ordre de mission (PDF)"), function () { api("clean.orderPdf", { missionId: id }).then(download).catch(showErr); }));
+    if ((m.canManage || m.isMine) && ["COMPLETED", "VALIDATED"].indexOf(m.status) >= 0) A.push(btn(t("Rapport de ménage (PDF)"), function () { api("clean.reportPdf", { missionId: id }).then(download).catch(showErr); }));
+    el.appendChild(pageHead(m.propertyName, fmtDT(m.startAt) + " → " + fmtDT(m.endAt), A));
+    if (m.status === "OFFERED") el.appendChild(h("div", { class: "alert warn" }, countdown(m.expiresAt, m.serverNow)));
+    el.appendChild(h("div", { class: "grid c2" }, panel("Mission", kv([["Équipe", m.providerEmail || t("À attribuer")], ["Priorité", st(m.priority)], ["Durée estimée", m.estimatedMinutes ? m.estimatedMinutes + " min" : "—"], ["Durée réelle", m.actualMinutes ? m.actualMinutes + " min" : "—"],
+      ["Tarif", fmtMoney(m.price)], ["Réattributions", m.reassignCount || 0], ["Note qualité", m.qualityScore ? m.qualityScore + " / 5" : "—"], ["Consignes", m.notes], m.declineReason ? ["Dernier refus", m.declineReason] : null])),
+      panel("Accès", kv([["Adresse", m.address], ["Consignes d'accès", m.accessInstructions], ["Réservation", m.reservationId ? h("a", { href: "#reservation/" + m.reservationId }, m.reservationId) : "—"]]))));
+    const rooms = m.rooms.length ? m.rooms : ["Séjour", "Chambre", "Cuisine", "Salle de bain"];
+    const roomsBox = h("div", { class: "cards" });
+    rooms.forEach(function (room) {
+      const cl = m.checklists.find(function (c) { return c.room === room; }) || { items: {} };
+      const ph = m.photos.filter(function (p) { return p.room === room; });
+      const card = h("div", { class: "card" }, h("div", { class: "actions", style: { justifyContent: "space-between" } }, h("h4", null, room), cl.doneAt ? tag(t("Terminé"), "good") : null),
+        h("div", { class: "small muted" }, t("Avant") + " : " + ph.filter(function (p) { return p.phase === "BEFORE"; }).length + " · " + t("Après") + " : " + ph.filter(function (p) { return p.phase === "AFTER"; }).length),
+        ph.length ? gallery(ph.map(function (p) { return { documentId: p.documentId, fileName: room + " " + st(p.phase), mimeType: "image/jpeg" }; })) : null);
+      if (m.isMine && m.status === "IN_PROGRESS") {
+        const boxes = m.checklistTemplate.map(function (it) { return h("label", { class: "small", style: { display: "flex", gap: "6px", alignItems: "center" } }, h("input", { type: "checkbox", value: it, checked: !!cl.items[it] }), it); });
+        card.appendChild(h("div", null, boxes));
+        const save = function (phase) {
+          const items = {}; boxes.forEach(function (b) { const i = b.querySelector("input"); items[i.value] = i.checked; });
+          (phase ? pickFiles({ accept: "image/*", capture: "environment", multiple: true }).then(function (f) { return uploadFiles(f, "CLEANING", id, phase === "BEFORE" ? "PHOTO_BEFORE" : "PHOTO_AFTER"); }) : Promise.resolve([]))
+            .then(function (ids) { return api("clean.room", { missionId: id, room: room, items: items, beforeDocIds: phase === "BEFORE" ? ids : [], afterDocIds: phase === "AFTER" ? ids : [] }); }).then(go).catch(showErr);
+        };
+        card.appendChild(h("div", { class: "actions" }, btn("📷 " + t("Avant"), function () { save("BEFORE"); }, "lg"), btn("📷 " + t("Après"), function () { save("AFTER"); }, "lg"), btn(t("Enregistrer"), function () { save(null); }, "lg")));
+      }
+      roomsBox.appendChild(card);
+    });
+    el.appendChild(panel("Contrôle par pièce", roomsBox));
+    el.appendChild(panel("Anomalies", table([{ l: "Date", dt: true, k: "at" }, { l: "Type", f: function (a) { return st(a.type); } }, { l: "Pièce", k: "room" }, { l: "Description", k: "description" }, { l: "Incident", f: function (a) { return a.incidentId ? h("a", { href: "#incident/" + a.incidentId }, t("Voir")) : "—"; } }], m.anomalies, { empty: "Aucune anomalie." }),
+      (m.isMine || m.canManage) && ["ACCEPTED", "IN_PROGRESS", "COMPLETED"].indexOf(m.status) >= 0 ? [btn("+ " + t("Signaler"), function () {
+        formModal(t("Signaler une anomalie"), [{ k: "type", l: "Type", t: "select", req: true, opts: listOpts("cleaningAnomalies") }, { k: "room", l: "Pièce", t: "select", opts: rooms.map(function (r) { return [r, r]; }) }, { k: "description", l: "Description", t: "textarea", req: true },
+          { k: "createIncident", l: "Créer un incident pour le gestionnaire", t: "checkbox" }, { k: "severity", l: "Gravité", t: "select", opts: ["LOW", "MEDIUM", "HIGH", "CRITICAL"], def: "MEDIUM", show: function (v) { return v.createIncident; } }], {},
+          function (v) { v.missionId = id; return api("clean.anomaly", v).then(go); });
+      })] : null));
+    if (m.history && m.canManage) el.appendChild(panel("Historique", table([{ l: "Date", dt: true, k: "timestamp" }, { l: "Par", k: "actorEmail" }, { l: "Action", k: "action" }], m.history)));
+  });
+}
+
+/* =============================== Incidents =============================== */
+function incidentDialog(preset) {
+  return formModal(t("Signaler un incident"), [{ k: "propertyId", l: "Bien", t: "select", req: true, opts: function () { return Promise.all([propChoices("incident.report"), propChoices("incident.manage")]).then(function (r) { const all = r[0].concat(r[1]); return all.filter(function (x, i) { return all.findIndex(function (y) { return y[0] === x[0]; }) === i; }); }); } },
+    { k: "category", l: "Catégorie", t: "select", req: true, opts: listOpts("incidentCategories") }, { k: "severity", l: "Gravité", t: "select", req: true, opts: ["LOW", "MEDIUM", "HIGH", "CRITICAL"], def: "MEDIUM" },
+    { k: "title", l: "Titre" }, { k: "description", l: "Description", t: "textarea", req: true }, { k: "estimatedCost", l: "Coût estimé (MAD)", t: "number", min: 0 }, { k: "photos", l: "Photos", t: "file", accept: "image/*", multiple: true, capture: "environment" }], preset || {},
+  function (v) {
+    const files = v.photos; delete v.photos;
+    return api("inc.create", v).then(function (r) { return (files.length ? uploadFiles(files, "INCIDENT", r.incidentId, "PHOTO") : Promise.resolve()).then(function () { NAV_HASH.v = "incident/" + r.incidentId; return r; }); });
+  }, { success: "Incident enregistré." });
+}
+PAGES.incidents = function (el) {
+  el.appendChild(pageHead(t("Incidents"), t("Registre des incidents et réclamations : qualification, devis, validation, intervention, contrôle, clôture."), [btn("+ " + t("Signaler un incident"), function () { incidentDialog(); }, "primary")]));
+  listView(el, { route: "inc.list", initial: { openOnly: true }, filters: [{ k: "openOnly", l: "Ouverts uniquement", t: "checkbox" }, { k: "status", l: "Statut", t: "select", opts: function () { return enumOpts("IncidentsV4", "status"); } }, { k: "category", l: "Catégorie", t: "select", opts: listOpts("incidentCategories") },
+    { k: "severity", l: "Gravité", t: "select", opts: ["LOW", "MEDIUM", "HIGH", "CRITICAL"] }, { k: "propertyId", l: "Bien", t: "select", opts: function () { return propChoices(); } }, { k: "from", l: "Du", t: "date" }, { k: "to", l: "Au", t: "date" }],
+    columns: [{ l: "Incident", k: "title" }, { l: "Bien", k: "propertyName" }, { l: "Catégorie", f: function (i) { return st(i.category); } }, { l: "Gravité", status: true, k: "severity" }, { l: "Statut", status: true, k: "status" }, { l: "Ancienneté", f: function (i) { return i.ageDays + " j"; } }, { l: "Coût", money: true, f: function (i) { return i.finalCost || i.estimatedCost; } }],
+    onRow: function (i) { NAV_HASH.v = "incident/" + i.incidentId; } });
+};
+PAGES.incident = function (el, id) {
+  el.appendChild(h("div", { class: "loading" }, t("Chargement…")));
+  return api("inc.get", { incidentId: id }).then(function (i) {
+    clear(el); $("page-title").textContent = i.title;
+    const go = function () { App.go("incident/" + id); };
+    const A = [stTag(i.severity), stTag(i.status)];
+    if (i.canManage) {
+      A.push(btn(t("Modifier"), function () { formModal(t("Modifier l'incident"), [{ k: "title", l: "Titre", req: true }, { k: "category", l: "Catégorie", t: "select", opts: listOpts("incidentCategories") }, { k: "severity", l: "Gravité", t: "select", opts: ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+        { k: "assignedToEmail", l: "Responsable (e-mail)", t: "email" }, { k: "estimatedCost", l: "Coût estimé", t: "number" }, { k: "finalCost", l: "Coût final", t: "number" }], i, function (v) { v.incidentId = id; return api("inc.update", v).then(go); }); }));
+      i.allowedTransitions.forEach(function (s) { A.push(btn("→ " + st(s), function () { confirmBox(t("Passer l'incident au statut") + " « " + st(s) + " » ?", { danger: s === "CANCELLED" }).then(function (ok) { if (ok) api("inc.update", { incidentId: id, status: s }).then(go).catch(showErr); }); }, s === "CANCELLED" ? "danger" : "")); });
+    }
+    el.appendChild(pageHead(i.title, i.propertyName + " · " + st(i.category) + " · " + t("déclaré le") + " " + fmtDT(i.createdAt), A));
+    el.appendChild(h("div", { class: "grid c2" }, panel("Description", h("p", { style: { whiteSpace: "pre-wrap" } }, i.description)),
+      panel("Suivi", kv([["Déclarant", i.createdBy], ["Origine", st(i.source)], ["Réservation", i.reservationId ? h("a", { href: "#reservation/" + i.reservationId }, i.reservationId) : "—"], ["Mission", i.missionId ? h("a", { href: "#cleaning/" + i.missionId }, i.missionId) : "—"],
+        ["Coût estimé", fmtMoney(i.estimatedCost)], ["Coût final", fmtMoney(i.finalCost)], ["Résolu le", fmtDT(i.resolvedAt)], ["Clos le", fmtDT(i.closedAt)], ["Ancienneté", i.ageDays + " j"]]))));
+    el.appendChild(panel("Photos et documents", gallery(i.documents), [btn("+ " + t("Ajouter"), function () { pickFiles({ multiple: true, capture: "environment" }).then(function (f) { return uploadFiles(f, "INCIDENT", id, "PHOTO"); }).then(go).catch(showErr); })]));
+    const qTools = i.canManage && ["CLOSED", "CANCELLED", "RESOLVED"].indexOf(i.status) < 0 ? [btn(t("Demander un devis"), function () {
+      const pk = providerPicker(function () { return i.propertyId; }, { required: true, defaultType: specialtyFor(i.category) });
+      formModal(t("Demander un devis"), pk.fields.concat([{ k: "requestNote", l: "Précisions", t: "textarea" }]), {},
+        function (v) { v.incidentId = id; return api("quote.request", v).then(function (r) { if (r.whatsapp) window.open(r.whatsapp, "_blank", "noopener"); go(); }); }, { intro: t("Le prestataire est notifié s'il dispose d'un compte ; sinon un lien WhatsApp pré-rempli est proposé (envoi manuel).") });
+    }), btn(t("Créer une intervention"), function () { workOrderDialog(i); })] : null;
+    el.appendChild(panel("Devis", table([{ l: "Prestataire", k: "artisanName" }, { l: "Statut", status: true, k: "status" }, { l: "HT", money: true, k: "amountHT" }, { l: "TTC", money: true, k: "amountTTC" }, { l: "Validité", date: true, k: "validUntil" }, { l: "Commission estimée", money: true, k: "commissionEstimate" },
+      { l: "", f: function (q) { return quoteActions(q, i, go); } }], i.quotes, { empty: "Aucun devis." }), qTools));
+    el.appendChild(panel("Interventions", table([{ l: "Intervention", k: "title" }, { l: "Prestataire", k: "artisanName" }, { l: "Statut", status: true, k: "status" }, { l: "Planifiée", dt: true, k: "scheduledAt" }, { l: "Terminée", dt: true, k: "completedAt" }], i.workOrders, { onRow: function (w) { NAV_HASH.v = "workorder/" + w.workOrderId; }, empty: "Aucune intervention." })));
+    if (i.invoices) el.appendChild(panel("Factures", table([{ l: "N°", k: "invoiceNumber" }, { l: "Prestataire", k: "artisanName" }, { l: "TTC", money: true, k: "amountTTC" }, { l: "Commission", money: true, k: "commissionAmount" }, { l: "Statut", status: true, k: "status" }], i.invoices, { onRow: function (v) { NAV_HASH.v = "invoice/" + v.invoiceId; }, empty: "Aucune facture." })));
+    const cbox = h("div", null, i.comments.length ? i.comments.map(function (c) { return h("div", { class: "card", style: { marginBottom: "8px" } }, h("div", { class: "small muted" }, c.authorEmail + " · " + fmtDT(c.createdAt) + (c.visibility === "INTERNAL" ? " · " + t("interne") : "")), h("div", { style: { whiteSpace: "pre-wrap" } }, c.body)); }) : h("div", { class: "empty" }, t("Aucun commentaire.")));
+    el.appendChild(panel("Commentaires", cbox, [btn("+ " + t("Commenter"), function () { formModal(t("Commentaire"), [{ k: "body", l: "Message", t: "textarea", req: true }, i.canManage ? { k: "visibility", l: "Visibilité", t: "select", opts: [["SHARED", t("Partagé (déclarant et prestataire)")], ["INTERNAL", t("Interne")]] } : null].filter(Boolean), {}, function (v) { v.incidentId = id; return api("inc.comment", v).then(go); }); })]));
+    if (i.history) el.appendChild(panel("Historique", table([{ l: "Date", dt: true, k: "timestamp" }, { l: "Par", k: "actorEmail" }, { l: "Action", k: "action" }, { l: "Détail", f: function (x) { return h("code", { class: "small" }, JSON.stringify(x.details).slice(0, 200)); } }], i.history)));
+  });
+};
+function quoteActions(q, inc, go) {
+  const out = h("span", { class: "actions" });
+  if (q.isMine !== false && q.status === "REQUESTED" && (can("quote.submit") || (inc && inc.canManage))) out.appendChild(btn(t("Saisir le devis"), function () { quoteSubmitDialog(q).then(function (x) { if (x) go(); }); }, "sm primary"));
+  if (q.status === "PENDING" && (q.canDecide || (inc && inc.canDecide))) { out.appendChild(btn(t("Accepter"), function () { formModal(t("Accepter le devis"), [{ k: "note", l: "Commentaire" }], {}, function (v) { return api("quote.decide", { quoteId: q.quoteId, decision: "APPROVED", note: v.note }).then(go); }); }, "sm primary"));
+    out.appendChild(btn(t("Refuser"), function () { formModal(t("Refuser le devis"), [{ k: "note", l: "Motif", req: true }], {}, function (v) { return api("quote.decide", { quoteId: q.quoteId, decision: "REJECTED", note: v.note }).then(go); }); }, "sm danger")); }
+  if (["PENDING", "APPROVED", "REJECTED", "EXPIRED"].indexOf(q.status) >= 0) out.appendChild(btn(t("Devis PDF"), function () { api("quote.pdf", { quoteId: q.quoteId }).then(download).catch(showErr); }, "sm"));
+  if (q.lines && q.lines.length) out.appendChild(btn(t("Détail"), function () { modal({ title: t("Devis"), body: table([{ l: "Désignation", k: "description" }, { l: "Qté", num: true, k: "quantity" }, { l: "PU HT", money: true, k: "unitPrice" }, { l: "Montant HT", money: true, k: "amount" }], q.lines) }); }, "sm"));
+  return out;
+}
+function quoteSubmitDialog(q) {
+  return formModal(t("Devis"), [{ k: "lines", l: "Lignes du devis", t: "lines" }, { k: "vatRate", l: "TVA (%)", t: "number", def: 20, min: 0, max: 100 }, { k: "validUntil", l: "Valable jusqu'au", t: "date", def: addDays(today(), 30) }, { k: "estimatedDays", l: "Délai estimé (jours)", t: "number", min: 0 }], {},
+    function (v) { if (!v.lines.length) throw { message: t("Ajoutez au moins une ligne.") }; v.quoteId = q.quoteId; return api("quote.submit", v); }, { size: "", success: "Devis transmis." });
+}
+/**
+ * Choix d'un prestataire dans l'annuaire : d'abord le TYPE DE PRESTATION, puis la liste des prestataires correspondants
+ * (annuaire de la plateforme géré par le super administrateur + éventuels prestataires historiques de l'organisation).
+ * o : { key, label, fixedType, valueKey ("email" pour le ménage), required, defaultType, emptyLabel }
+ */
+/** Type de prestation proposé par défaut d'après la catégorie d'incident (si elle correspond à une spécialité). */
+function specialtyFor(category) { const l = listOpts("specialties").map(function (x) { return x[0]; }); return l.indexOf(category) >= 0 ? category : ""; }
+function providerPicker(getPropertyId, o) {
+  o = o || {};
+  const key = o.key || "artisanId";
+  const load = function (inputs) {
+    const sel = inputs[key]; if (!sel) return;
+    const type = o.fixedType || (inputs.serviceType ? inputs.serviceType.value : "");
+    const pid = getPropertyId(inputs);
+    clear(sel);
+    if (!pid) { sel.appendChild(h("option", { value: "" }, t("Choisissez d'abord le bien"))); return; }
+    if (!type) { sel.appendChild(h("option", { value: "" }, t("Choisissez d'abord le type de prestation"))); return; }
+    sel.appendChild(h("option", { value: "" }, t("Chargement…")));
+    api("ctr.choices", { propertyId: pid, serviceType: type }).then(function (l) {
+      clear(sel);
+      if (!o.required) sel.appendChild(h("option", { value: "" }, t(o.emptyLabel || "— À attribuer plus tard —")));
+      if (!l.length) sel.appendChild(h("option", { value: "" }, t("Aucun prestataire pour ce type de prestation")));
+      l.forEach(function (c) {
+        const usable = o.fixedType === "CLEANING" ? c.canClean : true;
+        sel.appendChild(h("option", { value: o.valueKey === "email" ? c.email : c.artisanId, disabled: !usable },
+          c.name + ((c.zones || []).length ? " · " + c.zones.join(", ") : "") + (usable ? (c.hasAccount ? "" : " (" + t("sans compte") + ")") : " (" + t("compte non activé") + ")")));
+      });
+      const first = Array.from(sel.options).find(function (x) { return x.value && !x.disabled; });
+      if (o.required && first) sel.value = first.value;
+    }).catch(function (e) { clear(sel).appendChild(h("option", { value: "" }, errMsg(e))); });
+  };
+  const fields = [];
+  if (!o.fixedType) fields.push({ k: "serviceType", l: "Type de prestation", t: "select", req: true, def: o.defaultType, opts: function () { return listOpts("specialties").filter(function (x) { return x[0] !== "CLEANING" || o.allowCleaning; }); }, onchange: function (v, inputs) { load(inputs); } });
+  let started = false;
+  // Premier chargement de la liste dès que le formulaire est construit (puis à chaque changement de bien ou de type).
+  fields.push({ k: key, l: o.label || "Prestataire", t: "select", req: !!o.required, opts: [], help: t("Liste tenue par l'administrateur ImmoPilot, filtrée par type de prestation."),
+    onchange: function (v, inputs) { if (!started) { started = true; load(inputs); } } });
+  return { fields: fields, load: load };
+}
+function workOrderDialog(i) {
+  const approved = (i.quotes || []).filter(function (q) { return q.status === "APPROVED"; });
+  const pk = providerPicker(function () { return i.propertyId; }, { required: true, defaultType: specialtyFor(i.category) });
+  return formModal(t("Créer une intervention"), pk.fields.concat([
+    { k: "quoteId", l: "Devis approuvé", t: "select", opts: approved.map(function (q) { return [q.quoteId, q.artisanName + " — " + fmtMoney(q.amountTTC)]; }), help: "Obligatoire sauf incident critique (intervention d'urgence)." },
+    { k: "title", l: "Objet", def: i.title }, { k: "description", l: "Description", t: "textarea", def: i.description }, { k: "desiredDate", l: "Date souhaitée", t: "date" }, { k: "commissionRate", l: "Commission (%)", t: "number", min: 0, max: 100, help: "Vide = taux du prestataire ou de l'organisation (15 % par défaut)." }]),
+  approved[0] ? { artisanId: approved[0].artisanId, quoteId: approved[0].quoteId } : {}, function (v) { v.incidentId = i.incidentId; return api("wo.create", v).then(function (r) { NAV_HASH.v = "workorder/" + r.workOrderId; }); }, { success: "Intervention créée." });
+}
+
+/* =============================== Prestataires =============================== */
+function contractorFields(isCreate) {
+  return [{ k: "name", l: "Nom de l'entreprise ou de l'artisan", req: true }, { k: "email", l: "E-mail (compte du prestataire)", t: "email", req: true, help: isCreate ? "Une invitation lui est envoyée : rôle ménage si « Ménage » est coché, rôle artisan pour les autres prestations." : null },
+    { k: "phone", l: "Téléphone", t: "tel" }, { k: "specialties", l: "Types de prestation", t: "multi", req: true, opts: listOpts("specialties") },
+    { k: "zones", l: "Zones d'intervention (séparées par des virgules)" }, { k: "commissionRate", l: "Commission spécifique (%)", t: "number", min: 0, max: 100 }, { k: "legalName", l: "Raison sociale" }, { k: "taxId", l: "Identifiant fiscal (ICE / IF)" },
+    { k: "billingInfo", l: "Informations de facturation / RIB", t: "textarea" }, { k: "notes", l: "Notes internes", t: "textarea" }, !isCreate ? { k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "INACTIVE", "BLOCKED"] } : null].filter(Boolean);
+}
+PAGES.contractors = function (el, id) {
+  if (id) return contractorDetail(el, id);
+  el.appendChild(pageHead(t("Prestataires"), S.me.isSuper ? t("Annuaire de la plateforme : entreprises de ménage et artisans, avec leurs types de prestation. Les propriétaires et agences les choisissent dans cette liste.") : t("Annuaire des prestataires intégrés par l'administrateur ImmoPilot. Pour demander un devis, créer une intervention ou attribuer un ménage, choisissez le type de prestation puis le prestataire."), [S.me.isSuper ? btn("+ " + t("Prestataire"), function () {
+    formModal(t("Nouveau prestataire"), contractorFields(true), {}, function (v) { if (typeof v.zones === "string") v.zones = v.zones.split(","); return api("ctr.create", v).then(function (r) { const inv = (r.invitations || []).filter(function (x) { return x.invitationId; });
+      toast(inv.length ? t("Prestataire ajouté. Invitation envoyée :") + " " + inv.map(function (x) { return roleLabel(x.role); }).join(", ") : t("Prestataire ajouté."), "good");
+      if (r.note) toast(r.note); NAV_HASH.v = "contractors/" + r.artisanId; }); });
+  }, "primary") : null]));
+  listView(el, { route: "ctr.list", initial: { withStats: true }, filters: [{ k: "specialty", l: "Spécialité", t: "select", opts: listOpts("specialties") }, { k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "INACTIVE", "BLOCKED"] }, { k: "zone", l: "Zone", t: "text" }],
+    columns: [{ l: "Nom", k: "name" }, { l: "Spécialités", f: function (c) { return (c.specialties || []).map(st).join(", "); } }, { l: "Zones", f: function (c) { return (c.zones || []).join(", "); } }, { l: "Compte", f: function (c) { return c.hasAccount ? tag(t("Oui"), "good") : "—"; } },
+      { l: "Interventions", num: true, f: function (c) { return c.stats ? c.stats.interventions : "—"; } }, { l: "Résolution", f: function (c) { return c.stats ? fmtPct(c.stats.resolutionRate) : "—"; } }, { l: "Délai moyen", f: function (c) { return c.stats && c.stats.avgDelayDays !== null ? fmtNum(c.stats.avgDelayDays, 1) + " j" : "—"; } },
+      { l: "Facturé TTC", money: true, f: function (c) { return c.stats ? c.stats.totalInvoicedTTC : null; } }, { l: "Statut", status: true, k: "status" }], onRow: function (c) { NAV_HASH.v = "contractors/" + c.artisanId; } });
+};
+function contractorDetail(el, id) {
+  return api("ctr.get", { artisanId: id }).then(function (c) {
+    $("page-title").textContent = c.name;
+    el.appendChild(pageHead(c.name, (c.specialties || []).map(st).join(", "), [stTag(c.status), c.platform && !c.canEdit ? tag(t("Annuaire ImmoPilot"), "info") : null, (c.canEdit || can("workorder.operate")) ? btn(t("Modifier"), function () { formModal(t("Modifier"), contractorFields(false), Object.assign({}, c, { zones: (c.zones || []).join(", ") }), function (v) { v.artisanId = id; if (typeof v.zones === "string") v.zones = v.zones.split(","); return api("ctr.update", v).then(function () { App.go("contractors/" + id); }); }); }) : null,
+      c.phone ? h("a", { class: "btn", href: "https://wa.me/" + String(c.phone).replace(/\D/g, "").replace(/^0([5-7])/, "212$1"), target: "_blank", rel: "noopener" }, "WhatsApp") : null]));
+    el.appendChild(kpis([{ l: "Interventions", v: fmtNum(c.stats.interventions, 0) }, { l: "Contrôlées", v: fmtNum(c.stats.verified, 0), tone: "good" }, { l: "Taux de résolution", v: fmtPct(c.stats.resolutionRate) }, { l: "Délai moyen", v: c.stats.avgDelayDays === null ? "—" : fmtNum(c.stats.avgDelayDays, 1) + " j" },
+      { l: "Facturé TTC", v: fmtMoney(c.stats.totalInvoicedTTC) }, { l: "Coût moyen", v: fmtMoney(c.stats.avgInvoiceTTC) }, { l: "Commissions", v: fmtMoney(c.stats.commissionTotal) }, { l: "Devis acceptés", v: fmtPct(c.stats.quoteApprovalRate) }]));
+    el.appendChild(h("div", { class: "grid c2" }, panel("Coordonnées", kv([["E-mail", c.email], ["Téléphone", c.phone], ["Zones", (c.zones || []).join(", ")], ["Commission spécifique", isNil(c.commissionRate) ? "—" : c.commissionRate + " %"], ["Compte lié", c.hasAccount ? t("Oui") : t("Non")]])),
+      panel("Facturation", kv([["Raison sociale", c.legalName], ["Identifiant fiscal", c.taxId], ["Informations", c.billingInfo], ["Notes", c.notes]]))));
+    el.appendChild(panel("Historique des interventions", table([{ l: "Intervention", k: "title" }, { l: "Bien", k: "propertyName" }, { l: "Statut", status: true, k: "status" }, { l: "Créée le", dt: true, k: "createdAt" }, { l: "Terminée", dt: true, k: "completedAt" }], c.workOrders, { onRow: function (w) { NAV_HASH.v = "workorder/" + w.workOrderId; } })));
+    el.appendChild(panel("Documents", docList(c.documents), [btn("+ " + t("Ajouter"), function () { pickFiles({ multiple: true }).then(function (f) { return uploadFiles(f, "CONTRACTOR", id, "ADMIN"); }).then(function () { App.go("contractors/" + id); }).catch(showErr); })]));
+  });
+}
+
+/* =============================== Devis =============================== */
+PAGES.quotes = function (el) {
+  el.appendChild(pageHead(t("Devis"), t("Demandes, devis reçus et décisions du propriétaire.")));
+  const lv = listView(el, { route: "quote.list", search: false, filters: [{ k: "status", l: "Statut", t: "select", opts: ["REQUESTED", "PENDING", "APPROVED", "REJECTED", "DECLINED", "EXPIRED"] }, { k: "propertyId", l: "Bien", t: "select", opts: function () { return propChoices(); } }],
+    columns: [{ l: "Bien", k: "propertyName" }, { l: "Prestataire", k: "artisanName" }, { l: "Statut", status: true, k: "status" }, { l: "Demandé le", dt: true, k: "requestedAt" }, { l: "HT", money: true, k: "amountHT" }, { l: "TTC", money: true, k: "amountTTC" }, { l: "Validité", date: true, k: "validUntil" },
+      { l: "", f: function (q) { const s = h("span", { class: "actions" }, quoteActions(q, null, function () { lv.reload(); }));
+        if (q.isMine && q.status === "REQUESTED") s.appendChild(btn(t("Décliner"), function () { formModal(t("Décliner la demande"), [{ k: "reason", l: "Motif" }], {}, function (v) { return api("quote.decline", { quoteId: q.quoteId, reason: v.reason }).then(lv.reload); }); }, "sm danger"));
+        if (!q.isMine) s.appendChild(btn(t("Incident"), function () { NAV_HASH.v = "incident/" + q.incidentId; }, "sm")); return s; } }] });
+};
+
+/* =============================== Interventions =============================== */
+PAGES.workorders = function (el) {
+  el.appendChild(pageHead(t("Interventions"), t("Ordres de travail : acceptation, planification, réalisation, contrôle.")));
+  listView(el, { route: "wo.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["ASSIGNED", "ACCEPTED", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "VERIFIED", "DECLINED", "CANCELLED"] }, { k: "propertyId", l: "Bien", t: "select", opts: function () { return propChoices(); } }],
+    columns: [{ l: "Intervention", k: "title" }, { l: "Bien", k: "propertyName" }, { l: "Prestataire", k: "artisanName" }, { l: "Statut", status: true, k: "status" }, { l: "Souhaitée", date: true, k: "desiredDate" }, { l: "Planifiée", dt: true, k: "scheduledAt" }, { l: "Commission", f: function (w) { return isNil(w.commissionRate) ? "—" : w.commissionRate + " %"; } }],
+    onRow: function (w) { NAV_HASH.v = "workorder/" + w.workOrderId; } });
+};
+PAGES.workorder = function (el, id) {
+  return api("wo.get", { workOrderId: id }).then(function (w) {
+    $("page-title").textContent = w.title || t("Intervention");
+    const go = function () { App.go("workorder/" + id); }, A = [stTag(w.status)];
+    if (w.isMine && w.status === "ASSIGNED") { A.push(btn(t("Accepter"), function () { api("wo.respond", { workOrderId: id, decision: "ACCEPTED" }).then(go).catch(showErr); }, "primary")); A.push(btn(t("Refuser"), function () { formModal(t("Refuser"), [{ k: "reason", l: "Motif" }], {}, function (v) { return api("wo.respond", { workOrderId: id, decision: "DECLINED", reason: v.reason }).then(go); }); }, "danger")); }
+    if ((w.isMine || w.canManage) && ["ACCEPTED", "SCHEDULED", "ASSIGNED"].indexOf(w.status) >= 0 && (w.status !== "ASSIGNED" || w.canManage)) A.push(btn(t("Planifier"), function () { formModal(t("Date d'intervention"), [{ k: "scheduledAt", l: "Date et heure", t: "datetime", req: true }], { scheduledAt: w.scheduledAt }, function (v) { return api("wo.schedule", { workOrderId: id, scheduledAt: v.scheduledAt }).then(go); }); }));
+    if ((w.isMine || w.canManage) && ["ACCEPTED", "SCHEDULED"].indexOf(w.status) >= 0) A.push(btn(t("Démarrer"), function () { api("wo.start", { workOrderId: id }).then(go).catch(showErr); }, "primary"));
+    if ((w.isMine || w.canManage) && ["IN_PROGRESS", "SCHEDULED", "ACCEPTED"].indexOf(w.status) >= 0) A.push(btn(t("Terminer"), function () {
+      formModal(t("Rapport d'intervention"), [{ k: "report", l: "Travaux réalisés", t: "textarea", req: true }, { k: "photos", l: "Photos", t: "file", accept: "image/*", multiple: true, capture: "environment" }], {},
+        function (v) { return (v.photos.length ? uploadFiles(v.photos, "WORKORDER", id, "PHOTO") : Promise.resolve([])).then(function (ids) { return api("wo.complete", { workOrderId: id, report: v.report, photoDocIds: ids }); }).then(go); });
+    }, "primary"));
+    if (w.canManage && w.status === "COMPLETED") { A.push(btn(t("Contrôle OK"), function () { api("wo.verify", { workOrderId: id }).then(go).catch(showErr); }, "primary")); A.push(btn(t("À reprendre"), function () { formModal(t("Reprise"), [{ k: "note", l: "Motif", req: true }], {}, function (v) { return api("wo.verify", { workOrderId: id, decision: "REWORK", note: v.note }).then(go); }); })); }
+    if ((w.isMine || w.canManage) && ["COMPLETED", "VERIFIED"].indexOf(w.status) >= 0 && !w.invoiceId) A.push(btn(t("Transmettre la facture"), function () {
+      formModal(t("Facture"), [{ k: "invoiceNumber", l: "Numéro de facture", req: true }, { k: "issueDate", l: "Date", t: "date", def: today() }, { k: "dueDate", l: "Échéance", t: "date" }, { k: "amountHT", l: "Montant HT (MAD)", t: "number", req: true, min: 0.01, step: "0.01" },
+        { k: "vatRate", l: "TVA (%)", t: "number", def: 20 }, { k: "file", l: "Facture (PDF ou photo)", t: "file", req: true }, { k: "notes", l: "Notes", t: "textarea" }], {}, function (v) {
+        const files = v.file; delete v.file;
+        return uploadFiles(files, "WORKORDER", id, "INVOICE").then(function (ids) { return api("inv.submit", Object.assign(v, { workOrderId: id, documentId: ids[0], requestKey: rk() })); }).then(function (r) { if (r.warning) toast(r.warning, "bad"); go(); });
+      });
+    }));
+    if (w.canManage && ["ASSIGNED", "ACCEPTED", "SCHEDULED", "DECLINED"].indexOf(w.status) >= 0) A.push(btn(t("Annuler"), function () { formModal(t("Annuler l'intervention"), [{ k: "reason", l: "Motif" }], {}, function (v) { return api("wo.cancel", { workOrderId: id, reason: v.reason }).then(go); }); }, "danger"));
+    A.push(btn(t("Bon d'intervention PDF"), function () { api("wo.pdf", { workOrderId: id }).then(download).catch(showErr); }));
+    el.appendChild(pageHead(w.title || t("Intervention"), w.propertyName + " · " + w.artisanName, A));
+    el.appendChild(h("div", { class: "grid c2" }, panel("Intervention", kv([["Incident", h("a", { href: "#incident/" + w.incidentId }, t("Voir l'incident"))], ["Description", w.description], ["Date souhaitée", fmtDate(w.desiredDate)], ["Planifiée", fmtDT(w.scheduledAt)], ["Démarrée", fmtDT(w.startedAt)], ["Terminée", fmtDT(w.completedAt)], ["Contrôlée", fmtDT(w.verifiedAt)],
+      ["Commission", isNil(w.commissionRate) ? "—" : w.commissionRate + " %"], ["Facture", w.invoiceId ? h("a", { href: "#invoice/" + w.invoiceId }, t("Voir la facture")) : "—"], w.declineReason ? ["Motif", w.declineReason] : null])),
+      panel("Accès au bien", kv([["Adresse", (w.address || "") + " " + (w.city || "")], ["Consignes d'accès", w.accessInstructions]]))));
+    if (w.report) el.appendChild(panel("Rapport", h("p", { style: { whiteSpace: "pre-wrap" } }, w.report)));
+    if (w.quote) el.appendChild(panel("Devis approuvé", table([{ l: "Désignation", k: "description" }, { l: "Qté", num: true, k: "quantity" }, { l: "PU HT", money: true, k: "unitPrice" }, { l: "Montant HT", money: true, k: "amount" }], w.quote.lines)));
+    el.appendChild(panel("Photos et documents", gallery(w.documents), [btn("+ " + t("Ajouter"), function () { pickFiles({ multiple: true, capture: "environment" }).then(function (f) { return uploadFiles(f, "WORKORDER", id, "PHOTO"); }).then(go).catch(showErr); })]));
+  });
+};
+
+/* =============================== Factures =============================== */
+PAGES.invoices = function (el) {
+  el.appendChild(pageHead(t("Factures"), t("Factures des prestataires : la commission est calculée une seule fois, à l'approbation, sur le montant HT.")));
+  listView(el, { route: "inv.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["SUBMITTED", "APPROVED", "PARTIAL", "PAID", "REJECTED"] }, { k: "propertyId", l: "Bien", t: "select", opts: function () { return propChoices(); } }, { k: "from", l: "Du", t: "date" }, { k: "to", l: "Au", t: "date" }],
+    columns: [{ l: "N°", k: "invoiceNumber" }, { l: "Bien", k: "propertyName" }, { l: "Prestataire", k: "artisanName" }, { l: "Date", date: true, k: "issueDate" }, { l: "HT", money: true, k: "amountHT" }, { l: "TTC", money: true, k: "amountTTC" },
+      { l: "Commission", money: true, k: "commissionAmount" }, { l: "Net prestataire", money: true, k: "netToContractor" }, { l: "Payé", money: true, k: "paidAmount" }, { l: "Statut", status: true, k: "status" }], onRow: function (v) { NAV_HASH.v = "invoice/" + v.invoiceId; } });
+};
+PAGES.invoice = function (el, id) {
+  return api("inv.get", { invoiceId: id }).then(function (v) {
+    $("page-title").textContent = t("Facture") + " " + v.invoiceNumber;
+    const go = function () { App.go("invoice/" + id); }, A = [stTag(v.status)];
+    if (v.canManage && v.status === "SUBMITTED") { A.push(btn(t("Approuver"), function () { confirmBox(t("Approuver cette facture ? La commission sera calculée et figée.")).then(function (ok) { if (ok) api("inv.approve", { invoiceId: id }).then(go).catch(showErr); }); }, "primary"));
+      A.push(btn(t("Refuser"), function () { formModal(t("Refuser la facture"), [{ k: "note", l: "Motif", req: true }], {}, function (x) { return api("inv.reject", { invoiceId: id, note: x.note }).then(go); }); }, "danger")); }
+    if (v.canManage && ["APPROVED", "PARTIAL"].indexOf(v.status) >= 0) A.push(btn(t("Enregistrer un paiement"), function () { payDialog({ refType: "INVOICE", refId: id, kind: "INVOICE", amount: v.balance, title: t("Paiement au prestataire") }).then(function (x) { if (x) go(); }); }, "primary"));
+    if (v.documentId) A.push(btn(t("Voir la facture"), function () { openDoc(v.documentId); }));
+    A.push(btn(t("Facture PDF"), function () { api("inv.pdf", { invoiceId: id }).then(download).catch(showErr); }));
+    el.appendChild(pageHead(t("Facture") + " " + v.invoiceNumber, v.artisanName, A));
+    if (v.notes && v.notes.indexOf("[") === 0) el.appendChild(h("div", { class: "alert warn" }, v.notes));
+    el.appendChild(h("div", { class: "grid c2" }, panel("Montants", kv([["Montant HT", fmtMoney(v.amountHT)], ["TVA", fmtMoney(v.vatAmount) + " (" + fmtNum(v.vatRate) + " %)"], ["Montant TTC (coût propriétaire)", h("b", null, fmtMoney(v.amountTTC))], ["Date", fmtDate(v.issueDate)], ["Échéance", fmtDate(v.dueDate)]])),
+      panel("Commission et versement", v.commissionLocked ? kv([["Base de calcul (HT)", fmtMoney(v.commissionBase)], ["Taux", fmtNum(v.commissionRate) + " %"], ["Commission HT", fmtMoney(v.commissionAmount)], ["TVA sur commission", fmtMoney(v.commissionVatAmount)],
+        ["Net à verser au prestataire", h("b", null, fmtMoney(v.netToContractor))], ["Déjà versé", fmtMoney(v.paidAmount)], ["Reste à verser", fmtMoney(v.balance)]]) : h("p", { class: "muted" }, t("Calculée à l'approbation (taux prévu") + " : " + (isNil(v.commissionRate) ? "15" : v.commissionRate) + " %)."))));
+    el.appendChild(panel("Paiements", table([{ l: "Date", date: true, k: "paidAt" }, { l: "Montant", money: true, k: "amount" }, { l: "Mode", f: function (x) { return st(x.method); } }, { l: "Référence", k: "reference" }, { l: "Statut", status: true, k: "status" }], v.payments)));
+    el.appendChild(panel("Historique", table([{ l: "Date", dt: true, k: "timestamp" }, { l: "Par", k: "actorEmail" }, { l: "Action", k: "action" }], v.history)));
+  });
+};
+
+/* =============================== Baux et locataires =============================== */
+PAGES.leases = function (el) {
+  el.appendChild(pageHead(t("Locations longue durée"), t("Baux, échéanciers, paiements partiels, retards et quittances. Une échéance n'est jamais considérée payée sans paiement enregistré."), [can("lease.manage") ? btn("+ " + t("Nouveau bail"), function () { leaseDialog(); }, "primary") : null]));
+  listView(el, { route: "lease.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["DRAFT", "ACTIVE", "NOTICE", "ENDED", "RENEWED", "CANCELLED"] }, { k: "propertyId", l: "Bien", t: "select", opts: function () { return propChoices("lease.view"); } }],
+    columns: [{ l: "Bien", k: "propertyName" }, { l: "Locataire", k: "tenantName" }, { l: "Début", date: true, k: "startDate" }, { l: "Fin", date: true, k: "endDate" }, { l: "Loyer", money: true, k: "monthlyRent" }, { l: "Charges", money: true, k: "charges" },
+      { l: "Arriérés", f: function (l) { return l.arrears ? h("span", { class: "tag bad" }, fmtMoney(l.arrears)) : "—"; } }, { l: "Prochaine échéance", f: function (l) { return l.nextDue ? fmtDate(l.nextDue.dueDate) : "—"; } }, { l: "Statut", status: true, k: "status" }],
+    onRow: function (l) { NAV_HASH.v = "lease/" + l.leaseId; } });
+};
+function leaseDialog() {
+  return formModal(t("Nouveau bail"), [{ k: "propertyId", l: "Bien", t: "select", req: true, opts: function () { return api("property.choices", { cap: "lease.manage" }).then(function (l) { return l.filter(function (p) { return p.rentalMode !== "SHORT_TERM"; }).map(function (p) { return [p.propertyId, p.name]; }); }); } },
+    { k: "tenantId", l: "Locataire", t: "select", req: true, opts: function () { return api("tenant.list", { pageSize: 200 }).then(function (r) { return r.items.map(function (x) { return [x.tenantId, x.fullName]; }); }); }, help: "Créez d'abord le locataire dans « Locataires »." },
+    { k: "startDate", l: "Date de début", t: "date", req: true }, { k: "endDate", l: "Date de fin", t: "date", help: "Vide = durée indéterminée (échéancier glissant de 12 mois)." }, { k: "monthlyRent", l: "Loyer mensuel (MAD)", t: "number", req: true, min: 1 },
+    { k: "charges", l: "Charges mensuelles", t: "number", min: 0 }, { k: "deposit", l: "Caution", t: "number", min: 0 }, { k: "dueDay", l: "Jour d'échéance (1-28)", t: "number", def: 5, min: 1, max: 28 },
+    { k: "indexationRate", l: "Indexation annuelle (%)", t: "number", min: 0, max: 100, step: "0.01" }, { k: "nextIndexationDate", l: "Première indexation le", t: "date" }, { k: "terms", l: "Conditions particulières", t: "textarea" }], {},
+  function (v) { return api("lease.create", v).then(function (r) { NAV_HASH.v = "lease/" + r.leaseId; }); }, { intro: t("Le bail est créé en brouillon : activez-le pour générer l'échéancier."), success: "Bail créé." });
+}
+PAGES.lease = function (el, id) {
+  return api("lease.get", { leaseId: id }).then(function (l) {
+    $("page-title").textContent = l.tenantName;
+    const go = function () { App.go("lease/" + id); }, A = [stTag(l.status)];
+    if (l.canManage) {
+      if (l.status === "DRAFT") { A.push(btn(t("Activer le bail"), function () { confirmBox(t("Activer le bail et générer l'échéancier ?")).then(function (ok) { if (ok) api("lease.activate", { leaseId: id }).then(function (r) { toast(r.schedulesCreated + " " + t("échéance(s) créée(s)."), "good"); go(); }).catch(showErr); }); }, "primary"));
+        A.push(btn(t("Modifier"), function () { formModal(t("Modifier le bail"), [{ k: "startDate", l: "Début", t: "date" }, { k: "endDate", l: "Fin", t: "date" }, { k: "monthlyRent", l: "Loyer", t: "number" }, { k: "charges", l: "Charges", t: "number" }, { k: "deposit", l: "Caution", t: "number" }, { k: "dueDay", l: "Jour d'échéance", t: "number" }, { k: "indexationRate", l: "Indexation (%)", t: "number" }, { k: "terms", l: "Conditions", t: "textarea" }], l, function (v) { v.leaseId = id; return api("lease.update", v).then(go); }); })); }
+      if (["ACTIVE", "NOTICE"].indexOf(l.status) >= 0) {
+        A.push(btn(t("Préavis"), function () { formModal(t("Préavis"), [{ k: "noticeBy", l: "Donné par", t: "select", opts: [["TENANT", t("Locataire")], ["LANDLORD", t("Bailleur")]] }, { k: "noticeDate", l: "Date du préavis", t: "date", def: today() }, { k: "plannedEndDate", l: "Fin prévue", t: "date", req: true }], {}, function (v) { v.leaseId = id; return api("lease.notice", v).then(go); }); }));
+        A.push(btn(t("Renouveler"), function () { formModal(t("Renouvellement"), [{ k: "startDate", l: "Début", t: "date" }, { k: "endDate", l: "Fin", t: "date" }, { k: "monthlyRent", l: "Nouveau loyer", t: "number", def: l.monthlyRent }, { k: "charges", l: "Charges", t: "number", def: l.charges }], {}, function (v) { v.leaseId = id; return api("lease.renew", v).then(function (r) { toast(r.note); NAV_HASH.v = "lease/" + r.leaseId; }); }); }));
+        A.push(btn(t("Terminer le bail"), function () { formModal(t("Fin de bail"), [{ k: "endDate", l: "Date de fin", t: "date", def: today() }, { k: "reason", l: "Motif" }], {}, function (v) { v.leaseId = id; return api("lease.end", v).then(function (r) { modal({ title: t("Bail terminé"), size: "sm", body: kv([["Échéances annulées", r.schedulesCancelled], ["Échéances impayées", r.unpaidSchedules + " (" + fmtMoney(r.unpaidAmount) + ")"], ["Caution détenue", fmtMoney(r.depositHeld)]]), onClose: go }); }); }); }, "danger"));
+      }
+      if (["ENDED", "NOTICE", "RENEWED"].indexOf(l.status) >= 0 && l.depositHeld > 0) A.push(btn(t("Restituer la caution"), function () { formModal(t("Restitution de caution"), [{ k: "amountReturned", l: "Montant restitué", t: "number", req: true, def: l.depositHeld }, { k: "deductionReason", l: "Motif des retenues éventuelles", t: "textarea" }, { k: "method", l: "Mode", t: "select", opts: (S.meta.payMethods || []).map(function (m) { return [m, st(m)]; }) }, { k: "reference", l: "Référence" }], {}, function (v) { v.leaseId = id; v.requestKey = rk(); return api("lease.depositReturn", v).then(go); }); }));
+      if (l.deposit > 0 && l.depositHeld < l.deposit && ["DRAFT", "ACTIVE"].indexOf(l.status) >= 0) A.push(btn(t("Encaisser la caution"), function () { payDialog({ refType: "LEASE", refId: id, kind: "DEPOSIT", amount: l.deposit - l.depositHeld }).then(function (x) { if (x) go(); }); }));
+      A.push(btn(t("Générer le contrat"), function () { api("lease.document", { leaseId: id }).then(download).catch(showErr); }));
+    }
+    el.appendChild(pageHead(l.tenantName, l.propertyName + " · " + fmtDate(l.startDate) + " → " + (l.endDate ? fmtDate(l.endDate) : t("durée indéterminée")), A));
+    el.appendChild(kpis([{ l: "Loyer + charges", v: fmtMoney(Number(l.monthlyRent) + Number(l.charges || 0)) }, { l: "Arriérés", v: fmtMoney(l.arrears), tone: l.arrears ? "bad" : "good", sub: l.lateCount + " " + t("échéance(s) en retard") },
+      { l: "Caution détenue", v: fmtMoney(l.depositHeld), sub: t("prévue") + " " + fmtMoney(l.deposit) }, { l: "Prochaine échéance", v: l.nextDue ? fmtDate(l.nextDue.dueDate) : "—", sub: l.nextDue ? fmtMoney(l.nextDue.remaining) : "" }]));
+    el.appendChild(panel("Échéancier", table([{ l: "Période", k: "period" }, { l: "Échéance", date: true, k: "dueDate" }, { l: "Loyer", money: true, k: "rentAmount" }, { l: "Charges", money: true, k: "chargesAmount" }, { l: "Dû", money: true, k: "amountDue" }, { l: "Payé", money: true, k: "paid" }, { l: "Reste", money: true, k: "remaining" },
+      { l: "Statut", f: function (s) { return h("span", null, stTag(s.status), s.daysLate ? " " + s.daysLate + " j" : ""); } },
+      { l: "", f: function (s) { return h("span", { class: "actions" }, l.canManage && s.remaining > 0 && s.status !== "CANCELLED" ? btn(t("Paiement"), function () { payDialog({ refType: "RENT_SCHEDULE", refId: s.scheduleId, kind: "RENT", amount: s.remaining }).then(function (x) { if (x) go(); }); }, "sm primary") : null,
+        s.status === "PAID" ? btn(t("Quittance"), function () { api("lease.receipt", { scheduleId: s.scheduleId }).then(download).catch(showErr); }, "sm") : null); } }], l.schedules, { empty: "Échéancier généré à l'activation." })));
+    el.appendChild(h("div", { class: "grid c2" }, panel("Conditions", kv([["Jour d'échéance", l.dueDay], ["Indexation", l.indexationRate ? l.indexationRate + " % / an" : "—"], ["Prochaine indexation", fmtDate(l.nextIndexationDate)], ["Préavis", l.noticeDate ? fmtDate(l.noticeDate) + " (" + st(l.noticeBy) + ")" : "—"], ["Conditions particulières", l.terms]])),
+      panel("Locataire", kv([["Nom", l.tenantName], ["E-mail", l.tenantEmail], ["Téléphone", l.tenantPhone]]))));
+    el.appendChild(panel("Paiements", table([{ l: "Date", date: true, k: "paidAt" }, { l: "Nature", f: function (x) { return st(x.kind); } }, { l: "Montant", money: true, k: "amount" }, { l: "Mode", f: function (x) { return st(x.method); } }, { l: "Référence", k: "reference" }, { l: "Statut", status: true, k: "status" }], l.payments)));
+    el.appendChild(panel("Bail et documents", docList(l.documents), l.canManage || l.isTenant ? [btn("+ " + (l.isTenant ? t("Justificatif de paiement") : t("Document")), function () { pickFiles({ capture: "environment" }).then(function (f) { return uploadFiles(f, "LEASE", id, l.isTenant ? "PAYMENT_PROOF" : "CONTRACT"); }).then(go).catch(showErr); })] : null));
+    if (l.history) el.appendChild(panel("Historique", table([{ l: "Date", dt: true, k: "timestamp" }, { l: "Par", k: "actorEmail" }, { l: "Action", k: "action" }], l.history)));
+  });
+};
+PAGES.tenants = function (el) {
+  el.appendChild(pageHead(t("Locataires"), "", [can("lease.manage") ? btn("+ " + t("Locataire"), function () { tenantDialog({}).then(function (x) { if (x) lv.reload(); }); }, "primary") : null]));
+  const lv = listView(el, { route: "tenant.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "INACTIVE"] }], columns: [{ l: "Nom", k: "fullName" }, { l: "E-mail", k: "email" }, { l: "Téléphone", k: "phone" }, { l: "Baux actifs", num: true, k: "activeLeases" },
+    { l: "Espace locataire", f: function (x) { return x.hasAccount ? tag(t("Activé"), "good") : (x.email && can("user.invite") ? btn(t("Inviter"), function () { inviteDialog({ email: x.email, displayName: x.fullName, organizationId: x.organizationId, role: "TENANT" }); }, "sm") : "—"); } },
+    { l: "Statut", status: true, k: "status" }, { l: "", f: function (x) { return can("lease.manage") ? btn(t("Modifier"), function () { tenantDialog(x).then(function (r) { if (r) lv.reload(); }); }, "sm") : null; } }] });
+};
+function tenantDialog(x) {
+  return formModal(x.tenantId ? t("Modifier le locataire") : t("Nouveau locataire"), [x.tenantId ? null : { k: "propertyId", l: "Bien concerné (détermine l'organisation)", t: "select", req: true, opts: function () { return propChoices("lease.manage"); } },
+    { k: "fullName", l: "Nom complet", req: true }, { k: "email", l: "E-mail", t: "email" }, { k: "phone", l: "Téléphone", t: "tel" }, { k: "nationality", l: "Nationalité" }, x.tenantId ? { k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "INACTIVE"] } : null].filter(Boolean), x,
+  function (v) { return x.tenantId ? api("tenant.update", Object.assign(v, { tenantId: x.tenantId })) : api("tenant.create", v); }, { success: "Locataire enregistré." });
+}
+PAGES.mylease = function (el) {
+  el.appendChild(pageHead(t("Mon bail"), t("Vos échéances, quittances et documents.")));
+  return api("lease.mine").then(function (list) {
+    if (!list.length) { el.appendChild(h("div", { class: "empty" }, t("Aucun bail actif."))); return; }
+    list.forEach(function (l) {
+      el.appendChild(panel(l.propertyName, h("div", null, kpis([{ l: "Loyer + charges", v: fmtMoney(Number(l.monthlyRent) + Number(l.charges || 0)) }, { l: "Reste à payer", v: fmtMoney(l.arrears), tone: l.arrears ? "bad" : "good" }, { l: "Prochaine échéance", v: l.nextDue ? fmtDate(l.nextDue.dueDate) : "—" }]),
+        table([{ l: "Période", k: "period" }, { l: "Échéance", date: true, k: "dueDate" }, { l: "Dû", money: true, k: "amountDue" }, { l: "Payé", money: true, k: "paid" }, { l: "Statut", status: true, k: "status" },
+          { l: "", f: function (s) { return s.status === "PAID" ? btn(t("Quittance"), function () { api("lease.receipt", { scheduleId: s.scheduleId }).then(download).catch(showErr); }, "sm") : null; } }], l.schedules),
+        h("div", { class: "actions", style: { marginTop: "12px" } }, btn(t("Transmettre un justificatif de paiement"), function () { pickFiles({ capture: "environment" }).then(function (f) { return uploadFiles(f, "LEASE", l.leaseId, "PAYMENT_PROOF"); }).then(function () { toast(t("Justificatif transmis. Il sera vérifié par votre gestionnaire."), "good"); }).catch(showErr); }, "primary"),
+          btn(t("Déclarer un incident"), function () { incidentDialog({ propertyId: l.propertyId }); }), l.documentId ? btn(t("Mon contrat"), function () { openDoc(l.documentId); }) : null))));
+    });
+  });
+};
+</script>

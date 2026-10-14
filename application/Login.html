@@ -1,0 +1,116 @@
+<script>
+"use strict";
+/* Écrans publics : connexion, mot de passe oublié, acceptation d'invitation, réinitialisation, portail voyageur. */
+const Public = {
+  frame: function (title, sub, body) {
+    const app = clear($("app"));
+    const langSel = h("select", { class: "lang", "aria-label": t("Langue"), onchange: function (e) { setLang(e.target.value); App.start(); } }, [["fr", "Français"], ["en", "English"], ["ar", "العربية"]].map(function (l) { return h("option", { value: l[0] }, l[1]); }));
+    langSel.value = S.lang;
+    app.appendChild(h("div", { class: "auth" },
+      h("aside", { class: "auth-side" }, h("div", { class: "brand", style: { padding: 0 } }, h("div", { class: "brand-mark" }, "IP"), h("div", null, h("b", null, "ImmoPilot"), h("small", null, "Marrakech · Maroc"))),
+        h("div", null, h("h1", null, t("La gestion locative, de l'arrivée du voyageur au dernier dirham.")), h("p", null, t("Réservations, ménage, maintenance, baux et finances réunis pour les propriétaires, les conciergeries et leurs équipes de terrain.")))),
+      h("main", { class: "auth-main" }, h("div", { class: "auth-card" }, h("div", { class: "actions", style: { justifyContent: "flex-end", marginBottom: "18px" } }, langSel), h("h2", null, title), sub ? h("p", { class: "muted" }, sub) : null, body))));
+  },
+  login: function (msg) {
+    const err = h("div", { class: msg ? "alert bad" : "alert bad hidden" }, msg || "");
+    const f = buildForm([{ k: "email", l: "E-mail", t: "email", req: true, ac: "username" }, { k: "password", l: "Mot de passe", t: "password", req: true, ac: "current-password" }]);
+    const go = h("button", { class: "btn primary lg", type: "submit", style: { width: "100%", justifyContent: "center", marginTop: "14px" } }, t("Se connecter"));
+    f.el.appendChild(h("div", { class: "full" }, go));
+    f.el.addEventListener("submit", function (ev) {
+      ev.preventDefault(); const v = f.get(); if (f.validate()) { err.textContent = f.validate(); err.classList.remove("hidden"); return; }
+      go.disabled = true; go.textContent = t("Connexion…");
+      apiP("auth.login", { email: v.email, password: v.password, userAgent: navigator.userAgent.slice(0, 180) }).then(function (r) {
+        S.token = r.token; store("ip_token", r.token); S.me = r.me; if (r.me.locale && !lstore("ip_lang")) setLang(r.me.locale); App.enter();
+      }).catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); go.disabled = false; go.textContent = t("Se connecter"); });
+    });
+    const forgot = h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.forgot(); } }, t("Mot de passe oublié ou compte à activer ?"));
+    Public.frame(t("Connexion"), t("Accédez à votre espace ImmoPilot."), h("div", null, err, f.el, h("p", { class: "small", style: { marginTop: "16px" } }, forgot)));
+  },
+  forgot: function () {
+    formModal(t("Mot de passe oublié"), [{ k: "email", l: "E-mail", t: "email", req: true }], {}, function (v) {
+      return apiP("auth.requestReset", { email: v.email }).then(function (r) { toast(r.message, "good"); });
+    }, { submitLabel: t("Recevoir un lien"), size: "sm", intro: t("Un lien à usage unique vous sera envoyé si un compte actif correspond.") });
+  },
+  invite: function (token) {
+    Public.frame(t("Rejoindre ImmoPilot"), "", h("div", { class: "loading" }, t("Vérification de l'invitation…")));
+    apiP("invite.info", { token: token }).then(function (info) {
+      const fields = info.existingAccount ? [{ k: "currentPassword", l: "Mot de passe de votre compte existant", t: "password", req: true }] :
+        [{ k: "displayName", l: "Nom affiché", def: info.displayName, req: true }, { k: "password", l: "Choisissez un mot de passe", t: "password", req: true, help: "10 caractères minimum, avec lettres et chiffres.", ac: "new-password" },
+          { k: "password2", l: "Confirmez le mot de passe", t: "password", req: true, ac: "new-password" }];
+      const f = buildForm(fields, {}), err = h("div", { class: "alert bad hidden" });
+      const go = h("button", { class: "btn primary lg", type: "submit", style: { width: "100%", justifyContent: "center" } }, t("Accepter l'invitation"));
+      f.el.appendChild(h("div", { class: "full" }, go));
+      f.el.addEventListener("submit", function (ev) {
+        ev.preventDefault(); const v = f.get(); let m = f.validate();
+        if (!m && !info.existingAccount && v.password !== v.password2) m = t("Les mots de passe ne correspondent pas.");
+        if (m) { err.textContent = m; err.classList.remove("hidden"); return; }
+        go.disabled = true;
+        apiP("invite.accept", { token: token, displayName: v.displayName, password: v.password, currentPassword: v.currentPassword }).then(function (r) {
+          Public.frame(t("Invitation acceptée"), r.message, h("a", { class: "btn primary", href: (S.boot.appUrl || "") + "?", target: "_top", onclick: function (ev) { ev.preventDefault(); S.boot.mode = "app"; Public.login(); } }, t("Se connecter")));
+        }).catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); go.disabled = false; });
+      });
+      Public.frame(t("Rejoindre ImmoPilot"), "", h("div", null, h("div", { class: "alert info" }, kv([["Organisation", info.organizationName], ["Rôle", roleLabel(info.role)], ["E-mail", info.email], ["Expire le", fmtDT(info.expiresAt)]])), err, f.el));
+    }).catch(function (e) { Public.frame(t("Invitation"), "", h("div", null, h("div", { class: "alert bad" }, errMsg(e)), btn(t("Aller à la connexion"), function () { Public.login(); }))); });
+  },
+  reset: function (token) {
+    const f = buildForm([{ k: "password", l: "Nouveau mot de passe", t: "password", req: true, help: "10 caractères minimum, avec lettres et chiffres.", ac: "new-password" }, { k: "password2", l: "Confirmation", t: "password", req: true, ac: "new-password" }]);
+    const err = h("div", { class: "alert bad hidden" }), go = h("button", { class: "btn primary lg", type: "submit", style: { width: "100%", justifyContent: "center" } }, t("Enregistrer le mot de passe"));
+    f.el.appendChild(h("div", { class: "full" }, go));
+    f.el.addEventListener("submit", function (ev) {
+      ev.preventDefault(); const v = f.get(); let m = f.validate(); if (!m && v.password !== v.password2) m = t("Les mots de passe ne correspondent pas.");
+      if (m) { err.textContent = m; err.classList.remove("hidden"); return; }
+      go.disabled = true;
+      apiP("auth.resetPassword", { token: token, password: v.password }).then(function (r) { S.boot.mode = "app"; Public.login(); toast(r.message, "good"); })
+        .catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); go.disabled = false; });
+    });
+    Public.frame(t("Définir votre mot de passe"), t("Ce lien est personnel et utilisable une seule fois."), h("div", null, err, f.el));
+  },
+  /* ----------------------------- Portail voyageur ----------------------------- */
+  guest: function (token) {
+    const app = clear($("app"));
+    const wrap = h("div", { class: "guest-wrap" }, h("div", { class: "loading" }, t("Chargement…")));
+    app.appendChild(wrap);
+    const load = function () {
+      apiP("guest.portal.get", { token: token }).then(function (g) {
+        clear(wrap);
+        const langSel = h("select", { class: "lang", onchange: function (e) { setLang(e.target.value); load(); } }, [["fr", "Français"], ["en", "English"], ["ar", "العربية"]].map(function (l) { return h("option", { value: l[0] }, l[1]); })); langSel.value = S.lang;
+        wrap.appendChild(h("div", { class: "page-head" }, h("div", null, h("h2", null, g.propertyName), h("p", null, g.city + (g.address ? " — " + g.address : ""))), langSel));
+        wrap.appendChild(panel("Votre séjour", kv([["Arrivée", fmtDate(g.checkIn) + " · " + t("à partir de") + " " + g.checkInTime], ["Départ", fmtDate(g.checkOut) + " · " + t("avant") + " " + g.checkOutTime], ["Voyageurs", g.guestCount], ["Réservation au nom de", g.guestName]])));
+        wrap.appendChild(panel("Consignes d'arrivée", h("div", null, h("p", { style: { whiteSpace: "pre-wrap" } }, g.arrivalInstructions || t("Les consignes vous seront communiquées par votre hôte.")),
+          g.accessInstructions ? h("div", { class: "alert info", style: { whiteSpace: "pre-wrap" } }, g.accessInstructions) : h("p", { class: "muted small" }, t("Les codes d'accès seront visibles à partir du") + " " + fmtDate(g.accessAvailableFrom) + "."))));
+        if (g.houseRules) wrap.appendChild(panel("Règlement intérieur", h("p", { style: { whiteSpace: "pre-wrap" } }, g.houseRules)));
+        if (g.departureInstructions) wrap.appendChild(panel("Consignes de départ", h("p", { style: { whiteSpace: "pre-wrap" } }, g.departureInstructions)));
+        // Fiches voyageurs
+        const rows = g.guests.slice();
+        while (rows.length < g.guestCount) rows.push({});
+        const forms = rows.map(function (x, i) {
+          const f = buildForm([{ k: "lastName", l: "Nom", req: true }, { k: "firstName", l: "Prénom" }, { k: "nationality", l: "Nationalité" },
+            { k: "idType", l: "Type de pièce", t: "select", opts: g.idTypes.map(function (x2) { return [x2, st(x2)]; }) }, { k: "idRef", l: "Numéro de pièce", help: "Seuls les derniers caractères sont conservés, sauf obligation légale." }], x);
+          f.guestId = x.guestId; f.docCount = x.documentCount || 0; f.index = i; return f;
+        });
+        const formsBox = h("div");
+        forms.forEach(function (f) {
+          const up = f.guestId ? btn(t("Joindre la pièce d'identité") + (f.docCount ? " (" + f.docCount + ")" : ""), function () {
+            pickFiles({ accept: "image/*,application/pdf", capture: "environment" }).then(function (files) {
+              if (!files.length) return; return fileToPayload(files[0]).then(function (pl) { return apiP("guest.portal.upload", Object.assign(pl, { token: token, guestId: f.guestId })); }).then(function () { toast(t("Document transmis."), "good"); load(); });
+            }).catch(showErr);
+          }, "sm") : h("span", { class: "small muted" }, t("Enregistrez d'abord la fiche pour joindre un document."));
+          formsBox.appendChild(h("div", { class: "panel", style: { boxShadow: "none" } }, h("div", { class: "panel-head" }, h("h3", null, t("Voyageur") + " " + (f.index + 1)), up), f.el));
+        });
+        const save = btn(t("Enregistrer les informations"), function () {
+          const bad = forms.map(function (f) { return f.validate(); }).filter(Boolean)[0]; if (bad) { toast(bad, "bad"); return; }
+          save.disabled = true;
+          apiP("guest.portal.save", { token: token, guests: forms.map(function (f) { return Object.assign({ guestId: f.guestId }, f.get()); }) }).then(function () { toast(t("Informations enregistrées."), "good"); load(); }).catch(function (e) { showErr(e); save.disabled = false; });
+        }, "primary");
+        wrap.appendChild(panel("Informations des voyageurs", h("div", null, h("p", { class: "muted small" }, t("Ces informations sont transmises de façon sécurisée à votre hôte et supprimées après la durée légale de conservation.")), formsBox, save)));
+        // Signalement
+        wrap.appendChild(panel("Signaler un problème", h("div", null, h("p", { class: "muted small" }, t("Une fuite, une panne, un souci d'accès ? Prévenez votre hôte.")), btn(t("Signaler un problème"), function () {
+          formModal(t("Signaler un problème"), [{ k: "category", l: "Catégorie", t: "select", req: true, opts: g.incidentCategories.map(function (c) { return [c, st(c)]; }) }, { k: "description", l: "Description", t: "textarea", req: true }], {},
+            function (v) { return apiP("guest.portal.incident", Object.assign({ token: token }, v)); }, { success: "Votre signalement a été transmis." });
+        }))));
+      }).catch(function (e) { clear(wrap).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+    };
+    load();
+  }
+};
+</script>

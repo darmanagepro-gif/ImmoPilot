@@ -1,0 +1,8050 @@
+/**
+ * ImmoPilot 2.0.0 — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
+ * Contient les 33 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseService.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, ReportsService.gs, ReservationService.gs, SubscriptionService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
+ * À coller seul dans le projet Apps Script (aucun autre fichier .gs ne doit rester dans le projet).
+ */
+
+/* ======================================================================
+ * Admin.gs
+ * ====================================================================== */
+/**
+ * Administration : fonctions à exécuter depuis l'ÉDITEUR Apps Script (installation, premier super administrateur,
+ * sauvegarde/restauration, déclencheurs) et routes d'administration de la plateforme.
+ *
+ * IMPORTANT : toute fonction globale sans « _ » final est appelable depuis le navigateur (google.script.run).
+ * Les fonctions d'installation sont donc protégées par assertEditor_() : elles refusent de s'exécuter
+ * si l'utilisateur actif n'est pas le propriétaire du script (cas d'un visiteur anonyme de l'application web).
+ */
+function assertEditor_() {
+  let active = "", effective = "";
+  try { active = normalizeEmail_(Session.getActiveUser().getEmail()); effective = normalizeEmail_(Session.getEffectiveUser().getEmail()); } catch (e) { /* refus ci-dessous */ }
+  if (!active || active !== effective) throw new AppError("FORBIDDEN", "Fonction réservée au propriétaire du script, depuis l'éditeur Apps Script.");
+  return active;
+}
+
+/**
+ * Installation / mise à jour NON DESTRUCTIVE, à exécuter depuis l'éditeur.
+ * Installation à partir de rien : aucune propriété à renseigner. La fonction crée le dossier Drive privé,
+ * la base Google Sheet (dans ce dossier) et désigne le propriétaire du script comme premier super administrateur.
+ * Si IMMO_DATABASE_SPREADSHEET_ID est déjà renseignée, cette base est utilisée telle quelle (jamais recréée).
+ */
+function setupProject() {
+  const owner = assertEditor_();
+  ctxReset_();
+  return withLock_(function () {
+    const props = PropertiesService.getScriptProperties();
+    const adminSetup = ensureAdminEmails_(props, owner);
+    const root = driveRoot_();
+    const dbSetup = ensureDatabase_(props, root);
+    const mig = runMigrations_("setupProject:" + owner);
+    ["Modeles", "Sauvegardes", "Exports", "Organisations"].forEach(function (n) { subFolder_(root, n); });
+    const admins = createFirstSuperAdminInternal_(owner, props);
+    return { ok: true, version: IMMO_CONFIG.VERSION, databaseCreated: dbSetup.created, spreadsheetId: dbSetup.id, spreadsheetUrl: dbSetup.url,
+      adminEmailsDefaulted: adminSetup.defaulted, privateDriveFolderId: root.getId(), driveRootPrivate: driveRootIsPrivate_(),
+      migrations: mig, superAdmins: admins, next: "Déployez l'application web, renseignez IMMO_APP_URL, exécutez createFirstSuperAdmin() puis installTriggers()." };
+  }, 30000);
+}
+
+/** Si IMMO_ADMIN_EMAILS est vide, le propriétaire du script (seul à pouvoir lancer setupProject) devient le premier super administrateur. */
+function ensureAdminEmails_(props, owner) {
+  const raw = String(props.getProperty(IMMO_CONFIG.ADMIN_EMAILS_PROPERTY) || "").trim();
+  if (raw) return { defaulted: false, emails: raw };
+  validateEmail_(owner);
+  props.setProperty(IMMO_CONFIG.ADMIN_EMAILS_PROPERTY, owner);
+  return { defaulted: true, emails: owner };
+}
+
+/**
+ * Crée la base Google Sheet si aucune n'est configurée : classeur privé « ImmoPilot_DB », rangé dans le dossier Drive privé,
+ * fuseau Africa/Casablanca. Une base déjà configurée n'est jamais remplacée ; si elle est introuvable, l'installation s'arrête.
+ */
+function ensureDatabase_(props, rootFolder) {
+  const existing = props.getProperty(IMMO_CONFIG.DATABASE_PROPERTY);
+  if (existing) {
+    let ss;
+    try { ss = SpreadsheetApp.openById(existing); }
+    catch (e) { throw new AppError("CONFIG", "La base indiquée dans IMMO_DATABASE_SPREADSHEET_ID est introuvable ou inaccessible. Corrigez l'identifiant, ou videz la propriété pour créer une nouvelle base."); }
+    dbSetSpreadsheet_(ss);
+    return { created: false, id: ss.getId(), url: "https://docs.google.com/spreadsheets/d/" + ss.getId() + "/edit" };
+  }
+  const ss = SpreadsheetApp.create("ImmoPilot_DB");
+  try { ss.setSpreadsheetTimeZone(IMMO_CONFIG.TIMEZONE); } catch (e) { console.warn("Fuseau du classeur non modifié : " + e.message); }
+  const file = DriveApp.getFileById(ss.getId());
+  file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+  if (rootFolder) { try { file.moveTo(rootFolder); } catch (e) { console.warn("Classeur laissé à la racine du Drive : " + e.message); } }
+  const first = ss.getSheets()[0];
+  if (first && ss.getSheets().length === 1 && first.getLastRow() === 0) {
+    first.setName("Accueil");
+    first.getRange(1, 1, 3, 1).setValues([["'Base de données ImmoPilot " + IMMO_CONFIG.VERSION], ["'Ne modifiez, ne triez et ne supprimez aucun onglet à la main : passez par l'application."], ["'Créée le " + nowIso_()]]);
+  }
+  props.setProperty(IMMO_CONFIG.DATABASE_PROPERTY, ss.getId());
+  dbSetSpreadsheet_(ss);
+  return { created: true, id: ss.getId(), url: "https://docs.google.com/spreadsheets/d/" + ss.getId() + "/edit" };
+}
+
+/** Crée (ou complète) les super administrateurs listés dans IMMO_ADMIN_EMAILS et envoie un lien d'activation. */
+function createFirstSuperAdmin() {
+  const owner = assertEditor_();
+  ctxReset_();
+  return withLock_(function () { return createFirstSuperAdminInternal_(owner); });
+}
+function createFirstSuperAdminInternal_(owner, props) {
+  const raw = (props || PropertiesService.getScriptProperties()).getProperty(IMMO_CONFIG.ADMIN_EMAILS_PROPERTY) || "";
+  const emails = raw.split(",").map(normalizeEmail_).filter(Boolean);
+  assert_(emails.length, "Renseignez IMMO_ADMIN_EMAILS (propriétés du script) avec au moins une adresse.", "CONFIG");
+  let platform = dbAll_("Organizations").find(function (o) { return o.type === "PLATFORM"; });
+  if (!platform) platform = dbInsert_("Organizations", { name: "ImmoPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: "MA", city: "Marrakech", timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: owner });
+  return emails.map(function (email) {
+    validateEmail_(email);
+    let user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });
+    if (!user) user = dbInsert_("Users", { email: email, displayName: email.split("@")[0], status: "ACTIVE", createdAt: nowIso_(), createdBy: "editor:" + owner, locale: "fr", notifPrefsJson: { email: true, mutedTypes: [] } });
+    else if (user.status !== "ACTIVE") dbUpdate_("Users", user.userId, { status: "ACTIVE" });
+    const hasRole = dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(user.userId) && r.role === "SUPER_ADMIN" && r.status === "ACTIVE"; });
+    if (!hasRole) dbInsert_("UserRoles", { userId: user.userId, organizationId: platform.organizationId, role: "SUPER_ADMIN", status: "ACTIVE", createdAt: nowIso_(), createdBy: "editor:" + owner, permissionsJson: "[]" });
+    let link = "";
+    if (!user.passwordHash) {
+      try { link = sendPasswordLink_(user, "ACTIVATION"); Logger.log("Lien d'activation pour " + email + " (confidentiel, valable 72 h) : " + link); }
+      catch (e) { link = "ERREUR : " + e.message + " — déployez l'application web puis relancez createFirstSuperAdmin()."; }
+    }
+    auditAs_(owner, "", "SUPER_ADMIN_PROVISIONED", "User", user.userId, platform.organizationId, { email: email });
+    return { email: email, userId: user.userId, roleCreated: !hasRole, activationLinkSent: !!link && link.indexOf("ERREUR") < 0, activationNote: link ? "Lien envoyé par e-mail et écrit dans le journal d'exécution." : "Compte déjà activé." };
+  });
+}
+
+/** Sauvegarde manuelle (copie privée du classeur dans Sauvegardes/). */
+function backupNow() { assertEditor_(); return backupDatabase_("manuel"); }
+
+/**
+ * Restauration NON DESTRUCTIVE : la base courante est d'abord sauvegardée, puis une COPIE de la sauvegarde
+ * devient la base active (la base courante et la sauvegarde restent intactes). Exemple : restoreFromBackup("1AbC...").
+ */
+function restoreFromBackup(backupFileId) {
+  const owner = assertEditor_();
+  assert_(/^[\w-]{20,}$/.test(String(backupFileId || "")), "Identifiant de sauvegarde invalide.");
+  return withLock_(function () {
+    const before = backupDatabase_("pre-restore");
+    const src = DriveApp.getFileById(backupFileId);
+    const restored = src.makeCopy("ImmoPilot_DB_restored_" + Utilities.formatDate(new Date(), tz_(), "yyyyMMdd_HHmmss"), systemFolder_("Sauvegardes"));
+    restored.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+    const old = PropertiesService.getScriptProperties().getProperty(IMMO_CONFIG.DATABASE_PROPERTY);
+    PropertiesService.getScriptProperties().setProperty(IMMO_CONFIG.DATABASE_PROPERTY, restored.getId());
+    DB_SS_ = null; dbReset_();
+    auditAs_(owner, "", "DATABASE_RESTORED", "System", restored.getId(), "", { from: backupFileId, previousDatabase: old, safetyBackup: before.fileId });
+    return { ok: true, activeDatabaseId: restored.getId(), previousDatabaseId: old, safetyBackup: before, note: "Pour annuler : remettre previousDatabaseId dans IMMO_DATABASE_SPREADSHEET_ID." };
+  }, 30000);
+}
+
+/** Diagnostic non destructif (éditeur). */
+function healthCheck() { assertEditor_(); ctxReset_(); return diagnostics_(); }
+
+function diagnostics_() {
+  const ss = dbSpreadsheet_();
+  const missing = Object.keys(schema_()).filter(function (n) { return !ss.getSheetByName(n); });
+  const missingCols = {};
+  Object.keys(schema_()).forEach(function (n) {
+    if (missing.indexOf(n) >= 0) return;
+    const h = dbHeaders_(n); const m = schema_()[n].cols.filter(function (c) { return h.indexOf(c) < 0; });
+    if (m.length) missingCols[n] = m;
+  });
+  const done = missing.indexOf("MigrationHistory") >= 0 ? [] : dbAll_("MigrationHistory").filter(function (m) { return m.status === "DONE"; }).map(function (m) { return m.version; });
+  const triggers = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
+  let mailQuota = null; try { mailQuota = MailApp.getRemainingDailyQuota(); } catch (e) { mailQuota = "indisponible"; }
+  const sizes = {}; Object.keys(schema_()).forEach(function (n) { const sh = ss.getSheetByName(n); if (sh) sizes[n] = Math.max(sh.getLastRow() - 1, 0); });
+  const cells = ss.getSheets().reduce(function (a, s) { return a + s.getMaxRows() * s.getMaxColumns(); }, 0);
+  return { ok: missing.length === 0 && !Object.keys(missingCols).length, version: IMMO_CONFIG.VERSION, schemaVersion: IMMO_CONFIG.SCHEMA_VERSION, migrationsDone: done,
+    missingSheets: missing, missingColumns: missingCols, triggers: triggers, triggersOk: ["jobFrequent", "jobDaily"].every(function (t) { return triggers.indexOf(t) >= 0; }),
+    mailQuotaRemaining: mailQuota, driveRoot: driveRootIsPrivate_(), rows: sizes, spreadsheetCells: cells, cellLimit: 10000000,
+    appUrlConfigured: !!safeAppUrl_(), checkedAt: nowIso_(), integrity: missing.length ? null : integrityReport_() };
+}
+
+/* ----------------------------- Routes super administrateur ----------------------------- */
+function adminDiagnostics_(p) { requireSuper_(p); return diagnostics_(); }
+function adminBackup_(p) { requireSuper_(p); const b = withLock_(function () { return backupDatabase_("admin"); }, 30000); audit_("BACKUP_CREATED", "System", b.fileId, "", { name: b.name }); return b; }
+function adminBackups_(p) { requireSuper_(p); return listBackups_(); }
+function adminErrors_(p, a) {
+  requireSuper_(p);
+  const rows = dbAll_("ActivityLogs").filter(function (l) { return l.action === "ERROR" || l.result === "ERROR"; })
+    .sort(function (x, y) { return String(y.timestamp).localeCompare(String(x.timestamp)); })
+    .map(function (l) { const d = parseJson_(l.detailsJson, {}); return { timestamp: l.timestamp, errorId: l.errorId || d.errorId || "", route: d.route || "", message: d.message || "", actorEmail: l.actorEmail }; });
+  return pageOf_(rows, a);
+}
+function adminJobs_(p, a) {
+  requireSuper_(p);
+  return pageOf_(dbAll_("ScheduledJobs").slice().sort(function (x, y) { return String(y.startedAt).localeCompare(String(x.startedAt)); })
+    .map(function (j) { return { jobName: j.jobName, startedAt: j.startedAt, finishedAt: j.finishedAt, status: j.status, result: parseJson_(j.resultJson, {}), error: j.error }; }), a);
+}
+/** Paramètres : plateforme (super admin) ou organisation (settings.manage). */
+function settingsGet_(p, a) {
+  const orgId = safeText_(a.organizationId || "", 120);
+  if (orgId) { if (!p.isSuper) assertOrgCap_(p, orgId, "settings.manage"); } else requireSuper_(p);
+  const out = {};
+  Object.keys(DEFAULT_SETTINGS).forEach(function (k) { out[k] = getSetting_(k, orgId || null); });
+  return { organizationId: orgId, settings: out };
+}
+var ORG_EDITABLE_SETTINGS_ = ["reservation.defaultCheckIn", "reservation.defaultCheckOut", "reservation.minTurnaroundMinutes", "reservation.cancellationPolicy", "checkin.graceMinutes",
+  "cleaning.acceptanceMinutes", "cleaning.requirePhotos", "commission.contractorRate", "commission.vatRate", "finance.vatRate", "quote.agencyApprovalLimit", "workorder.requireQuote",
+  "invoice.tolerancePercent", "rent.graceDays", "alerts.rentDueDays", "alerts.leaseEndDays", "alerts.incidentAgeDays", "alerts.incidentCost", "retention.sensitiveDocDays",
+  "guests.storeIdReference", "notify.emailEnabled", "template.leaseDocId", "template.receiptDocId", "template.reservationDocId", "list.incidentCategories", "list.expenseCategories",
+  "list.cancelReasons", "list.cleaningAnomalies", "list.specialties", "locale", "currency"];
+function settingsSet_(p, a) {
+  const orgId = safeText_(a.organizationId || "", 120), key = String(a.key || "");
+  assert_(Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key), "Paramètre inconnu.");
+  if (orgId) { if (!p.isSuper) assertOrgCap_(p, orgId, "settings.manage"); assert_(ORG_EDITABLE_SETTINGS_.indexOf(key) >= 0, "Paramètre réservé à la plateforme."); }
+  else requireSuper_(p);
+  const v = validateSettingValue_(key, a.value);
+  setSetting_(key, v, orgId || null, p.email);
+  audit_("SETTING_UPDATED", "Setting", key, orgId, { key: key, value: v });
+  return { ok: true, key: key, value: v };
+}
+function validateSettingValue_(key, v) {
+  const def = DEFAULT_SETTINGS[key];
+  if (typeof def === "boolean") return bool_(v);
+  if (typeof def === "number") { const n = Number(v); assert_(isFinite(n) && n >= 0 && n <= 1e7, "Valeur numérique invalide."); return n; }
+  if (Array.isArray(def)) {
+    const arr = Array.isArray(v) ? v : String(v || "").split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+    if (key === "reservation.cancellationPolicy") return arr.map(function (x) { const o = typeof x === "object" ? x : {}; return { daysBefore: Math.max(0, parseInt(o.daysBefore, 10) || 0), penaltyPercent: rate_(o.penaltyPercent, "Pénalité") }; }).sort(function (x, y) { return y.daysBefore - x.daysBefore; });
+    if (key === "alerts.leaseEndDays") return arr.map(function (x) { return Math.max(1, parseInt(x, 10) || 30); }).slice(0, 5);
+    return arr.slice(0, 40).map(function (x) { return safeText_(String(x).toUpperCase().replace(/[^A-Z0-9_]/g, "_"), 40); }).filter(Boolean);
+  }
+  if (/^template\./.test(key)) { const s = safeText_(v, 100); assert_(!s || /^[\w-]{20,}$/.test(s), "Identifiant de document Google invalide."); if (s) assertTemplateAllowed_(s); return s; }
+  if (/Check(In|Out)$/.test(key)) { const s = safeText_(v, 5); assert_(/^([01]\d|2[0-3]):[0-5]\d$/.test(s), "Heure au format HH:MM attendue."); return s; }
+  if (key === "locale") return oneOf_(v, ["fr", "en", "ar"], "Langue");
+  if (key === "currency") return oneOf_(String(v).toUpperCase(), ["MAD", "EUR", "USD"], "Devise");
+  return safeText_(v, 500);
+}
+
+/* ----------------------------- Journal d'audit ----------------------------- */
+function auditList_(p, a) {
+  a = a || {};
+  const orgId = safeText_(a.organizationId || "", 120);
+  let allowedOrgs = null;
+  if (!p.isSuper) {
+    allowedOrgs = p.roles.filter(function (r) { return r.caps.indexOf("audit.view.org") >= 0; }).map(function (r) { return r.organizationId; });
+    if (!allowedOrgs.length) forbid_("Accès au journal d'audit refusé.");
+    if (orgId) assert_(allowedOrgs.indexOf(orgId) >= 0, "Organisation non autorisée.", "FORBIDDEN");
+  }
+  const from = a.from ? dateOnly_(a.from, "Début") : "", to = a.to ? dateOnly_(a.to, "Fin") : "";
+  const rows = dbAll_("ActivityLogs").filter(function (l) {
+    if (allowedOrgs && allowedOrgs.indexOf(String(l.organizationId)) < 0) return false;
+    if (orgId && String(l.organizationId) !== orgId) return false;
+    const d = String(l.timestamp).slice(0, 10);
+    if (from && d < from) return false; if (to && d > to) return false;
+    if (a.action && String(l.action).indexOf(String(a.action).toUpperCase()) < 0) return false;
+    return matchesQuery_(a.q, [l.actorEmail, l.entityType, l.entityId, l.action]);
+  }).sort(function (x, y) { return String(y.timestamp).localeCompare(String(x.timestamp)); })
+    .map(function (l) { return { timestamp: l.timestamp, actorEmail: l.actorEmail, organizationId: l.organizationId, action: l.action, entityType: l.entityType, entityId: l.entityId, result: l.result || "OK", details: parseJson_(l.detailsJson, {}) }; });
+  return pageOf_(rows, a);
+}
+
+/* ======================================================================
+ * Assistant.gs
+ * ====================================================================== */
+/**
+ * RUBBAN (رُبّان, « le pilote ») — assistant d'aide intégré à ImmoPilot, disponible 24 h/24, 7 j/7.
+ *
+ * Deux modes :
+ *  - GUIDE (toujours disponible, gratuit) : recherche dans la base de connaissances ASSISTANT_KB_ ci-dessous,
+ *    exécutée dans le navigateur ; réponses pas à pas avec un bouton pour ouvrir la bonne page.
+ *  - IA (facultatif) : si les propriétés du script IMMO_AI_PROVIDER (« anthropic » ou « gemini ») et IMMO_AI_API_KEY
+ *    sont renseignées, la question est transmise par le SERVEUR au service d'IA choisi, avec la base de connaissances
+ *    comme référence. La clé ne quitte jamais le serveur. Aucune donnée de la base (biens, clients, montants…) n'est envoyée :
+ *    seulement la question, les derniers échanges de la conversation, la page affichée et le rôle de l'utilisateur.
+ *  En cas d'erreur, de quota ou de service indisponible, l'assistant revient automatiquement au mode GUIDE.
+ */
+var ASSISTANT_NAME_ = "Rubban";
+var AI_PROVIDER_PROPERTY_ = "IMMO_AI_PROVIDER", AI_KEY_PROPERTY_ = "IMMO_AI_API_KEY", AI_MODEL_PROPERTY_ = "IMMO_AI_MODEL";
+var AI_DEFAULT_MODELS_ = { anthropic: "claude-haiku-5-5", gemini: "gemini-3.5-flash-lite" };
+var AI_LIMITS_ = { perUserHour: 30, platformDay: 1500, maxQuestion: 600, maxHistory: 6, maxTokens: 700 };
+
+/**
+ * Base de connaissances. r : rôles concernés (« * » = tous ; SUPER = super administrateur). go : page à ouvrir.
+ * k : mots-clés supplémentaires (synonymes, anglais, arabe) pour la recherche.
+ */
+var ASSISTANT_KB_ = [
+  // ---------- Compte et connexion ----------
+  { id: "login", t: "Se connecter à ImmoPilot", r: ["*"], go: "", k: "connexion login connecter identifiant se connecter sign in دخول",
+    s: ["Ouvrez l'adresse d'ImmoPilot (site ou application).", "Saisissez votre e-mail et votre mot de passe, puis « Se connecter ».", "Après 5 essais erronés, le compte est bloqué 15 minutes : attendez puis réessayez, ou utilisez « Mot de passe oublié »."] },
+  { id: "activate", t: "Activer mon compte (lien reçu par e-mail)", r: ["*"], go: "", k: "activation activer invitation lien email premier mot de passe accepter invitation تفعيل",
+    s: ["Ouvrez l'e-mail « Invitation à rejoindre ImmoPilot » ou « Activez votre compte ImmoPilot ».", "Cliquez sur le bouton « Ouvrir ImmoPilot » (lien personnel, à usage unique).", "Choisissez votre mot de passe (10 caractères minimum, avec lettres et chiffres) puis validez.", "Le lien d'invitation est valable 7 jours, le lien d'activation 72 h. Expiré ? Demandez à votre administrateur de le renvoyer."] },
+  { id: "forgot", t: "Mot de passe oublié", r: ["*"], go: "", k: "oublié oublie reset réinitialiser mot de passe mdp password forgot نسيت كلمة السر",
+    s: ["Sur l'écran de connexion, cliquez sur « Mot de passe oublié ».", "Saisissez votre e-mail : vous recevez un lien valable 1 heure.", "Ouvrez le lien et choisissez un nouveau mot de passe. Vos autres sessions sont déconnectées."] },
+  { id: "password", t: "Changer mon mot de passe ou ma langue", r: ["*"], go: "settings", k: "changer mot de passe profil langue nom téléphone préférences notifications email arabe anglais",
+    s: ["Ouvrez « Paramètres » › « Mon profil ».", "Modifiez votre nom, téléphone, langue (FR, EN, ع) ou vos préférences de notifications.", "« Changer le mot de passe » demande l'ancien mot de passe. « Déconnecter mes autres appareils » ferme les sessions ouvertes ailleurs."] },
+  { id: "delete-account", t: "Supprimer mon compte", r: ["*"], go: "settings", k: "supprimer compte suppression rgpd données personnelles delete account حذف الحساب",
+    s: ["Ouvrez « Paramètres » › « Mon profil » › « Supprimer mon compte ».", "Indiquez le motif : la demande est transmise à l'administrateur ImmoPilot.", "Votre identité est effacée ; les données comptables obligatoires sont conservées sans votre nom."] },
+  { id: "install-phone", t: "Installer ImmoPilot sur mon téléphone", r: ["*"], go: "", k: "téléphone mobile android iphone application installer écran d'accueil app store play store",
+    s: ["Android : ouvrez le site ImmoPilot dans Chrome, menu ⋮ › « Installer l'application » (ou installez-la depuis Google Play quand elle y est publiée).", "iPhone : ouvrez le site dans Safari, bouton Partager › « Sur l'écran d'accueil ».", "Les données sont les mêmes sur le web, Android et iPhone, en temps réel."] },
+  { id: "notifications", t: "Notifications et e-mails", r: ["*"], go: "notifications", k: "notification cloche alerte email rappel message whatsapp",
+    s: ["La cloche en haut à droite affiche les notifications non lues ; « Notifications » les liste toutes.", "Réglez les e-mails dans « Paramètres » › « Mon profil » › « Modifier mes préférences ».", "Les boutons WhatsApp ouvrent une conversation pré-remplie : l'envoi reste manuel."] },
+  // ---------- Biens ----------
+  { id: "property-create", t: "Ajouter un bien", r: ["OWNER", "SUPER"], go: "properties", k: "ajouter créer nouveau bien logement appartement villa riad duplex studio propriété property عقار",
+    s: ["Ouvrez « Biens » › « + Ajouter un bien ».", "Renseignez le nom, la ville, le type, le mode de location (courte durée, longue durée ou mixte), les chambres, la capacité et le prix par nuit ou le loyer.", "Enregistrez : la fiche du bien s'ouvre (onglets Fiche, Photos, Documents, Agences et équipes, Historique)."] },
+  { id: "property-edit", t: "Modifier un bien, ses photos ou ses documents", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "properties", k: "modifier fiche bien photo photos image ajouter photo documents pièces horaires arrivée départ consignes accès archiver",
+    s: ["Ouvrez « Biens » puis le bien concerné.", "« Modifier la fiche » : adresse, pièces, horaires d'arrivée/départ, consignes d'accès, tarifs.", "Onglets « Photos » et « Documents » : « Ajouter des photos » / « Ajouter un document » (JPEG, PNG, WEBP ou PDF, 4 Mo max)."] },
+  { id: "agency-create", t: "Créer une agence et lui confier mon bien (propriétaire)", r: ["OWNER"], go: "properties", k: "créer agence confier bien agence immobilière gestionnaire mandat accès agence وكالة",
+    s: ["Ouvrez « Biens », puis votre bien › onglet « Agences et équipes ».", "Cliquez sur « Créer une agence » : nom de l'agence, e-mail et nom de son responsable.", "Cochez les droits : consultation, réservations, opérations (ménage, incidents, interventions), finances.", "Le responsable reçoit une invitation par e-mail ; l'agence voit le bien dès son activation.", "Agence déjà existante ? Utilisez « Attribuer une agence existante »."] },
+  { id: "agency-manage", t: "Gérer mes agences : droits, retrait, modification, suppression", r: ["OWNER"], go: "agencies", k: "mes agences gérer droits retirer accès supprimer agence modifier fiche agence révoquer",
+    s: ["Ouvrez « Mes agences » : chaque agence avec ses biens et ses droits.", "« Modifier les droits » ou « Retirer » pour un bien ; « Retirer tous les accès » pour tout couper d'un coup.", "« Modifier la fiche » et « Supprimer l'agence » sont possibles pour les agences que vous avez créées. Rien n'est effacé : l'agence est désactivée et ses accès révoqués.", "Une agence qui gère aussi les biens d'autres propriétaires ne peut pas être supprimée : seuls vos accès sont retirés."] },
+  { id: "staff", t: "Affecter un gardien, une équipe de ménage ou un locataire à un bien", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "properties", k: "gardien concierge affecter personnel équipe inviter personne bien rôle guard",
+    s: ["Ouvrez le bien › onglet « Agences et équipes ».", "« Inviter une personne » : e-mail, rôle (gardien, ménage, artisan, locataire) ; l'invitation est liée au bien.", "Si la personne a déjà un compte avec ce rôle : « Affecter une personne ». Un gardien peut aussi être limité à une seule réservation."] },
+  // ---------- Réservations ----------
+  { id: "resv-create", t: "Créer une réservation", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reservations", k: "réservation resa booking créer nouvelle séjour voyageur airbnb booking.com dates حجز",
+    s: ["Ouvrez « Réservations » › « + Nouvelle réservation » (ou cliquez sur une date du « Calendrier »).", "Choisissez le bien, les dates d'arrivée et de départ, le voyageur et le nombre de personnes.", "Prix : laissez vide pour nuits × prix du bien, ou saisissez votre prix (tarif libre pour l'agence).", "ImmoPilot refuse automatiquement les chevauchements, y compris entre agences, en respectant le temps de ménage entre deux séjours."] },
+  { id: "resv-pay", t: "Enregistrer un paiement ou un acompte de réservation", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reservations", k: "paiement acompte solde caution encaisser payé impayé règlement virement espèces",
+    s: ["Ouvrez la réservation › « Enregistrer un paiement » : montant, date, mode (virement, espèces, carte, plateforme…) et référence.", "Le statut passe à « Partiel » ou « Payé » automatiquement.", "Aucun paiement en ligne n'est effectué par l'application : enregistrez les règlements réellement reçus."] },
+  { id: "resv-cancel", t: "Annuler une réservation ou déclarer un no-show", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reservations", k: "annuler annulation no-show absent pas venu jamais arrivé client venu remboursement pénalité motif",
+    s: ["Ouvrez la réservation › « Annuler » : choisissez le motif ; la pénalité de la politique d'annulation est calculée.", "Voyageur jamais arrivé : « No-show ».", "Les motifs d'annulation alimentent l'analyse de Pareto « Motifs d'annulation »."] },
+  { id: "calendar", t: "Calendrier et blocage de dates", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "GUARD", "SUPER"], go: "calendar", k: "calendrier planning disponibilité bloquer période indisponible travaux propriétaire",
+    s: ["Ouvrez « Calendrier » : réservations et blocages par bien.", "« Bloquer une période » rend des dates indisponibles (travaux, séjour du propriétaire)."] },
+  { id: "resv-docs", t: "Fiche de réservation PDF, confirmation et lien voyageur", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reservations", k: "fiche pdf confirmation email voyageur lien voyageur portail pièce d'identité passeport cin",
+    s: ["Dans la réservation : « Fiche PDF », « Envoyer la confirmation » (si l'e-mail du voyageur est renseigné).", "« Lien voyageur » crée un portail personnel où le voyageur complète ses informations et peut joindre sa pièce d'identité.", "Les pièces d'identité sont privées et supprimées automatiquement 30 jours après le départ ; « Effacer les données d'identité » le fait immédiatement."] },
+  // ---------- Arrivées / départs ----------
+  { id: "checkin", t: "Faire un check-in ou un check-out (gardien)", r: ["GUARD", "OWNER", "AGENCY_ADMIN", "AGENCY_USER"], go: "checkin", k: "check-in check-out arrivée départ gardien clés état des lieux signature photos retard",
+    s: ["Ouvrez « Arrivées et départs » : les arrivées et départs du jour.", "« Effectuer le check-in » : cochez la liste, relevez les compteurs, ajoutez photos et signature, signalez une anomalie si besoin.", "« Effectuer le check-out » au départ : la mission de ménage est créée automatiquement.", "Les retards sont enregistrés et alimentent l'analyse « Retards et non-conformités »."] },
+  // ---------- Ménage ----------
+  { id: "cleaning-create", t: "Créer et attribuer une mission de ménage", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "cleaning", k: "ménage menage nettoyage mission créer attribuer entreprise de ménage femme de ménage cleaning تنظيف",
+    s: ["Après chaque check-out, une mission est créée automatiquement ; vous pouvez aussi la créer dans « Ménage » › « Mission ».", "« Attribuer » : choisissez d'abord le type de prestation « Ménage », puis l'entreprise dans la liste de l'annuaire ImmoPilot.", "Indiquez le tarif convenu : il deviendra une dépense du propriétaire à la validation.", "L'entreprise a 2 heures pour accepter ; sinon vous êtes alerté et pouvez réattribuer."] },
+  { id: "cleaning-do", t: "Réaliser une mission de ménage (entreprise de ménage)", r: ["CLEANER"], go: "cleaning", k: "accepter mission démarrer terminer photos avant après pièce checklist anomalie",
+    s: ["Ouvrez « Ménage » : « Accepter » ou « Refuser » la mission dans le délai affiché.", "Sur place : « Démarrer », puis pour chaque pièce cochez les tâches et ajoutez les photos AVANT et APRÈS.", "« Signaler » une anomalie (objet manquant, casse, saleté) ; « Terminer la mission » à la fin."] },
+  { id: "cleaning-validate", t: "Valider un ménage, rapport et ordre de mission PDF", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "CLEANER", "SUPER"], go: "cleaning", k: "valider ménage payer paie coût tarif prix facture ménage qui paie note qualité rapport de ménage pdf ordre de mission photos avant après reprendre",
+    s: ["Ouvrez la mission terminée › « Valider » : note de qualité et coût final (dépense imputée au propriétaire du bien).", "« À reprendre » renvoie la mission au prestataire avec un motif.", "« Rapport de ménage (PDF) » : horaires, tâches par pièce, photos avant/après, anomalies. « Ordre de mission (PDF) » : document de commande avec les engagements."] },
+  // ---------- Incidents et maintenance ----------
+  { id: "incident", t: "Déclarer et suivre un incident", r: ["*"], go: "incidents", k: "incident panne fuite problème casse déclarer signaler climatisation plomberie électricité maintenance عطل",
+    s: ["Ouvrez « Incidents » › « Déclarer un incident » (ou « Signaler un incident » depuis le bien ou un check-in).", "Choisissez la catégorie, la gravité, décrivez et ajoutez des photos.", "Le gestionnaire qualifie l'incident, demande un devis ou crée directement une intervention."] },
+  { id: "quote", t: "Demander, établir et accepter un devis", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "ARTISAN", "SUPER"], go: "quotes", k: "devis demander devis accepter refuser chiffrage prix artisan bon pour accord quote عرض سعر",
+    s: ["Dans l'incident : « Demander un devis » et choisissez le type de prestation puis l'artisan de la liste.", "L'artisan ouvre « Devis » › « Saisir le devis » : lignes, TVA, validité, délai.", "Le propriétaire (ou l'agence selon son plafond) « Accepte » ou « Refuse ». « Devis PDF » télécharge le devis au nom du prestataire."] },
+  { id: "workorder", t: "Créer et suivre une intervention (hors ménage)", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "ARTISAN", "SUPER"], go: "workorders", k: "intervention ordre de travail bon d'intervention réparation planifier artisan travaux",
+    s: ["Après acceptation du devis (ou directement en urgence) : « Créer une intervention ».", "L'artisan accepte, « Planifier », « Démarrer », puis « Terminer » avec compte rendu et photos.", "Le gestionnaire contrôle : « Contrôle OK ». « Bon d'intervention PDF » imprime l'ordre de mission."] },
+  { id: "invoice", t: "Transmettre, approuver et payer une facture d'artisan", r: ["OWNER", "AGENCY_ADMIN", "ARTISAN", "SUPER"], go: "invoices", k: "facture transmettre approuver payer commission net prestataire facture pdf فاتورة",
+    s: ["L'artisan : intervention terminée › « Transmettre la facture » (numéro, montants, justificatif PDF).", "Le gestionnaire : « Factures » › la facture › « Approuver » : la commission est calculée une seule fois et figée.", "« Enregistrer un paiement » pour le versement au prestataire. « Facture PDF » produit la facture au nom du prestataire."] },
+  { id: "providers", t: "Choisir un prestataire (ménage, plombier, électricien…)", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "contractors", k: "prestataire artisan plombier électricien climatisation peintre serrurier jardinier piscine annuaire liste",
+    s: ["Les prestataires sont intégrés par l'équipe ImmoPilot dans un annuaire vérifié.", "Lors d'une attribution, choisissez d'abord le type de prestation, puis le prestataire dans la liste.", "« Prestataires » affiche leurs fiches et leurs statistiques, calculées uniquement sur vos biens."] },
+  { id: "providers-admin", t: "Ajouter un prestataire à l'annuaire (super administrateur)", r: ["SUPER"], go: "contractors", k: "ajouter prestataire annuaire intégrer artisan entreprise ménage super admin",
+    s: ["Ouvrez « Prestataires » › « + Prestataire » : nom, e-mail, téléphone, types de prestation, zones, mentions légales et coordonnées de paiement.", "Le compte du prestataire est invité automatiquement (rôle ménage et/ou artisan).", "Les propriétaires et agences le choisissent ensuite dans la liste selon le type de prestation."] },
+  // ---------- Location longue durée ----------
+  { id: "lease", t: "Créer un bail et générer le contrat", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "bail location longue durée louer année annuel mensuel locataire contrat loyer charges caution indexation créer bail إيجار",
+    s: ["Créez d'abord le locataire dans « Locataires ».", "« Locations longue durée » › « Nouveau bail » : bien, locataire, dates, loyer, charges, caution, jour d'échéance.", "« Activer le bail » génère l'échéancier des loyers ; « Encaisser la caution » enregistre le dépôt de garantie. « Générer le contrat » produit un modèle indicatif à faire valider."] },
+  { id: "rent", t: "Encaisser un loyer, quittance et retards", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "loyer encaisser quittance retard impayé échéance relance locataire",
+    s: ["Ouvrez le bail › échéancier › « Payer » sur l'échéance : montant, date, mode.", "« Quittance » produit la quittance PDF d'une échéance payée.", "Les retards apparaissent dans le tableau de bord et l'analyse « Impayés »."] },
+  { id: "lease-end", t: "Préavis, renouvellement, fin de bail et caution", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "préavis renouveler fin de bail restitution caution résiliation",
+    s: ["Dans le bail : « Préavis », « Renouveler » ou « Terminer le bail ».", "« Restituer la caution » : montant rendu et retenues éventuelles."] },
+  { id: "tenant-space", t: "Espace locataire", r: ["TENANT"], go: "mylease", k: "locataire mon bail payer loyer quittance justificatif incident",
+    s: ["« Mon bail » : votre contrat, vos échéances et vos quittances.", "« Transmettre un justificatif de paiement » envoie la preuve de votre virement au bailleur.", "« Signaler un incident » pour une panne dans le logement."] },
+  // ---------- Finances, analyses, rapports ----------
+  { id: "finance", t: "Suivre les finances (revenus, dépenses, impayés)", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "finance", k: "finances revenus chiffre d'affaires dépenses rentabilité occupation adr revpar impayés encaissé résultat",
+    s: ["Ouvrez « Finances » et choisissez la période et le bien.", "Vous voyez : prévu, facturé, encaissé, restant dû, dépenses, résultat, taux d'occupation, ADR, RevPAR.", "« Dépense » et « Revenu divers » ajoutent des écritures ; « Exporter rentabilité (CSV) » pour Excel."] },
+  { id: "pareto", t: "Comprendre les analyses de Pareto", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "pareto", k: "pareto 80/20 analyse causes coûts incidents retards annulations",
+    s: ["Ouvrez « Analyses Pareto » et choisissez l'analyse et la période.", "Les éléments marqués « prioritaires » expliquent environ 80 % du total : traitez-les en premier.", "Comparez avec la période précédente ; « PDF » ou « CSV » pour exporter."] },
+  { id: "reports", t: "Rapports et exports", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reports", k: "rapport export csv pdf excel télécharger",
+    s: ["Ouvrez « Rapports », choisissez le rapport, la période et les filtres.", "« Exporter (CSV) » pour Excel ou « PDF » pour imprimer."] },
+  { id: "dashboard", t: "Tableau de bord", r: ["*"], go: "dashboard", k: "tableau de bord accueil indicateurs kpi statistiques",
+    s: ["« Tableau de bord » affiche les indicateurs de votre rôle, calculés en temps réel sur votre seul périmètre.", "Changez la période en haut de page."] },
+  // ---------- Utilisateurs, abonnement, paramètres ----------
+  { id: "invite", t: "Inviter un utilisateur", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "users", k: "inviter utilisateur collaborateur employé compte ajouter personne équipe accès",
+    s: ["Ouvrez « Utilisateurs » › « + Inviter » : e-mail, nom, organisation et rôle.", "La personne reçoit un lien valable 7 jours. « Renvoyer » ou « Révoquer » depuis l'onglet « Invitations ».", "« Droits » permet de retirer certaines capacités à un compte."] },
+  { id: "subscription", t: "Mon abonnement, contrat et factures d'abonnement", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "subscriptions", k: "abonnement forfait essentiel pro business prix facture contrat changer de forfait résilier",
+    s: ["Ouvrez « Abonnements » : forfait, statut, échéance, utilisation et historique des règlements.", "« Contrat et historique (PDF) » télécharge votre contrat.", "« Demander un changement de forfait » ou « Résilier en fin de période » ; vos données restent conservées."] },
+  { id: "settings-org", t: "Paramètres de l'organisation (horaires, annulation, commission…)", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "settings", k: "paramètres horaires arrivée départ battement ménage politique d'annulation commission tva modèles",
+    s: ["Ouvrez « Paramètres » › « Paramètres de l'organisation ».", "Réglez : heures d'arrivée/départ, temps de ménage entre séjours, politique d'annulation, commission, TVA, délais d'alerte, modèles de documents."] },
+  { id: "support-access", t: "Accès d'assistance pour l'équipe ImmoPilot", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "settings", k: "assistance support aide équipe immopilot accès autoriser",
+    s: ["L'équipe ImmoPilot n'accède jamais à vos données sans votre accord.", "Une demande d'accès apparaît dans « Paramètres » › « Accès d'assistance » : « Accorder » (1 à 24 h, lecture seule, journalisé) ou refuser."] },
+  { id: "audit", t: "Journal d'audit (qui a fait quoi)", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "audit", k: "journal audit historique traçabilité qui a modifié sécurité",
+    s: ["« Journal d'audit » liste les actions sensibles : connexions, paiements, annulations, droits, documents…"] },
+  // ---------- Super administrateur ----------
+  { id: "admin-org", t: "Créer une organisation cliente (super administrateur)", r: ["SUPER"], go: "admin", k: "créer organisation client super admin propriétaire agence onboarding",
+    s: ["« Administration globale » › « Organisations » › « + Organisation » : nom, type (propriétaire, agence, prestataire), ville, forfait d'essai.", "Sur la ligne : « Inviter » son responsable, « Forfait », « Suspendre » ou « Assistance »."] },
+  { id: "admin-sub", t: "Attribuer un forfait et enregistrer un paiement d'abonnement", r: ["SUPER"], go: "subscriptions", k: "forfait abonnement paiement client facturation plateforme super admin",
+    s: ["« Abonnements » › « + Attribuer un forfait » (avec ou sans essai).", "Sur la ligne : « Paiement » pour enregistrer un règlement réellement reçu ; « Contrat (PDF) » pour le contrat.", "La case « Inclure la démo » affiche aussi les organisations de démonstration."] },
+  { id: "admin-diag", t: "Diagnostic, erreurs, sauvegardes (super administrateur)", r: ["SUPER"], go: "admin", k: "diagnostic erreur technique err- sauvegarde restauration tâches planifiées santé",
+    s: ["« Administration globale » : onglets « Diagnostic », « Erreurs techniques » (références ERR-…), « Tâches planifiées » et « Sauvegardes ».", "« Créer une sauvegarde maintenant » copie la base dans le dossier privé « Sauvegardes »."] },
+  { id: "error", t: "J'ai un message d'erreur", r: ["*"], go: "", k: "erreur bug ne marche pas bloqué page blanche err- problème accès refusé",
+    s: ["Notez la référence affichée (ERR-…) et l'heure.", "« Accès refusé » : votre rôle ou les droits accordés sur ce bien ne permettent pas l'action ; demandez au propriétaire ou à votre administrateur.", "« Abonnement suspendu » : le compte est en lecture seule jusqu'au règlement.", "Sinon, transmettez la référence à votre administrateur ImmoPilot."] }
+];
+
+/** Rôles de l'utilisateur sous forme de libellés (pour filtrer les articles). */
+function assistantRoles_(p) {
+  const s = {}; (p.roles || []).forEach(function (r) { s[r.role] = true; }); if (p.isSuper) s.SUPER = true;
+  return Object.keys(s);
+}
+function aiConfig_() {
+  if (TEST_HOOKS_.aiConfig === false) return null;
+  if (TEST_HOOKS_.aiConfig) return TEST_HOOKS_.aiConfig;
+  const props = PropertiesService.getScriptProperties();
+  const provider = String(props.getProperty(AI_PROVIDER_PROPERTY_) || "").trim().toLowerCase(), key = String(props.getProperty(AI_KEY_PROPERTY_) || "").trim();
+  if (!key || !AI_DEFAULT_MODELS_[provider]) return null;
+  return { provider: provider, key: key, model: String(props.getProperty(AI_MODEL_PROPERTY_) || "").trim() || AI_DEFAULT_MODELS_[provider] };
+}
+
+/** Base de connaissances (publique : aucune donnée client). aiEnabled n'indique que la présence d'une configuration. */
+function assistantKbPublic_() { return { name: ASSISTANT_NAME_, articles: ASSISTANT_KB_, aiEnabled: false }; }
+function assistantKb_(p) { return { name: ASSISTANT_NAME_, articles: ASSISTANT_KB_, aiEnabled: !!aiConfig_(), roles: assistantRoles_(p) }; }
+
+function assistantSystemPrompt_(p, lang, page) {
+  const kb = ASSISTANT_KB_.map(function (a) { return "## " + a.t + " [page: " + (a.go || "connexion") + " ; rôles: " + a.r.join(",") + "]\n" + a.s.map(function (x, i) { return (i + 1) + ". " + x; }).join("\n"); }).join("\n\n");
+  const L = { fr: "français", en: "English", ar: "العربية" }[lang] || "français";
+  return "Tu es " + ASSISTANT_NAME_ + " (رُبّان, « le pilote »), l'assistant d'aide intégré au logiciel de gestion immobilière ImmoPilot (Maroc : propriétaires, agences, gardiens, ménage, artisans, locataires).\n" +
+    "Règles :\n- Réponds en " + L + ", de façon courte et concrète : étapes numérotées avec les noms exacts des menus et boutons.\n" +
+    "- Appuie-toi UNIQUEMENT sur la documentation ci-dessous. Si une fonction n'y figure pas, dis franchement qu'ImmoPilot ne la propose pas ou que tu n'es pas sûr, et propose de contacter l'administrateur ImmoPilot.\n" +
+    "- Tu n'as accès à aucune donnée du compte (biens, réservations, montants) : n'invente jamais de chiffres ni de noms.\n" +
+    "- Ne demande jamais de mot de passe, numéro de pièce d'identité ou coordonnées bancaires.\n" +
+    "- Pour les questions juridiques, fiscales ou comptables, donne des repères généraux et recommande un professionnel.\n" +
+    "- Hors sujet (sans lien avec ImmoPilot ou la gestion locative) : réponds poliment que tu es dédié à ImmoPilot.\n" +
+    "Contexte : rôles de l'utilisateur = " + assistantRoles_(p).join(", ") + " ; page affichée = " + (page || "inconnue") + ".\n\n# Documentation ImmoPilot\n" + kb;
+}
+
+/** Appel du service d'IA (serveur uniquement). Retourne le texte de la réponse ou lève une erreur. */
+function aiCall_(cfg, system, messages) {
+  let req;
+  if (cfg.provider === "anthropic") {
+    req = { url: "https://api.anthropic.com/v1/messages", method: "post", contentType: "application/json", muteHttpExceptions: true,
+      headers: { "x-api-key": cfg.key, "anthropic-version": "2023-06-01" },
+      payload: JSON.stringify({ model: cfg.model, max_tokens: AI_LIMITS_.maxTokens, system: system, messages: messages }) };
+  } else {
+    req = { url: "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(cfg.model) + ":generateContent", method: "post", contentType: "application/json", muteHttpExceptions: true,
+      headers: { "x-goog-api-key": cfg.key },
+      payload: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: AI_LIMITS_.maxTokens, temperature: 0.2 },
+        contents: messages.map(function (m) { return { role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }; }) }) };
+  }
+  const res = TEST_HOOKS_.aiFetch ? TEST_HOOKS_.aiFetch(req) : UrlFetchApp.fetch(req.url, req), code = res.getResponseCode();
+  let body = {}; try { body = JSON.parse(res.getContentText() || "{}"); } catch (e) { body = {}; }
+  if (code < 200 || code >= 300) throw new Error("Service d'IA : HTTP " + code + (body.error && body.error.message ? " — " + String(body.error.message).slice(0, 200) : ""));
+  const text = cfg.provider === "anthropic"
+    ? (body.content || []).filter(function (c) { return c.type === "text"; }).map(function (c) { return c.text; }).join("\n")
+    : (((body.candidates || [])[0] || {}).content || { parts: [] }).parts.map(function (x) { return x.text || ""; }).join("\n");
+  if (!String(text).trim()) throw new Error("Service d'IA : réponse vide.");
+  return String(text).trim();
+}
+
+/** Route assistant.ask : réponse IA si configurée, sinon { mode: "guide" } (le navigateur répond avec la base de connaissances). */
+function assistantAsk_(p, a) {
+  const question = reqText_(a.question, "Question", 2, AI_LIMITS_.maxQuestion);
+  const cfg = aiConfig_();
+  if (!cfg) return { mode: "guide" };
+  try { rateLimit_("ai-user:" + p.userId, AI_LIMITS_.perUserHour, 3600); rateLimit_("ai-platform", AI_LIMITS_.platformDay, 86400); }
+  catch (e) { return { mode: "guide", notice: "Limite de questions à l'assistant IA atteinte pour le moment : voici les réponses du guide." }; }
+  const lang = ["fr", "en", "ar"].indexOf(a.lang) >= 0 ? a.lang : "fr", page = safeText_(a.page || "", 60);
+  const history = (Array.isArray(a.history) ? a.history : []).slice(-AI_LIMITS_.maxHistory).map(function (m) {
+    return { role: m && m.role === "assistant" ? "assistant" : "user", content: safeText_(m && m.content, 1200) };
+  }).filter(function (m) { return m.content; });
+  while (history.length && history[0].role !== "user") history.shift();
+  const messages = history.concat([{ role: "user", content: question }]);
+  for (let i = messages.length - 1; i > 0; i--) if (messages[i].role === messages[i - 1].role) messages.splice(i - 1, 1);
+  try {
+    const answer = aiCall_(cfg, assistantSystemPrompt_(p, lang, page), messages);
+    audit_("ASSISTANT_AI_ANSWER", "Assistant", ASSISTANT_NAME_, "", { provider: cfg.provider, chars: question.length });
+    return { mode: "ai", answer: answer.slice(0, 6000), provider: cfg.provider };
+  } catch (e) {
+    console.error("Assistant IA : " + e.message);
+    return { mode: "guide", notice: "L'assistant IA est momentanément indisponible : voici les réponses du guide." };
+  }
+}
+
+/** Fonction d'éditeur : vérifie la configuration de l'assistant IA (sans rien enregistrer). */
+function testerAssistantIA() {
+  assertEditor_();
+  const cfg = aiConfig_();
+  if (!cfg) return { ok: false, mode: "guide", message: "Mode IA non configuré : renseignez IMMO_AI_PROVIDER (anthropic ou gemini) et IMMO_AI_API_KEY dans les propriétés du script. Le mode Guide fonctionne sans configuration." };
+  try { const t = aiCall_(cfg, "Réponds en une phrase.", [{ role: "user", content: "Dis bonjour aux utilisateurs d'ImmoPilot." }]); return { ok: true, provider: cfg.provider, model: cfg.model, sample: t.slice(0, 200) }; }
+  catch (e) { return { ok: false, provider: cfg.provider, model: cfg.model, error: e.message }; }
+}
+
+/* ======================================================================
+ * AuditService.gs
+ * ====================================================================== */
+/** Journal d'audit (feuille ActivityLogs). Les données sensibles sont masquées avant écriture. */
+var AUDIT_REDACT_ = /(password|passwd|token|secret|idnumber|idref|passport|cin|base64|hash|salt)/i;
+
+function auditRedact_(v, depth) {
+  depth = depth || 0;
+  if (v == null || depth > 4) return v;
+  if (Array.isArray(v)) return v.slice(0, 30).map(function (x) { return auditRedact_(x, depth + 1); });
+  if (typeof v === "object") { const o = {}; Object.keys(v).forEach(function (k) { o[k] = AUDIT_REDACT_.test(k) ? "[masqué]" : auditRedact_(v[k], depth + 1); }); return o; }
+  if (typeof v === "string" && v.length > 300) return v.slice(0, 300) + "…";
+  return v;
+}
+/** Journalise une action. N'interrompt jamais l'opération métier si l'écriture échoue. */
+function audit_(action, entityType, entityId, organizationId, details, result) {
+  try {
+    const p = (typeof CTX_ !== "undefined" && CTX_ && CTX_.principal) || null;
+    dbInsert_("ActivityLogs", { timestamp: nowIso_(), actorEmail: p ? p.email : "", actorUserId: p ? p.userId : "", organizationId: String(organizationId || ""),
+      action: safeText_(action, 100), entityType: safeText_(entityType || "", 80), entityId: safeText_(entityId || "", 120),
+      detailsJson: jsonSafe_(auditRedact_(details || {})), result: result || "OK" });
+  } catch (err) { console.error("Audit échoué : " + err.message); }
+}
+function auditAs_(email, userId, action, entityType, entityId, orgId, details, result) {
+  try { dbInsert_("ActivityLogs", { timestamp: nowIso_(), actorEmail: email || "", actorUserId: userId || "", organizationId: String(orgId || ""), action: action,
+    entityType: entityType || "", entityId: entityId || "", detailsJson: jsonSafe_(auditRedact_(details || {})), result: result || "OK" }); } catch (e) { console.error(e.message); }
+}
+/** Historique d'une entité (autorisé si l'appelant peut lire l'entité : à vérifier par l'appelant). */
+function auditHistory_(entityType, entityId, limit) {
+  return dbAll_("ActivityLogs").filter(function (l) { return l.entityType === entityType && String(l.entityId) === String(entityId); })
+    .sort(function (a, b) { return String(b.timestamp).localeCompare(String(a.timestamp)); }).slice(0, limit || 50)
+    .map(function (l) { return { timestamp: l.timestamp, actorEmail: l.actorEmail, action: l.action, details: parseJson_(l.detailsJson, {}) }; });
+}
+/** Différences entre deux objets (champs modifiés uniquement). */
+function diff_(before, after, fields) {
+  const d = {};
+  fields.forEach(function (f) { if (after[f] !== undefined && String(before[f] == null ? "" : before[f]) !== String(after[f] == null ? "" : after[f])) d[f] = { from: before[f] == null ? "" : before[f], to: after[f] }; });
+  return d;
+}
+
+/* ======================================================================
+ * Auth.gs
+ * ====================================================================== */
+/**
+ * Authentification applicative.
+ *
+ * Pourquoi pas l'identité Google seule ? Avec un déploiement « Exécuter en tant que : moi » et « Accès : tout le monde »,
+ * Session.getActiveUser() est VIDE pour les comptes extérieurs au domaine du propriétaire du script. Elle ne peut donc
+ * pas servir d'identité pour un SaaS ouvert. ImmoPilot utilise des comptes applicatifs :
+ *  - mot de passe haché PBKDF2-HMAC-SHA256 avec sel aléatoire (jamais stocké en clair) ;
+ *  - jeton de session aléatoire de 256 bits, seul son SHA-256 est stocké (feuille Sessions), expiration configurable ;
+ *  - l'identité provient UNIQUEMENT du jeton vérifié côté serveur, jamais d'un e-mail transmis par le navigateur ;
+ *  - verrouillage après 5 échecs (15 min) + limitation par CacheService ;
+ *  - possession de l'adresse e-mail prouvée par un lien à usage unique (invitation / activation / réinitialisation).
+ */
+var LOGIN_MAX_FAILS_ = 5;
+var LOGIN_LOCK_MINUTES_ = 15;
+
+function pbkdfIters_() { if (TEST_HOOKS_.pbkdfIters) return TEST_HOOKS_.pbkdfIters; return Math.max(1000, parseInt(PropertiesService.getScriptProperties().getProperty(IMMO_CONFIG.PBKDF_ITERATIONS_PROPERTY), 10) || 2000); }
+function hexToBytes_(hex) { const out = []; for (let i = 0; i < hex.length; i += 2) { let v = parseInt(hex.substr(i, 2), 16); if (v > 127) v -= 256; out.push(v); } return out; }
+
+/** PBKDF2-HMAC-SHA256, une sortie de 32 octets (RFC 8018). */
+function pbkdf2Hex_(password, saltHex, iters) {
+  const pw = Utilities.newBlob(String(password)).getBytes();
+  const salt = hexToBytes_(saltHex);
+  let u = Utilities.computeHmacSignature(Utilities.MacAlgorithm.HMAC_SHA_256, salt.concat([0, 0, 0, 1]), pw);
+  const t = u.slice();
+  for (let i = 1; i < iters; i++) {
+    u = Utilities.computeHmacSignature(Utilities.MacAlgorithm.HMAC_SHA_256, u, pw);
+    for (let j = 0; j < t.length; j++) t[j] = t[j] ^ u[j];
+  }
+  return bytesToHex_(t);
+}
+function validatePassword_(pw) {
+  pw = String(pw || "");
+  assert_(pw.length >= 10 && pw.length <= 128, "Le mot de passe doit contenir entre 10 et 128 caractères.");
+  assert_(/[a-zA-Z]/.test(pw) && /\d/.test(pw), "Le mot de passe doit contenir au moins une lettre et un chiffre.");
+  return pw;
+}
+function setUserPassword_(userId, pw) {
+  validatePassword_(pw);
+  const salt = sha256Hex_(randomToken_()).slice(0, 32), iters = pbkdfIters_();
+  dbUpdate_("Users", userId, { passwordHash: pbkdf2Hex_(pw, salt, iters), passwordSalt: salt, passwordIters: iters, failedAttempts: 0, lockedUntil: "", pwChangedAt: nowIso_(), updatedAt: nowIso_() });
+}
+function verifyPassword_(user, pw) {
+  if (!user || !user.passwordHash || !user.passwordSalt) return false;
+  return safeEq_(pbkdf2Hex_(String(pw || ""), user.passwordSalt, Number(user.passwordIters) || pbkdfIters_()), user.passwordHash);
+}
+
+function rateLimit_(bucket, max, seconds) {
+  const c = CacheService.getScriptCache(), k = "rl_" + sha256Hex_(bucket).slice(0, 40);
+  const n = Number(c.get(k) || 0) + 1;
+  c.put(k, String(n), seconds);
+  if (n > max) throw new AppError("RATE_LIMIT", "Trop de tentatives. Patientez quelques minutes.");
+}
+
+function createSession_(user, userAgent) {
+  const token = randomToken_(), hours = Number(getSetting_("session.hours")) || 12;
+  dbInsert_("Sessions", { userId: user.userId, tokenHash: sha256Hex_(token), createdAt: nowIso_(), expiresAt: new Date(Date.now() + hours * 3600000).toISOString(), lastSeenAt: nowIso_(), userAgent: safeText_(userAgent || "", 200) });
+  return token;
+}
+
+/** Résout le jeton de session en principal. Aucune donnée d'autorisation n'est mise en cache entre deux appels. */
+function principalFromToken_(token) {
+  token = String(token || "");
+  if (!/^[a-f0-9]{64}$/.test(token)) throw new AppError("AUTH", "Session invalide. Veuillez vous reconnecter.");
+  const h = sha256Hex_(token);
+  const s = dbAll_("Sessions").find(function (x) { return x.tokenHash === h; });
+  if (!s || s.revokedAt || !parseTs_(s.expiresAt) || parseTs_(s.expiresAt).getTime() < Date.now()) throw new AppError("AUTH", "Session expirée. Veuillez vous reconnecter.");
+  const user = dbGet_("Users", s.userId);
+  if (!user || user.status !== "ACTIVE") throw new AppError("AUTH", "Compte inactif ou suspendu.");
+  const p = buildPrincipal_(user);
+  if (!p.roles.length) throw new AppError("AUTH", "Aucun rôle actif n'est attribué à ce compte, ou votre organisation est suspendue.");
+  p.sessionId = s.sessionId;
+  const last = parseTs_(s.lastSeenAt);
+  if (!last || Date.now() - last.getTime() > 10 * 60000) dbUpdate_("Sessions", s.sessionId, { lastSeenAt: nowIso_() });
+  return p;
+}
+
+/* ---------------------- Points d'entrée publics (via apiPublic) ---------------------- */
+function authLogin_(args) {
+  const email = validateEmail_(args.email), pw = String(args.password || "");
+  rateLimit_("login:" + email, 10, 600);
+  const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });
+  const generic = new AppError("AUTH", "Identifiants invalides.");
+  if (!user) { pbkdf2Hex_(pw, "00", 50); throw generic; }
+  const locked = parseTs_(user.lockedUntil);
+  if (locked && locked.getTime() > Date.now()) throw new AppError("LOCKED", "Compte temporairement verrouillé après plusieurs échecs. Réessayez plus tard ou réinitialisez votre mot de passe.");
+  if (!user.passwordHash) throw new AppError("AUTH", "Compte non activé. Utilisez le lien d'invitation ou « Mot de passe oublié » pour définir votre mot de passe.");
+  if (!verifyPassword_(user, pw)) {
+    const fails = (Number(user.failedAttempts) || 0) + 1;
+    dbUpdate_("Users", user.userId, { failedAttempts: fails, lockedUntil: fails >= LOGIN_MAX_FAILS_ ? new Date(Date.now() + LOGIN_LOCK_MINUTES_ * 60000).toISOString() : "" });
+    auditAs_(email, user.userId, "LOGIN_FAILED", "User", user.userId, "", { fails: fails }, "FAIL");
+    throw generic;
+  }
+  if (user.status !== "ACTIVE") { auditAs_(email, user.userId, "LOGIN_REFUSED_STATUS", "User", user.userId, "", { status: user.status }, "FAIL"); throw new AppError("AUTH", "Compte suspendu ou désactivé."); }
+  const p = buildPrincipal_(user);
+  if (!p.roles.length) throw new AppError("AUTH", "Aucun rôle actif, ou organisation suspendue.");
+  dbUpdate_("Users", user.userId, { failedAttempts: 0, lockedUntil: "", lastLoginAt: nowIso_() });
+  const token = createSession_(user, args.userAgent);
+  auditAs_(email, user.userId, "LOGIN_SUCCESS", "User", user.userId, "", {});
+  CTX_.principal = p;
+  return { token: token, me: meBootstrap_(p) };
+}
+
+function authRequestReset_(args) {
+  const email = validateEmail_(args.email);
+  rateLimit_("reset:" + email, 3, 3600);
+  const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email && u.status === "ACTIVE"; });
+  if (user) sendPasswordLink_(user, user.passwordHash ? "RESET" : "ACTIVATION");
+  return { ok: true, message: "Si un compte actif correspond à cette adresse, un lien vient d'être envoyé (valable 1 heure)." };
+}
+
+/** Crée un jeton de réinitialisation/activation et l'envoie par e-mail. Retourne l'URL (utile pour la console d'installation). */
+function sendPasswordLink_(user, purpose) {
+  const token = randomToken_();
+  dbAll_("PasswordResets").filter(function (r) { return String(r.userId) === String(user.userId) && !r.usedAt; })
+    .forEach(function (r) { dbUpdate_("PasswordResets", r.resetId, { usedAt: nowIso_() }); });
+  const hours = purpose === "ACTIVATION" ? 72 : 1;
+  dbInsert_("PasswordResets", { userId: user.userId, tokenHash: sha256Hex_(token), createdAt: nowIso_(), expiresAt: new Date(Date.now() + hours * 3600000).toISOString(), usedAt: "", purpose: purpose });
+  const url = appUrl_() + "?action=reset&token=" + token;
+  const subject = purpose === "ACTIVATION" ? "Activez votre compte ImmoPilot" : "Réinitialisation de votre mot de passe ImmoPilot";
+  const body = "Bonjour " + (user.displayName || "") + ",\n\n" + (purpose === "ACTIVATION" ? "Définissez votre mot de passe pour activer votre compte" : "Une réinitialisation de mot de passe a été demandée") +
+    " (lien valable " + hours + " h, utilisable une seule fois) :\n" + url + "\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\nImmoPilot";
+  sendMailSafe_(user.email, subject, body, "auth:" + purpose + ":" + user.userId + ":" + Date.now());
+  auditAs_("", user.userId, "PASSWORD_LINK_" + purpose, "User", user.userId, "", {});
+  return url;
+}
+
+function authResetPassword_(args) {
+  const token = String(args.token || "");
+  assert_(/^[a-f0-9]{64}$/.test(token), "Lien invalide.");
+  rateLimit_("resetuse:" + token.slice(0, 16), 10, 3600);
+  return withLock_(function () {
+    const h = sha256Hex_(token);
+    const r = dbAll_("PasswordResets").find(function (x) { return x.tokenHash === h; });
+    assert_(r && !r.usedAt, "Lien invalide ou déjà utilisé.", "AUTH");
+    assert_(parseTs_(r.expiresAt).getTime() > Date.now(), "Lien expiré. Faites une nouvelle demande.", "AUTH");
+    const user = dbGet_("Users", r.userId);
+    assert_(user && user.status === "ACTIVE", "Compte inactif.", "AUTH");
+    setUserPassword_(user.userId, args.password);
+    dbUpdate_("PasswordResets", r.resetId, { usedAt: nowIso_() });
+    revokeAllSessions_(user.userId);
+    auditAs_(user.email, user.userId, "PASSWORD_SET", "User", user.userId, "", { purpose: r.purpose });
+    return { ok: true, message: "Mot de passe enregistré. Vous pouvez vous connecter." };
+  });
+}
+
+function revokeAllSessions_(userId) {
+  dbAll_("Sessions").filter(function (s) { return String(s.userId) === String(userId) && !s.revokedAt; })
+    .forEach(function (s) { dbUpdate_("Sessions", s.sessionId, { revokedAt: nowIso_() }); });
+}
+
+/* ---------------------- Routes authentifiées ---------------------- */
+function meLogout_(p) { dbUpdate_("Sessions", p.sessionId, { revokedAt: nowIso_() }); audit_("LOGOUT", "User", p.userId, ""); return { ok: true }; }
+function meLogoutAll_(p) { revokeAllSessions_(p.userId); audit_("LOGOUT_ALL", "User", p.userId, ""); return { ok: true }; }
+function meChangePassword_(p, a) {
+  const user = dbGet_("Users", p.userId);
+  rateLimit_("chpw:" + p.userId, 5, 900);
+  if (!verifyPassword_(user, a.currentPassword)) { audit_("PASSWORD_CHANGE_FAILED", "User", p.userId, "", {}, "FAIL"); throw new AppError("AUTH", "Mot de passe actuel incorrect."); }
+  setUserPassword_(p.userId, a.newPassword);
+  dbAll_("Sessions").filter(function (s) { return String(s.userId) === p.userId && !s.revokedAt && s.sessionId !== p.sessionId; })
+    .forEach(function (s) { dbUpdate_("Sessions", s.sessionId, { revokedAt: nowIso_() }); });
+  audit_("PASSWORD_CHANGED", "User", p.userId, "");
+  return { ok: true };
+}
+function meUpdateProfile_(p, a) {
+  const patch = { updatedAt: nowIso_() };
+  if (a.displayName !== undefined) patch.displayName = reqText_(a.displayName, "Nom", 2, 100);
+  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, ["fr", "en", "ar"], "Langue");
+  if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
+  if (a.notifPrefs !== undefined) {
+    const np = a.notifPrefs || {};
+    patch.notifPrefsJson = { email: np.email !== false, inApp: true, mutedTypes: Array.isArray(np.mutedTypes) ? np.mutedTypes.slice(0, 40).map(function (x) { return safeText_(x, 60); }) : [] };
+  }
+  dbUpdate_("Users", p.userId, patch);
+  audit_("PROFILE_UPDATED", "User", p.userId, "", { fields: Object.keys(patch) });
+  return { ok: true };
+}
+
+/** Données d'amorçage de l'interface : identité, rôles, organisations, capacités d'affichage. */
+function meBootstrap_(p) {
+  const orgs = indexBy_(dbAll_("Organizations"), "organizationId");
+  const user = dbGet_("Users", p.userId);
+  const unread = dbAll_("Notifications").filter(function (n) { return String(n.userId) === p.userId && !n.readAt; }).length;
+  return {
+    userId: p.userId, email: p.email, displayName: p.displayName, locale: (user && user.locale) || "fr", isSuper: p.isSuper,
+    roles: p.roles.map(function (r) { return { role: r.role, organizationId: r.organizationId, organizationName: (orgs[r.organizationId] || {}).name || "" }; }),
+    caps: uiCaps_(p).concat(p.isSuper ? ["platform.admin"] : []),
+    notifPrefs: parseJson_(user && user.notifPrefsJson, { email: true, mutedTypes: [] }),
+    unreadNotifications: unread, appName: IMMO_CONFIG.APP_NAME, version: IMMO_CONFIG.VERSION,
+    currency: getSetting_("currency"), timezone: tz_(), today: todayStr_(),
+    supportGrants: p.grants.map(function (g) { return { organizationId: g.organizationId, expiresAt: g.expiresAt }; }),
+    lists: { incidentCategories: getSetting_("list.incidentCategories"), expenseCategories: getSetting_("list.expenseCategories"),
+      cancelReasons: getSetting_("list.cancelReasons"), cleaningAnomalies: getSetting_("list.cleaningAnomalies"), specialties: getSetting_("list.specialties") }
+  };
+}
+
+/* ======================================================================
+ * CheckInOutService.gs
+ * ====================================================================== */
+/**
+ * Check-in / check-out (interface terrain des gardiens).
+ * Le gardien ne modifie ni les montants ni les dates : il enregistre uniquement les événements d'arrivée/départ,
+ * l'état du logement, les photos, la signature éventuelle et les anomalies. Les heures réelles sont horodatées par le serveur.
+ */
+function checkEventOut_(x) {
+  return { id: x.checkInId || x.checkOutId, reservationId: x.reservationId, plannedAt: x.plannedAt, actualAt: x.actualAt, agentEmail: x.agentEmail, lateMinutes: x.lateMinutes,
+    checklist: parseJson_(x.checklistJson, {}), conditionNotes: x.conditionNotes, meters: parseJson_(x.metersJson, {}), photoDocIds: parseJson_(x.photoDocIdsJson, []),
+    comments: x.comments, incidentId: x.incidentId, status: x.status };
+}
+
+function opsToday_(p, a) {
+  a = a || {};
+  const day = a.date ? dateOnly_(a.date, "Date") : todayStr_();
+  const props = indexBy_(dbAll_("Properties"), "propertyId");
+  const cis = indexBy_(dbAll_("CheckIns"), "reservationId"), cos = indexBy_(dbAll_("CheckOuts"), "reservationId");
+  const now = Date.now();
+  const mine = dbAll_("Reservations").filter(function (r) {
+    if (["CONFIRMED", "IN_PROGRESS", "COMPLETED", "PENDING"].indexOf(r.status) < 0) return false;
+    if (a.propertyId && String(r.propertyId) !== String(a.propertyId)) return false;
+    return canResv_(p, r, "checkin.operate");
+  });
+  const map = function (r, kind) {
+    const prop = props[String(r.propertyId)], grace = (Number(getSetting_("checkin.graceMinutes", r.organizationId)) || 120) * 60000;
+    const planned = kind === "ARRIVAL" ? resvStartMs_(r, prop) : resvEndMs_(r, prop);
+    const done = kind === "ARRIVAL" ? cis[String(r.reservationId)] : cos[String(r.reservationId)];
+    return { reservationId: r.reservationId, propertyId: r.propertyId, propertyName: prop ? prop.name : "", address: prop ? prop.address : "", guestName: r.guestName, guestCount: r.guestCount,
+      guestPhone: r.guestPhone, status: r.status, plannedAt: new Date(planned).toISOString(), done: !!done, actualAt: done ? done.actualAt : "",
+      late: !done && now > planned + grace && (kind === "ARRIVAL" ? r.status === "CONFIRMED" : r.status === "IN_PROGRESS"), checkIn: r.checkIn, checkOut: r.checkOut,
+      rooms: prop ? parseJson_(prop.roomsJson, []) : [] };
+  };
+  const arrivals = mine.filter(function (r) { return r.checkIn === day; }).map(function (r) { return map(r, "ARRIVAL"); });
+  const departures = mine.filter(function (r) { return r.checkOut === day; }).map(function (r) { return map(r, "DEPARTURE"); });
+  const overdue = mine.filter(function (r) { return r.checkIn < day && r.status === "CONFIRMED"; }).map(function (r) { return Object.assign(map(r, "ARRIVAL"), { kind: "ARRIVAL_MISSING" }); })
+    .concat(mine.filter(function (r) { return r.checkOut < day && r.status === "IN_PROGRESS"; }).map(function (r) { return Object.assign(map(r, "DEPARTURE"), { kind: "DEPARTURE_MISSING" }); }));
+  const sortT = function (x, y) { return String(x.plannedAt).localeCompare(String(y.plannedAt)); };
+  return { date: day, arrivals: arrivals.sort(sortT), departures: departures.sort(sortT), overdue: overdue,
+    checklistTemplate: ["Clés / badges remis", "Logement propre", "Équipements fonctionnels", "Linge présent", "Consignes expliquées", "Compteurs relevés"] };
+}
+
+function opsActualAt_(a) {
+  if (!a.actualAt) return new Date();
+  const d = parseTs_(a.actualAt);
+  assert_(d && Math.abs(Date.now() - d.getTime()) <= 24 * 3600000 && d.getTime() <= Date.now() + 5 * 60000, "Heure réelle invalide (24 h maximum dans le passé).");
+  return d;
+}
+function opsCommon_(p, a, r, kind) {
+  const prop = dbGet_("Properties", r.propertyId);
+  const photos = assertDocsOf_(Array.isArray(a.photoDocIds) ? a.photoDocIds : [], "RESERVATION", r.reservationId);
+  const checklist = a.checklist && typeof a.checklist === "object" && !Array.isArray(a.checklist) ? a.checklist : {};
+  const cl = {}; Object.keys(checklist).slice(0, 40).forEach(function (k) { cl[safeText_(k, 80)] = checklist[k] === true || checklist[k] === "true"; });
+  if (a.signatureDocId) { assertDocsOf_([a.signatureDocId], "RESERVATION", r.reservationId); cl.__signatureDocId = a.signatureDocId; }
+  const meters = {}; if (a.meters && typeof a.meters === "object") Object.keys(a.meters).slice(0, 10).forEach(function (k) { meters[safeText_(k, 40)] = safeText_(a.meters[k], 40); });
+  const actual = opsActualAt_(a);
+  const planned = kind === "IN" ? resvStartMs_(r, prop) : resvEndMs_(r, prop);
+  let incidentId = "";
+  if (a.incident && a.incident.description) {
+    incidentId = incidentInsert_(p, prop, { category: a.incident.category || "OTHER", severity: a.incident.severity || "MEDIUM", description: a.incident.description, reservationId: r.reservationId,
+      title: (kind === "IN" ? "Constat d'arrivée" : "Constat de départ") + " : " + (a.incident.category || "OTHER"), source: kind === "IN" ? "CHECKIN" : "CHECKOUT", photoDocIds: [] }).incidentId;
+  }
+  return { prop: prop, row: { organizationId: r.organizationId, propertyId: r.propertyId, reservationId: r.reservationId, plannedAt: new Date(planned).toISOString(), actualAt: actual.toISOString(),
+    agentUserId: p.userId, agentEmail: p.email, checklistJson: cl, conditionNotes: safeText_(a.conditionNotes, 2000), metersJson: meters, photoDocIdsJson: photos, comments: safeText_(a.comments, 2000),
+    incidentId: incidentId, status: "DONE", idempotencyKey: safeText_(a.requestKey || "", 120), createdAt: nowIso_(), lateMinutes: Math.max(0, Math.round((actual.getTime() - planned) / 60000)) } };
+}
+
+function opsCheckIn_(p, a) {
+  const r0 = assertResv_(p, a.reservationId, "checkin.operate");
+  return withLock_(function () {
+    return idemRun_(a.requestKey, "CHECK_IN", r0.organizationId, function () {
+      const r = dbGet_("Reservations", r0.reservationId);
+      assert_(r.status === "CONFIRMED", "Check-in impossible : la réservation doit être confirmée (statut " + r.status + ").");
+      assert_(!dbAll_("CheckIns").some(function (x) { return String(x.reservationId) === String(r.reservationId); }), "Check-in déjà effectué.");
+      const today = todayStr_();
+      assert_(today >= addDaysStr_(r.checkIn, -1) && today <= r.checkOut, "Check-in hors de la période du séjour.");
+      const c = opsCommon_(p, a, r, "IN");
+      const row = dbInsert_("CheckIns", c.row);
+      dbUpdate_("Reservations", r.reservationId, { status: "IN_PROGRESS", version: Number(r.version || 0) + 1, updatedAt: nowIso_(), updatedBy: p.email });
+      audit_("CHECK_IN_DONE", "Reservation", r.reservationId, r.organizationId, { checkInId: row.checkInId, lateMinutes: row.lateMinutes, photos: c.row.photoDocIdsJson.length });
+      if (row.lateMinutes > 0 || row.incidentId) notify_({ eventKey: "checkin:" + row.checkInId, userIds: propertyManagers_(c.prop, "canManageReservations"), type: "CHECK_IN", organizationId: r.organizationId,
+        title: "Arrivée enregistrée : " + c.prop.name, body: r.guestName + (row.lateMinutes ? " — retard " + row.lateMinutes + " min" : "") + (row.incidentId ? " — anomalie signalée" : ""), link: "#reservation/" + r.reservationId, email: !!row.incidentId });
+      return { ok: true, checkInId: row.checkInId, id: row.checkInId, actualAt: row.actualAt, incidentId: row.incidentId };
+    });
+  });
+}
+
+function opsCheckOut_(p, a) {
+  const r0 = assertResv_(p, a.reservationId, "checkin.operate");
+  return withLock_(function () {
+    return idemRun_(a.requestKey, "CHECK_OUT", r0.organizationId, function () {
+      const r = dbGet_("Reservations", r0.reservationId);
+      assert_(r.status === "IN_PROGRESS", "Check-out impossible : aucun check-in enregistré (statut " + r.status + ").");
+      assert_(!dbAll_("CheckOuts").some(function (x) { return String(x.reservationId) === String(r.reservationId); }), "Check-out déjà effectué.");
+      const c = opsCommon_(p, a, r, "OUT");
+      const row = dbInsert_("CheckOuts", c.row);
+      dbUpdate_("Reservations", r.reservationId, { status: "COMPLETED", version: Number(r.version || 0) + 1, updatedAt: nowIso_(), updatedBy: p.email });
+      audit_("CHECK_OUT_DONE", "Reservation", r.reservationId, r.organizationId, { checkOutId: row.checkOutId, lateMinutes: row.lateMinutes });
+      const mission = cleaningAutoCreate_(c.prop, r, p);
+      notify_({ eventKey: "checkout:" + row.checkOutId, userIds: propertyManagers_(c.prop, "canManageOperations"), type: "CHECK_OUT", organizationId: r.organizationId,
+        title: "Départ enregistré : " + c.prop.name, body: r.guestName + (mission ? " — mission de ménage " + (mission.status === "OFFERED" ? "proposée" : "à attribuer") : ""), link: "#cleaning", email: false });
+      return { ok: true, checkOutId: row.checkOutId, id: row.checkOutId, actualAt: row.actualAt, cleaningMissionId: mission ? mission.missionId : "", incidentId: row.incidentId };
+    });
+  });
+}
+
+function opsHistory_(p, a) {
+  a = a || {};
+  const props = indexBy_(dbAll_("Properties"), "propertyId"), resv = indexBy_(dbAll_("Reservations"), "reservationId");
+  const rows = dbAll_("CheckIns").map(function (x) { return Object.assign(checkEventOut_(x), { kind: "CHECK_IN" }); })
+    .concat(dbAll_("CheckOuts").map(function (x) { return Object.assign(checkEventOut_(x), { kind: "CHECK_OUT" }); }))
+    .filter(function (x) {
+      const r = resv[String(x.reservationId)];
+      if (!r || !(canResv_(p, r, "checkin.operate") || canResv_(p, r, "reservation.view"))) return false;
+      if (a.propertyId && String(r.propertyId) !== String(a.propertyId)) return false;
+      const d = String(x.actualAt).slice(0, 10);
+      if (a.from && d < a.from) return false; if (a.to && d > a.to) return false;
+      if (a.lateOnly && !(x.lateMinutes > 0)) return false;
+      return true;
+    }).map(function (x) { const r = resv[String(x.reservationId)]; return Object.assign(x, { propertyName: (props[String(r.propertyId)] || {}).name, guestName: r.guestName }); })
+    .sort(function (x, y) { return String(y.actualAt).localeCompare(String(x.actualAt)); });
+  return pageOf_(rows, a);
+}
+
+/** Rapport PDF d'arrivée/départ (état des lieux simplifié). */
+function opsReport_(p, a) {
+  const r = assertResv_(p, a.reservationId, "reservation.view");
+  const prop = dbGet_("Properties", r.propertyId);
+  const ev = [];
+  dbAll_("CheckIns").filter(function (x) { return String(x.reservationId) === String(r.reservationId); }).forEach(function (x) { ev.push(["Arrivée", checkEventOut_(x)]); });
+  dbAll_("CheckOuts").filter(function (x) { return String(x.reservationId) === String(r.reservationId); }).forEach(function (x) { ev.push(["Départ", checkEventOut_(x)]); });
+  assert_(ev.length, "Aucun check-in / check-out enregistré.");
+  const docs = indexBy_(dbAll_("Documents"), "documentId");
+  let html = "<p><b>Bien :</b> " + escapeHtml_(prop.name) + " — <b>Voyageur :</b> " + escapeHtml_(r.guestName) + " — <b>Séjour :</b> " + r.checkIn + " → " + r.checkOut + "</p>";
+  ev.forEach(function (e) {
+    const x = e[1];
+    html += "<h2>" + e[0] + "</h2>" + htmlTable_(["Champ", "Valeur"], [["Prévu", x.plannedAt], ["Réel", x.actualAt], ["Retard (min)", x.lateMinutes], ["Agent", x.agentEmail], ["État", x.conditionNotes], ["Commentaires", x.comments],
+      ["Compteurs", JSON.stringify(x.meters)], ["Incident", x.incidentId || "—"]]) +
+      "<p><b>Checklist :</b> " + Object.keys(x.checklist).filter(function (k) { return k.indexOf("__") !== 0; }).map(function (k) { return escapeHtml_(k) + (x.checklist[k] ? " ✔" : " ✘"); }).join(" · ") + "</p>" +
+      "<p><b>Photos :</b> " + x.photoDocIds.map(function (id) { return escapeHtml_((docs[id] || {}).fileName || id); }).join(", ") + "</p>" + (x.checklist.__signatureDocId ? "<p>Signature enregistrée (document " + escapeHtml_(x.checklist.__signatureDocId) + ")</p>" : "");
+  });
+  const pdf = htmlToPdf_(pdfShell_("Rapport d'arrivée / départ", html), "EtatDesLieux_" + r.reservationId);
+  return storeGeneratedPdf_(p, pdf, { propertyId: prop.propertyId, organizationId: prop.organizationId }, "CHECKIN", r.reservationId, "REPORT");
+}
+
+/* ======================================================================
+ * CleaningService.gs
+ * ====================================================================== */
+/**
+ * Ménage et contrôle qualité.
+ * Cycle : CREATED (à attribuer) → OFFERED (proposée, délai d'acceptation calculé côté serveur) → ACCEPTED → IN_PROGRESS
+ *         → COMPLETED (déclarée terminée) → VALIDATED (contrôlée par le responsable). EXPIRED / CANCELLED en sortie.
+ * Refus ou empêchement : la mission revient à CREATED (sans prestataire) et le responsable est alerté.
+ * L'expiration est vérifiée par la tâche planifiée jobFrequent (toutes les 15 min) sur horodatages serveur ;
+ * l'interface n'affiche qu'un compte à rebours indicatif.
+ */
+var CLEAN_PRIORITIES_ = ["LOW", "NORMAL", "HIGH", "URGENT"];
+
+function cleanMine_(p, m) { return String(m.providerUserId) === p.userId || (m.providerEmail && normalizeEmail_(m.providerEmail) === p.email); }
+function cleanMgr_(p, m) { return canProp_(p, dbGet_("Properties", m.propertyId), "cleaning.manage"); }
+function cleanLoad_(p, id, mode) {
+  const m = dbGet_("CleaningMissions", safeText_(id, 120));
+  if (!m) throw new AppError("FORBIDDEN", "Mission introuvable ou accès refusé.");
+  const ok = mode === "provider" ? cleanMine_(p, m) && hasRole_(p, "CLEANER") : mode === "manager" ? cleanMgr_(p, m) : (cleanMine_(p, m) || cleanMgr_(p, m));
+  if (!ok) throw new AppError("FORBIDDEN", "Mission introuvable ou accès refusé.");
+  if (mode !== "read") assertOrgWritable_(m.organizationId);
+  return m;
+}
+function cleanProvider_(email) {
+  email = validateEmail_(email);
+  const u = dbAll_("Users").find(function (x) { return normalizeEmail_(x.email) === email && x.status === "ACTIVE"; });
+  assert_(u && dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(u.userId) && r.role === "CLEANER" && r.status === "ACTIVE"; }), "Le prestataire doit avoir un compte actif avec le rôle CLEANER.");
+  return u;
+}
+function cleanOffer_(m, provider, by) {
+  const minutes = Number(getSetting_("cleaning.acceptanceMinutes", m.organizationId)) || 120;
+  const patch = { providerUserId: provider.userId, providerEmail: normalizeEmail_(provider.email), status: "OFFERED", expiresAt: new Date(Date.now() + minutes * 60000).toISOString(),
+    responseAt: "", expiryAlertedAt: "", declineReason: "", updatedAt: nowIso_(), reassignCount: (Number(m.reassignCount) || 0) + (m.providerUserId || m.status === "EXPIRED" ? 1 : 0) };
+  dbUpdate_("CleaningMissions", m.missionId, patch);
+  const prop = dbGet_("Properties", m.propertyId);
+  notify_({ eventKey: "clean-offer:" + m.missionId + ":" + patch.expiresAt, userIds: [provider.userId], type: "CLEANING_OFFER", organizationId: m.organizationId,
+    title: "Nouvelle mission de ménage : " + prop.name, body: "Prévue le " + Utilities.formatDate(parseTs_(m.startAt) || new Date(), tz_(), "dd/MM HH:mm") + ". Réponse attendue avant " + Utilities.formatDate(new Date(patch.expiresAt), tz_(), "dd/MM HH:mm") + ".", link: "#cleaning/" + m.missionId });
+  return patch;
+}
+function cleanEstimate_(prop) { return 60 + 30 * (Number(prop.bedrooms) || 1); }
+
+/** Création automatique après un départ (appelée par le check-out). Idempotent par réservation. */
+function cleaningAutoCreate_(prop, r, p) {
+  const ex = dbAll_("CleaningMissions").find(function (m) { return String(m.reservationId) === String(r.reservationId) && m.status !== "CANCELLED"; });
+  if (ex) return ex;
+  const start = new Date();
+  const est = cleanEstimate_(prop);
+  const m = dbInsert_("CleaningMissions", { organizationId: prop.organizationId, propertyId: prop.propertyId, reservationId: r.reservationId, providerUserId: "", providerEmail: "",
+    startAt: start.toISOString(), endAt: new Date(start.getTime() + est * 60000).toISOString(), price: 0, currency: prop.currency || "MAD", status: "CREATED", priority: "HIGH",
+    estimatedMinutes: est, notes: "Créée automatiquement après le départ de " + r.guestName, createdAt: nowIso_(), createdBy: p ? p.email : "system", updatedAt: nowIso_(), reassignCount: 0, source: "CHECKOUT" });
+  const def = dbAll_("PropertyAssignments").find(function (a) { return String(a.propertyId) === String(prop.propertyId) && a.role === "CLEANER" && a.status === "ACTIVE"; });
+  if (def) { try { const u = cleanProvider_(def.email); const patch = cleanOffer_(m, u); Object.assign(m, patch); } catch (e) { console.error("Auto-attribution ménage : " + e.message); } }
+  else notify_({ eventKey: "clean-unassigned:" + m.missionId, userIds: propertyManagers_(prop, "canManageOperations"), type: "CLEANING_UNASSIGNED", organizationId: prop.organizationId,
+    title: "Mission de ménage à attribuer : " + prop.name, body: "Aucune équipe de ménage n'est associée au bien.", link: "#cleaning/" + m.missionId });
+  auditAs_(p ? p.email : "system", p ? p.userId : "", "CLEANING_MISSION_CREATED", "CleaningMission", m.missionId, prop.organizationId, { source: "CHECKOUT", status: m.status });
+  return m;
+}
+
+function cleanOut_(p, m, props) {
+  const prop = (props || {})[String(m.propertyId)] || dbGet_("Properties", m.propertyId) || {};
+  const mgr = cleanMgr_(p, m);
+  const late = ["ACCEPTED", "OFFERED", "CREATED"].indexOf(m.status) >= 0 && parseTs_(m.startAt) && parseTs_(m.startAt).getTime() + 30 * 60000 < Date.now();
+  return { missionId: m.missionId, propertyId: m.propertyId, propertyName: prop.name, address: prop.address, reservationId: m.reservationId, providerEmail: m.providerEmail, status: m.status,
+    priority: m.priority, startAt: m.startAt, endAt: m.endAt, estimatedMinutes: m.estimatedMinutes, expiresAt: m.expiresAt, acceptedAt: m.acceptedAt, startedAt: m.startedAt, completedAt: m.completedAt,
+    actualMinutes: m.actualMinutes, validatedAt: m.validatedAt, notes: m.notes, anomalies: parseJson_(m.anomaliesJson, []), reassignCount: m.reassignCount, declineReason: m.declineReason,
+    price: mgr || cleanMine_(p, m) ? m.price : null, currency: m.currency, qualityScore: m.qualityScore, validationNote: m.validationNote, late: !!late, isMine: cleanMine_(p, m), canManage: mgr,
+    serverNow: nowIso_() };
+}
+
+/* ------------------------------ Routes ------------------------------ */
+function cleanList_(p, a) {
+  a = a || {};
+  const props = indexBy_(dbAll_("Properties"), "propertyId");
+  const rows = dbAll_("CleaningMissions").filter(function (m) {
+    if (!(cleanMine_(p, m) || canProp_(p, props[String(m.propertyId)], "cleaning.manage"))) return false;
+    if (a.mine && !cleanMine_(p, m)) return false;
+    if (a.propertyId && String(m.propertyId) !== String(a.propertyId)) return false;
+    if (a.status) { if (String(a.status).split(",").indexOf(m.status) < 0) return false; }
+    const d = String(m.startAt).slice(0, 10);
+    if (a.from && d < a.from) return false; if (a.to && d > a.to) return false;
+    return matchesQuery_(a.q, [m.providerEmail, (props[String(m.propertyId)] || {}).name, m.missionId]);
+  }).sort(function (x, y) { return String(y.startAt).localeCompare(String(x.startAt)); });
+  const page = pageOf_(rows, a);
+  page.items = page.items.map(function (m) { return cleanOut_(p, m, props); });
+  return page;
+}
+function cleanGet_(p, a) {
+  const m = cleanLoad_(p, a.missionId, "read");
+  const prop = dbGet_("Properties", m.propertyId);
+  const o = cleanOut_(p, m);
+  o.rooms = parseJson_(prop.roomsJson, []);
+  o.checklistTemplate = parseJson_(prop.cleaningChecklistJson, []).length ? parseJson_(prop.cleaningChecklistJson, []) : ["Sols", "Surfaces", "Linge changé", "Sanitaires", "Poubelles", "Consommables"];
+  o.accessInstructions = prop.accessInstructions;
+  o.checklists = dbAll_("CleaningChecklists").filter(function (c) { return String(c.missionId) === String(m.missionId); }).map(function (c) { return { room: c.room, items: parseJson_(c.itemsJson, {}), doneAt: c.doneAt }; });
+  o.photos = dbAll_("CleaningPhotos").filter(function (c) { return String(c.missionId) === String(m.missionId); }).map(function (c) { return { photoId: c.photoId, room: c.room, phase: c.phase, documentId: c.documentId, takenAt: c.takenAt }; });
+  o.legacyReports = dbAll_("CleaningReports").filter(function (c) { return String(c.missionId) === String(m.missionId); }).map(function (c) { return { submittedAt: c.submittedAt, checklist: parseJson_(c.checklistJson, {}), notes: c.notes }; });
+  o.history = auditHistory_("CleaningMission", m.missionId, 30);
+  return o;
+}
+function cleanCreate_(p, a) {
+  const prop = assertProp_(p, a.propertyId, "cleaning.manage");
+  let reservationId = safeText_(a.reservationId || "", 120);
+  if (reservationId) { const r = dbGet_("Reservations", reservationId); assert_(r && String(r.propertyId) === String(prop.propertyId), "Réservation d'un autre bien."); }
+  const start = parseTs_(a.startAt); assert_(start, "Date et heure prévues obligatoires.");
+  const est = a.estimatedMinutes ? Math.round(Number(a.estimatedMinutes)) : cleanEstimate_(prop);
+  assert_(est >= 15 && est <= 1440, "Durée estimée invalide (15 à 1440 min).");
+  const provider = a.providerEmail ? cleanProvider_(a.providerEmail) : null;
+  return withLock_(function () {
+    const m = dbInsert_("CleaningMissions", { organizationId: prop.organizationId, propertyId: prop.propertyId, reservationId: reservationId, providerUserId: "", providerEmail: "",
+      startAt: start.toISOString(), endAt: new Date(start.getTime() + est * 60000).toISOString(), price: a.price === "" || a.price == null ? 0 : money_(a.price, "Tarif"), currency: prop.currency || "MAD",
+      status: "CREATED", priority: oneOf_(a.priority || "NORMAL", CLEAN_PRIORITIES_, "Priorité"), estimatedMinutes: est, notes: safeText_(a.notes, 1000), createdAt: nowIso_(), createdBy: p.email,
+      updatedAt: nowIso_(), reassignCount: 0, source: "MANUAL" });
+    if (provider) cleanOffer_(m, provider);
+    audit_("CLEANING_MISSION_CREATED", "CleaningMission", m.missionId, prop.organizationId, { source: "MANUAL", offered: !!provider });
+    return { ok: true, missionId: m.missionId, id: m.missionId };
+  });
+}
+function cleanAssign_(p, a) {
+  const m0 = cleanLoad_(p, a.missionId, "manager");
+  const provider = cleanProvider_(a.providerEmail);
+  return withLock_(function () {
+    const m = dbGet_("CleaningMissions", m0.missionId);
+    assert_(["CREATED", "EXPIRED", "OFFERED", "DECLINED"].indexOf(m.status) >= 0, "Mission non réattribuable (statut " + m.status + ").");
+    cleanOffer_(m, provider);
+    audit_("CLEANING_ASSIGNED", "CleaningMission", m.missionId, m.organizationId, { provider: provider.email, reassign: !!m.providerUserId || m.status === "EXPIRED" });
+    return { ok: true };
+  });
+}
+/** Réponse du prestataire : ACCEPTED, DECLINED (offre) ou UNAVAILABLE (empêchement après acceptation). */
+function cleanRespond_(p, a) {
+  const m0 = cleanLoad_(p, a.missionId, "provider");
+  const decision = oneOf_(a.decision, ["ACCEPTED", "DECLINED", "UNAVAILABLE"], "Décision");
+  return withLock_(function () {
+    const m = dbGet_("CleaningMissions", m0.missionId), prop = dbGet_("Properties", m.propertyId);
+    if (decision === "UNAVAILABLE") assert_(m.status === "ACCEPTED", "Empêchement possible uniquement sur une mission acceptée et non démarrée.");
+    else {
+      assert_(m.status === "OFFERED", "Mission déjà traitée (statut " + m.status + ").");
+      assert_(parseTs_(m.expiresAt).getTime() > Date.now(), "Le délai d'acceptation est dépassé.", "EXPIRED");
+    }
+    if (decision === "ACCEPTED") dbUpdate_("CleaningMissions", m.missionId, { status: "ACCEPTED", responseAt: nowIso_(), acceptedAt: nowIso_(), updatedAt: nowIso_() });
+    else {
+      const reason = decision === "UNAVAILABLE" ? reqText_(a.reason, "Motif de l'empêchement", 3, 300) : safeText_(a.reason, 300);
+      dbUpdate_("CleaningMissions", m.missionId, { status: "CREATED", providerUserId: "", providerEmail: "", responseAt: nowIso_(), declineReason: reason, updatedAt: nowIso_() });
+      notify_({ eventKey: "clean-" + decision + ":" + m.missionId + ":" + Date.now(), userIds: propertyManagers_(prop, "canManageOperations"), type: "CLEANING_DECLINED", organizationId: m.organizationId,
+        title: (decision === "DECLINED" ? "Mission refusée : " : "Empêchement signalé : ") + prop.name, body: p.email + (reason ? " — " + reason : "") + ". Réattribuez la mission.", link: "#cleaning/" + m.missionId });
+    }
+    audit_("CLEANING_" + decision, "CleaningMission", m.missionId, m.organizationId, { provider: p.email });
+    return { ok: true, status: decision === "ACCEPTED" ? "ACCEPTED" : "CREATED" };
+  });
+}
+function cleanStart_(p, a) {
+  const m = cleanLoad_(p, a.missionId, "provider");
+  assert_(m.status === "ACCEPTED", "La mission doit être acceptée avant de démarrer.");
+  dbUpdate_("CleaningMissions", m.missionId, { status: "IN_PROGRESS", startedAt: nowIso_(), updatedAt: nowIso_() });
+  audit_("CLEANING_STARTED", "CleaningMission", m.missionId, m.organizationId, {});
+  return { ok: true };
+}
+/** Contrôle par pièce : checklist + rattachement des photos avant/après (documents déjà déposés sur la mission). */
+function cleanRoom_(p, a) {
+  const m = cleanLoad_(p, a.missionId, "provider");
+  assert_(m.status === "IN_PROGRESS", "La mission doit être en cours.");
+  const room = reqText_(a.room, "Pièce", 1, 60);
+  const items = {}; if (a.items && typeof a.items === "object") Object.keys(a.items).slice(0, 40).forEach(function (k) { items[safeText_(k, 120)] = a.items[k] === true; });
+  const before = assertDocsOf_(a.beforeDocIds || [], "CLEANING", m.missionId), after = assertDocsOf_(a.afterDocIds || [], "CLEANING", m.missionId);
+  return withLock_(function () {
+    const ex = dbAll_("CleaningChecklists").find(function (c) { return String(c.missionId) === String(m.missionId) && c.room === room; });
+    const done = Object.keys(items).length > 0 && Object.keys(items).every(function (k) { return items[k]; });
+    if (ex) dbUpdate_("CleaningChecklists", ex.checklistId, { itemsJson: items, doneAt: done ? nowIso_() : "", updatedAt: nowIso_() });
+    else dbInsert_("CleaningChecklists", { organizationId: m.organizationId, missionId: m.missionId, room: room, itemsJson: items, doneAt: done ? nowIso_() : "", updatedAt: nowIso_() });
+    const known = {}; dbAll_("CleaningPhotos").forEach(function (c) { if (String(c.missionId) === String(m.missionId)) known[c.documentId] = true; });
+    const rows = [];
+    before.forEach(function (d) { if (!known[d]) rows.push({ organizationId: m.organizationId, missionId: m.missionId, propertyId: m.propertyId, room: room, phase: "BEFORE", documentId: d, takenAt: nowIso_(), takenBy: p.email }); });
+    after.forEach(function (d) { if (!known[d]) rows.push({ organizationId: m.organizationId, missionId: m.missionId, propertyId: m.propertyId, room: room, phase: "AFTER", documentId: d, takenAt: nowIso_(), takenBy: p.email }); });
+    dbInsertMany_("CleaningPhotos", rows);
+    audit_("CLEANING_ROOM_UPDATED", "CleaningMission", m.missionId, m.organizationId, { room: room, done: done, photos: rows.length });
+    return { ok: true, done: done, photosAdded: rows.length };
+  });
+}
+/** Anomalie (objet manquant, dégradation…), avec création facultative d'un incident lié à la mission. */
+function cleanAnomaly_(p, a) {
+  const m = cleanLoad_(p, a.missionId, "read");
+  assert_(cleanMine_(p, m) || cleanMgr_(p, m), "Accès refusé.", "FORBIDDEN");
+  assert_(["ACCEPTED", "IN_PROGRESS", "COMPLETED"].indexOf(m.status) >= 0, "Mission non active.");
+  const type = oneOf_(a.type || "OTHER", getSetting_("list.cleaningAnomalies", m.organizationId), "Type d'anomalie");
+  const desc = reqText_(a.description, "Description", 3, 1000);
+  return withLock_(function () {
+    const fresh = dbGet_("CleaningMissions", m.missionId);
+    const list = parseJson_(fresh.anomaliesJson, []);
+    let incidentId = "";
+    if (a.createIncident) {
+      const prop = dbGet_("Properties", m.propertyId);
+      incidentId = incidentInsert_(p, prop, { category: type === "DAMAGE" || type === "BREAKAGE" ? "DAMAGE" : (type === "DIRT" ? "CLEANING" : "OTHER"), severity: a.severity || "MEDIUM",
+        description: desc, title: "Ménage — " + type + (a.room ? " (" + a.room + ")" : ""), reservationId: m.reservationId, missionId: m.missionId, source: "CLEANING", photoDocIds: [] }).incidentId;
+    }
+    list.push({ type: type, room: safeText_(a.room, 60), description: desc, at: nowIso_(), by: p.email, incidentId: incidentId });
+    dbUpdate_("CleaningMissions", m.missionId, { anomaliesJson: list, updatedAt: nowIso_() });
+    audit_("CLEANING_ANOMALY_REPORTED", "CleaningMission", m.missionId, m.organizationId, { type: type, incidentId: incidentId });
+    return { ok: true, incidentId: incidentId };
+  });
+}
+function cleanComplete_(p, a) {
+  const m = cleanLoad_(p, a.missionId, "provider");
+  assert_(m.status === "IN_PROGRESS", "La mission doit être en cours.");
+  const lists = dbAll_("CleaningChecklists").filter(function (c) { return String(c.missionId) === String(m.missionId); });
+  assert_(lists.length > 0, "Renseignez la checklist d'au moins une pièce.");
+  if (getSetting_("cleaning.requirePhotos", m.organizationId) !== false) {
+    const photos = dbAll_("CleaningPhotos").filter(function (c) { return String(c.missionId) === String(m.missionId); });
+    const missing = lists.filter(function (l) { return !photos.some(function (x) { return x.room === l.room && x.phase === "BEFORE"; }) || !photos.some(function (x) { return x.room === l.room && x.phase === "AFTER"; }); }).map(function (l) { return l.room; });
+    assert_(!missing.length, "Photos avant ET après requises pour : " + missing.join(", ") + ".");
+  }
+  const computed = m.startedAt ? Math.max(1, Math.round((Date.now() - parseTs_(m.startedAt).getTime()) / 60000)) : null;
+  const declared = a.actualMinutes ? Math.round(Number(a.actualMinutes)) : computed;
+  assert_(declared && declared >= 1 && declared <= 1440, "Durée réelle invalide.");
+  dbUpdate_("CleaningMissions", m.missionId, { status: "COMPLETED", completedAt: nowIso_(), actualMinutes: declared, notes: a.notes ? safeText_((m.notes ? m.notes + "\n" : "") + a.notes, 1000) : m.notes, updatedAt: nowIso_() });
+  const prop = dbGet_("Properties", m.propertyId);
+  audit_("CLEANING_COMPLETED", "CleaningMission", m.missionId, m.organizationId, { actualMinutes: declared, measuredMinutes: computed });
+  notify_({ eventKey: "clean-done:" + m.missionId, userIds: propertyManagers_(prop, "canManageOperations"), type: "CLEANING_DONE", organizationId: m.organizationId,
+    title: "Ménage terminé, à valider : " + prop.name, body: "Durée déclarée : " + declared + " min.", link: "#cleaning/" + m.missionId, email: false });
+  return { ok: true, actualMinutes: declared };
+}
+/** Validation (ou renvoi) par le responsable ; crée la dépense de ménage une seule fois (clé unique). */
+function cleanValidate_(p, a) {
+  const m0 = cleanLoad_(p, a.missionId, "manager");
+  return withLock_(function () {
+    const m = dbGet_("CleaningMissions", m0.missionId);
+    assert_(m.status === "COMPLETED", "Seule une mission terminée peut être contrôlée.");
+    if (a.decision === "REJECT") {
+      dbUpdate_("CleaningMissions", m.missionId, { status: "IN_PROGRESS", validationNote: reqText_(a.note, "Motif", 3, 500), updatedAt: nowIso_() });
+      notify_({ eventKey: "clean-reject:" + m.missionId + ":" + Date.now(), userIds: [m.providerUserId], type: "CLEANING_REJECTED", organizationId: m.organizationId, title: "Mission à reprendre", body: a.note, link: "#cleaning/" + m.missionId });
+      audit_("CLEANING_REJECTED", "CleaningMission", m.missionId, m.organizationId, {});
+      return { ok: true, status: "IN_PROGRESS" };
+    }
+    const score = a.qualityScore === undefined || a.qualityScore === "" ? "" : Math.round(Number(a.qualityScore));
+    assert_(score === "" || (score >= 1 && score <= 5), "Note qualité de 1 à 5.");
+    const price = a.price === undefined || a.price === "" ? num_(m.price) : money_(a.price, "Tarif");
+    dbUpdate_("CleaningMissions", m.missionId, { status: "VALIDATED", validatedAt: nowIso_(), validatedBy: p.email, qualityScore: score, validationNote: safeText_(a.note, 500), price: price, updatedAt: nowIso_() });
+    if (price > 0) dbInsertUnique_("Expenses", "uniqueKey", "cleaning:" + m.missionId, { organizationId: m.organizationId, propertyId: m.propertyId, category: "CLEANING", description: "Ménage mission " + m.missionId,
+      supplier: m.providerEmail, amount: price, vatAmount: 0, currency: m.currency || "MAD", expenseDate: String(m.completedAt || nowIso_()).slice(0, 10), status: "INVOICED", refType: "CLEANING", refId: m.missionId, createdAt: nowIso_(), createdBy: p.email });
+    audit_("CLEANING_VALIDATED", "CleaningMission", m.missionId, m.organizationId, { qualityScore: score, price: price });
+    return { ok: true, status: "VALIDATED" };
+  });
+}
+function cleanCancel_(p, a) {
+  const m = cleanLoad_(p, a.missionId, "manager");
+  assert_(["CREATED", "OFFERED", "ACCEPTED", "EXPIRED"].indexOf(m.status) >= 0, "Mission non annulable.");
+  dbUpdate_("CleaningMissions", m.missionId, { status: "CANCELLED", updatedAt: nowIso_(), validationNote: safeText_(a.reason, 300) });
+  audit_("CLEANING_CANCELLED", "CleaningMission", m.missionId, m.organizationId, {});
+  return { ok: true };
+}
+
+/* ------------------------- Documents PDF : ordre de mission et rapport de ménage ------------------------- */
+/** Donneur d'ordre (agence qui gère le bien si c'est elle qui a créé ou validé la mission, sinon le propriétaire) et prestataire. */
+function cleanParties_(m, prop) {
+  const ownerOrg = dbGet_("Organizations", prop.organizationId) || {};
+  const byOrg = dbGet_("Organizations", commissionBeneficiary_({ createdBy: m.validatedBy || m.createdBy }, prop)) || ownerOrg;
+  const u = m.providerUserId ? dbGet_("Users", m.providerUserId) : null;
+  const art = dbAll_("Artisans").find(function (c) { return m.providerEmail && normalizeEmail_(c.email) === normalizeEmail_(m.providerEmail) && c.status !== "BLOCKED"; });
+  return { owner: ownerOrg, orderer: byOrg, provider: { name: (art && art.name) || (u && u.displayName) || m.providerEmail || "À attribuer", email: m.providerEmail || "", phone: (art && art.phone) || (u && u.phone) || "" } };
+}
+function cleanDT_(s) { const d = parseTs_(s); return d ? Utilities.formatDate(d, tz_(), "dd/MM/yyyy HH:mm") : "—"; }
+function cleanMoney_(v, cur) { return v === "" || v == null ? "—" : (Math.round(num_(v) * 100) / 100).toLocaleString("fr-FR") + " " + (cur || "MAD"); }
+
+/** Ordre de mission de ménage (avant intervention) : parties, lieu, horaires, tarif convenu, consignes et engagements. */
+function cleanOrderPdf_(p, a) {
+  const m = cleanLoad_(p, a.missionId, "read"), prop = dbGet_("Properties", m.propertyId), P = cleanParties_(m, prop);
+  const rooms = parseJson_(prop.roomsJson, []), tasks = parseJson_(prop.cleaningChecklistJson, []).length ? parseJson_(prop.cleaningChecklistJson, []) : ["Sols", "Surfaces", "Linge changé", "Sanitaires", "Poubelles", "Consommables"];
+  let html = "<h2>Parties</h2>" + htmlTable_(["", "Organisation / personne", "Contact"], [
+    ["Donneur d'ordre", P.orderer.name || "", P.orderer.billingEmail || ""], ["Propriétaire du bien (règlement)", P.owner.name || "", P.owner.billingEmail || ""],
+    ["Prestataire", P.provider.name, [P.provider.email, P.provider.phone].filter(String).join(" — ")]]);
+  html += "<h2>Mission</h2>" + htmlTable_(["Champ", "Valeur"], [["Référence", m.missionId], ["Bien", prop.name], ["Adresse", [prop.address, prop.neighborhood, prop.city].filter(String).join(", ")],
+    ["Début prévu", cleanDT_(m.startAt)], ["Fin prévue", cleanDT_(m.endAt)], ["Durée estimée", (m.estimatedMinutes || "—") + " min"], ["Priorité", ({ LOW: "Basse", NORMAL: "Normale", HIGH: "Haute", URGENT: "Urgente" })[m.priority || "NORMAL"] || m.priority],
+    ["Tarif convenu", cleanMoney_(m.price, m.currency)], ["Réservation liée", m.reservationId || "—"], ["Consignes", m.notes || "—"]]);
+  html += "<h2>Pièces et tâches attendues</h2>" + htmlTable_(["Pièce", "Tâches"], (rooms.length ? rooms : ["Logement"]).map(function (r) { return [r, tasks.join(", ")]; }));
+  html += "<h2>Engagements</h2><div class='box'><ul style='margin:0;padding-left:16px'>" + [
+    "Accepter ou refuser la mission dans le délai indiqué dans l'application.",
+    "Prendre des photos AVANT et APRÈS dans chaque pièce et cocher la liste des tâches dans l'application.",
+    "Signaler immédiatement toute anomalie (objet manquant, casse, dégradation) depuis la mission.",
+    "Respecter les consignes d'accès et la confidentialité des lieux ; restituer les clés selon les consignes.",
+    "La mission est réglée au tarif convenu après validation par le donneur d'ordre ; la dépense est imputée au propriétaire du bien."
+  ].map(function (x) { return "<li>" + escapeHtml_(x) + "</li>"; }).join("") + "</ul></div>";
+  html += "<h2>Signatures</h2><table class='sign'><tr><td>Le donneur d'ordre<br><span class='muted'>" + escapeHtml_(P.orderer.name || "") + "</span></td><td>Le prestataire<br><span class='muted'>" + escapeHtml_(P.provider.name) + "</span></td></tr></table>";
+  html += "<p class='muted'>Modèle indicatif : à adapter et faire valider par un professionnel avant usage contractuel.</p>";
+  audit_("CLEANING_ORDER_PDF", "CleaningMission", m.missionId, m.organizationId, {});
+  return storeGeneratedPdf_(p, htmlToPdf_(pdfShell_("Ordre de mission de ménage", html, { subtitle: prop.name + " — " + cleanDT_(m.startAt) }), "OrdreMission_" + m.missionId),
+    { propertyId: prop.propertyId, organizationId: prop.organizationId }, "CLEANING", m.missionId, "ORDER");
+}
+
+/** Rapport de ménage (après intervention) : horaires réels, liste par pièce, photos avant / après, anomalies, validation. */
+function cleanReportPdf_(p, a) {
+  const m = cleanLoad_(p, a.missionId, "read"), prop = dbGet_("Properties", m.propertyId), P = cleanParties_(m, prop);
+  assert_(["COMPLETED", "VALIDATED"].indexOf(m.status) >= 0, "Le rapport est disponible quand la mission est terminée.");
+  const checklists = dbAll_("CleaningChecklists").filter(function (c) { return String(c.missionId) === String(m.missionId); });
+  const photos = dbAll_("CleaningPhotos").filter(function (c) { return String(c.missionId) === String(m.missionId); });
+  const anomalies = parseJson_(m.anomaliesJson, []);
+  let html = "<h2>Synthèse</h2>" + htmlTable_(["Champ", "Valeur"], [["Référence", m.missionId], ["Bien", prop.name + " — " + [prop.address, prop.city].filter(String).join(", ")],
+    ["Prestataire", P.provider.name], ["Donneur d'ordre", P.orderer.name || ""], ["Prévu", cleanDT_(m.startAt) + " → " + cleanDT_(m.endAt)],
+    ["Réalisé", cleanDT_(m.startedAt) + " → " + cleanDT_(m.completedAt)], ["Durée réelle", (m.actualMinutes || "—") + " min (estimée : " + (m.estimatedMinutes || "—") + " min)"],
+    ["Statut", m.status === "VALIDATED" ? "Validée le " + cleanDT_(m.validatedAt) + " par " + (m.validatedBy || "") : "Terminée, en attente de validation"],
+    ["Note qualité", m.qualityScore ? m.qualityScore + " / 5" : "—"], ["Tarif", cleanMoney_(m.price, m.currency)], ["Anomalies", String(anomalies.length)]]);
+  html += "<h2>Liste des tâches par pièce</h2>" + (checklists.length ? htmlTable_(["Pièce", "Tâches réalisées", "Terminé le"], checklists.map(function (c) {
+    const it = parseJson_(c.itemsJson, {}); return [c.room, Object.keys(it).map(function (k) { return (it[k] ? "✔ " : "✘ ") + k; }).join(" · "), cleanDT_(c.doneAt)]; })) : "<p class='muted'>Aucune liste de tâches enregistrée.</p>");
+  const roomsWithPhotos = []; photos.forEach(function (ph) { if (roomsWithPhotos.indexOf(ph.room) < 0) roomsWithPhotos.push(ph.room); });
+  html += "<h2>Photos avant / après</h2>";
+  if (!photos.length) html += "<p class='muted'>Aucune photo enregistrée pour cette mission.</p>";
+  let embedded = 0;
+  roomsWithPhotos.slice(0, 8).forEach(function (room) {
+    const pick = function (phase) { const x = photos.filter(function (ph) { return ph.room === room && ph.phase === phase; })[0]; if (!x || embedded >= 16) return "<span class='muted'>—</span>"; const src = pdfImageData_(x.documentId); if (!src) return "<span class='muted'>Photo consultable dans l'application</span>"; embedded++; return "<img src='" + src + "'>"; };
+    html += "<p style='margin:8px 0 2px'><b>" + escapeHtml_(room) + "</b></p><table class='photos'><tr><td><b>AVANT</b><br>" + pick("BEFORE") + "</td><td><b>APRÈS</b><br>" + pick("AFTER") + "</td></tr></table>";
+  });
+  html += "<h2>Anomalies signalées</h2>" + (anomalies.length ? htmlTable_(["Type", "Pièce", "Description", "Date"], anomalies.map(function (x) { return [x.type, x.room || "", x.description || "", cleanDT_(x.at)]; })) : "<p>Aucune anomalie signalée.</p>");
+  if (m.validationNote) html += "<h2>Commentaire de validation</h2><p>" + escapeHtml_(m.validationNote) + "</p>";
+  html += "<h2>Signatures</h2><table class='sign'><tr><td>Le prestataire<br><span class='muted'>" + escapeHtml_(P.provider.name) + "</span></td><td>Le donneur d'ordre<br><span class='muted'>" + escapeHtml_(P.orderer.name || "") + "</span></td></tr></table>";
+  audit_("CLEANING_REPORT_PDF", "CleaningMission", m.missionId, m.organizationId, { photos: embedded });
+  return storeGeneratedPdf_(p, htmlToPdf_(pdfShell_("Rapport de ménage", html, { subtitle: prop.name + " — " + cleanDT_(m.completedAt) }), "RapportMenage_" + m.missionId),
+    { propertyId: prop.propertyId, organizationId: prop.organizationId }, "CLEANING", m.missionId, "REPORT");
+}
+
+/** Tâche planifiée : expiration des offres non acceptées et alertes de retard. */
+function cleaningExpireJob_() {
+  const now = Date.now(); let expired = 0, late = 0;
+  dbAll_("CleaningMissions").filter(function (m) { return m.status === "OFFERED" && parseTs_(m.expiresAt) && parseTs_(m.expiresAt).getTime() <= now; }).forEach(function (m) {
+    dbUpdate_("CleaningMissions", m.missionId, { status: "EXPIRED", expiryAlertedAt: nowIso_(), updatedAt: nowIso_() });
+    auditAs_("system", "", "CLEANING_EXPIRED", "CleaningMission", m.missionId, m.organizationId, { provider: m.providerEmail });
+    const prop = dbGet_("Properties", m.propertyId);
+    if (prop) notify_({ eventKey: "clean-expired:" + m.missionId + ":" + m.expiresAt, userIds: propertyManagers_(prop, "canManageOperations"), type: "CLEANING_EXPIRED", organizationId: m.organizationId,
+      title: "Mission de ménage non acceptée : " + prop.name, body: "Aucune réponse de " + m.providerEmail + " dans le délai. Réattribuez la mission.", link: "#cleaning/" + m.missionId });
+    expired++;
+  });
+  dbAll_("CleaningMissions").filter(function (m) { return m.status === "ACCEPTED" && !m.lateAlertedAt && parseTs_(m.startAt) && parseTs_(m.startAt).getTime() + 30 * 60000 < now; }).forEach(function (m) {
+    dbUpdate_("CleaningMissions", m.missionId, { lateAlertedAt: nowIso_() });
+    const prop = dbGet_("Properties", m.propertyId);
+    if (prop) notify_({ eventKey: "clean-late:" + m.missionId, userIds: propertyManagers_(prop, "canManageOperations").concat([m.providerUserId]), type: "CLEANING_LATE", organizationId: m.organizationId,
+      title: "Mission de ménage non démarrée : " + prop.name, body: "Prévue à " + Utilities.formatDate(parseTs_(m.startAt), tz_(), "dd/MM HH:mm") + ".", link: "#cleaning/" + m.missionId });
+    late++;
+  });
+  return { expired: expired, lateAlerts: late };
+}
+
+/* ======================================================================
+ * Code.gs
+ * ====================================================================== */
+/**
+ * Point d'entrée de l'application web et routeur unique des appels serveur.
+ *
+ * Le navigateur n'appelle que trois fonctions globales :
+ *  - api(token, route, args)  : routes authentifiées (le jeton de session est vérifié à CHAQUE appel) ;
+ *  - apiPublic(route, args)   : connexion, mot de passe, invitation, portail voyageur (jetons à usage limité) ;
+ *  - doGet(e)                 : rendu de la page.
+ * Les autres fonctions globales sans « _ » (setupProject, installTriggers…) sont protégées par assertEditor_().
+ * Chaque route est une fonction privée (suffixe « _ ») qui reçoit le principal vérifié côté serveur.
+ */
+/** Table des routes (construite à l'appel : les fonctions sont définies dans d'autres fichiers, chargés après celui-ci). */
+/**
+ * Les routes désignent leur fonction par son NOM : si un fichier .gs manque ou a été collé incomplètement,
+ * seules les routes concernées échouent (avec un message clair) au lieu de bloquer toute l'application.
+ */
+function resolveHandler_(name) {
+  const g = typeof globalThis !== "undefined" ? globalThis : this;
+  const fn = typeof name === "function" ? name : g[name];
+  if (typeof fn !== "function") throw new AppError("CONFIG", "Installation incomplète : la fonction serveur « " + name + " » est introuvable (fichier .gs absent ou collé partiellement). Lancez verifierInstallation() dans l'éditeur Apps Script.");
+  return fn;
+}
+function routes_() { return {
+  "me.get": function (p) { return meBootstrap_(p); }, "me.logout": "meLogout_", "me.logoutAll": "meLogoutAll_", "me.changePassword": "meChangePassword_", "me.updateProfile": "meUpdateProfile_", "me.requestDeletion": "meRequestDeletion_",
+  "meta.get": function (p) { return metaGet_(p); },
+  "org.list": "orgList_", "org.create": "orgCreate_", "org.update": "orgUpdate_", "org.setStatus": "orgSetStatus_",
+  "support.request": "supportRequest_", "support.decide": "supportDecide_", "support.revoke": "supportRevoke_", "support.list": "supportList_",
+  "invite.create": "inviteCreate_", "invite.resend": "inviteResend_", "invite.revoke": "inviteRevoke_", "invite.list": "inviteList_",
+  "user.list": "userList_", "user.setStatus": "userSetStatus_", "user.sendActivation": "userSendActivation_", "user.erase": "userErase_", "role.setStatus": "roleSetStatus_", "role.setPermissions": "roleSetPermissions_", "role.caps": "roleCapsCatalog_",
+  "notif.list": "notifList_", "notif.read": "notifRead_", "notif.whatsapp": "notifWhatsApp_", "notif.email": "notifSendEmail_",
+  "doc.upload": "docUpload_", "doc.list": "docList_", "doc.get": "docGet_", "doc.archive": "docArchive_",
+  "admin.diagnostics": "adminDiagnostics_", "admin.backup": "adminBackup_", "admin.backups": "adminBackups_", "admin.errors": "adminErrors_", "admin.jobs": "adminJobs_",
+  "settings.get": "settingsGet_", "settings.set": "settingsSet_", "audit.list": "auditList_",
+  "property.list": "propertyList_", "property.choices": "propertyChoices_", "property.get": "propertyGet_", "property.orgChoices": function (p) { return propertyOrgChoices_(p); },
+  "property.create": "propertyCreate_", "property.update": "propertyUpdate_", "property.archive": "propertyArchive_", "property.import": "propertyImport_", "property.export": "propertyExport_",
+  "residence.list": "residenceList_", "residence.create": "residenceCreate_",
+  "property.agencyChoices": "propertyAgencyChoices_", "property.agencySet": "propertyAgencySet_", "property.agencyCreate": "ownerAgencyCreate_", "agency.mine": "ownerAgencyList_", "agency.update": "ownerAgencyUpdate_", "agency.revokeAll": "ownerAgencyRevokeAll_", "agency.delete": "ownerAgencyDelete_", "property.access": "propertyAccessList_", "property.staffAssign": "propertyStaffAssign_", "property.staffRevoke": "propertyStaffRevoke_",
+  "resv.list": "resvList_", "resv.get": "resvGet_", "resv.availability": "resvAvailability_", "resv.create": "resvCreate_", "resv.update": "resvUpdate_", "resv.setStatus": "resvSetStatus_", "resv.cancel": "resvCancel_",
+  "resv.calendar": "resvCalendar_", "resv.sendConfirmation": "resvSendConfirmation_", "resv.sheet": "resvSheet_", "block.create": "blockCreate_", "block.cancel": "blockCancel_",
+  "guest.list": "guestList_", "guest.save": "guestSave_", "guest.purge": "guestPurge_", "guest.tokenCreate": "guestTokenCreate_", "guest.tokenRevoke": "guestTokenRevoke_",
+  "ops.today": "opsToday_", "ops.checkIn": "opsCheckIn_", "ops.checkOut": "opsCheckOut_", "ops.history": "opsHistory_", "ops.report": "opsReport_",
+  "clean.list": "cleanList_", "clean.get": "cleanGet_", "clean.create": "cleanCreate_", "clean.assign": "cleanAssign_", "clean.respond": "cleanRespond_", "clean.start": "cleanStart_", "clean.room": "cleanRoom_",
+  "clean.anomaly": "cleanAnomaly_", "clean.complete": "cleanComplete_", "clean.validate": "cleanValidate_", "clean.cancel": "cleanCancel_", "clean.orderPdf": "cleanOrderPdf_", "clean.reportPdf": "cleanReportPdf_",
+  "inc.list": "incList_", "inc.get": "incGet_", "inc.create": "incCreate_", "inc.update": "incUpdate_", "inc.comment": "incComment_",
+  "ctr.list": "ctrList_", "ctr.choices": "ctrChoices_", "ctr.get": "ctrGet_", "ctr.create": "ctrCreate_", "ctr.update": "ctrUpdate_",
+  "quote.request": "quoteRequest_", "quote.submit": "quoteSubmit_", "quote.create": "quoteCreate_", "quote.decline": "quoteDeclineRequest_", "quote.decide": "quoteDecide_", "quote.list": "quoteList_", "quote.pdf": "quotePdf_",
+  "wo.create": "woCreate_", "wo.respond": "woRespond_", "wo.schedule": "woSchedule_", "wo.start": "woStart_", "wo.complete": "woComplete_", "wo.verify": "woVerify_", "wo.cancel": "woCancel_",
+  "wo.list": "woList_", "wo.get": "woGet_", "wo.pdf": "woOrderPdf_",
+  "inv.submit": "invSubmit_", "inv.approve": "invApprove_", "inv.reject": "invReject_", "inv.list": "invList_", "inv.get": "invGet_", "inv.pdf": "invoicePdf_",
+  "fin.summary": "finSummary_", "pay.record": "payRecord_", "pay.void": "payVoid_", "pay.reconcile": "payReconcile_", "pay.list": "payList_",
+  "exp.create": "expCreate_", "exp.cancel": "expCancel_", "exp.list": "expList_", "rev.create": "revCreate_",
+  "tenant.list": "tenantList_", "tenant.create": "tenantCreate_", "tenant.update": "tenantUpdate_",
+  "lease.list": "leaseList_", "lease.get": "leaseGet_", "lease.create": "leaseCreate_", "lease.update": "leaseUpdate_", "lease.activate": "leaseActivate_", "lease.notice": "leaseNotice_",
+  "lease.end": "leaseEnd_", "lease.renew": "leaseRenew_", "lease.depositReturn": "leaseDepositReturn_", "lease.receipt": "leaseReceipt_", "lease.document": "leaseDocument_", "lease.mine": function (p) { return leaseMine_(p); },
+  "plan.list": "planList_", "plan.save": "planSave_", "sub.assign": "subAssign_", "sub.recordPayment": "subRecordPayment_", "sub.setStatus": "subSetStatus_", "sub.list": "subList_",
+  "sub.mine": function (p) { return subMine_(p); }, "sub.requestChange": "subRequestChange_", "sub.contractPdf": "subContractPdf_", "assistant.kb": "assistantKb_", "assistant.ask": "assistantAsk_",
+  "dash.get": "dashGet_", "pareto.run": "paretoRun_", "pareto.export": "paretoExport_", "report.run": "reportRun_", "report.export": "reportExport_"
+}; }
+function publicRoutes_() { return {
+  "auth.login": "authLogin_", "assistant.kb": "assistantKbPublic_", "auth.requestReset": "authRequestReset_", "auth.resetPassword": "authResetPassword_",
+  "invite.info": "inviteInfo_", "invite.accept": "inviteAccept_",
+  "guest.portal.get": "guestPortalGet_", "guest.portal.save": "guestPortalSave_", "guest.portal.upload": "guestPortalUpload_", "guest.portal.incident": "guestPortalIncident_"
+}; }
+
+/* ------------------------- Vérification de l'installation -------------------------
+ * Autonome (ne dépend d'aucun autre fichier) : si un fichier manque ou est mal nommé dans le projet Apps Script,
+ * la page affiche la liste exacte des fichiers à corriger au lieu d'une erreur technique.
+ */
+var INSTALL_HTML_FILES_ = ["Index", "Styles", "Components", "I18n", "Login", "Dashboard", "Pages", "Scripts", "Assistant"];
+/* Première et dernière fonction de chaque fichier : détecte un fichier absent ET un fichier collé incomplètement. */
+var INSTALL_GS_SENTINELS_ = { Admin: ["assertEditor_", "auditList_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SubscriptionService: ["planOut_", "subscriptionJob_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
+function installCheck_() {
+  const g = typeof globalThis !== "undefined" ? globalThis : this;
+  const missingGs = Object.keys(INSTALL_GS_SENTINELS_).filter(function (f) { return INSTALL_GS_SENTINELS_[f].some(function (n) { return typeof g[n] !== "function"; }); });
+  // Toutes les fonctions appelées par les routes doivent exister.
+  const handlers = [];
+  try { [routes_(), publicRoutes_()].forEach(function (R) { Object.keys(R).forEach(function (k) { if (typeof R[k] === "string" && typeof g[R[k]] !== "function" && handlers.indexOf(R[k]) < 0) handlers.push(R[k]); }); }); } catch (e) { handlers.push("routes_"); }
+  // Version « 2 fichiers » : Index.html contient toute l'interface (marqueur IMMOPILOT_BUNDLE), les autres fichiers HTML sont inutiles.
+  // Détection par le CODE de l'interface (et non par un commentaire HTML, que Google peut retirer à la lecture du fichier).
+  let indexContent = null;
+  try { indexContent = HtmlService.createHtmlOutputFromFile("Index").getContent(); } catch (e) { indexContent = null; }
+  const bundled = !!indexContent && indexContent.indexOf("const PAGES = {}") >= 0 && indexContent.indexOf("NAV_HASH") >= 0;
+  let missingHtml = (bundled ? ["Index"] : INSTALL_HTML_FILES_).filter(function (n) { try { HtmlService.createHtmlOutputFromFile(n); return false; } catch (e) { return true; } });
+  // Index présent mais court (ancienne version qui appelle 7 autres fichiers) alors qu'aucun de ces fichiers n'existe :
+  // le plus simple est de remplacer Index par la version complète.
+  // (Seulement si AUCUN des 7 fichiers n'existe : sinon il s'agit d'une installation en fichiers séparés incomplète.)
+  const indexOutdated = !!indexContent && !bundled && missingHtml.length === INSTALL_HTML_FILES_.length - 1 && missingHtml.indexOf("Index") < 0;
+  if (indexOutdated) missingHtml = ["Index"];
+  return { ok: !missingGs.length && !missingHtml.length && !handlers.length, missingGs: missingGs, missingHtml: missingHtml, missingFunctions: handlers, indexOutdated: indexOutdated, bundled: bundled,
+    expected: { gs: Object.keys(INSTALL_GS_SENTINELS_).length, html: INSTALL_HTML_FILES_.length } };
+}
+/** À lancer depuis l'éditeur : liste les fichiers manquants ou mal nommés (aucune donnée lue ni modifiée). */
+function verifierInstallation() {
+  const r = installCheck_();
+  if (r.ok) console.log("Installation complète : " + r.expected.gs + " fichiers script et " + r.expected.html + " fichiers HTML trouvés.");
+  else {
+    if (r.indexOutdated) console.log("Index.html contient l'ancienne version courte (sans l'interface). Remplacez TOUT son contenu par le fichier 2_Index_html_A_COLLER.txt (environ 2 066 lignes), puis publiez une nouvelle version.");
+    else if (r.missingHtml.length) console.log("Fichiers HTML introuvables (à créer avec ＋ › HTML, nom exact, sans .html) : " + r.missingHtml.join(", "));
+    if (r.missingGs.length) console.log("Fichiers script introuvables ou collés incomplètement (＋ › Script, nom exact sans .gs, recollez TOUT le contenu) : " + r.missingGs.join(", "));
+    if (r.missingFunctions.length) console.log("Fonctions serveur introuvables : " + r.missingFunctions.join(", "));
+  }
+  return r;
+}
+function installErrorPage_(r) {
+  const esc = function (s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+  const list = function (items, ext) { return "<ul>" + items.map(function (n) { return "<li><code>" + esc(n) + ext + "</code></li>"; }).join("") + "</ul>"; };
+  let html = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;color:#1d2b3a;line-height:1.5}" +
+    "h1{font-size:20px;color:#1b3554}code{background:#eef2f7;padding:1px 5px;border-radius:4px}.box{border:1px solid #e3b341;background:#fff8e6;padding:12px 16px;border-radius:8px}</style></head><body>" +
+    "<h1>ImmoPilot : installation incomplète</h1><div class='box'>L'application ne peut pas démarrer car des fichiers sont absents ou mal nommés dans le projet Apps Script. Aucune donnée n'est en cause.</div>";
+  if (r.indexOutdated) html += "<h2>Le fichier Index.html n'est pas la version complète</h2><p>Il contient l'ancienne version courte, qui appelle 7 autres fichiers. Dans l'éditeur, ouvrez <code>Index.html</code>, faites Ctrl+A puis Supprimer, et collez <b>tout</b> le contenu du fichier <code>2_Index_html_A_COLLER.txt</code> (environ 2 066 lignes). Ne recréez pas les autres fichiers HTML.</p>";
+  else if (r.missingHtml.length) html += "<h2>Fichiers HTML introuvables</h2>" + list(r.missingHtml, ".html") +
+    "<p>Dans l'éditeur : <b>＋ › HTML</b> (et non « Script »), tapez le nom exact <b>sans</b> « .html », en respectant les majuscules, effacez le contenu proposé et collez celui du fichier du ZIP. Si un fichier du même nom existe en <code>.gs</code>, supprimez-le.</p>";
+  if (r.missingGs.length) html += "<h2>Fichiers script introuvables ou incomplets</h2>" + list(r.missingGs, ".gs") +
+    "<p>Dans l'éditeur : <b>＋ › Script</b>, nom exact sans « .gs », collez le contenu complet du fichier du ZIP.</p>";
+  html += "<h2>Ensuite</h2><ol><li>Enregistrez (Ctrl+S).</li><li>Déployer › Gérer les déploiements › ✏️ › Version : <b>Nouvelle version</b> › Déployer.</li><li>Rechargez cette page.</li></ol>" +
+    "<p>Astuce : dans l'éditeur, la fonction <code>verifierInstallation</code> affiche la même liste dans le journal d'exécution.</p></body></html>";
+  return HtmlService.createHtmlOutput(html).setTitle("ImmoPilot — installation incomplète");
+}
+
+/**
+ * Intégration de l'application dans VOTRE site ou VOS applications mobiles (désactivée par défaut).
+ * Propriété du script IMMO_EMBED_ORIGINS : liste d'origines autorisées, séparées par des virgules,
+ * ex. « https://monnom.github.io ». Vide = l'application ne peut pas être affichée dans un autre site (protection anti-clickjacking).
+ * Google ne permet pas de restreindre l'intégration à certaines origines côté serveur : l'interface vérifie donc
+ * elle-même ses cadres parents (location.ancestorOrigins) et refuse de s'afficher dans un site non autorisé.
+ */
+function embedOrigins_() {
+  let raw = "";
+  try { raw = PropertiesService.getScriptProperties().getProperty(IMMO_CONFIG.EMBED_ORIGINS_PROPERTY) || ""; } catch (e) { raw = ""; }
+  // On ne garde que l'origine (https://domaine[:port]) : une adresse avec un chemin (…github.io/immopilot/) est acceptée.
+  return raw.split(",").map(function (x) { const m = String(x).trim().match(/^https:\/\/[a-z0-9.-]+(:\d+)?(?=\/|$)/i); return m ? m[0].toLowerCase() : ""; })
+    .filter(Boolean).slice(0, 10);
+}
+
+function doGet(e) {
+  const check = installCheck_();
+  if (!check.ok) return installErrorPage_(check);
+  const prm = (e && e.parameter) || {};
+  const action = ["accept", "reset", "guest"].indexOf(String(prm.action || "")) >= 0 ? String(prm.action) : "app";
+  const token = /^[a-f0-9]{64}$/.test(String(prm.token || "")) ? String(prm.token) : "";
+  const t = HtmlService.createTemplateFromFile("Index");
+  const embed = embedOrigins_();
+  t.boot = JSON.stringify({ mode: action, token: token, appName: IMMO_CONFIG.APP_NAME, version: IMMO_CONFIG.VERSION, embed: embed });
+  return t.evaluate().setTitle(IMMO_CONFIG.APP_NAME).addMetaTag("viewport", "width=device-width, initial-scale=1, viewport-fit=cover")
+    .setXFrameOptionsMode(embed.length ? HtmlService.XFrameOptionsMode.ALLOWALL : HtmlService.XFrameOptionsMode.DEFAULT);
+}
+
+function argsGuard_(args) {
+  if (args === null || args === undefined) return {};
+  if (typeof args !== "object" || Array.isArray(args)) throw new AppError("VALIDATION", "Paramètres invalides.");
+  let size = 0; try { size = JSON.stringify(args).length; } catch (e) { throw new AppError("VALIDATION", "Paramètres non sérialisables."); }
+  if (size > 7 * 1024 * 1024) throw new AppError("VALIDATION", "Requête trop volumineuse.");
+  return args;
+}
+function errorResponse_(e, route) {
+  if (e instanceof AppError || (e && e.name === "AppError")) {
+    if (e.code === "FORBIDDEN") audit_("ACCESS_DENIED", "Route", route, "", { message: String(e.message).slice(0, 200) }, "DENIED");
+    return { ok: false, error: { code: e.code, message: e.message } };
+  }
+  const errorId = "ERR-" + Utilities.getUuid().slice(0, 8).toUpperCase();
+  console.error(errorId + " " + route + " : " + (e && e.stack ? e.stack : e));
+  try { dbInsert_("ActivityLogs", { timestamp: nowIso_(), actorEmail: CTX_.principal ? CTX_.principal.email : "", actorUserId: CTX_.principal ? CTX_.principal.userId : "", organizationId: "",
+    action: "ERROR", entityType: "Route", entityId: route, detailsJson: jsonSafe_({ route: route, message: String(e && e.message || e).slice(0, 500), errorId: errorId }), result: "ERROR", errorId: errorId }); } catch (e2) { console.error(e2.message); }
+  const quota = /quota|Service invoked too many times|Limit Exceeded|trop de fois/i.test(String(e && e.message));
+  return { ok: false, error: { code: quota ? "QUOTA" : "INTERNAL", message: quota ? "Quota Google atteint, réessayez plus tard (réf. " + errorId + ")." : "Erreur interne. Référence : " + errorId + "." } };
+}
+
+/** Appel authentifié. Le jeton est vérifié côté serveur à chaque appel ; aucune donnée d'identité fournie par le navigateur n'est crue. */
+function api(token, route, args) {
+  ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0;
+  route = String(route || "");
+  try {
+    const R = routes_(), name = Object.prototype.hasOwnProperty.call(R, route) ? R[route] : null;
+    if (!name) throw new AppError("NOT_FOUND", "Fonction inconnue : " + route);
+    const fn = resolveHandler_(name);
+    const a = argsGuard_(args);
+    const p = principalFromToken_(token);
+    CTX_.principal = p;
+    return { ok: true, data: fn(p, a) };
+  } catch (e) { return errorResponse_(e, route); }
+}
+/** Appel public : uniquement les routes dont la sécurité repose sur un secret à usage unique ou un mot de passe. */
+function apiPublic(route, args) {
+  ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0;
+  route = String(route || "");
+  try {
+    const R = publicRoutes_(), name = Object.prototype.hasOwnProperty.call(R, route) ? R[route] : null;
+    if (!name) throw new AppError("NOT_FOUND", "Fonction inconnue.");
+    const fn = resolveHandler_(name);
+    return { ok: true, data: fn(argsGuard_(args)) };
+  } catch (e) { return errorResponse_(e, route); }
+}
+
+/** Métadonnées pour l'interface (listes de valeurs, types d'analyses et de rapports). Aucune donnée client. */
+function metaGet_(p) {
+  const S = schema_(), enums = {};
+  ["Reservations", "CleaningMissions", "IncidentsV4", "Quotes", "WorkOrders", "Invoices", "Leases", "Subscriptions", "Payments", "Properties", "Expenses"].forEach(function (t) { enums[t] = S[t].enums; });
+  const inviteRoles = {};
+  p.roles.forEach(function (r) { const best = bestRoleIn_(p, r.organizationId); if (best && INVITABLE_ROLES[best]) inviteRoles[r.organizationId] = INVITABLE_ROLES[best]; });
+  return { enums: enums, paretoTypes: Object.keys(PARETO_TYPES_).map(function (k) { return { type: k, title: PARETO_TYPES_[k].title, unit: PARETO_TYPES_[k].unit }; }),
+    reportTypes: Object.keys(REPORT_TYPES_).map(function (k) { return { type: k, title: REPORT_TYPES_[k] }; }), roles: IMMO_CONFIG.ROLES, inviteRoles: inviteRoles,
+    superInviteRoles: p.isSuper ? INVITABLE_ROLES.SUPER_ADMIN : [], roleCaps: ROLE_CAPS, propertyTypes: PROPERTY_TYPES_, sources: RESV_SOURCES_, idTypes: ID_TYPES_, payMethods: PAY_METHODS_,
+    planFeatures: PLAN_FEATURES_, severities: SEVERITIES_, settingsKeys: Object.keys(DEFAULT_SETTINGS), orgEditableSettings: ORG_EDITABLE_SETTINGS_ };
+}
+
+/* ======================================================================
+ * Compat.gs
+ * ====================================================================== */
+/**
+ * Compatibilité avec les versions précédentes (phases 2 à 4).
+ * - p4ExpireCleaningMissions : ancien déclencheur installé par installPhase4Triggers() ; redirigé vers jobFrequent()
+ *   tant que installTriggers() n'a pas été exécuté (installTriggers supprime l'ancien déclencheur).
+ * - installPhase4Triggers : ancien nom, redirigé vers installTriggers().
+ * Les anciennes fonctions appelées par l'ancienne interface (getAppBootstrap, createProperty, p4Event…) sont remplacées
+ * par les routes de api() ; la correspondance est détaillée dans CHANGELOG.md. Supprimez le fichier Phase4Operations.gs
+ * de votre projet Apps Script lors de la mise à jour.
+ */
+function p4ExpireCleaningMissions() { return jobFrequent(); }
+function installPhase4Triggers() { return installTriggers(); }
+
+/* ======================================================================
+ * Config.gs
+ * ====================================================================== */
+/**
+ * ImmoPilot — configuration centrale et schéma des données.
+ * Les colonnes situées AVANT le séparateur "|" sont les colonnes historiques (phases 2 à 4) :
+ * elles ne doivent jamais être renommées ni réordonnées. Les colonnes après "|" sont ajoutées
+ * en fin de feuille par la migration (non destructif).
+ * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
+ */
+var IMMO_CONFIG = Object.freeze({
+  APP_NAME: "ImmoPilot",
+  VERSION: "2.0.0",
+  SCHEMA_VERSION: 3,
+  TIMEZONE: "Africa/Casablanca",
+  DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
+  DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
+  ADMIN_EMAILS_PROPERTY: "IMMO_ADMIN_EMAILS",
+  ORGANIZATION_NAME_PROPERTY: "IMMO_INITIAL_ORGANIZATION_NAME",
+  APP_URL_PROPERTY: "IMMO_APP_URL",
+  PBKDF_ITERATIONS_PROPERTY: "IMMO_PBKDF_ITERATIONS",
+  EMBED_ORIGINS_PROPERTY: "IMMO_EMBED_ORIGINS",
+  ACTIVE_STATUS: "ACTIVE",
+  MAX_UPLOAD_BYTES: 4 * 1024 * 1024,
+  MAX_PAGE_SIZE: 200,
+  MAX_EXPORT_ROWS: 5000,
+  ROLES: ["SUPER_ADMIN", "OWNER", "AGENCY_ADMIN", "AGENCY_USER", "GUARD", "CLEANER", "ARTISAN", "TENANT"]
+});
+
+/** Capacités par rôle (plafond). UserRoles.permissionsJson peut seulement retirer ("-cap") ou restaurer ("+cap") dans ce plafond. */
+var ROLE_CAPS = Object.freeze({
+  SUPER_ADMIN: ["platform.admin", "audit.view", "subscription.manage", "org.manage", "settings.platform", "support.request"],
+  OWNER: ["property.create", "property.edit", "property.archive", "property.assign", "reservation.view", "reservation.edit", "reservation.cancel",
+    "guest.view", "guestdoc.view", "checkin.operate", "cleaning.manage", "incident.view", "incident.manage", "incident.report", "quote.decide",
+    "contractor.manage", "workorder.manage", "invoice.view", "invoice.manage", "finance.view", "finance.manage", "lease.view", "lease.manage",
+    "report.view", "report.export", "user.invite", "user.manage", "settings.manage", "subscription.view", "audit.view.org", "support.approve", "document.view"],
+  AGENCY_ADMIN: ["reservation.view", "reservation.edit", "reservation.cancel", "guest.view", "guestdoc.view", "checkin.operate", "cleaning.manage",
+    "incident.view", "incident.manage", "incident.report", "quote.decide", "contractor.manage", "workorder.manage", "invoice.view", "finance.view",
+    "lease.view", "lease.manage", "report.view", "report.export", "user.invite", "user.manage", "settings.manage", "subscription.view",
+    "audit.view.org", "support.approve", "document.view"],
+  AGENCY_USER: ["reservation.view", "reservation.edit", "guest.view", "checkin.operate", "cleaning.manage", "incident.view", "incident.manage",
+    "incident.report", "workorder.manage", "lease.view", "report.view", "document.view"],
+  GUARD: ["checkin.operate", "incident.report", "guest.view.min"],
+  CLEANER: ["cleaning.operate", "incident.report"],
+  ARTISAN: ["workorder.operate", "quote.submit", "invoice.submit"],
+  TENANT: ["lease.self", "incident.report"]
+});
+
+/** Droits portés par une attribution agence↔bien (AgencyPropertyPermissions). */
+var AGENCY_FLAG_CAPS = Object.freeze({
+  canView: ["reservation.view", "incident.view", "incident.report", "guest.view", "lease.view", "report.view", "document.view", "report.export"],
+  canManageReservations: ["reservation.edit", "reservation.cancel", "checkin.operate", "guestdoc.view"],
+  canManageOperations: ["cleaning.manage", "incident.manage", "workorder.manage", "contractor.manage", "quote.decide", "lease.manage"],
+  canViewFinance: ["finance.view", "invoice.view"]
+});
+
+/** Rôles qu'un rôle donné peut inviter (prévention de l'élévation de privilèges). */
+var INVITABLE_ROLES = Object.freeze({
+  SUPER_ADMIN: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "GUARD", "CLEANER", "ARTISAN", "TENANT"],
+  OWNER: ["OWNER", "GUARD", "CLEANER", "ARTISAN", "TENANT"],
+  AGENCY_ADMIN: ["AGENCY_ADMIN", "AGENCY_USER", "GUARD", "CLEANER", "ARTISAN"]
+});
+
+var DEFAULT_SETTINGS = Object.freeze({
+  "currency": "MAD",
+  "locale": "fr",
+  "reservation.defaultCheckIn": "15:00",
+  "reservation.defaultCheckOut": "11:00",
+  "reservation.minTurnaroundMinutes": 120,
+  "reservation.cancellationPolicy": [{ daysBefore: 7, penaltyPercent: 0 }, { daysBefore: 2, penaltyPercent: 50 }, { daysBefore: 0, penaltyPercent: 100 }],
+  "checkin.graceMinutes": 120,
+  "cleaning.acceptanceMinutes": 120,
+  "cleaning.requirePhotos": true,
+  "commission.contractorRate": 15,
+  "commission.vatRate": 20,
+  "finance.vatRate": 20,
+  "quote.agencyApprovalLimit": 0,
+  "workorder.requireQuote": true,
+  "invoice.tolerancePercent": 5,
+  "rent.graceDays": 5,
+  "alerts.rentDueDays": 3,
+  "alerts.leaseEndDays": [60, 30],
+  "alerts.incidentAgeDays": 3,
+  "alerts.incidentCost": 5000,
+  "alerts.quotaPercent": 80,
+  "retention.sensitiveDocDays": 30,
+  "retention.logDays": 730,
+  "guests.storeIdReference": false,
+  "session.hours": 12,
+  "backup.keep": 14,
+  "billing.enforce": true,
+  "notify.emailEnabled": true,
+  "template.leaseDocId": "",
+  "template.receiptDocId": "",
+  "template.reservationDocId": "",
+  "list.incidentCategories": ["PLUMBING", "ELECTRICITY", "AC", "HUMIDITY", "LOCKSMITH", "FURNITURE", "APPLIANCE", "CLEANING", "DAMAGE", "SECURITY", "OTHER"],
+  "list.expenseCategories": ["MAINTENANCE", "CLEANING", "UTILITIES", "TAXES", "INSURANCE", "AGENCY_FEES", "SUPPLIES", "OTHER"],
+  "list.cancelReasons": ["GUEST_REQUEST", "NO_PAYMENT", "OVERBOOKING", "OWNER_REQUEST", "FORCE_MAJEURE", "OTHER"],
+  "list.cleaningAnomalies": ["MISSING_ITEM", "DAMAGE", "DIRT", "BREAKAGE", "OTHER"],
+  "list.specialties": ["CLEANING", "PLUMBING", "ELECTRICITY", "AC", "PAINTING", "LOCKSMITH", "CARPENTRY", "APPLIANCE", "GARDENING", "POOL", "OTHER"],
+  "contractors.platformOnly": true
+});
+
+var DEFAULT_PLANS = Object.freeze([
+  { planCode: "ESSENTIEL", name: "Essentiel", price: 199, periodicity: "MONTHLY", maxProperties: 5, maxUsers: 3, storageMb: 500, trialDays: 14, sortOrder: 1,
+    features: ["properties", "reservations", "checkin", "cleaning", "incidents", "finance_basic"] },
+  { planCode: "PRO", name: "Pro", price: 499, periodicity: "MONTHLY", maxProperties: 25, maxUsers: 15, storageMb: 3000, trialDays: 14, sortOrder: 2,
+    features: ["properties", "reservations", "checkin", "cleaning", "incidents", "finance_basic", "finance_advanced", "leases", "contractors", "pareto", "reports", "automations", "guest_portal"] },
+  { planCode: "BUSINESS", name: "Business", price: 1299, periodicity: "MONTHLY", maxProperties: 200, maxUsers: 100, storageMb: 20000, trialDays: 14, sortOrder: 3,
+    features: ["properties", "reservations", "checkin", "cleaning", "incidents", "finance_basic", "finance_advanced", "leases", "contractors", "pareto", "reports", "automations", "guest_portal", "multi_agency", "exports_unlimited"] }
+]);
+
+var TABLES_SRC = {
+  Organizations: { pk: "organizationId", idp: "org", org: "organizationId", req: "name", enums: { status: ["ACTIVE", "SUSPENDED", "INACTIVE"], type: ["OWNER_ORG", "AGENCY", "PROVIDER", "PLATFORM"] },
+    cols: "organizationId,name,status,createdAt#t,createdBy|type,country,city,timezone,locale,planCode,billingEmail,suspendedAt#t,suspensionReason,updatedAt#t,isDemo#b" },
+  Users: { pk: "userId", idp: "usr", req: "email", enums: { status: ["ACTIVE", "SUSPENDED", "DISABLED", "INVITED"] },
+    cols: "userId,email,displayName,status,createdAt#t,createdBy|passwordHash,passwordSalt,passwordIters#n,failedAttempts#n,lockedUntil#t,lastLoginAt#t,locale,phone,notifPrefsJson#j,updatedAt#t,pwChangedAt#t" },
+  Invitations: { pk: "invitationId", idp: "inv", org: "organizationId", req: "email,role", enums: { status: ["PENDING", "ACCEPTED", "REVOKED", "EXPIRED", "EMAIL_FAILED"] },
+    cols: "invitationId,email,displayName,organizationId,role,tokenHash,status,expiresAt#t,createdAt#t,createdBy,acceptedAt#t,revokedAt#t|permissionsJson#j,propertyId" },
+  UserRoles: { pk: "userRoleId", idp: "role", org: "organizationId", req: "userId,role", enums: { status: ["ACTIVE", "REVOKED", "SUSPENDED"] },
+    cols: "userRoleId,userId,organizationId,role,status,createdAt#t,createdBy|permissionsJson#j,revokedAt#t,revokedBy" },
+  ActivityLogs: { pk: "logId", idp: "log", org: "organizationId", req: "action",
+    cols: "logId,timestamp#t,actorEmail,organizationId,action,entityType,entityId,detailsJson#j|actorUserId,result,errorId" },
+  PlatformSettings: { pk: "settingKey", idp: "set", req: "settingKey", cols: "settingKey,settingValue,updatedAt#t,updatedBy" },
+  Settings: { pk: "settingId", idp: "stg", org: "organizationId", req: "organizationId,settingKey", cols: "settingId,organizationId,settingKey,settingValue,updatedAt#t,updatedBy" },
+  Sessions: { pk: "sessionId", idp: "ses", req: "userId,tokenHash", cols: "sessionId,userId,tokenHash,createdAt#t,expiresAt#t,lastSeenAt#t,revokedAt#t,userAgent" },
+  PasswordResets: { pk: "resetId", idp: "rst", req: "userId,tokenHash", cols: "resetId,userId,tokenHash,createdAt#t,expiresAt#t,usedAt#t,purpose" },
+  SupportGrants: { pk: "grantId", idp: "sgr", org: "organizationId", req: "superAdminUserId,organizationId,justification",
+    enums: { status: ["REQUESTED", "ACTIVE", "DENIED", "REVOKED", "EXPIRED"] },
+    cols: "grantId,superAdminUserId,organizationId,justification,status,requestedAt#t,approvedAt#t,approvedBy,expiresAt#t,revokedAt#t,scope" },
+  Residences: { pk: "residenceId", idp: "res", org: "organizationId", req: "name,city", cols: "residenceId,organizationId,name,city,address,status,createdAt#t,createdBy" },
+  Properties: { pk: "propertyId", idp: "prop", org: "organizationId", req: "organizationId,name,city",
+    enums: { status: ["ACTIVE", "INACTIVE", "MAINTENANCE", "ARCHIVED", "DELETED"], rentalMode: ["SHORT_TERM", "LONG_TERM", "BOTH"] },
+    cols: "propertyId,organizationId,ownerUserId,residenceId,name,address,city,neighborhood,building,floor,doorNumber,propertyType,surfaceM2#n,bedrooms#n,bathrooms#n,equipmentJson#j,accessInstructions,latitude#n,longitude#n,rentalMode,status,createdAt#t,createdBy,updatedAt#t,updatedBy|capacity#n,description,houseRules,arrivalInstructions,departureInstructions,checkInTime,checkOutTime,minTurnaroundMinutes#n,nightlyPrice#n,cleaningFee#n,monthlyRent#n,charges#n,currency,managementCommissionRate#n,touristTaxPerNight#n,roomsJson#j,cleaningChecklistJson#j" },
+  AgencyPropertyPermissions: { pk: "permissionId", idp: "perm", org: "ownerOrganizationId", req: "propertyId,agencyOrganizationId", enums: { status: ["ACTIVE", "REVOKED"] },
+    cols: "permissionId,propertyId,ownerOrganizationId,agencyOrganizationId,canView#b,canManageReservations#b,canManageOperations#b,status,createdAt#t,createdBy|canViewFinance#b,commissionRate#n,validFrom#d,validTo#d,updatedAt#t,updatedBy" },
+  PropertyAssignments: { pk: "assignmentId", idp: "asgn", req: "propertyId,userId,role", enums: { status: ["ACTIVE", "REVOKED"] },
+    cols: "assignmentId,propertyId,reservationId,userId,email,role,status,createdAt#t,createdBy,revokedAt#t,revokedBy" },
+  AvailabilityBlocks: { pk: "blockId", idp: "blk", org: "organizationId", req: "propertyId,startDate,endDate", enums: { status: ["ACTIVE", "CANCELLED"] },
+    cols: "blockId,organizationId,propertyId,startDate#d,endDate#d,reason,status,createdAt#t,createdBy|blockType" },
+  Reservations: { pk: "reservationId", idp: "resv", org: "organizationId", req: "propertyId,checkIn,checkOut,guestName",
+    enums: { status: ["DRAFT", "PENDING", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"], paymentStatus: ["UNPAID", "PARTIAL", "PAID", "REFUNDED", "OVERPAID"] },
+    cols: "reservationId,organizationId,propertyId,agencyOrganizationId,checkIn#d,checkOut#d,guestCount#n,guestName,status,notes,createdAt#t,createdBy,updatedAt#t,updatedBy|checkInAt#t,checkOutAt#t,guestEmail,guestPhone,totalPrice#n,taxes#n,fees#n,commissionRate#n,commissionAmount#n,deposit#n,depositStatus,paymentStatus,source,cancelReason,cancelledAt#t,cancelledBy,refundDue#n,version#n,idempotencyKey,currency" },
+  GuestEvents: { pk: "eventId", idp: "gev", org: "organizationId", cols: "eventId,organizationId,propertyId,reservationId,travelerName,eventType,eventAt#t,eventDate#d,actorEmail,idempotencyKey,notes" },
+  Guests: { pk: "guestId", idp: "gst", org: "organizationId", req: "reservationId,lastName", enums: { status: ["ACTIVE", "PURGED"] },
+    cols: "guestId,organizationId,propertyId,reservationId,lastName,firstName,email,phone,nationality,idType,idRefMasked,isPrimary#b,status,createdAt#t,createdBy,updatedAt#t,purgedAt#t" },
+  GuestDocuments: { pk: "guestDocId", idp: "gdc", org: "organizationId", req: "reservationId,documentId", cols: "guestDocId,organizationId,reservationId,guestId,documentId,docType,createdAt#t,createdBy" },
+  GuestAccessTokens: { pk: "tokenId", idp: "gtk", org: "organizationId", req: "reservationId,tokenHash", enums: { status: ["ACTIVE", "REVOKED", "EXPIRED"] },
+    cols: "tokenId,organizationId,reservationId,tokenHash,status,expiresAt#t,createdAt#t,createdBy,lastUsedAt#t,useCount#n" },
+  CheckIns: { pk: "checkInId", idp: "cki", org: "organizationId", req: "reservationId",
+    cols: "checkInId,organizationId,propertyId,reservationId,plannedAt#t,actualAt#t,agentUserId,agentEmail,checklistJson#j,conditionNotes,metersJson#j,photoDocIdsJson#j,comments,incidentId,status,idempotencyKey,createdAt#t,lateMinutes#n" },
+  CheckOuts: { pk: "checkOutId", idp: "cko", org: "organizationId", req: "reservationId",
+    cols: "checkOutId,organizationId,propertyId,reservationId,plannedAt#t,actualAt#t,agentUserId,agentEmail,checklistJson#j,conditionNotes,metersJson#j,photoDocIdsJson#j,comments,incidentId,status,idempotencyKey,createdAt#t,lateMinutes#n" },
+  CleaningMissions: { pk: "missionId", idp: "cln", org: "organizationId", req: "propertyId",
+    enums: { status: ["CREATED", "OFFERED", "ACCEPTED", "DECLINED", "EXPIRED", "IN_PROGRESS", "COMPLETED", "VALIDATED", "CANCELLED"] },
+    cols: "missionId,organizationId,propertyId,reservationId,providerUserId,providerEmail,startAt#t,endAt#t,price#n,currency,status,responseAt#t,expiresAt#t,notes,createdAt#t,createdBy,updatedAt#t|priority,estimatedMinutes#n,acceptedAt#t,startedAt#t,completedAt#t,actualMinutes#n,validatedAt#t,validatedBy,anomaliesJson#j,expiryAlertedAt#t,reassignCount#n,declineReason,source,qualityScore#n,validationNote,lateAlertedAt#t" },
+  CleaningReports: { pk: "reportId", idp: "clr", org: "organizationId", cols: "reportId,organizationId,propertyId,missionId,providerEmail,checklistJson#j,photoFileIdsJson#j,notes,submittedAt#t,createdAt#t" },
+  CleaningChecklists: { pk: "checklistId", idp: "clc", org: "organizationId", req: "missionId,room", cols: "checklistId,organizationId,missionId,room,itemsJson#j,doneAt#t,updatedAt#t" },
+  CleaningPhotos: { pk: "photoId", idp: "clp", org: "organizationId", req: "missionId,documentId", enums: { phase: ["BEFORE", "AFTER"] },
+    cols: "photoId,organizationId,missionId,propertyId,room,phase,documentId,takenAt#t,takenBy" },
+  Incidents: { pk: "incidentId", idp: "inc", org: "organizationId", cols: "incidentId,organizationId,propertyId,category,description,status,createdAt#t,createdBy" },
+  IncidentsV4: { pk: "incidentId", idp: "inc", org: "organizationId", req: "propertyId,category,description",
+    enums: { severity: ["LOW", "MEDIUM", "HIGH", "CRITICAL"], priority: ["LOW", "NORMAL", "HIGH", "URGENT"],
+      status: ["OPEN", "QUALIFIED", "ASSIGNED", "QUOTE_PENDING", "AWAITING_OWNER", "APPROVED", "IN_PROGRESS", "RESOLVED", "CLOSED", "CANCELLED"] },
+    cols: "incidentId,organizationId,propertyId,reservationId,category,priority,description,status,photoFileIdsJson#j,createdAt#t,createdBy,updatedAt#t,updatedBy|title,severity,reportedByUserId,assignedToUserId,contractorId,estimatedCost#n,finalCost#n,resolvedAt#t,closedAt#t,missionId,source,alertedAt#t,legacyOrigin" },
+  IncidentComments: { pk: "commentId", idp: "icm", org: "organizationId", req: "incidentId,body", cols: "commentId,organizationId,incidentId,authorEmail,body,createdAt#t,visibility" },
+  Artisans: { pk: "artisanId", idp: "art", org: "organizationId", req: "name,email", enums: { status: ["ACTIVE", "INACTIVE", "BLOCKED"] },
+    cols: "artisanId,organizationId,name,email,phone,categoriesJson#j,zonesJson#j,status,createdAt#t,createdBy|userId,notes,legalName,taxId,commissionRate#n,billingInfo,updatedAt#t" },
+  Quotes: { pk: "quoteId", idp: "quo", org: "organizationId", req: "propertyId,incidentId,artisanId",
+    enums: { status: ["REQUESTED", "PENDING", "APPROVED", "REJECTED", "DECLINED", "EXPIRED", "CANCELLED"] },
+    cols: "quoteId,organizationId,propertyId,incidentId,artisanId,status,currency,totalAmount#n,validUntil#d,linesJson#j,decisionAt#t,decisionBy,decisionNote,createdAt#t,createdBy|requestNote,requestedAt#t,requestedBy,submittedAt#t,amountHT#n,vatRate#n,amountTTC#n,estimatedDays#n,commissionRateEst#n,commissionEstimate#n" },
+  QuoteDecisions: { pk: "decisionId", idp: "qdc", org: "organizationId", cols: "decisionId,organizationId,quoteId,decision,note,decidedAt#t,decidedBy" },
+  WorkOrders: { pk: "workOrderId", idp: "wo", org: "organizationId", req: "propertyId,incidentId,artisanId",
+    enums: { status: ["ASSIGNED", "ACCEPTED", "DECLINED", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "VERIFIED", "CANCELLED"] },
+    cols: "workOrderId,organizationId,propertyId,incidentId,quoteId,artisanId,status,scheduledAt#t,description,report,invoiceFileId,createdAt#t,createdBy,updatedAt#t,updatedBy|title,desiredDate#d,acceptedAt#t,startedAt#t,completedAt#t,verifiedAt#t,verifiedBy,commissionRate#n,photoDocIdsJson#j,invoiceId,declineReason" },
+  Invoices: { pk: "invoiceId", idp: "ivc", org: "organizationId", req: "propertyId,artisanId",
+    enums: { status: ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "PARTIAL", "PAID", "CANCELLED"] },
+    cols: "invoiceId,organizationId,propertyId,workOrderId,incidentId,artisanId,invoiceNumber,issueDate#d,dueDate#d,amountHT#n,vatRate#n,vatAmount#n,amountTTC#n,commissionRate#n,commissionBase#n,commissionAmount#n,commissionVatRate#n,commissionVatAmount#n,commissionBeneficiaryOrgId,commissionLocked#b,netToContractor#n,currency,status,documentId,approvedAt#t,approvedBy,paidAmount#n,paidAt#t,createdAt#t,createdBy,notes" },
+  Payments: { pk: "paymentId", idp: "pay", org: "organizationId", req: "kind,refType,refId,direction,amount",
+    enums: { kind: ["RESERVATION", "DEPOSIT", "REFUND", "RENT", "INVOICE", "SUBSCRIPTION", "DEPOSIT_REFUND", "OTHER"], refType: ["RESERVATION", "RENT_SCHEDULE", "INVOICE", "SUBSCRIPTION", "LEASE", "EXPENSE"], direction: ["IN", "OUT"], status: ["RECORDED", "VOID"] },
+    cols: "paymentId,organizationId,propertyId,kind,refType,refId,direction,amount#n,currency,method,paidAt#t,reference,proofDocId,status,reconciled#b,reconciledAt#t,reconciledBy,note,idempotencyKey,recordedBy,createdAt#t,voidedAt#t,voidedBy" },
+  Tenants: { pk: "tenantId", idp: "tnt", org: "organizationId", req: "fullName", enums: { status: ["ACTIVE", "INACTIVE"] },
+    cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t" },
+  Leases: { pk: "leaseId", idp: "lea", org: "organizationId", req: "propertyId,tenantId,startDate,monthlyRent",
+    enums: { status: ["DRAFT", "ACTIVE", "NOTICE", "ENDED", "RENEWED", "CANCELLED"] },
+    cols: "leaseId,organizationId,propertyId,tenantId,startDate#d,endDate#d,durationMonths#n,monthlyRent#n,charges#n,deposit#n,dueDay#n,indexationRate#n,nextIndexationDate#d,terms,documentId,status,noticeDate#d,noticeBy,depositStatus,depositReturned#n,depositDeductions#n,renewedFromLeaseId,endReason,createdAt#t,createdBy,updatedAt#t,updatedBy" },
+  RentSchedules: { pk: "scheduleId", idp: "rsc", org: "organizationId", req: "leaseId,period", enums: { status: ["OPEN", "CANCELLED"] },
+    cols: "scheduleId,organizationId,propertyId,leaseId,period,dueDate#d,rentAmount#n,chargesAmount#n,amountDue#n,status,createdAt#t,uniqueKey" },
+  Expenses: { pk: "expenseId", idp: "exp", org: "organizationId", req: "category,amount", enums: { status: ["PLANNED", "INVOICED", "PAID", "CANCELLED"] },
+    cols: "expenseId,organizationId,propertyId,category,description,supplier,amount#n,vatAmount#n,currency,expenseDate#d,status,paidAt#t,refType,refId,uniqueKey,documentId,createdAt#t,createdBy" },
+  RevenueRecords: { pk: "revenueId", idp: "rev", org: "organizationId", req: "category,amount", enums: { status: ["EXPECTED", "RECEIVED", "CANCELLED"] },
+    cols: "revenueId,organizationId,propertyId,category,description,amount#n,currency,revenueDate#d,status,receivedAt#t,createdAt#t,createdBy" },
+  Documents: { pk: "documentId", idp: "doc", org: "organizationId", req: "fileId,ownerType,category", enums: { status: ["ACTIVE", "ARCHIVED", "PURGED"] },
+    cols: "documentId,organizationId,propertyId,ownerType,ownerId,category,fileId,fileName,mimeType,sizeBytes#n,sha256,sensitive#b,status,createdAt#t,createdBy,retainUntil#d,purgedAt#t,legacy#b" },
+  Notifications: { pk: "notificationId", idp: "ntf", org: "organizationId", req: "userId,title", cols: "notificationId,organizationId,userId,type,title,body,link,createdAt#t,readAt#t,eventKey" },
+  NotificationLogs: { pk: "logId", idp: "nlg", org: "organizationId", req: "eventKey,channel", cols: "logId,eventKey,channel,recipient,type,status,sentAt#t,error,organizationId" },
+  ScheduledJobs: { pk: "jobRunId", idp: "job", req: "jobName", cols: "jobRunId,jobName,startedAt#t,finishedAt#t,status,resultJson#j,error" },
+  MigrationHistory: { pk: "migrationId", idp: "mig", req: "version", cols: "migrationId,version#n,name,appliedAt#t,appliedBy,status,detailsJson#j" },
+  SubscriptionPlans: { pk: "planCode", idp: "pln", req: "planCode,name", enums: { status: ["ACTIVE", "RETIRED"], periodicity: ["MONTHLY", "QUARTERLY", "YEARLY"] },
+    cols: "planCode,name,price#n,currency,periodicity,maxProperties#n,maxUsers#n,storageMb#n,featuresJson#j,quotasJson#j,trialDays#n,status,sortOrder#n,updatedAt#t,updatedBy" },
+  Subscriptions: { pk: "subscriptionId", idp: "sub", org: "organizationId", req: "organizationId,planCode",
+    enums: { status: ["TRIAL", "ACTIVE", "PAST_DUE", "SUSPENDED", "CANCELLED", "EXPIRED"] },
+    cols: "subscriptionId,organizationId,planCode,status,startDate#d,nextDueDate#d,createdAt#t,createdBy|periodEnd#d,trialEnd#d,cancelAtPeriodEnd#b,price#n,currency,periodicity,canceledAt#t,suspendedAt#t,paidThrough#d,updatedAt#t,updatedBy,lastReminderKey" },
+  OperationRequests: { pk: "requestKey", idp: "opr", org: "organizationId", cols: "requestKey,organizationId,operation,resourceId,createdAt#t" }
+};
+
+function include(filename) {
+  const allowed = ["Styles", "Components", "Login", "Dashboard", "Pages", "I18n", "Scripts"];
+  if (allowed.indexOf(String(filename)) < 0) throw new Error("Inclusion non autorisée.");
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+/* ======================================================================
+ * ContractorService.gs
+ * ====================================================================== */
+/**
+ * Annuaire des prestataires (feuille historique « Artisans », conservée et enrichie).
+ * ANNUAIRE DE LA PLATEFORME : les prestataires (entreprises de ménage, artisans…) sont intégrés par le SUPER ADMINISTRATEUR
+ * (organizationId = organisation « Plateforme »), avec leurs types de prestation (spécialités). Les propriétaires et agences
+ * les choisissent dans cette liste, filtrée par type de prestation ; ils ne peuvent pas en créer eux-mêmes
+ * (paramètre plateforme contractors.platformOnly, activé par défaut). Les prestataires créés auparavant par une
+ * organisation restent utilisables par elle.
+ * Chaque prestataire reçoit une invitation : rôle CLEANER s'il fait du ménage, ARTISAN pour les autres prestations ;
+ * son compte ne donne accès qu'à SES missions, demandes, devis, interventions et factures.
+ */
+function platformOrgId_() { const o = dbAll_("Organizations").find(function (x) { return x.type === "PLATFORM"; }); return o ? String(o.organizationId) : ""; }
+function isPlatformContractor_(c) { const pid = platformOrgId_(); return !!pid && String(c.organizationId) === pid; }
+/** Peut-on choisir des prestataires pour ce bien ? (gestion des interventions ou du ménage) */
+function canPickProviders_(p, prop) { return canProp_(p, prop, "workorder.manage") || canProp_(p, prop, "contractor.manage") || canProp_(p, prop, "cleaning.manage"); }
+function contractorUsableFor_(p, c, prop) {
+  if (!c || c.status !== "ACTIVE" || !prop) return false;
+  if (isPlatformContractor_(c)) return canPickProviders_(p, prop);
+  if (String(c.organizationId) === String(prop.organizationId)) return canProp_(p, prop, "workorder.manage") || canProp_(p, prop, "contractor.manage");
+  const acc = propertyAccess_(p, prop);
+  return !!(acc && acc.agencyOrgIds.indexOf(String(c.organizationId)) >= 0 && acc.caps["workorder.manage"]);
+}
+/** Statistiques d'un prestataire. propOk (facultatif) limite le calcul aux biens visibles par le demandeur :
+ *  un client ne voit jamais l'activité ni les montants réalisés chez les autres clients. */
+function contractorStats_(artisanId, propOk) {
+  const keep = function (x) { return !propOk || propOk(String(x.propertyId)); };
+  const wos = dbAll_("WorkOrders").filter(function (w) { return String(w.artisanId) === String(artisanId) && w.status !== "CANCELLED" && keep(w); });
+  const done = wos.filter(function (w) { return ["COMPLETED", "VERIFIED"].indexOf(w.status) >= 0; });
+  const delays = done.map(function (w) { const s = parseTs_(w.createdAt), e = parseTs_(w.completedAt || w.updatedAt); return s && e ? (e.getTime() - s.getTime()) / 86400000 : null; }).filter(function (x) { return x !== null; });
+  const inv = dbAll_("Invoices").filter(function (v) { return String(v.artisanId) === String(artisanId) && ["APPROVED", "PARTIAL", "PAID"].indexOf(v.status) >= 0 && keep(v); });
+  const quotes = dbAll_("Quotes").filter(function (q) { return String(q.artisanId) === String(artisanId) && keep(q); });
+  return { interventions: wos.length, completed: done.length, verified: wos.filter(function (w) { return w.status === "VERIFIED"; }).length,
+    resolutionRate: pct_(wos.filter(function (w) { return w.status === "VERIFIED"; }).length, wos.filter(function (w) { return w.status !== "DECLINED"; }).length),
+    avgDelayDays: delays.length ? round2_(delays.reduce(function (a, b) { return a + b; }, 0) / delays.length) : null,
+    totalInvoicedTTC: sumBy_(inv, function (v) { return v.amountTTC; }), avgInvoiceTTC: inv.length ? round2_(sumBy_(inv, function (v) { return v.amountTTC; }) / inv.length) : null,
+    commissionTotal: sumBy_(inv, function (v) { return v.commissionAmount; }), quotes: quotes.length,
+    quoteApprovalRate: pct_(quotes.filter(function (q) { return q.status === "APPROVED"; }).length, quotes.filter(function (q) { return ["APPROVED", "REJECTED"].indexOf(q.status) >= 0; }).length) };
+}
+/** Filtre « biens visibles » pour les statistiques d'un prestataire de la plateforme consulté par un client. */
+function visiblePropFilter_(p) {
+  const memo = {};
+  return function (pid) { if (memo[pid] === undefined) { const pr = dbGet_("Properties", pid); memo[pid] = !!pr && canPickProviders_(p, pr); } return memo[pid]; };
+}
+function contractorOut_(c, withStats, withBilling, propOk) {
+  const o = { artisanId: c.artisanId, organizationId: c.organizationId, name: c.name, email: c.email, phone: c.phone, specialties: parseJson_(c.categoriesJson, []), zones: parseJson_(c.zonesJson, []),
+    status: c.status, notes: c.notes, commissionRate: c.commissionRate, hasAccount: !!c.userId, createdAt: c.createdAt };
+  if (withBilling) { o.legalName = c.legalName; o.taxId = c.taxId; o.billingInfo = c.billingInfo; }
+  if (withStats) o.stats = contractorStats_(c.artisanId, propOk);
+  return o;
+}
+function contractorInput_(a, orgId) {
+  const o = {};
+  if (a.name !== undefined) o.name = reqText_(a.name, "Nom", 2, 120);
+  if (a.email !== undefined) o.email = validateEmail_(a.email);
+  if (a.phone !== undefined) o.phone = safeText_(a.phone, 30);
+  const list = function (v, allowed) { return (Array.isArray(v) ? v : String(v || "").split(",")).map(function (x) { return safeText_(String(x).trim(), 60); }).filter(Boolean).filter(function (x) { return !allowed || allowed.indexOf(x) >= 0; }).slice(0, 20); };
+  if (a.specialties !== undefined) o.categoriesJson = list(a.specialties, getSetting_("list.specialties", orgId));
+  if (a.zones !== undefined) o.zonesJson = list(a.zones);
+  if (a.notes !== undefined) o.notes = safeText_(a.notes, 2000);
+  if (a.legalName !== undefined) o.legalName = safeText_(a.legalName, 160);
+  if (a.taxId !== undefined) o.taxId = safeText_(a.taxId, 40);
+  if (a.billingInfo !== undefined) o.billingInfo = safeText_(a.billingInfo, 500);
+  if (a.commissionRate !== undefined) o.commissionRate = a.commissionRate === "" ? "" : rate_(a.commissionRate, "Commission");
+  if (a.status !== undefined) o.status = oneOf_(a.status, ["ACTIVE", "INACTIVE", "BLOCKED"], "Statut");
+  return o;
+}
+
+/* ------------------------------ Routes ------------------------------ */
+function ctrList_(p, a) {
+  a = a || {};
+  const orgIds = p.roles.filter(function (r) { return r.caps.indexOf("contractor.manage") >= 0; }).map(function (r) { return r.organizationId; });
+  const mine = myArtisanIds_(p), platform = platformOrgId_();
+  // L'annuaire de la plateforme est visible du super administrateur et de quiconque gère des interventions ou du ménage.
+  const seesPlatform = p.isSuper || p.roles.some(function (r) { return ["contractor.manage", "workorder.manage", "cleaning.manage"].some(function (c) { return r.caps.indexOf(c) >= 0; }); });
+  if (p.isSuper && platform) orgIds.push(platform);
+  const rows = dbAll_("Artisans").filter(function (c) {
+    const isPf = !!platform && String(c.organizationId) === platform;
+    if (orgIds.indexOf(String(c.organizationId)) < 0 && mine.indexOf(String(c.artisanId)) < 0 && !(isPf && seesPlatform && c.status === "ACTIVE")) return false;
+    if (a.status && c.status !== a.status) return false;
+    if (a.specialty && parseJson_(c.categoriesJson, []).indexOf(a.specialty) < 0) return false;
+    if (a.zone && !parseJson_(c.zonesJson, []).some(function (z) { return String(z).toLowerCase().indexOf(String(a.zone).toLowerCase()) >= 0; })) return false;
+    return matchesQuery_(a.q, [c.name, c.email, c.phone]);
+  }).sort(function (x, y) { return String(x.name).localeCompare(String(y.name)); });
+  const page = pageOf_(rows, a);
+  const clientFilter = p.isSuper ? null : visiblePropFilter_(p);
+  page.items = page.items.map(function (c) {
+    const isPf = !!platform && String(c.organizationId) === platform, own = mine.indexOf(String(c.artisanId)) >= 0;
+    const o = contractorOut_(c, !!a.withStats, orgIds.indexOf(String(c.organizationId)) >= 0, isPf && !own ? clientFilter : null);
+    o.platform = isPf; return o;
+  });
+  return page;
+}
+/** Prestataires utilisables pour un bien, filtrés par type de prestation (specialty / serviceType). */
+function ctrChoices_(p, a) {
+  const prop = dbGet_("Properties", safeText_(a.propertyId, 120));
+  if (!prop || !canPickProviders_(p, prop)) throw new AppError("FORBIDDEN", "Bien introuvable ou accès refusé.");
+  const type = safeText_(a.serviceType || a.specialty || "", 40);
+  const cleaners = indexBy_(dbAll_("UserRoles").filter(function (r) { return r.role === "CLEANER" && r.status === "ACTIVE"; }), "userId");
+  const usersByEmail = {}; dbAll_("Users").forEach(function (u) { if (u.status === "ACTIVE") usersByEmail[normalizeEmail_(u.email)] = u; });
+  return dbAll_("Artisans").filter(function (c) { return contractorUsableFor_(p, c, prop) && (!type || parseJson_(c.categoriesJson, []).indexOf(type) >= 0); })
+    .sort(function (x, y) { return String(x.name).localeCompare(String(y.name)); })
+    .map(function (c) {
+      const u = usersByEmail[normalizeEmail_(c.email)];
+      return { artisanId: c.artisanId, name: c.name, email: c.email, phone: c.phone, specialties: parseJson_(c.categoriesJson, []), zones: parseJson_(c.zonesJson, []),
+        hasAccount: !!c.userId || !!u, canClean: !!(u && cleaners[String(u.userId)]), platform: isPlatformContractor_(c), commissionRate: c.commissionRate };
+    });
+}
+function ctrGet_(p, a) {
+  const c = dbGet_("Artisans", safeText_(a.artisanId, 120));
+  if (!c) throw new AppError("FORBIDDEN", "Prestataire introuvable ou accès refusé.");
+  const pf = isPlatformContractor_(c);
+  const mgr = pf ? p.isSuper : hasOrgCap_(p, c.organizationId, "contractor.manage"), self = myArtisanIds_(p).indexOf(String(c.artisanId)) >= 0;
+  const viewer = pf && c.status === "ACTIVE" && p.roles.some(function (r) { return ["contractor.manage", "workorder.manage", "cleaning.manage"].some(function (k) { return r.caps.indexOf(k) >= 0; }); });
+  if (!mgr && !self && !viewer) throw new AppError("FORBIDDEN", "Prestataire introuvable ou accès refusé.");
+  const o = contractorOut_(c, true, mgr || self, (pf && !mgr && !self) ? visiblePropFilter_(p) : null);
+  o.platform = pf; o.canEdit = mgr;
+  // Un propriétaire ou une agence ne voit que les interventions de SES biens, jamais celles des autres clients.
+  const visible = function (w) { if (mgr && !pf) return true; if (self) return true; const pr = dbGet_("Properties", w.propertyId); return !!pr && canProp_(p, pr, "workorder.manage"); };
+  o.workOrders = dbAll_("WorkOrders").filter(function (w) { return String(w.artisanId) === String(c.artisanId) && visible(w); }).sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); }).slice(0, 50).map(woOut_);
+  o.documents = (mgr || self) ? docList_(p, { ownerType: "CONTRACTOR", ownerId: c.artisanId }) : [];
+  return o;
+}
+function ctrCreate_(p, a) {
+  let orgId;
+  if (p.isSuper) {
+    orgId = platformOrgId_();
+    assert_(orgId, "Organisation plateforme absente : exécutez setupProject().", "CONFIG");
+  } else {
+    if (getSetting_("contractors.platformOnly") !== false) forbid_("Les prestataires (ménage, artisans…) sont intégrés par l'administrateur ImmoPilot. Choisissez-les dans la liste, par type de prestation.");
+    orgId = safeText_(a.organizationId || (p.roles.find(function (r) { return r.caps.indexOf("contractor.manage") >= 0; }) || {}).organizationId, 120);
+    assertOrgCap_(p, orgId, "contractor.manage");
+    assertFeature_(orgId, "contractors");
+    assertOrgWritable_(orgId);
+  }
+  const d = contractorInput_(a, orgId);
+  assert_((d.categoriesJson || []).length, "Choisissez au moins un type de prestation.");
+  assert_(d.name && d.email, "Nom et e-mail obligatoires.");
+  const c = withLock_(function () {
+    assert_(!dbAll_("Artisans").some(function (c) { return String(c.organizationId) === orgId && normalizeEmail_(c.email) === d.email && c.status !== "BLOCKED"; }), "Ce prestataire existe déjà dans votre annuaire.");
+    const u = dbAll_("Users").find(function (x) { return normalizeEmail_(x.email) === d.email; });
+    const row = dbInsert_("Artisans", Object.assign({ categoriesJson: [], zonesJson: [] }, d, { organizationId: orgId, status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(),
+      userId: u && dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(u.userId) && r.role === "ARTISAN" && r.status === "ACTIVE"; }) ? u.userId : "" }));
+    audit_("ARTISAN_CREATED", "Artisan", row.artisanId, orgId, { name: row.name, platform: !!p.isSuper });
+    return row;
+  });
+  const out = { ok: true, artisanId: c.artisanId, id: c.artisanId, hasAccount: !!c.userId, invitations: [] };
+  if (p.isSuper && a.inviteAccount !== false) out.invitations = providerInvite_(p, c);
+  else if (!c.userId) out.note = "Invitez ce prestataire (rôle ARTISAN) pour qu'il réponde lui-même aux demandes.";
+  return out;
+}
+/** Invitations du compte d'un prestataire de la plateforme : CLEANER pour le ménage, ARTISAN pour les autres prestations. */
+function providerInvite_(p, c) {
+  const specs = parseJson_(c.categoriesJson, []), org = dbGet_("Organizations", c.organizationId), out = [];
+  const roles = [];
+  if (specs.indexOf("CLEANING") >= 0) roles.push("CLEANER");
+  if (specs.some(function (x) { return x !== "CLEANING"; })) roles.push("ARTISAN");
+  const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === normalizeEmail_(c.email); });
+  roles.forEach(function (role) {
+    const has = user && dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(user.userId) && r.role === role && r.status === "ACTIVE"; });
+    const pending = dbAll_("Invitations").some(function (i) { return normalizeEmail_(i.email) === normalizeEmail_(c.email) && i.role === role && String(i.organizationId) === String(c.organizationId) && i.status === "PENDING"; });
+    if (has || pending) { out.push({ role: role, status: has ? "ALREADY_ACTIVE" : "ALREADY_PENDING" }); return; }
+    const r = invitationInsertAndSend_(p, { email: c.email, displayName: c.name, organizationId: c.organizationId, role: role }, org);
+    out.push({ role: role, status: r.status, emailSent: r.emailSent, invitationId: r.invitationId });
+  });
+  return out;
+}
+function ctrUpdate_(p, a) {
+  const c = dbGet_("Artisans", safeText_(a.artisanId, 120));
+  if (!c) notFound_("Prestataire");
+  const self = myArtisanIds_(p).indexOf(String(c.artisanId)) >= 0;
+  const mgr = isPlatformContractor_(c) ? p.isSuper : hasOrgCap_(p, c.organizationId, "contractor.manage");
+  if (!mgr) {
+    assert_(self, "Accès refusé.", "FORBIDDEN");
+    ["status", "commissionRate", "notes", "name", "email"].forEach(function (k) { assert_(a[k] === undefined, "Champ non modifiable par le prestataire : " + k, "FORBIDDEN"); });
+  }
+  const d = contractorInput_(a, c.organizationId); d.updatedAt = nowIso_();
+  dbUpdate_("Artisans", c.artisanId, d);
+  audit_("ARTISAN_UPDATED", "Artisan", c.artisanId, c.organizationId, diff_(c, d, Object.keys(d).filter(function (k) { return k !== "updatedAt"; })));
+  return { ok: true };
+}
+
+/* ======================================================================
+ * DashboardService.gs
+ * ====================================================================== */
+/**
+ * Tableaux de bord par rôle. Tous les indicateurs sont calculés à partir des données réelles (aucune valeur codée en dur)
+ * et uniquement sur le périmètre autorisé de l'utilisateur. Le super administrateur ne voit que des AGRÉGATS de plateforme.
+ */
+function dashGet_(p, a) {
+  a = a || {};
+  const per = periodFromFilters_(a);
+  const out = { period: per, sections: [] };
+  if (p.isSuper) { out.admin = dashAdmin_(per, a.includeDemo === true); out.sections.push("admin"); }
+  const portfolioProps = finScopeProps_(p, a);
+  if (portfolioProps.length && hasAnyRole_(p, ["OWNER", "AGENCY_ADMIN", "AGENCY_USER"])) { out.portfolio = dashPortfolio_(p, a, per, portfolioProps); out.sections.push("portfolio"); }
+  else if (hasAnyRole_(p, ["AGENCY_ADMIN", "AGENCY_USER", "OWNER"])) { out.operations = dashOperationsOnly_(p, a, per); out.sections.push("operations"); }
+  if (hasRole_(p, "CLEANER") || accessibleProps_(p, "cleaning.manage").length) { out.cleaning = dashCleaning_(p, a, per); out.sections.push("cleaning"); }
+  if (myArtisanIds_(p).length) { out.artisan = dashArtisan_(p, per); out.sections.push("artisan"); }
+  if (accessibleProps_(p, "lease.view").some(function (x) { return x.rentalMode !== "SHORT_TERM"; })) { out.lease = dashLease_(p, a, per); out.sections.push("lease"); }
+  if (hasRole_(p, "GUARD") || accessibleProps_(p, "checkin.operate").length) { const t = opsToday_(p, {}); out.today = { arrivals: t.arrivals.length, departures: t.departures.length, overdue: t.overdue.length, arrivalsDone: t.arrivals.filter(function (x) { return x.done; }).length, departuresDone: t.departures.filter(function (x) { return x.done; }).length }; out.sections.push("today"); }
+  if (myTenantIds_(p).length) { out.tenant = leaseMine_(p).map(function (l) { return { leaseId: l.leaseId, propertyName: l.propertyName, status: l.status, nextDue: l.nextDue, arrears: l.arrears }; }); out.sections.push("tenant"); }
+  return out;
+}
+
+function dashAdmin_(per, includeDemo) {
+  // Les organisations de démonstration sont exclues par défaut (case « Inclure la démo » dans l'interface).
+  const demo = includeDemo ? {} : demoOrgIdSet_(), keep = function (r) { return !demo[String(r.organizationId)]; };
+  const all = function (t) { return dbAll_(t).filter(keep); };
+  const demoOnly = {};
+  if (!includeDemo) { const byUser = {}; dbAll_("UserRoles").filter(function (r) { return r.status === "ACTIVE"; }).forEach(function (r) { (byUser[r.userId] = byUser[r.userId] || []).push(r); });
+    Object.keys(byUser).forEach(function (u) { if (byUser[u].every(function (r) { return demo[String(r.organizationId)]; })) demoOnly[u] = true; }); }
+  const inP = function (d) { const s = String(d || "").slice(0, 10); return s >= per.from && s <= per.to; };
+  const orgs = all("Organizations").filter(function (o) { return o.type !== "PLATFORM"; });
+  const users = dbAll_("Users").filter(function (u) { return !demoOnly[u.userId]; }), props = all("Properties"), resv = all("Reservations"), subs = all("Subscriptions");
+  const activeOrgIds = orgs.filter(function (o) { return o.status === "ACTIVE"; }).map(function (o) { return String(o.organizationId); });
+  const uses = function (table, field) { const s = {}; all(table).forEach(function (r) { s[String(r[field || "organizationId"])] = true; }); return pct_(activeOrgIds.filter(function (o) { return s[o]; }).length, activeOrgIds.length); };
+  const unpaidSubs = subs.filter(function (s) { return ["PAST_DUE", "SUSPENDED"].indexOf(s.status) >= 0; });
+  const logs = all("ActivityLogs").filter(function (l) { return inP(l.timestamp); });
+  const months = {};
+  orgs.forEach(function (o) { const m = String(o.createdAt).slice(0, 7); months[m] = (months[m] || 0) + 1; });
+  const daily = {};
+  logs.forEach(function (l) { const d = String(l.timestamp).slice(0, 10); daily[d] = (daily[d] || 0) + 1; });
+  return {
+    organizations: orgs.length, organizationsActive: activeOrgIds.length, organizationsSuspended: orgs.filter(function (o) { return o.status === "SUSPENDED"; }).length,
+    usersActive: users.filter(function (u) { return u.status === "ACTIVE"; }).length, usersNew: users.filter(function (u) { return inP(u.createdAt); }).length,
+    usersNeverActivated: users.filter(function (u) { return u.status === "ACTIVE" && !u.passwordHash; }).length,
+    properties: props.filter(function (x) { return x.status !== "DELETED"; }).length, propertiesActive: props.filter(function (x) { return x.status === "ACTIVE"; }).length,
+    reservations: resv.filter(function (r) { return inP(r.checkIn) && r.status !== "DRAFT"; }).length,
+    declaredRevenue: sumBy_(resv.filter(function (r) { return inP(r.checkIn) && REVENUE_STATUSES_.indexOf(r.status) >= 0; }), function (r) { return num_(r.totalPrice) + num_(r.fees); }) +
+      sumBy_(all("RentSchedules").filter(function (s) { return s.status === "OPEN" && inP(s.dueDate); }), function (s) { return s.amountDue; }),
+    declaredRevenueNote: "Données déclaratives saisies par les clients (non auditées).",
+    platformRevenue: sumBy_(all("Payments").filter(function (x) { return x.kind === "SUBSCRIPTION" && x.status === "RECORDED" && inP(x.paidAt); }), function (x) { return x.amount; }),
+    subscriptionsActive: subs.filter(function (s) { return s.status === "ACTIVE"; }).length, subscriptionsTrial: subs.filter(function (s) { return s.status === "TRIAL"; }).length,
+    subscriptionsExpired: subs.filter(function (s) { return s.status === "EXPIRED"; }).length, subscriptionsPastDue: subs.filter(function (s) { return s.status === "PAST_DUE"; }).length,
+    subscriptionsSuspended: subs.filter(function (s) { return s.status === "SUSPENDED"; }).length,
+    subscriptionUnpaidAmount: sumBy_(unpaidSubs, function (s) { return s.price; }),
+    upcomingRenewals: subs.filter(function (s) { return ["ACTIVE", "TRIAL"].indexOf(s.status) >= 0 && (s.periodEnd || s.trialEnd) && (s.periodEnd || s.trialEnd) <= addDaysStr_(todayStr_(), 15); }).length,
+    storageMb: round2_(sumBy_(all("Documents").filter(function (d) { return d.status === "ACTIVE"; }), function (d) { return d.sizeBytes; }) / 1048576),
+    activityVolume: logs.length, errors: logs.filter(function (l) { return l.action === "ERROR"; }).length,
+    loginsFailed: logs.filter(function (l) { return l.action === "LOGIN_FAILED"; }).length,
+    featureUsage: { reservations: uses("Reservations"), leases: uses("Leases"), cleaning: uses("CleaningMissions"), incidents: uses("IncidentsV4"), contractors: uses("Artisans"), invoices: uses("Invoices"), guestPortal: uses("GuestAccessTokens") },
+    newOrganizationsByMonth: Object.keys(months).sort().slice(-12).map(function (m) { return { month: m, count: months[m] }; }),
+    demoExcluded: Object.keys(demo).length, activityByDay: Object.keys(daily).sort().map(function (d) { return { date: d, count: daily[d] }; })
+  };
+}
+
+function dashPortfolio_(p, a, per, props) {
+  const ids = indexBy_(props, "propertyId");
+  const fin = finComputeForProps_(props, per, a);
+  const prev = finComputeForProps_(props, previousPeriod_(per), a);
+  const yearFrom = addDaysStr_(addMonthsStr_(per.to, -12), 1);
+  const year = finComputeForProps_(props, { from: yearFrom, to: per.to, toExcl: addDaysStr_(per.to, 1), days: diffDays_(yearFrom, per.to) + 1 }, a);
+  const today = todayStr_(), in30 = addDaysStr_(today, 30);
+  const resv = dbAll_("Reservations").filter(function (r) { return ids[String(r.propertyId)] && (!a.agencyOrganizationId || String(r.agencyOrganizationId) === String(a.agencyOrganizationId)); });
+  const inc = dbAll_("IncidentsV4").filter(function (i) { return ids[String(i.propertyId)]; });
+  const resolved = inc.filter(function (i) { return i.resolvedAt && String(i.resolvedAt).slice(0, 10) >= per.from && String(i.resolvedAt).slice(0, 10) <= per.to; });
+  const agencyOrgs = p.roles.filter(function (r) { return r.role === "AGENCY_ADMIN" || r.role === "AGENCY_USER"; }).map(function (r) { return r.organizationId; });
+  const t = opsToday_(p, {});
+  return {
+    isAgency: agencyOrgs.length > 0 && !hasRole_(p, "OWNER"),
+    propertyCount: props.length, propertiesActive: props.filter(function (x) { return x.status === "ACTIVE"; }).length,
+    reservationsInPeriod: resv.filter(function (r) { return r.checkIn >= per.from && r.checkIn <= per.to && REVENUE_STATUSES_.concat(["PENDING"]).indexOf(r.status) >= 0; }).length,
+    upcomingReservations: resv.filter(function (r) { return r.checkIn >= today && r.checkIn <= in30 && ["PENDING", "CONFIRMED"].indexOf(r.status) >= 0; }).length,
+    arrivalsToday: t.arrivals.length, departuresToday: t.departures.length,
+    totals: fin.totals, previousTotals: prev.totals,
+    deltas: { expected: round2_(fin.totals.expected - prev.totals.expected), collected: round2_(fin.totals.collected - prev.totals.collected), expenses: round2_(fin.totals.expenses - prev.totals.expenses),
+      occupancyRate: round2_(fin.totals.occupancyRate - prev.totals.occupancyRate), result: round2_(fin.totals.result - prev.totals.result) },
+    openIncidents: inc.filter(function (i) { return ["CLOSED", "CANCELLED", "RESOLVED"].indexOf(i.status) < 0; }).length,
+    severeIncidents: inc.filter(function (i) { return ["CLOSED", "CANCELLED", "RESOLVED"].indexOf(i.status) < 0 && ["HIGH", "CRITICAL"].indexOf(i.severity) >= 0; }).length,
+    avgResolutionDays: resolved.length ? round2_(resolved.reduce(function (s, i) { return s + (parseTs_(i.resolvedAt).getTime() - parseTs_(i.createdAt).getTime()) / 86400000; }, 0) / resolved.length) : null,
+    maintenanceCost: round2_(num_(fin.expensesByCategory.MAINTENANCE)),
+    cleaningPending: dbAll_("CleaningMissions").filter(function (m) { return ids[String(m.propertyId)] && ["CREATED", "OFFERED", "EXPIRED"].indexOf(m.status) >= 0; }).length,
+    cleaningToValidate: dbAll_("CleaningMissions").filter(function (m) { return ids[String(m.propertyId)] && m.status === "COMPLETED"; }).length,
+    invoicesPending: dbAll_("Invoices").filter(function (v) { return ids[String(v.propertyId)] && v.status === "SUBMITTED"; }).length,
+    quotesToValidate: dbAll_("Quotes").filter(function (q) { return ids[String(q.propertyId)] && q.status === "PENDING"; }).length,
+    latePayments: resv.filter(function (r) { return REVENUE_STATUSES_.indexOf(r.status) >= 0 && r.checkIn < today && resvMoney_(r).balance > 0; }).length +
+      dbAll_("RentSchedules").filter(function (s) { return ids[String(s.propertyId)] && s.status === "OPEN" && rentStatus_(s).status === "LATE"; }).length,
+    commissions: { management: fin.totals.managementCommissions, contractor: agencyOrgs.reduce(function (s, o) { return round2_(s + num_(fin.contractorCommissionsByBeneficiary[o])); }, 0),
+      byAgency: fin.byAgency },
+    ranking: fin.byProperty.slice().sort(function (x, y) { return y.result - x.result; }).map(function (r, i) { return Object.assign({ rank: i + 1 }, r); }),
+    byMonth: year.byMonth, byAgency: fin.byAgency, expensesByCategory: fin.expensesByCategory
+  };
+}
+function dashOperationsOnly_(p, a, per) {
+  const props = accessibleProps_(p, "reservation.view"), ids = indexBy_(props, "propertyId"), t = opsToday_(p, {});
+  return { propertyCount: props.length, reservationsInPeriod: dbAll_("Reservations").filter(function (r) { return ids[String(r.propertyId)] && r.checkIn >= per.from && r.checkIn <= per.to && r.status !== "CANCELLED"; }).length,
+    arrivalsToday: t.arrivals.length, departuresToday: t.departures.length,
+    openIncidents: dbAll_("IncidentsV4").filter(function (i) { return ids[String(i.propertyId)] && ["CLOSED", "CANCELLED", "RESOLVED"].indexOf(i.status) < 0; }).length };
+}
+
+/** Indicateurs ménage : vue prestataire (ses missions) et vue responsable (missions des biens gérés, qualité par équipe). */
+function dashCleaning_(p, a, per) {
+  const managed = accessiblePropIds_(p, "cleaning.manage");
+  const inP = function (d) { const s = String(d || "").slice(0, 10); return s >= per.from && s <= per.to; };
+  const all = dbAll_("CleaningMissions").filter(function (m) { return (managed[String(m.propertyId)] || cleanMine_(p, m)) && (!a.propertyId || String(m.propertyId) === String(a.propertyId)); });
+  const inPeriod = all.filter(function (m) { return inP(m.startAt); });
+  const now = Date.now();
+  const done = inPeriod.filter(function (m) { return ["COMPLETED", "VALIDATED"].indexOf(m.status) >= 0; });
+  const missionIds = {}; all.forEach(function (m) { missionIds[String(m.missionId)] = m; });
+  const logs = dbAll_("ActivityLogs").filter(function (l) { return inP(l.timestamp) && missionIds[String(l.entityId)] && ["CLEANING_ACCEPTED", "CLEANING_DECLINED", "CLEANING_EXPIRED"].indexOf(l.action) >= 0; });
+  const acc = logs.filter(function (l) { return l.action === "CLEANING_ACCEPTED"; }).length;
+  const onTime = done.filter(function (m) { return parseTs_(m.completedAt) && parseTs_(m.endAt) && parseTs_(m.completedAt).getTime() <= parseTs_(m.endAt).getTime(); }).length;
+  const teams = {};
+  done.forEach(function (m) { const k = m.providerEmail || "—"; const t = teams[k] = teams[k] || { provider: k, missions: 0, minutes: 0, anomalies: 0, scoreSum: 0, scored: 0, late: 0 };
+    t.missions++; t.minutes += num_(m.actualMinutes); t.anomalies += parseJson_(m.anomaliesJson, []).length; if (num_(m.qualityScore) > 0) { t.scoreSum += num_(m.qualityScore); t.scored++; }
+    if (parseTs_(m.completedAt) && parseTs_(m.endAt) && parseTs_(m.completedAt).getTime() > parseTs_(m.endAt).getTime()) t.late++; });
+  const byProp = {}; const props = indexBy_(dbAll_("Properties"), "propertyId");
+  inPeriod.forEach(function (m) { const n = parseJson_(m.anomaliesJson, []).length; if (n) byProp[m.propertyId] = { propertyName: (props[String(m.propertyId)] || {}).name, anomalies: (byProp[m.propertyId] ? byProp[m.propertyId].anomalies : 0) + n }; });
+  return {
+    toAccept: all.filter(function (m) { return m.status === "OFFERED"; }).length, unassigned: all.filter(function (m) { return m.status === "CREATED"; }).length,
+    expired: all.filter(function (m) { return m.status === "EXPIRED"; }).length, accepted: all.filter(function (m) { return m.status === "ACCEPTED"; }).length,
+    inProgress: all.filter(function (m) { return m.status === "IN_PROGRESS"; }).length, toValidate: all.filter(function (m) { return m.status === "COMPLETED"; }).length,
+    late: all.filter(function (m) { return ["ACCEPTED", "OFFERED", "CREATED"].indexOf(m.status) >= 0 && parseTs_(m.startAt) && parseTs_(m.startAt).getTime() + 30 * 60000 < now; }).length,
+    completedInPeriod: done.length, avgMinutes: done.length ? Math.round(done.reduce(function (s, m) { return s + num_(m.actualMinutes); }, 0) / done.length) : null,
+    acceptanceRate: pct_(acc, logs.length), onTimeRate: pct_(onTime, done.length),
+    anomalies: inPeriod.reduce(function (s, m) { return s + parseJson_(m.anomaliesJson, []).length; }, 0),
+    qualityAvg: (function () { const sc = done.filter(function (m) { return num_(m.qualityScore) > 0; }); return sc.length ? round2_(sc.reduce(function (s, m) { return s + num_(m.qualityScore); }, 0) / sc.length) : null; })(),
+    byTeam: Object.keys(teams).map(function (k) { const t = teams[k]; return { provider: t.provider, missions: t.missions, avgMinutes: Math.round(t.minutes / t.missions), anomalies: t.anomalies, lateRate: pct_(t.late, t.missions), qualityAvg: t.scored ? round2_(t.scoreSum / t.scored) : null }; }),
+    anomaliesByProperty: Object.keys(byProp).map(function (k) { return byProp[k]; }).sort(function (x, y) { return y.anomalies - x.anomalies; })
+  };
+}
+
+function dashArtisan_(p, per) {
+  const ids = myArtisanIds_(p);
+  const mine = function (x) { return ids.indexOf(String(x.artisanId)) >= 0; };
+  const wos = dbAll_("WorkOrders").filter(mine), inv = dbAll_("Invoices").filter(mine), quotes = dbAll_("Quotes").filter(mine);
+  const done = wos.filter(function (w) { return ["COMPLETED", "VERIFIED"].indexOf(w.status) >= 0 && w.completedAt; });
+  const months = {};
+  done.forEach(function (w) { const m = String(w.completedAt).slice(0, 7); months[m] = (months[m] || 0) + 1; });
+  return {
+    quotesToSend: quotes.filter(function (q) { return q.status === "REQUESTED"; }).length, quotesPending: quotes.filter(function (q) { return q.status === "PENDING"; }).length,
+    quotesApproved: quotes.filter(function (q) { return q.status === "APPROVED"; }).length,
+    upcoming: wos.filter(function (w) { return ["ASSIGNED", "ACCEPTED", "SCHEDULED"].indexOf(w.status) >= 0; }).length,
+    inProgress: wos.filter(function (w) { return w.status === "IN_PROGRESS"; }).length, completed: done.length,
+    invoicesSubmitted: inv.filter(function (v) { return v.status === "SUBMITTED"; }).length, invoicesApproved: inv.filter(function (v) { return ["APPROVED", "PARTIAL"].indexOf(v.status) >= 0; }).length,
+    amountDue: sumBy_(inv.filter(function (v) { return ["APPROVED", "PARTIAL"].indexOf(v.status) >= 0; }), function (v) { return num_(v.netToContractor) - num_(v.paidAmount); }),
+    amountPaid: sumBy_(inv, function (v) { return v.paidAmount; }),
+    avgDelayDays: (function () { const d = done.map(function (w) { return (parseTs_(w.completedAt).getTime() - parseTs_(w.createdAt).getTime()) / 86400000; }); return d.length ? round2_(d.reduce(function (s, x) { return s + x; }, 0) / d.length) : null; })(),
+    completedByMonth: Object.keys(months).sort().slice(-12).map(function (m) { return { month: m, count: months[m] }; })
+  };
+}
+
+function dashLease_(p, a, per) {
+  const props = accessibleProps_(p, "lease.view").filter(function (x) { return x.rentalMode !== "SHORT_TERM" && (!a.propertyId || String(x.propertyId) === String(a.propertyId)); });
+  const ids = indexBy_(props, "propertyId"), today = todayStr_();
+  const leases = dbAll_("Leases").filter(function (l) { return ids[String(l.propertyId)]; });
+  const active = leases.filter(function (l) { return ["ACTIVE", "NOTICE"].indexOf(l.status) >= 0; });
+  const sched = dbAll_("RentSchedules").filter(function (s) { return ids[String(s.propertyId)] && s.status === "OPEN"; }).map(function (s) { return rentStatus_(s, today); });
+  const inPer = sched.filter(function (s) { return s.dueDate >= per.from && s.dueDate <= per.to; });
+  const ltProps = props.filter(function (x) { return x.rentalMode === "LONG_TERM"; });
+  const fin = finComputeForProps_(props, per, a);
+  return {
+    activeLeases: active.length, noticeLeases: leases.filter(function (l) { return l.status === "NOTICE"; }).length,
+    rentExpected: sumBy_(inPer, function (s) { return s.amountDue; }), rentCollected: sumBy_(inPer, function (s) { return s.paid; }),
+    unpaid: sumBy_(sched.filter(function (s) { return ["LATE", "DUE", "PARTIAL"].indexOf(s.status) >= 0; }), function (s) { return s.remaining; }),
+    lateCount: sched.filter(function (s) { return s.status === "LATE"; }).length,
+    endingSoon: active.filter(function (l) { return l.endDate && l.endDate <= addDaysStr_(today, 60); }).map(function (l) { return { leaseId: l.leaseId, propertyName: (ids[String(l.propertyId)] || {}).name, endDate: l.endDate }; }),
+    occupancyRate: pct_(ltProps.filter(function (x) { return active.some(function (l) { return String(l.propertyId) === String(x.propertyId); }); }).length, ltProps.length),
+    expenses: fin.totals.expenses, resultByProperty: fin.byProperty.map(function (r) { return { propertyId: r.propertyId, name: r.name, rentExpected: r.rentExpected, expenses: r.expenses, result: r.result }; })
+  };
+}
+
+/* ======================================================================
+ * Database.gs
+ * ====================================================================== */
+/**
+ * Couche d'accès aux données (Google Sheets). Les lignes sont liées par identifiant stable, jamais par numéro de ligne.
+ * Lecture : une lecture de feuille par table et par exécution (mémoïsée, invalidée à l'écriture).
+ * Les objets retournés par dbAll_/dbGet_ sont en LECTURE SEULE (ne pas les modifier : utiliser dbUpdate_).
+ */
+var DB_MEMO_ = {};
+var DB_HEADERS_ = {};
+var DB_SS_ = null;
+var SCHEMA_ = null;
+
+function dbReset_() { DB_MEMO_ = {}; DB_HEADERS_ = {}; }
+function dbSetSpreadsheet_(ss) { DB_SS_ = ss; dbReset_(); }
+
+function schema_() {
+  if (SCHEMA_) return SCHEMA_;
+  const out = {};
+  Object.keys(TABLES_SRC).forEach(function (name) {
+    const d = TABLES_SRC[name], parts = d.cols.split("|"), cols = [], types = {};
+    parts.forEach(function (part) {
+      part.split(",").forEach(function (raw) { raw = raw.trim(); if (!raw) return; const a = raw.split("#"); cols.push(a[0]); types[a[0]] = a[1] || "s"; });
+    });
+    out[name] = { name: name, pk: d.pk, idp: d.idp || "id", cols: cols, types: types, legacyCount: parts[0].split(",").filter(Boolean).length,
+      org: d.org || null, req: (d.req || "").split(",").filter(Boolean), enums: d.enums || {} };
+  });
+  SCHEMA_ = out;
+  return out;
+}
+function tableDef_(name) { const s = schema_()[name]; assert_(s, "Table inconnue : " + name, "INTERNAL"); return s; }
+
+function dbSpreadsheet_() {
+  if (DB_SS_) return DB_SS_;
+  const id = PropertiesService.getScriptProperties().getProperty(IMMO_CONFIG.DATABASE_PROPERTY);
+  assert_(id, "Base non configurée. Renseignez IMMO_DATABASE_SPREADSHEET_ID puis exécutez setupProject().", "CONFIG");
+  DB_SS_ = SpreadsheetApp.openById(id);
+  return DB_SS_;
+}
+function dbSheet_(name) {
+  tableDef_(name);
+  const sh = dbSpreadsheet_().getSheetByName(name);
+  assert_(sh, "Feuille absente : " + name + ". Exécutez setupProject().", "CONFIG");
+  return sh;
+}
+function dbHeaders_(name) {
+  if (DB_HEADERS_[name]) return DB_HEADERS_[name];
+  const sh = dbSheet_(name);
+  DB_HEADERS_[name] = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].map(String);
+  return DB_HEADERS_[name];
+}
+
+function normOut_(S, col, v) {
+  const t = S.types[col] || "s";
+  if (v === "" || v == null) return t === "b" ? false : (t === "n" ? null : "");
+  if (t === "b") return v === true || /^true$/i.test(String(v));
+  if (t === "n") { const n = Number(v); return isFinite(n) ? n : null; }
+  if (isDateObj_(v)) return t === "d" ? Utilities.formatDate(v, tz_(), "yyyy-MM-dd") : (t === "t" ? v.toISOString() : Utilities.formatDate(v, tz_(), "yyyy-MM-dd'T'HH:mm:ss"));
+  if (t === "d") return String(v).slice(0, 10);
+  return typeof v === "number" ? String(v) : v;
+}
+function toCell_(S, col, v) {
+  const t = S.types[col] || "s";
+  if (v === undefined || v === null || v === "") return "";
+  if (t === "b") return v === true || /^true$/i.test(String(v));
+  if (t === "n") { const n = Number(v); assert_(isFinite(n), "Valeur numérique invalide pour " + col, "VALIDATION"); return n; }
+  if (t === "j" && typeof v !== "string") v = jsonSafe_(v);
+  const s = String(v);
+  if (s.length > 45000) throw new AppError("VALIDATION", "Valeur trop longue pour " + col + ".");
+  // Toute valeur texte est préfixée d'une apostrophe (« texte forcé » de Sheets, non stockée dans la valeur) :
+  // neutralise les formules (=, +, -, @), les conversions automatiques en date/heure/nombre et la perte des zéros initiaux.
+  return "'" + s;
+}
+/** Ré-encode une cellule existante d'une colonne inconnue du schéma, sans la transformer. */
+function reencodeRaw_(v) { return typeof v === "string" && v !== "" ? "'" + v : v; }
+
+function dbAll_(name) {
+  if (DB_MEMO_[name]) return DB_MEMO_[name];
+  const S = tableDef_(name), sh = dbSheet_(name), lr = sh.getLastRow(), lc = sh.getLastColumn(), rows = [];
+  if (lr >= 2) {
+    const vals = sh.getRange(1, 1, lr, lc).getValues(), headers = vals[0].map(String);
+    for (let r = 1; r < vals.length; r++) {
+      const row = vals[r];
+      if (!row.some(function (c) { return c !== "" && c !== null; })) continue;
+      const o = {};
+      headers.forEach(function (h, i) { if (h) o[h] = normOut_(S, h, row[i]); });
+      S.cols.forEach(function (c) { if (!(c in o)) o[c] = normOut_(S, c, ""); });
+      rows.push(o);
+    }
+  }
+  DB_MEMO_[name] = rows;
+  return rows;
+}
+function dbWhere_(name, pred) { return dbAll_(name).filter(pred); }
+function dbGet_(name, id) {
+  const pk = tableDef_(name).pk, s = String(id);
+  return dbAll_(name).find(function (r) { return String(r[pk]) === s; }) || null;
+}
+function dbFind_(name, field, value) { const s = String(value); return dbAll_(name).find(function (r) { return String(r[field]) === s; }) || null; }
+
+function validateRow_(S, obj, isInsert) {
+  Object.keys(obj).forEach(function (k) { assert_(S.cols.indexOf(k) >= 0, "Colonne inconnue " + S.name + "." + k, "INTERNAL"); });
+  if (isInsert) S.req.forEach(function (k) { assert_(obj[k] !== undefined && obj[k] !== null && String(obj[k]) !== "", "Champ obligatoire manquant : " + k); });
+  Object.keys(S.enums).forEach(function (k) {
+    if (obj[k] !== undefined && obj[k] !== "" && obj[k] !== null) assert_(S.enums[k].indexOf(obj[k]) >= 0, "Valeur invalide pour " + k + " : " + obj[k]);
+  });
+}
+
+function dbInsert_(name, obj) {
+  const S = tableDef_(name), row = Object.assign({}, obj);
+  if (!row[S.pk]) row[S.pk] = newId_(S.idp);
+  validateRow_(S, row, true);
+  const headers = dbHeaders_(name);
+  dbSheet_(name).appendRow(headers.map(function (h) { return row[h] === undefined ? "" : toCell_(S, h, row[h]); }));
+  delete DB_MEMO_[name];
+  return row;
+}
+function dbInsertMany_(name, objs) {
+  if (!objs.length) return [];
+  const S = tableDef_(name), headers = dbHeaders_(name), sh = dbSheet_(name), out = [];
+  const values = objs.map(function (o) {
+    const row = Object.assign({}, o); if (!row[S.pk]) row[S.pk] = newId_(S.idp);
+    validateRow_(S, row, true); out.push(row);
+    return headers.map(function (h) { return row[h] === undefined ? "" : toCell_(S, h, row[h]); });
+  });
+  sh.getRange(sh.getLastRow() + 1, 1, values.length, headers.length).setValues(values);
+  delete DB_MEMO_[name];
+  return out;
+}
+/** Met à jour une ligne par identifiant (retrouvé à chaque appel). Retourne false si introuvable. */
+function dbUpdate_(name, id, patch) {
+  const S = tableDef_(name), sh = dbSheet_(name), lr = sh.getLastRow();
+  if (lr < 2) return false;
+  assert_(patch[S.pk] === undefined || String(patch[S.pk]) === String(id), "Identifiant non modifiable.", "INTERNAL");
+  validateRow_(S, patch, false);
+  const headers = dbHeaders_(name), pkIdx = headers.indexOf(S.pk);
+  assert_(pkIdx >= 0, "Colonne identifiant absente de " + name, "CONFIG");
+  const ids = sh.getRange(2, pkIdx + 1, lr - 1, 1).getValues();
+  let rowNo = -1;
+  for (let i = 0; i < ids.length; i++) if (String(ids[i][0]) === String(id)) { rowNo = i + 2; break; }
+  if (rowNo < 0) return false;
+  const cur = sh.getRange(rowNo, 1, 1, headers.length).getValues()[0];
+  // La ligne entière est réécrite : chaque cellule est ré-encodée pour ne pas laisser Sheets reconvertir un texte (date, heure, nombre).
+  const out = headers.map(function (h, i) {
+    if (!h) return cur[i];
+    if (Object.prototype.hasOwnProperty.call(patch, h)) return patch[h] === undefined ? "" : toCell_(S, h, patch[h]);
+    if (S.types[h] === undefined) return reencodeRaw_(cur[i]);
+    return toCell_(S, h, normOut_(S, h, cur[i]));
+  });
+  sh.getRange(rowNo, 1, 1, headers.length).setValues([out]);
+  delete DB_MEMO_[name];
+  return true;
+}
+function dbDelete_(name, id) {
+  const S = tableDef_(name), sh = dbSheet_(name), lr = sh.getLastRow();
+  if (lr < 2) return false;
+  const pkIdx = dbHeaders_(name).indexOf(S.pk), ids = sh.getRange(2, pkIdx + 1, lr - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) if (String(ids[i][0]) === String(id)) { sh.deleteRow(i + 2); delete DB_MEMO_[name]; return true; }
+  return false;
+}
+/** Insertion unique : retourne {row, created}. À appeler sous verrou. */
+function dbInsertUnique_(name, field, value, obj) {
+  const ex = dbFind_(name, field, value);
+  if (ex) return { row: ex, created: false };
+  const o = Object.assign({}, obj); o[field] = value;
+  return { row: dbInsert_(name, o), created: true };
+}
+
+/* ---------- Paramètres (plateforme < organisation) ---------- */
+function getSetting_(key, orgId) {
+  if (orgId) {
+    const o = dbAll_("Settings").find(function (s) { return String(s.organizationId) === String(orgId) && s.settingKey === key; });
+    if (o) return parseJson_(o.settingValue, o.settingValue);
+  }
+  const g = dbAll_("PlatformSettings").find(function (s) { return s.settingKey === key; });
+  if (g) return parseJson_(g.settingValue, g.settingValue);
+  return DEFAULT_SETTINGS[key];
+}
+function setSetting_(key, value, orgId, actor) {
+  assert_(Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key), "Paramètre inconnu : " + key);
+  const json = jsonSafe_(value);
+  if (orgId) {
+    const ex = dbAll_("Settings").find(function (s) { return String(s.organizationId) === String(orgId) && s.settingKey === key; });
+    if (ex) dbUpdate_("Settings", ex.settingId, { settingValue: json, updatedAt: nowIso_(), updatedBy: actor || "" });
+    else dbInsert_("Settings", { organizationId: orgId, settingKey: key, settingValue: json, updatedAt: nowIso_(), updatedBy: actor || "" });
+  } else {
+    if (dbGet_("PlatformSettings", key)) dbUpdate_("PlatformSettings", key, { settingValue: json, updatedAt: nowIso_(), updatedBy: actor || "" });
+    else dbInsert_("PlatformSettings", { settingKey: key, settingValue: json, updatedAt: nowIso_(), updatedBy: actor || "" });
+  }
+}
+
+/* ======================================================================
+ * Demo.gs
+ * ====================================================================== */
+/**
+ * ENVIRONNEMENT DE DÉMONSTRATION (test, présentation, vérificateurs Google Play).
+ *
+ * À exécuter UNE fois depuis l'éditeur Apps Script : creerEnvironnementDemo().
+ * - Crée (ou complète, si on relance) les organisations, comptes, biens, droits d'agence, gardiens et le prestataire
+ *   décrits dans DEMO_SPEC_ ; toutes les organisations et tous les biens portent le préfixe « DÉMO ».
+ * - Ne supprime et ne modifie aucune donnée existante : un compte déjà présent garde son mot de passe et ses rôles ;
+ *   seuls son nom (s'il n'a jamais été renseigné) et son téléphone (s'il est vide) sont complétés.
+ * - Chaque nouveau compte reçoit un e-mail d'activation (lien valable 72 h, à usage unique) pour choisir son mot de passe.
+ *   Un lien expiré se renvoie depuis l'application : Utilisateurs › « Envoyer le lien d'activation ».
+ *
+ * HISTORIQUE FICTIF (facultatif) : creerHistoriqueDemo() ajoute ensuite 6 mois d'activité sur ces biens (réservations, arrivées et départs,
+ * ménages, incidents, devis, interventions, factures, dépenses, bail et loyers) pour alimenter tableaux de bord, finances et analyses de Pareto.
+ * Toutes ces données sont fictives et marquées « DEMO » ; la fonction ne s'exécute qu'une fois.
+ */
+var DEMO_PHONE_ = "+33749980918";
+/** L'application affiche une seule devise (MAD) : les prix donnés en euros sont convertis à ce taux arrondi et rappelés en euros dans la fiche. */
+var DEMO_EUR_MAD_ = 11;
+var DEMO_SPEC_ = {
+  superAdmin: { email: "abder.loulou@icloud.com", name: "Éric Dupont" },
+  owner: { email: "abderhmane.loulou@icloud.com", name: "Jean Bernard", org: "DÉMO – Jean Bernard (propriétaire)" },
+  agency: { email: "ecosynergy31@gmail.com", name: "Moad Zaira", org: "DÉMO – Agence Moad Zaira" },
+  provider: { email: "speedfibre69@gmail.com", name: "Mohamed Zetounie",
+    notes: "Tous corps de métier : intervention sur devis.\nMénage à prix fixe : appartement 200 MAD (2 h) ; villa 400 MAD (2 h).\nContact WhatsApp : " + DEMO_PHONE_ + "." },
+  pricingNote: "Prix demandé par le propriétaire à l'agence : {EUR} € la nuit, soit {MAD} MAD (prix fixe, 1 € ≈ " + DEMO_EUR_MAD_ + " MAD).\nPrix de vente au voyageur : libre, fixé par l'agence Moad Zaira.\n" +
+    "Ménage : organisé par l'agence (prestataire choisi dans la liste ImmoPilot), facturé au propriétaire qui le règle directement.",
+  properties: [
+    { key: "duplex", name: "DÉMO – Duplex 3 suites", rentalMode: "SHORT_TERM", propertyType: "APARTMENT", bedrooms: 3, bathrooms: 3, capacity: 6, eur: 120,
+      rooms: ["Séjour", "Cuisine", "Suite 1", "Suite 2", "Suite 3", "Terrasse"], agency: true,
+      guard: { email: "ecosynergy31+gardien.duplex@gmail.com", name: "Gardien Duplex (démo)" } },
+    { key: "deux", name: "DÉMO – Appartement 2 chambres", rentalMode: "SHORT_TERM", propertyType: "APARTMENT", bedrooms: 2, bathrooms: 1, capacity: 4, eur: 80,
+      rooms: ["Séjour", "Cuisine", "Chambre 1", "Chambre 2", "Salle de bain"], agency: true,
+      guard: { email: "ecosynergy31+gardien.appartement@gmail.com", name: "Gardien Appartement (démo)" } },
+    { key: "long", name: "DÉMO – Appartement longue durée", rentalMode: "LONG_TERM", propertyType: "APARTMENT", agency: false,
+      description: "Bien en location longue durée, géré directement par le propriétaire.",
+      guard: { email: "ecosynergy31+gardien.longue@gmail.com", name: "Gardien Longue durée (démo)" } }
+  ]
+};
+
+function creerEnvironnementDemo() {
+  const editor = assertEditor_();
+  ctxReset_(); dbReset_();
+  const r = demoBuild_(editor);
+  Logger.log(demoSummaryText_(r));
+  return r;
+}
+
+/** Construit l'environnement au nom du super administrateur `actorEmail` (doit déjà exister). Relançable sans doublon. */
+function demoBuild_(actorEmail) {
+  const S = DEMO_SPEC_, report = { organizations: [], accounts: [], properties: [], agencyAccess: [], guards: [], provider: null, notes: [] };
+  const platformId = platformOrgId_();
+  assert_(platformId, "Organisation plateforme absente : exécutez d'abord setupProject().", "CONFIG");
+  const actor = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === normalizeEmail_(actorEmail); });
+  assert_(actor, "Votre compte super administrateur est introuvable : exécutez d'abord createFirstSuperAdmin().", "CONFIG");
+  const sp = buildPrincipal_(actor);
+  assert_(sp.isSuper, "Seul un super administrateur peut créer l'environnement de démonstration.", "FORBIDDEN");
+  demoAs_(sp);
+
+  // 1. Organisations
+  const ownerOrg = demoOrg_(sp, S.owner.org, "OWNER_ORG", S.owner.email, report);
+  const agencyOrg = demoOrg_(sp, S.agency.org, "AGENCY", S.agency.email, report);
+  demoMarkOrgs_([ownerOrg, agencyOrg], sp.email);
+
+  // 2. Comptes (créés sans mot de passe ; l'activation se fait par e-mail)
+  demoAccount_(S.superAdmin.email, S.superAdmin.name, "SUPER_ADMIN", platformId, report);
+  const ownerU = demoAccount_(S.owner.email, S.owner.name, "OWNER", ownerOrg.organizationId, report);
+  demoAccount_(S.agency.email, S.agency.name, "AGENCY_ADMIN", agencyOrg.organizationId, report);
+
+  // 3. Prestataire de l'annuaire plateforme : tous les types de prestation, ménage compris
+  const provU = demoAccount_(S.provider.email, S.provider.name, "CLEANER", platformId, report);
+  demoAccount_(S.provider.email, S.provider.name, "ARTISAN", platformId, report);
+  let art = dbAll_("Artisans").find(function (c) { return String(c.organizationId) === platformId && normalizeEmail_(c.email) === normalizeEmail_(S.provider.email) && c.status !== "BLOCKED"; });
+  if (!art) {
+    const created = ctrCreate_(sp, { name: S.provider.name, email: S.provider.email, phone: DEMO_PHONE_, specialties: getSetting_("list.specialties", platformId),
+      zones: ["Marrakech"], notes: S.provider.notes, inviteAccount: false });
+    art = dbGet_("Artisans", created.artisanId);
+    report.provider = { artisanId: art.artisanId, created: true };
+  } else report.provider = { artisanId: art.artisanId, created: false };
+  if (!art.userId) dbUpdate_("Artisans", art.artisanId, { userId: provU.userId, updatedAt: nowIso_() });
+  report.provider.specialties = parseJson_(dbGet_("Artisans", art.artisanId).categoriesJson, []);
+
+  // 4. Biens du propriétaire (créés en son nom), attribution à l'agence et gardiens
+  const op = buildPrincipal_(dbGet_("Users", ownerU.userId));
+  S.properties.forEach(function (d) {
+    let prop = dbAll_("Properties").find(function (x) { return String(x.organizationId) === String(ownerOrg.organizationId) && x.name === d.name && ["ARCHIVED", "DELETED"].indexOf(x.status) < 0; });
+    const created = !prop;
+    if (!prop) {
+      demoAs_(op);
+      const input = { organizationId: ownerOrg.organizationId, name: d.name, city: "Marrakech", rentalMode: d.rentalMode, propertyType: d.propertyType,
+        description: demoDescription_(d), checkInTime: "15:00", checkOutTime: "11:00", currency: "MAD" };
+      if (d.eur) input.nightlyPrice = d.eur * DEMO_EUR_MAD_;
+      ["bedrooms", "bathrooms", "capacity", "rooms"].forEach(function (k) { if (d[k] !== undefined) input[k] = d[k]; });
+      prop = dbGet_("Properties", propertyCreate_(op, input).propertyId);
+      demoAs_(sp);
+    } else if (prop.currency === "EUR" && d.eur && Number(prop.nightlyPrice) === d.eur) {
+      // Première version de la démo (prix stockés en euros) : conversion en MAD, devise affichée par l'application.
+      dbUpdate_("Properties", prop.propertyId, { currency: "MAD", nightlyPrice: d.eur * DEMO_EUR_MAD_, description: demoDescription_(d), updatedAt: nowIso_(), updatedBy: sp.email });
+      prop = dbGet_("Properties", prop.propertyId);
+    }
+    report.properties.push({ key: d.key, propertyId: prop.propertyId, name: prop.name, created: created, nightlyPrice: prop.nightlyPrice, currency: prop.currency, rentalMode: prop.rentalMode });
+    if (d.agency) {
+      demoAs_(op);
+      const perm = propertyAgencySet_(op, { propertyId: prop.propertyId, agencyOrganizationId: agencyOrg.organizationId, canView: true,
+        canManageReservations: true, canManageOperations: true, canViewFinance: true });
+      demoAs_(sp);
+      report.agencyAccess.push({ property: prop.name, permissionId: perm.permissionId });
+    }
+    const g = demoAccount_(d.guard.email, d.guard.name, "GUARD", ownerOrg.organizationId, report);
+    demoAs_(op);
+    const asg = propertyStaffAssign_(op, { propertyId: prop.propertyId, email: d.guard.email, role: "GUARD" });
+    demoAs_(sp);
+    report.guards.push({ property: prop.name, email: g.email, assignmentId: asg.assignmentId });
+  });
+
+  // 5. Liens d'activation (une seule fois par compte tant que le lien précédent est valable)
+  report.accounts.forEach(function (acc) {
+    if (acc.role === "ARTISAN") return; // même compte que CLEANER
+    const u = dbGet_("Users", acc.userId);
+    if (u.passwordHash) { acc.activation = "Compte déjà activé (mot de passe inchangé)."; return; }
+    const pending = dbAll_("PasswordResets").some(function (r) { return String(r.userId) === String(u.userId) && r.purpose === "ACTIVATION" && !r.usedAt && parseTs_(r.expiresAt) && parseTs_(r.expiresAt).getTime() > Date.now(); });
+    if (pending) { acc.activation = "Lien d'activation déjà envoyé et encore valable."; return; }
+    try { sendPasswordLink_(u, "ACTIVATION"); acc.activation = "Lien d'activation envoyé par e-mail (72 h)."; }
+    catch (e) { acc.activation = "ERREUR d'envoi : " + e.message; }
+  });
+
+  report.notes.push("Devise : l'application affiche les montants en MAD ; prix convertis à 1 € ≈ " + DEMO_EUR_MAD_ + " MAD (120 € = " + 120 * DEMO_EUR_MAD_ + " MAD, 80 € = " + 80 * DEMO_EUR_MAD_ + " MAD), rappelés en euros dans la description des biens.");
+  report.notes.push("Ville par défaut : Marrakech (modifiable dans chaque fiche).");
+  audit_("DEMO_ENVIRONMENT_BUILT", "System", "demo", ownerOrg.organizationId, { properties: report.properties.length, accounts: report.accounts.length });
+  return report;
+}
+
+/**
+ * Marque les organisations de démonstration : exclues des statistiques et de la facturation de la plateforme
+ * (tableau de bord du super administrateur, abonnements), et sans e-mails automatiques (les notifications restent visibles dans l'application).
+ */
+function demoMarkOrgs_(orgs, actorEmail) {
+  if (dbHeaders_("Organizations").indexOf("isDemo") < 0) migSchemaSync_(); // ajoute la colonne isDemo (opération additive)
+  orgs.forEach(function (o) {
+    if (o.isDemo !== true) dbUpdate_("Organizations", o.organizationId, { isDemo: true, updatedAt: nowIso_() });
+    if (getSetting_("notify.emailEnabled", o.organizationId) !== false) setSetting_("notify.emailEnabled", false, o.organizationId, actorEmail);
+  });
+}
+
+/**
+ * Met la démonstration en veille (organisations suspendues : plus aucune connexion aux comptes de démo, données conservées)
+ * ou la réactive. À n'utiliser qu'après la vérification Google Play : Google se connecte avec le compte de démonstration.
+ */
+function mettreDemoEnVeille() { const ed = assertEditor_(); ctxReset_(); dbReset_(); const r = demoSetSleep_(ed, true); Logger.log(JSON.stringify(r)); return r; }
+function reveillerDemo() { const ed = assertEditor_(); ctxReset_(); dbReset_(); const r = demoSetSleep_(ed, false); Logger.log(JSON.stringify(r)); return r; }
+function demoSetSleep_(actorEmail, sleep) {
+  const actor = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === normalizeEmail_(actorEmail); });
+  assert_(actor, "Compte super administrateur introuvable.", "CONFIG");
+  const sp = buildPrincipal_(actor); assert_(sp.isSuper, "Réservé au super administrateur.", "FORBIDDEN"); demoAs_(sp);
+  const orgs = dbAll_("Organizations").filter(function (o) { return o.isDemo === true; });
+  assert_(orgs.length, "Aucune organisation de démonstration.");
+  return { ok: true, status: sleep ? "SUSPENDED" : "ACTIVE", organizations: orgs.map(function (o) {
+    if (o.status !== (sleep ? "SUSPENDED" : "ACTIVE")) orgSetStatus_(sp, { organizationId: o.organizationId, status: sleep ? "SUSPENDED" : "ACTIVE", reason: "Démonstration mise en veille (aucune donnée supprimée)" });
+    return o.name;
+  }) };
+}
+
+/** Change l'utilisateur courant et vide le cache des droits sur les biens (calculé pour l'utilisateur précédent). */
+function demoAs_(p) { CTX_.principal = p; CTX_.propMemo = {}; }
+
+/** Lignes de devis type : main-d'œuvre au taux horaire, déplacement, fournitures (total = montant HT). */
+function demoQuoteLines_(label, ht) {
+  const hours = Math.max(1, Math.round(ht * 0.35 / 150)), travel = 100, supplies = Math.max(0, ht - hours * 150 - travel);
+  const lines = [{ description: "Main-d'œuvre — " + label, quantity: hours, unitPrice: 150, amount: hours * 150 }, { description: "Déplacement", quantity: 1, unitPrice: travel, amount: travel }];
+  if (supplies > 0) lines.push({ description: "Fournitures et pièces", quantity: 1, unitPrice: supplies, amount: supplies });
+  return lines;
+}
+
+function demoDescription_(d) {
+  return d.description || DEMO_SPEC_.pricingNote.replace("{EUR}", d.eur).replace("{MAD}", d.eur * DEMO_EUR_MAD_);
+}
+
+function demoOrg_(sp, name, type, billingEmail, report) {
+  let o = dbAll_("Organizations").find(function (x) { return String(x.name).toLowerCase() === name.toLowerCase() && x.status !== "INACTIVE"; });
+  const created = !o;
+  if (!o) o = dbGet_("Organizations", orgCreate_(sp, { name: name, type: type, city: "Marrakech", billingEmail: billingEmail, locale: "fr" }).organizationId);
+  assert_(o.type === type, "L'organisation « " + name + " » existe déjà avec un autre type (" + o.type + ").");
+  report.organizations.push({ organizationId: o.organizationId, name: o.name, type: o.type, created: created });
+  return o;
+}
+
+/** Compte + rôle actif. Ne touche jamais au mot de passe ; complète seulement le nom (jamais saisi) et le téléphone (vide). */
+function demoAccount_(email, name, role, orgId, report) {
+  email = validateEmail_(email);
+  let u = dbAll_("Users").find(function (x) { return normalizeEmail_(x.email) === email; });
+  const created = !u;
+  if (!u) u = dbInsert_("Users", { email: email, displayName: name, status: "ACTIVE", createdAt: nowIso_(), createdBy: "demo", locale: "fr", phone: DEMO_PHONE_, notifPrefsJson: { email: true, mutedTypes: [] } });
+  else {
+    const patch = {};
+    if (!u.displayName || u.displayName === email.split("@")[0]) patch.displayName = name;
+    if (!u.phone) patch.phone = DEMO_PHONE_;
+    if (Object.keys(patch).length) { patch.updatedAt = nowIso_(); dbUpdate_("Users", u.userId, patch); }
+    assert_(u.status !== "DISABLED", "Le compte " + email + " est désactivé : réactivez-le avant de relancer.");
+  }
+  const has = dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(u.userId) && String(r.organizationId) === String(orgId) && r.role === role && r.status === "ACTIVE"; });
+  if (!has) dbInsert_("UserRoles", { userId: u.userId, organizationId: orgId, role: role, status: "ACTIVE", createdAt: nowIso_(), createdBy: "demo", permissionsJson: "[]" });
+  audit_(has ? "DEMO_ACCOUNT_CHECKED" : "DEMO_ROLE_GRANTED", "User", u.userId, orgId, { email: email, role: role });
+  report.accounts.push({ email: email, name: name, role: role, userId: u.userId, created: created, roleAdded: !has });
+  return { userId: u.userId, email: email };
+}
+
+function demoSummaryText_(r) {
+  const L = ["=== Environnement de démonstration ImmoPilot ==="];
+  r.organizations.forEach(function (o) { L.push("Organisation " + (o.created ? "créée" : "existante") + " : " + o.name + " (" + o.type + ")"); });
+  r.accounts.filter(function (a) { return a.role !== "ARTISAN"; }).forEach(function (a) { L.push("Compte " + a.name + " <" + a.email + "> — " + a.role + (a.role === "CLEANER" ? " + ARTISAN" : "") + " — " + (a.activation || "")); });
+  r.properties.forEach(function (p) { L.push("Bien " + (p.created ? "créé" : "existant") + " : " + p.name + " — " + p.rentalMode + (p.nightlyPrice ? " — " + p.nightlyPrice + " " + p.currency + "/nuit" : "")); });
+  r.agencyAccess.forEach(function (x) { L.push("Agence Moad Zaira → " + x.property + " (consultation, réservations, opérations, finances)"); });
+  r.guards.forEach(function (g) { L.push("Gardien " + g.email + " → " + g.property); });
+  if (r.provider) L.push("Prestataire Mohamed Zetounie dans l'annuaire : " + r.provider.specialties.join(", "));
+  r.notes.forEach(function (n) { L.push("Note : " + n); });
+  return L.join("\n");
+}
+
+/* =========================== HISTORIQUE FICTIF DE 6 MOIS =========================== */
+
+/** À exécuter depuis l'éditeur APRÈS creerEnvironnementDemo(). Une seule fois : une relance ne recrée rien. */
+function creerHistoriqueDemo() {
+  const editor = assertEditor_();
+  ctxReset_(); dbReset_();
+  const r = demoHistory_(editor, {});
+  Logger.log(JSON.stringify(r, null, 2));
+  return r;
+}
+
+/** Générateur pseudo-aléatoire reproductible (mêmes données à chaque installation). */
+function demoRng_(seed) {
+  let a = seed >>> 0;
+  const next = function () { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  return {
+    next: next,
+    int: function (lo, hi) { return lo + Math.floor(next() * (hi - lo + 1)); },
+    pick: function (list) { return list[Math.floor(next() * list.length)]; },
+    weighted: function (pairs) { const tot = pairs.reduce(function (s, x) { return s + x[1]; }, 0); let u = next() * tot; for (let i = 0; i < pairs.length; i++) { u -= pairs[i][1]; if (u < 0) return pairs[i][0]; } return pairs[pairs.length - 1][0]; }
+  };
+}
+
+var DEMO_GUESTS_ = ["Claire Martin", "Lucas Moreau", "Sofia Rossi", "James Walker", "Inès Haddad", "Thomas Müller", "Yasmine El Idrissi", "Paul Lefèvre", "Emma Johnson",
+  "Hugo Garnier", "Lina Benjelloun", "Marco Bianchi", "Chloé Dubois", "Omar Tazi", "Anna Schmidt", "Julien Petit", "Sara Lopez", "Nathan Roux", "Leila Amrani", "Oliver Brown",
+  "Camille Laurent", "Mehdi Alaoui", "Giulia Romano", "Antoine Faure", "Nora Chraibi", "Daniel Smith", "Léa Fontaine", "Karim Saidi", "Elena García", "Maxime Girard"];
+
+/**
+ * Crée l'historique. opts.today (AAAA-MM-JJ) sert aux tests. Retourne le nombre d'enregistrements par table.
+ * Les lignes sont préparées en mémoire puis écrites en une fois par table (rapide, même sur Google Sheets).
+ */
+function demoHistory_(actorEmail, opts) {
+  opts = opts || {};
+  const S = DEMO_SPEC_, rnd = demoRng_(20261014), today = opts.today || todayStr_(), start = addDaysStr_(today, -182);
+  const actor = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === normalizeEmail_(actorEmail); });
+  assert_(actor, "Compte super administrateur introuvable.", "CONFIG");
+  const sp = buildPrincipal_(actor);
+  assert_(sp.isSuper, "Réservé au super administrateur.", "FORBIDDEN");
+  demoAs_(sp);
+  const orgByName = function (n) { return dbAll_("Organizations").find(function (o) { return o.name === n && o.status === "ACTIVE"; }); };
+  const ownerOrg = orgByName(S.owner.org), agencyOrg = orgByName(S.agency.org);
+  assert_(ownerOrg && agencyOrg, "Lancez d'abord creerEnvironnementDemo().", "CONFIG");
+  const userBy = function (email) { return dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === normalizeEmail_(email); }); };
+  const ownerU = userBy(S.owner.email), agencyU = userBy(S.agency.email), provU = userBy(S.provider.email);
+  const art = dbAll_("Artisans").find(function (c) { return String(c.organizationId) === platformOrgId_() && normalizeEmail_(c.email) === normalizeEmail_(S.provider.email); });
+  const props = {};
+  S.properties.forEach(function (d) {
+    const pr = dbAll_("Properties").find(function (x) { return String(x.organizationId) === String(ownerOrg.organizationId) && x.name === d.name && ["ARCHIVED", "DELETED"].indexOf(x.status) < 0; });
+    assert_(pr, "Bien « " + d.name + " » introuvable : relancez creerEnvironnementDemo().", "CONFIG");
+    props[d.key] = { prop: pr, spec: d, guard: userBy(d.guard.email) };
+  });
+  assert_(ownerU && agencyU && provU && art && props.duplex.guard, "Environnement de démonstration incomplet : relancez creerEnvironnementDemo().", "CONFIG");
+  const propIds = Object.keys(props).map(function (k) { return String(props[k].prop.propertyId); });
+  const already = dbAll_("Reservations").some(function (r) { return propIds.indexOf(String(r.propertyId)) >= 0 && /^demo-hist:/.test(String(r.idempotencyKey || "")); });
+  if (already) {
+    const extra = demoExtras_(sp, ownerOrg, agencyOrg, props, provU, start, today);
+    return { ok: true, already: true, message: "L'historique de démonstration existe déjà : seuls les éléments manquants (abonnements, listes et photos de ménage) ont été complétés.", extras: extra };
+  }
+
+  // Biens « en service » depuis le début de l'historique (sinon le taux d'occupation ne compterait que les nuits depuis leur création).
+  Object.keys(props).forEach(function (k) { const pr = props[k].prop; if (String(pr.createdAt).slice(0, 10) > start) dbUpdate_("Properties", pr.propertyId, { createdAt: addDaysStr_(start, -30) + "T09:00:00.000Z" }); });
+  const T = { Reservations: [], Guests: [], Payments: [], CheckIns: [], CheckOuts: [], CleaningMissions: [], Expenses: [], IncidentsV4: [], Quotes: [], WorkOrders: [], Invoices: [] };
+  const orgId = String(ownerOrg.organizationId), agEmail = normalizeEmail_(agencyU.email), ownEmail = normalizeEmail_(ownerU.email);
+  const iso = function (d) { return d.toISOString(); }, plusMin = function (d, m) { return new Date(d.getTime() + m * 60000); };
+  const day = function (d) { return dateStr_(d); }, notAfterToday = function (s) { return s > today ? today : s; };
+  const pay = function (o) {
+    T.Payments.push(Object.assign({ paymentId: newId_("pay"), organizationId: orgId, currency: "MAD", status: "RECORDED", reconciled: true, reconciledAt: o.paidAt + "T12:00:00.000Z",
+      reconciledBy: ownEmail, recordedBy: agEmail, createdAt: o.paidAt + "T12:00:00.000Z", note: "Donnée de démonstration" }, o));
+  };
+  const expense = function (o) {
+    T.Expenses.push(Object.assign({ expenseId: newId_("exp"), organizationId: orgId, currency: "MAD", vatAmount: 0, status: "PAID", createdBy: ownEmail }, o, {
+      createdAt: o.createdAt || o.expenseDate + "T10:00:00.000Z", paidAt: o.paidAt || o.expenseDate + "T10:00:00.000Z" }));
+  };
+  const existing = dbAll_("Reservations").filter(function (r) { return propIds.indexOf(String(r.propertyId)) >= 0 && ["CANCELLED", "DRAFT"].indexOf(r.status) < 0; });
+
+  /* ---------- 1. Location courte durée : réservations, arrivées, départs, paiements, ménages ---------- */
+  const sell = { duplex: [1500, 1900], deux: [1000, 1250] };
+  ["duplex", "deux"].forEach(function (key) {
+    const P = props[key], prop = P.prop, guard = P.guard, ownerNight = num_(prop.nightlyPrice) || P.spec.eur * DEMO_EUR_MAD_;
+    let cursor = addDaysStr_(start, rnd.int(0, 4)), n = 0;
+    while (cursor < addDaysStr_(today, 35)) {
+      const nights = rnd.pick([2, 3, 3, 4, 4, 5, 6, 7]), ci = cursor, co = addDaysStr_(ci, nights);
+      cursor = addDaysStr_(co, rnd.pick([0, 1, 1, 2, 3, 4, 6]));
+      if (existing.some(function (r) { return String(r.propertyId) === String(prop.propertyId) && r.checkIn < co && r.checkOut > ci; })) continue;
+      n++;
+      const t = resvTimes_(prop, ci, co), rate = Math.round(rnd.int(sell[key][0], sell[key][1]) / 10) * 10, total = rate * nights;
+      const margin = Math.max(0, total - ownerNight * nights), guestName = rnd.pick(DEMO_GUESTS_), source = rnd.weighted([["AIRBNB", 45], ["BOOKING", 30], ["DIRECT", 15], ["PHONE", 10]]);
+      let status = "CONFIRMED";
+      if (co <= today) { const u = rnd.next(); status = u < 0.09 ? "CANCELLED" : (u < 0.12 ? "NO_SHOW" : "COMPLETED"); }
+      else if (ci <= today) status = "IN_PROGRESS";
+      const created = notAfterToday(addDaysStr_(ci, -rnd.int(5, 45))), rid = newId_("resv");
+      const r = { reservationId: rid, organizationId: orgId, propertyId: prop.propertyId, agencyOrganizationId: agencyOrg.organizationId, checkIn: ci, checkOut: co,
+        checkInAt: iso(t.start), checkOutAt: iso(t.end), guestCount: rnd.int(1, Number(prop.capacity) || 2), guestName: guestName, status: status, notes: "Donnée de démonstration",
+        createdAt: created + "T09:00:00.000Z", createdBy: agEmail, updatedAt: created + "T09:00:00.000Z", updatedBy: agEmail, guestEmail: "", guestPhone: "", totalPrice: total, taxes: 0, fees: 0,
+        commissionRate: Math.round(margin / total * 1000) / 10, commissionAmount: margin, deposit: 0, depositStatus: "NONE", paymentStatus: "UNPAID", source: source,
+        version: 1, idempotencyKey: "demo-hist:" + key + ":" + n, currency: "MAD" };
+      const parts = guestName.split(" ");
+      T.Guests.push({ guestId: newId_("gst"), organizationId: orgId, propertyId: prop.propertyId, reservationId: rid, lastName: parts.slice(1).join(" "), firstName: parts[0], email: "", phone: "",
+        nationality: "", idType: "", idRefMasked: "", isPrimary: true, status: "ACTIVE", createdAt: r.createdAt, createdBy: agEmail, updatedAt: r.createdAt });
+      const method = source === "AIRBNB" || source === "BOOKING" ? "PLATFORM" : rnd.pick(["TRANSFER", "CASH", "CARD"]);
+      const advance = Math.round(total * 0.3);
+      if (status === "CANCELLED") {
+        r.cancelReason = rnd.weighted([["GUEST_REQUEST", 5], ["NO_PAYMENT", 2], ["OWNER_REQUEST", 1], ["FORCE_MAJEURE", 1], ["OTHER", 1]]);
+        r.cancelledAt = notAfterToday(addDaysStr_(ci, -rnd.int(2, 20))) + "T10:00:00.000Z"; r.cancelledBy = agEmail; r.refundDue = 0;
+      } else {
+        const fullyPaid = status !== "CONFIRMED" && status !== "NO_SHOW" && rnd.next() > 0.07;
+        pay({ propertyId: prop.propertyId, kind: "RESERVATION", refType: "RESERVATION", refId: rid, direction: "IN", amount: advance, method: method, paidAt: created, reference: "Acompte" });
+        let paid = advance;
+        if (fullyPaid) { pay({ propertyId: prop.propertyId, kind: "RESERVATION", refType: "RESERVATION", refId: rid, direction: "IN", amount: total - advance, method: method, paidAt: notAfterToday(ci), reference: "Solde" }); paid = total; }
+        r.paymentStatus = status === "NO_SHOW" ? "PAID" : (paid >= total ? "PAID" : "PARTIAL");
+      }
+      if (status === "COMPLETED" || status === "IN_PROGRESS") {
+        const late = rnd.next() < 0.18 ? rnd.int(15, 120) : 0, actualIn = plusMin(t.start, late || -rnd.int(0, 30));
+        T.CheckIns.push({ checkInId: newId_("cki"), organizationId: orgId, propertyId: prop.propertyId, reservationId: rid, plannedAt: iso(t.start), actualAt: iso(actualIn), agentUserId: guard.userId,
+          agentEmail: guard.email, checklistJson: { "Clés remises": true, "Inventaire vérifié": true, "Compteurs relevés": true }, conditionNotes: "Logement conforme.", metersJson: {}, photoDocIdsJson: [],
+          comments: late ? "Arrivée tardive du voyageur." : "", incidentId: "", status: "DONE", idempotencyKey: "", createdAt: iso(actualIn), lateMinutes: late });
+        r.version = 2;
+      }
+      if (status === "COMPLETED") {
+        const late = rnd.next() < 0.12 ? rnd.int(10, 90) : 0, actualOut = plusMin(t.end, late || -rnd.int(0, 45));
+        T.CheckOuts.push({ checkOutId: newId_("cko"), organizationId: orgId, propertyId: prop.propertyId, reservationId: rid, plannedAt: iso(t.end), actualAt: iso(actualOut), agentUserId: guard.userId,
+          agentEmail: guard.email, checklistJson: { "Clés récupérées": true, "Inventaire vérifié": true }, conditionNotes: "", metersJson: {}, photoDocIdsJson: [], comments: late ? "Départ tardif." : "",
+          incidentId: "", status: "DONE", idempotencyKey: "", createdAt: iso(actualOut), lateMinutes: late });
+        r.version = 3;
+        // Mission de ménage : Mohamed Zetounie, 200 MAD les 2 h (appartement), commandée par l'agence, payée par le propriétaire.
+        const mStart = plusMin(actualOut, 30), accepted = plusMin(actualOut, rnd.int(5, 25)), started = plusMin(mStart, rnd.int(0, 10));
+        const actualMin = rnd.next() < 0.12 ? rnd.int(135, 170) : rnd.int(85, 110), completed = plusMin(started, actualMin), validated = plusMin(completed, rnd.int(60, 300));
+        const anomalies = [];
+        if (rnd.next() < 0.28) {
+          const type = rnd.weighted([["MISSING_ITEM", 4], ["DIRT", 3], ["BREAKAGE", 2], ["DAMAGE", 1], ["OTHER", 1]]);
+          const desc = { MISSING_ITEM: "Serviettes manquantes", DIRT: "Four très sale", BREAKAGE: "Verre cassé", DAMAGE: "Tache sur le canapé", OTHER: "Ampoule grillée" }[type];
+          anomalies.push({ type: type, room: rnd.pick(prop.roomsJson && parseJson_(prop.roomsJson, []).length ? parseJson_(prop.roomsJson, []) : ["Séjour"]), description: desc, at: iso(completed), by: provU.email, incidentId: "" });
+        }
+        const mid = newId_("cln");
+        T.CleaningMissions.push({ missionId: mid, organizationId: orgId, propertyId: prop.propertyId, reservationId: rid, providerUserId: provU.userId, providerEmail: provU.email,
+          startAt: iso(mStart), endAt: iso(plusMin(mStart, 120)), price: 200, currency: "MAD", status: "VALIDATED", responseAt: iso(accepted), expiresAt: iso(plusMin(actualOut, 120)),
+          notes: "Ménage de départ (démonstration)", createdAt: iso(actualOut), createdBy: guard.email, updatedAt: iso(validated), priority: "HIGH", estimatedMinutes: 120, acceptedAt: iso(accepted),
+          startedAt: iso(started), completedAt: iso(completed), actualMinutes: actualMin, validatedAt: iso(validated), validatedBy: agEmail, anomaliesJson: anomalies, reassignCount: 0,
+          source: "AUTO", qualityScore: anomalies.length ? rnd.int(3, 4) : rnd.int(4, 5), validationNote: anomalies.length ? "Anomalie signalée et traitée." : "" });
+        expense({ propertyId: prop.propertyId, category: "CLEANING", description: "Ménage mission " + mid, supplier: provU.email, amount: 200, expenseDate: day(completed), refType: "CLEANING",
+          refId: mid, uniqueKey: "cleaning:" + mid, createdAt: iso(validated), createdBy: agEmail, paidAt: iso(plusMin(validated, 60 * 24 * rnd.int(2, 10))) });
+      }
+      T.Reservations.push(r);
+    }
+  });
+
+  /* ---------- 2. Incidents, devis, interventions, factures (Mohamed Zetounie) ---------- */
+  const INC = [
+    ["duplex", "PLUMBING", "Fuite sous l'évier de la cuisine", 450], ["deux", "AC", "Recharge de gaz de la climatisation (chambre 1)", 900],
+    ["long", "HUMIDITY", "Traces d'humidité dans la salle de bain", 1500], ["duplex", "AC", "Climatisation de la suite 2 ne refroidit plus", 1200],
+    ["deux", "PLUMBING", "Ballon d'eau chaude en panne", 2200], ["duplex", "PLUMBING", "Chasse d'eau de la suite 1 qui coule", 300],
+    ["deux", "APPLIANCE", "Le lave-linge ne vidange plus", 550], ["duplex", "ELECTRICITY", "Prises de la terrasse hors service", 650],
+    ["long", "ELECTRICITY", "Le disjoncteur saute régulièrement", 400], ["deux", "PLUMBING", "Siphon de douche bouché", 250], ["duplex", "LOCKSMITH", "Serrure de la porte d'entrée dure", 350]
+  ];
+  INC.forEach(function (x, i) {
+    const P = props[x[0]], prop = P.prop, ht = x[3], byAgency = x[0] !== "long", mgr = byAgency ? agEmail : ownEmail;
+    const createdDay = addDaysStr_(start, 8 + i * 15 + rnd.int(0, 6));
+    if (createdDay > addDaysStr_(today, -12)) return;
+    const created = localToDate_(createdDay, "09:30"), incId = newId_("inc"), qid = newId_("quo"), woId = newId_("wo"), ivId = newId_("ivc");
+    const split = computeInvoiceSplit_(ht, 20, 15, 20);
+    const decided = addDaysStr_(createdDay, 2), desired = addDaysStr_(decided, 3), doneDay = addDaysStr_(desired, rnd.next() < 0.3 ? rnd.int(1, 5) : -rnd.int(0, 2));
+    const completed = localToDate_(doneDay, "16:00"), issue = doneDay, paidDay = notAfterToday(addDaysStr_(issue, rnd.int(5, 15)));
+    T.IncidentsV4.push({ incidentId: incId, organizationId: orgId, propertyId: prop.propertyId, reservationId: "", category: x[1], priority: ht > 1000 ? "HIGH" : "NORMAL", description: x[2],
+      status: "CLOSED", photoFileIdsJson: [], createdAt: iso(created), createdBy: P.guard.email, updatedAt: iso(plusMin(completed, 60 * 24)), updatedBy: mgr, title: x[2], severity: ht > 1000 ? "HIGH" : "MEDIUM",
+      reportedByUserId: P.guard.userId, assignedToUserId: provU.userId, contractorId: art.artisanId, estimatedCost: split.amountTTC, finalCost: split.amountTTC, resolvedAt: iso(completed),
+      closedAt: iso(plusMin(completed, 60 * 24)), source: "MANUAL" });
+    T.Quotes.push({ quoteId: qid, organizationId: orgId, propertyId: prop.propertyId, incidentId: incId, artisanId: art.artisanId, status: "APPROVED", currency: "MAD", totalAmount: split.amountTTC,
+      validUntil: addDaysStr_(createdDay, 30), linesJson: demoQuoteLines_(x[2], ht), decisionAt: decided + "T10:00:00.000Z",
+      decisionBy: mgr, decisionNote: "Devis accepté.", createdAt: iso(created), createdBy: mgr, requestNote: "Merci de chiffrer l'intervention.", requestedAt: iso(created), requestedBy: mgr,
+      submittedAt: addDaysStr_(createdDay, 1) + "T15:00:00.000Z", amountHT: ht, vatRate: 20, amountTTC: split.amountTTC, estimatedDays: 1, commissionRateEst: 15, commissionEstimate: split.commissionAmount });
+    T.WorkOrders.push({ workOrderId: woId, organizationId: orgId, propertyId: prop.propertyId, incidentId: incId, quoteId: qid, artisanId: art.artisanId, status: "VERIFIED", scheduledAt: desired + "T09:00:00.000Z",
+      description: x[2], report: "Intervention réalisée, essais concluants.", invoiceFileId: "", createdAt: decided + "T10:05:00.000Z", createdBy: mgr, updatedAt: iso(plusMin(completed, 60 * 20)),
+      updatedBy: mgr, title: x[2], desiredDate: desired, acceptedAt: decided + "T12:00:00.000Z", startedAt: iso(plusMin(completed, -120)), completedAt: iso(completed),
+      verifiedAt: iso(plusMin(completed, 60 * 20)), verifiedBy: mgr, commissionRate: 15, photoDocIdsJson: [], invoiceId: ivId });
+    T.Invoices.push({ invoiceId: ivId, organizationId: orgId, propertyId: prop.propertyId, workOrderId: woId, incidentId: incId, artisanId: art.artisanId, invoiceNumber: "DEMO-MZ-" + ("00" + (i + 1)).slice(-3),
+      issueDate: issue, dueDate: addDaysStr_(issue, 30), amountHT: split.amountHT, vatRate: 20, vatAmount: split.vatAmount, amountTTC: split.amountTTC, commissionRate: 15, commissionBase: split.commissionBase,
+      commissionAmount: split.commissionAmount, commissionVatRate: 20, commissionVatAmount: split.commissionVatAmount, commissionBeneficiaryOrgId: byAgency ? agencyOrg.organizationId : orgId,
+      commissionLocked: true, netToContractor: split.netToContractor, currency: "MAD", status: "PAID", documentId: "", approvedAt: issue + "T18:00:00.000Z", approvedBy: mgr,
+      paidAmount: split.netToContractor, paidAt: paidDay + "T10:00:00.000Z", createdAt: issue + "T17:00:00.000Z", createdBy: provU.email, notes: "Donnée de démonstration" });
+    expense({ propertyId: prop.propertyId, category: "MAINTENANCE", description: "Facture DEMO-MZ-" + ("00" + (i + 1)).slice(-3) + " — " + x[2], supplier: S.provider.name, amount: split.amountTTC,
+      vatAmount: split.vatAmount, expenseDate: issue, refType: "INVOICE", refId: ivId, uniqueKey: "invoice:" + ivId, createdBy: mgr, paidAt: paidDay + "T10:00:00.000Z" });
+    pay({ propertyId: prop.propertyId, kind: "INVOICE", refType: "INVOICE", refId: ivId, direction: "OUT", amount: split.netToContractor, method: "TRANSFER", paidAt: paidDay, reference: "Virement facture", recordedBy: mgr });
+  });
+  // Deux incidents encore ouverts (à traiter pendant la démo)
+  const openInc = function (key, cat, text, est, daysAgo, status) {
+    const P = props[key], at = localToDate_(addDaysStr_(today, -daysAgo), "10:00");
+    T.IncidentsV4.push({ incidentId: newId_("inc"), organizationId: orgId, propertyId: P.prop.propertyId, reservationId: "", category: cat, priority: "NORMAL", description: text, status: status,
+      photoFileIdsJson: [], createdAt: iso(at), createdBy: P.guard.email, updatedAt: iso(at), updatedBy: P.guard.email, title: text, severity: "MEDIUM", reportedByUserId: P.guard.userId,
+      estimatedCost: est, source: "MANUAL" });
+  };
+  openInc("duplex", "AC", "Bruit anormal du climatiseur du séjour", 600, 3, "OPEN");
+  openInc("deux", "FURNITURE", "Pied de lit cassé (chambre 2)", 300, 1, "OPEN");
+
+  /* ---------- 3. Autres dépenses : eau et électricité, consommables, assurance, taxe ---------- */
+  for (let m = 5; m >= 0; m--) {
+    const month = addMonthsStr_(today.slice(0, 8) + "01", -m);
+    const d = addDaysStr_(month, 9);
+    if (d > today) continue;
+    expense({ propertyId: props.duplex.prop.propertyId, category: "UTILITIES", description: "Électricité et eau " + month.slice(0, 7), supplier: "Régie (démo)", amount: rnd.int(60, 90) * 10, expenseDate: d });
+    expense({ propertyId: props.deux.prop.propertyId, category: "UTILITIES", description: "Électricité et eau " + month.slice(0, 7), supplier: "Régie (démo)", amount: rnd.int(40, 65) * 10, expenseDate: d });
+    expense({ propertyId: props.duplex.prop.propertyId, category: "SUPPLIES", description: "Linge et consommables " + month.slice(0, 7), supplier: "Fournisseur (démo)", amount: rnd.int(25, 45) * 10, expenseDate: addDaysStr_(d, 3) > today ? d : addDaysStr_(d, 3) });
+    expense({ propertyId: props.deux.prop.propertyId, category: "SUPPLIES", description: "Linge et consommables " + month.slice(0, 7), supplier: "Fournisseur (démo)", amount: rnd.int(15, 30) * 10, expenseDate: addDaysStr_(d, 3) > today ? d : addDaysStr_(d, 3) });
+  }
+  [["duplex", 1400], ["deux", 1000], ["long", 900]].forEach(function (x, i) {
+    expense({ propertyId: props[x[0]].prop.propertyId, category: "INSURANCE", description: "Assurance habitation annuelle", supplier: "Assureur (démo)", amount: x[1], expenseDate: addDaysStr_(start, 20 + i) });
+    expense({ propertyId: props[x[0]].prop.propertyId, category: "TAXES", description: "Taxe de services communaux", supplier: "Commune (démo)", amount: Math.round(x[1] * 1.2), expenseDate: addDaysStr_(start, 60 + i) });
+  });
+
+  /* ---------- 4. Écriture en une fois par table ---------- */
+  const counts = {};
+  Object.keys(T).forEach(function (name) { counts[name] = T[name].length; });
+  withLock_(function () { Object.keys(T).forEach(function (name) { dbInsertMany_(name, T[name]); }); }, 30000);
+
+  /* ---------- 5. Bail et loyers (bien en longue durée) : créés par les fonctions de l'application ---------- */
+  const L = props.long, op = buildPrincipal_(ownerU);
+  demoAs_(op);
+  const leaseStart = addMonthsStr_(today.slice(0, 8) + "01", -6);
+  const tenantId = tenantCreate_(op, { propertyId: L.prop.propertyId, fullName: "Karim Benali (locataire démo)", phone: DEMO_PHONE_ }).tenantId;
+  const leaseId = leaseCreate_(op, { propertyId: L.prop.propertyId, tenantId: tenantId, startDate: leaseStart, endDate: addDaysStr_(addMonthsStr_(leaseStart, 12), -1), monthlyRent: 7000, charges: 300,
+    deposit: 14000, dueDay: 5, terms: "Bail de démonstration." }).leaseId;
+  leaseActivate_(op, { leaseId: leaseId });
+  dbUpdate_("Properties", L.prop.propertyId, { monthlyRent: 7000, charges: 300, updatedAt: nowIso_() });
+  const rent = [];
+  rent.push({ paymentId: newId_("pay"), organizationId: orgId, propertyId: L.prop.propertyId, kind: "DEPOSIT", refType: "LEASE", refId: leaseId, direction: "IN", amount: 14000, currency: "MAD",
+    method: "TRANSFER", paidAt: leaseStart, reference: "Caution", status: "RECORDED", reconciled: true, recordedBy: ownEmail, createdAt: leaseStart + "T10:00:00.000Z", note: "Donnée de démonstration" });
+  const due = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(leaseId) && s.dueDate <= today; }).sort(function (a, b) { return a.dueDate < b.dueDate ? -1 : 1; });
+  due.forEach(function (s, i) {
+    const last = i === due.length - 1, beforeLast = i === due.length - 2;
+    if (last && diffDays_(s.dueDate, today) <= 25) return; // échéance du mois en cours : pas encore payée
+    const amount = beforeLast ? Math.round(num_(s.amountDue) / 2) : num_(s.amountDue);      // mois précédent : payé à moitié (retard)
+    const paidAt = notAfterToday(addDaysStr_(s.dueDate, i === 2 ? 14 : rnd.int(0, 3)));      // un loyer réglé avec 14 jours de retard
+    rent.push({ paymentId: newId_("pay"), organizationId: orgId, propertyId: L.prop.propertyId, kind: "RENT", refType: "RENT_SCHEDULE", refId: s.scheduleId, direction: "IN", amount: amount, currency: "MAD",
+      method: "TRANSFER", paidAt: paidAt, reference: "Loyer " + s.period, status: "RECORDED", reconciled: true, recordedBy: ownEmail, createdAt: paidAt + "T10:00:00.000Z", note: "Donnée de démonstration" });
+  });
+  dbInsertMany_("Payments", rent);
+  dbUpdate_("Leases", leaseId, { depositStatus: "HELD", updatedAt: nowIso_() });
+  counts.Payments += rent.length; counts.Leases = 1; counts.RentSchedules = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(leaseId); }).length;
+  demoAs_(sp);
+  counts.extras = demoExtras_(sp, ownerOrg, agencyOrg, props, provU, start, today);
+  audit_("DEMO_HISTORY_BUILT", "System", "demo-history", orgId, counts);
+  return { ok: true, already: false, from: start, to: today, counts: counts };
+}
+
+/* ---------- Compléments : abonnements avec historique, listes de tâches et photos avant / après des ménages ---------- */
+var DEMO_PHOTOS_ = {"sejour_avant": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAwICQsJCAwLCgsODQwOEh4UEhEREiUbHBYeLCcuLisnKyoxN0Y7MTRCNCorPVM+QkhKTk9OLztWXFVMW0ZNTkv/2wBDAQ0ODhIQEiQUFCRLMisyS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0v/wAARCAFAAeADASIAAhEBAxEB/8QAGwABAAIDAQEAAAAAAAAAAAAAAAUGAgMEAQf/xABMEAABAwEDBQoLBwIFAgcAAAAAAQIDBAUREgYTFCExFkFRUlSRoaOx0RUzNDVTYXFzgZLhIjJkcoKTsgfBI0JEYvA2oiQmQ1ZjdaX/xAAZAQEAAwEBAAAAAAAAAAAAAAAAAQIDBAX/xAAsEQEAAQQBAwMDBAIDAAAAAAAAAQIDERMSFDFRBCFhIkGxMnGR4VKBFTPw/9oADAMBAAIRAxEAPwC0gHjnI1qucqI1EvVV3jJd6CGmygja9UihdI1P8yuw39Br3Rfhes+hTZT5dEelvT9k6CC3Rfhes+g3Rfhes+g2U+U9Le8fhOggt0X4XrPoN0X4XrPoNlPk6W94/CdBBbovwvWfQbovwvWfQbKfJ0t7x+E6CC3Rfhes+g3Rfhes+g2U+Tpb3j8J0EFui/C9Z9Bui/C9Z9Bsp8nS3vH4ToILdF+F6z6DdF+F6z6DZT5OlvePwnQQW6L8L1n0G6L8L1n0GynydLe8fhOg56KthrY1fEq6luVq7UOgvE5c9VM0ziQABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABDZSTPbDDEi3Neqq713Xd5MkFlP/AKb9X9ilz9Muj0sZvQgwCdyModMtlkjkvjp0zi+3e6dfwOamOU4exXXFFM1T9kED6VbbIraseuigXFJTvVE9T267v7fEishKttRR1VnTfaRPtIi77V1Kn/OE01fVjLmj1Wbc18e32UoHe6y5EtpbNS/Hns2i+q/bzayz5c1TaWgprOh+yjrlVE3mt1InP2FYo9pmfs2qvYqppiM5UkF9yVjisjJ99fU/ZSZ2JV/233N/56yNy+oc3VwVrE+zM3A9U4ybOjsJm3inkzp9TFV3hj/aqAvX9PvIKr3qdhGZW2c2G0oK+nuWnq3I69NmL6pr5xNv6eSY9RE3ZtzCsAveXUzqZLOnYiK6KZXoi7L0uU8ybymrLVtJKaeKBrMCuvY1UXV7VUnXEVcZlWPUVTb2RT7fv/SigvGUOVFbZdqSUsEVO5jWtVFe1yrrT1KhSppFmmfI5ERz3K5btmspVTFM4iW1ququOUxiP3YAAq1ddlzPhr4VYv3nIxU4UXUW4ptB5dT+9b2oXI3tdnl+uj6okABs4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACCyn/wBN+r+xOkJlMxysp3on2Wq5FX1rdd2KUufpl0+l/wC6P/fZAl/yOpmWfYb6ud7IVnXEr3rciNTU2/4385QCXrsoquts5lA6OCOBmFEzbVRbk2JrVTC3VFM5l6XqLdVymKY7fdbcm6ems+edjLYp6x9SuLA1WouJL1VdTl/4hX0/8vZX8WBz/hgd3f2IGiqpKKriqYbs5E5HJfsX1KdVs2xPbEsctRFCx8bcKLGipenrvVf+KWmuJpjzDOLFUVzmcxMe76AtkMXKFLT1XJDhu/37L/l1FJteV9uZSOjiW9r5EhjXgamq/tU3pllaSUqQYINTMGPC7Fsuv27SJsu0JLMrG1UMcb5GoqNziKqJfv6lQmuumr2hWzZuUZqq74xC+5QUlJPQQ2c+0YKFjMKoj1S9zUS5EuVU1dxjaNJHaOTD6eGpjq307EwyRqi3uanqVdap2lFtW0p7Vq1qahGI9Wo1EYioiIntOmxrfq7GZKynbE9sioqpIircvquVC22mZnMeyvS3KaImJ9491l/p95BVe9TsOfJqZls2RLZNQ7/FhufE5d5L9XMvQpC2XlHVWUkzaaGnwzPxqjmu1epNew4LOrprOrI6qnVM4zeXYqcClYuRERC8+nqqmufOJj/S3f1C8mo/zu7EIjIbz6nunf2OS2bfqrZZEypjhakaqqZtFTb7VU5rKtKayqvSYGsc/Crbnoqpr9ioRNcTc5LUWao9PNue/ukctf8AqCb8jOwgjrtS0JbUrHVU7WNe5ERUYiompPWqnIZ1TmqZb2qZpoimfsAAho30Hl1P71vahcilQRrLMxibVUkPB3/y/wDb9Tps0zMTh5Xr6oiuIlZQViSgwRudnL8KKt2Ek8n/ACJ/vF7ENZiY7uCJieyUABCQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwliZNG6ORqOY5LlRTMAicK/Nk/Kj1zErFZvY70VOY5qmx6imgdK98StbdeiKt+27gLScVs+bZv0/yQz1UuuPWXfKuxUEssaPa5iIvCqmfgybjR869x3UPkrPj2m81ixRhjPr70SivBk3Gj517h4Mm40fOvcSoJ6ehHX3kV4Mm40fOvcPBk3Gj517iVA6eg6+8ivBk3Gj517h4Mm40fOvcSoHT0HX3kV4Mm40fOvcPBk3Gj517iVA6eg6+8ivBk3Gj517h4Mm40fOvcSoHT0HX3kV4Mm40fOvcPBk3Gj517iVA6eg6+80UtKymRblxPXa643gG0UxTGIclddVdXKqcy1z+Ik/KvYb8n/In+8XsQ0T+Ik/KvYb8n/In+8XsQzuL2+yUABm0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOK2fNs36f5IdpxWz5tm/T/JAI6h8lZ8e03mih8lZ8e03nRHZz1d5AASqAAAAAAAAAAAAAAAA1z+Ik/KvYb8n/In+8XsQ0T+Ik/KvYb8n/In+8XsQyuNrfZKAAzaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHFbPm2b9P8kO04rZ82zfp/kgEdQ+Ss+PabzRQ+Ss+Pabzojs56u8gAJVAAAAAAAAAAAAAAAAa5/ESflXsN+T/kT/eL2IaJ/ESflXsN+T/kT/eL2IZXG1vslAAZtAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADitnzbN+n+SHacVs+bZv0/yQCOofJWfHtN5oofJWfHtN50R2c9XeQAEqgAAAAAAAAAAAAAAANc/iJPyr2G/J/wAif7xexDRP4iT8q9hvyf8AIn+8XsQyuNrfZKAAzaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHFbPm2b9P8AJDtOK2fNs36f5IBHUPkrPj2m80UPkrPj2m86I7OervIACVQAAAAAAAAAAAAAAAGufxEn5V7Dfk/5E/3i9iGifxEn5V7Dfk/5E/3i9iGVxtb7JQAGbQAAAAAAUq0PL6n3ru1TQa6/lTkvgKGBr+TmvgKGBr+TmvgKGBr+TmvgKGBr+TmvgKGBr+TmvgKGBr+TmvgKGBr+TmvgKGBr+TmvgKGBr+TmvgKGBr+TmvgKGBr+TmvgAMlwAAAAAAAAAADitnzbN+n+SHacVs+bZv0/yQCOofJWfHtN5oofJWfHtN50R2c9XeQAEqgAAAAAAAAAAAAAAANc/iJPyr2G/J/yJ/vF7ENE/iJPyr2G/J/yJ/vF7EMrja32SgAM2gAAAAApVoeX1PvXdqmg32h5fU+9d2qaDpjsxkABIAAAAAAAAAAAAAAAAAAAAAAAAAAC+AA5WwAAAAAAAAAABx2sx0lnytY1XOW65ES9dqHYAK1FpsUaMbSvVE4Y3GecruSu/bcWIFuUo4wrucruSu/bcM5Xcld+24sQHKUcY8K7nK7krv23DOV3JXftuLEByk4x4V3OV3JXftuGcruSu/bcWIDlJxjwrucruSu/bcM5Xcld+24sQHKTjHhXc5Xcld+24Zyu5K79txYgOUnGPCu5yu5K79twzldyV37bixAcpOMeFdzldyV37bhnK7krv23FiA5ScY8K291c9jmrSvucl3i3EnYcb4qR7ZGOYucVbnJdvISIImZlMREdgAEJAAAMJZo4Wo6WRkbVW69zkRLzntGvis+DOSa3LqYxNrl/5vlNq6qWsndNM69y7E3kTgQvTRlWasN1XI2WrmkYt7HyOc1eFFU1Hjfup7D03ZgAAAAAAAAAAAAAAAAAAAAAAAAAAAAC7U9TBUtxQSskS5FXCutL+FN43Hz+GWSCVssTlY9q3oqFwsm1I7QiuW5k7U+2z+6eowqow0irKQABRYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABUspZ1ltJY9aNiaiIl+q9dd/SnMRJI5Qed6j9P8UI46ae0MZ7vUVyqiIqmeal4F5zGPxjfah2nVZs03ImZYXbk0T7OTNS8C84zUvAvOdYN+lo8yx31ORY5ERVVFuT1mGJeFTsk8W72KcRzXrcW5iIb2q5rj3e4l4VGJeFTwGLV7iXhUYl4VPAB7iXhUYl4VPAB7iXhUYl4VPAB7iXhUYl4VPAB7iXhUYl4VPAB7iXhUYl4VPAB7iXhUYl4VPAB7iXhUYl4VPAAO6xZ1gtOBUvVHuwKiLdei6vr8DhOizvOFL75nahE9kx3XsGuWeKG7Oysjv2YnIl5r02l5TD+4hy5dEU1T7xDoBz6bS8ph/cQ2RTxTX5qVkl23C5FuGSaao95hsAAVAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABTcoPO9R+n+KEcSOUHneo/T/FCOOmntDGe7Jmp7b+FDrxs4zec4gdFu9NuMRDKu3Fbtxs4zecY2cZvOcQNeqnwz6ePLre9qsdc5Ni75yAGFy5Nycy1oo4QAAzXAAAAAAAAAAAAAAAAD3CvAvMeHQ37qewyu3Joh2ek9PF+qYmcYaUat6XotxszbeAzBy13aqvh69n0Vu3ExMZ/eGGbbwGcf+FI2Rmp7FRzV4FQ1rLcqpd0mdN/j1EUX3c49G37br1uJ43cf2ym76KJxiP4/p0VVZPV4c/JjwX3akS6/wBhoJWqsGeLDmFz999+pG3c6mjwNX+g/wC9veZTTU6qL1nj9MxEfw4SdyY/1P6f7nB4Gr/Qf97e8lrBo56TP5+PBjw3a0W+6/gLUROWHqrtuqzMRVH8/KWABs8UAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFNyg871H6f4oRxI5Qed6j9P8UI46ae0MZ7gALIAAAAAAAAAAAPcLuBeYN+8ntOgwu3Zol3+k9JTfpmZnGHPhdwLzDC7gXmOgGXUT4dn/GUf5S58K8C8x4dDvur7DnN7Vya4cHq/TxYqiInOQAGrjAAAMke5EuvMQVmInuvTXVR+mcMs47hGcdwmII4U+F+ovf5T/Mi61vOizvOFL75nahznRZ3nCl98ztQtPZl3lewAcrYAAAAAR+ky8foQaTLx+hDSCqzdpMvH6EGky8foQ0gDdpMvH6EGky8foQ0gDdpMvH6EGky8foQ0gDdpMvH6EGky8foQ0gDdpMvH6EGky8foQ0mMr0jjV6pfcB0aTLx+hBpMvH6EIl1XKq6lRvsQ2QVTle1r0RUXVfvkZMJLSZeP0INJl4/QhpBI3aTLx+hBpMvH6ENIA3aTLx+hBpMvH6ENIA3aTLx+hBpMvH6ENIA3aTLx+hBpMvH6ENIA3aTLx+hBpMvH6ENIAr9sOV9pTOct6rh7EOI67W84S/DsQ5Drp7Q557gALIAAAAAAAAAAAPcTuFec8BExErRVVHaXuJ3CvOMTuFec8BHGPCdlfmXuJeFec8AJiIhE1TPeQAEqgAAAAAAABuolVtZAqbUkavSaTdR+Vwe8b2kT2THdbdJl4/Qg0mXj9CGkHG6G7SZeP0INJl4/QhpAG7SZeP0INJl4/QhpAAAAAAAAAAAAAAt9y3IirvXgAqIqXLrQjIprQWoRHMW7FrRW3N5yTA0Oo4lXVib7FM4oI41vamvhU2AgAASAAAAAAAAAAAAACCtuHBVJJrukTpTV3EeWmogZURLHIl6LzovChXqujkpXqj0VWbz0TUp0W6sxhjXTicucAGqgAAAAAAAAAAAAAAAAAAAAAAG6lkZG9VensXgKzOIymIzLDNSejdzGBKZ2P0jec4aqRkj0Vie1eEpRXNU4mF6qYiO7SADVmHXZcOerY9tzPtrd6vrcaaenkqXo2JqrwrvJ7Sw0dKykiwM1qv3nb6qZ11YjC9NOZbwAczYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARNba0kM7oo4kTAtyq+/WdFm2g6sVzXx3Oal6ubs+h1yRRy3ZyNj7tmJqLcZMY2NqNY1GtTYiJchOYwh6ACEtWi0/oIvkQaLT+gi+RDaBmUYhq0Wn9BF8iDRaf0EXyIbTgqqmWOdzWuuRLt5OAiasLRTl1aLT+gi+RBotP6CL5EODS5+P0INLn4/QhXatrl36LT+gi+RBotP6CL5EODS5+P0INLn4/Qg2muXfotP6CL5EGi0/oIvkQ4NLn4/Qg0ufj9CDaa5d+i0/oIvkQaLT+gi+RDg0ufj9CDS5+P0INprl36LT+gi+RBotP6CL5EODS5+P0INLn4/Qg2muXfotP6CL5EGi0/oIvkQ4NLn4/Qg0ufj9CDaa5d+i0/oIvkQaLT+gi+RDg0ufj9CDS5+P0INprl36LT+gi+RBotP6CL5EODS5+P0INLn4/Qg2muXfotP6CL5EGi0/oIvkQ44qqZ0rGq/UrkRdSEiWivKs04atFp/QRfIg0Wn9BF8iG0E5lXECIjURGoiImpETeAASAAAAAAAAAAAHLhRVW+5NepLwYyPwMV1yrdvIBF+HG47swuC/bi13ewlmriRFS+5detLjlgzM0iu0diPRcWLCi6/bwnUPb7AAAAAAAAAAAAAAAAAAAAAAAAAAAAOauhnmjRKebNrv+v47UFDDPDGqVE2cXe9Xx2qB0nNaNS+lp85GxHLeia9ies6QBXfC1XjxZxLr78OFLvZwm5lQ+pvle1Ecq72wmNHhx48zHjvvxYUvv4Tiq4pHVD1axypq1onqK3JzHZa33cwM8zL6N/yqMzL6N/yqYYlvmGAM8zL6N/yqYyMdGxXva5rU2qqDEmYeA0JVx4rtd3DcdLYpHIitY5UXWiom0maZjuiKoliDPMy+jf8qjMy+jf8qkYlOYYAzzMvo3/KozMvo3/KoxJmGAM8zL6N/wAqjMy+jf8AKoxJmGAM8zL6N/yqYuY5q3OaqL60GJMw8BkkUjkvRjlThRD3My+jf8qjEmYIPHx/mTtJci4YpEmYqxvREcn+VSUNbfZlcAAaMwAAAAAAAAAAAAAAAAA01NVFSsxSuuv2Im1QNwI9ls0znIipI1OFW6k5iQaqORFaqKi60VN8YAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADGSNksbmSNRzXalRTIAcCWPSpJiXGqcVXau872ojURGoiImpETeAGQAAAAAAABjMjljcjFudvEY5rmrc5FRfWhKgjCco+lZJnGuaiom+u9cSAAQAAkAAAAAAAAAAAAAEXujsrlXVv7hujsrlXVv7igkvZeTs9o2VVWklVTU9LSuRsjplfel92xGtXhQ6tNLDZKz7o7K5V1b+4bo7K5V1b+4gFyQtDTrPpmyU72Wiiup6hr1WNyIl/Bemr1ENW0z6KsnpZFar4JHRuVuxVRblu5hpo8mypeN0dlcq6t/ccNo2nZNZc9tZhkalyKsb7lTg2FPJKksSpq7GrbVjfEkFG5rZGuVcS3qiJcl12/wjTTH3NkykGVFArkx18aN31SN6r/EmILdsinhbFHVLhbsvjf3FFBM2aZRslft0dlcq6t/cN0dlcq6t/cUJrVc5GptVbiQt+xaiwbQdRVb4nyo1HXxKqtuX2ohGmlOyVt3R2Vyrq39w3R2Vyrq39xQQNFJslft0dlcq6t/cN0dlcq6t/cVOssSppLGorUkfEsFY5zY2tVcSXKqLel129wmltHAllvq5atjZlkwRU7URzncLna/spwcI00mypct0dlcq6t/cN0dlcq6t/cUEDRSbJX7dHZXKurf3DdHZXKurf3FBA0UmyV+3R2Vyrq39w3R2Vyrq39xQTqsqgltS0IKKBzGyzuwtV6qjUX13Io00myV03R2Vyrq39w3R2Vyrq39xSLQo5LPrqijmVrpKeR0blYt6KqLctxoGik2Sv26OyuVdW/uG6OyuVdW/uKJBE6eeOFiojpHI1FXZeq3EnWZPz0NvLZFVVUkUqXXzPkVsTb24tblT+20aaTZUtG6OyuVdW/uG6OyuVdW/uKLURZiolhzjJM29W443Xtdct16LvoaxopNkr9ujsrlXVv7hujsrlXVv7iggaKTZK/bo7K5V1b+4bo7K5V1b+4oIGik2Sv26OyuVdW/uG6OyuVdW/uKo+wqlmT8dtK+HRpJc0jUVcd+veuuu1cJGDTSbJX7dHZXKurf3DdHZXKurf3FBA0UmyV+3R2Vyrq39w3R2Vyrq39xQQNFJslft0dlcq6t/cN0dlcq6t/cQLckqjRLPqJa+hhS0fJ2yOkvcurUtzFRNqbVOWbJ6ppp6+CsnpaSeiZjdHNLcsuq9EZxlu7UI00eU7Klo3R2Vyrq39w3R2Vyrq39xU7UsSpsuis+rnfE6OvjWSJGKqqiJdtvROFNl5Gk6aUbJX7dHZXKurf3DdHZXKurf3FTtyxKmw5aeOqfE9aiFszc2qrc1b9t6Jr1EaNNJslft0dlcq6t/cN0dlcq6t/cUEDRSbJX7dHZXKurf3DdHZXKurf3FBA0UmyV+3R2Vyrq39w3R2Vyrq39xQQNFJslft0dlcq6t/cN0dlcq6t/cUEDRSbJX7dHZXKurf3DdHZXKurf3FBA0UmyV+3R2Vyrq39w3R2Vyrq39xQQNFJslft0dlcq6t/cN0dlcq6t/cUEDRSbJX7dHZXKurf3DdHZXKurf3FBA0UmyV+3R2Vyrq39w3R2Vyrq39xQQNFJskLxku6Fv9PreWojkkiSVmJsb0Y5dbdiqi3cxRwbTGWcThesnsoHWtlLk/RRU6U1HQ4mxMx43L9hdauuS/ZwIdb6iS0LKy1jqlzsdNPfC1U1Rrjd93g2IfOgRxTl9Opc9fkz4Eu8FZtNOwXYL9WPO+u6/bv7DGmqXSWPlRTZPzzOWOoatJHTPXE1quTFm0TWiX4th8zBHEy+g0y1y5MWcthLItoLVu8IqzxuLEvjN/Dw36uEgMv8AQN09T4NzeaubjzV2HHdruu1fW8roJiMSZX2iz+4yyvAd2c0pdPwXX7Vuzn+267bquuLHaejeH7cwtV9qaJFozWPRkipcuLNuVFuds3r9h8fBHEysmVta+qp6FlTZc1JUxI5qzVEyPmlTV99MLV1cKpw+s7MhbvBluaHd4XzCaNd9+7XiwevZs9RTwTj2wZ930i1cPgHJPw3dg0pdJxcF+vF6+Hf275llFWyU01pxPsmers6WK6KR9SxKZiXanRpguRU4EdfefNQRxMvqUNXNAuQ8MT1ZHNEqSIn+dMLdS+rXsOeZ6VVnZYU9UiOpqOobmY0RLokRyp9lN7ZvHzUDiZfWUv3SQ5rNbldDXFs0e7Cu3exX3esgLLqdEyCt+WgerGpWtzTt9rVcy5fUt2+UUDiZfUqurZTWlY9ZLRSVc9VZKJI+HCkyOXD9tt+12tdmvWckkbLMyosCpZaVZ/4pytlirXIk7G3pcj1TWqKu8vAfOAOJl9RsVbRT+oleletUsObqFpkmV2HBiT7l+q7ZsKtkgyptq1npNalXA+np3LE2CXA9yJ/6bN5E9ScxVwTxMvpFtOfDk5YVoy6TT1kdfgWWomxztYuK9HPRGrsTYqakOuvdaDv6mUSyOqVs10iLBerlhV2aW/DvX7dh8sBHEy+ifb8GZQ+Br/DPhOTHmvHZrH/lu13bdnrOh+jbu8ncOb0/MJpubu8ZgXbdv7eg+ZgcTL6K+oktCystY6pc7HTT3wtVNUa43fd4NiFIseqoKSd77Rs7whErLmx590WFb9t6bfZ6zhBMRgysvhrJr/2n/wDpS9xCWnPS1NY+Who9CgVEww51ZMOrX9pda3rrOUE4Rl9Csv8A6FsT/wC4j/kpMS1cr8ocrIXqj4aejbJHG5qK1HpGio65d+/fPkoK8U5fQKx7qqxsjqyoVZap9VhdK7W5yJJqRV39hNS1cr8ocrIXqj4aejbJHG5qK1HpGio65d+/fPkoHEyv9a+nqrEyRrLXVJUfUObPLJrVzEdscu+mok585p9v+F8PgHRl0XFdmr7kwZrevuv2b58tA4mX0K2aukosmMlKiqpZKlYmK+NrZkjbemFftfZVVTZsuMbFtee3KbK+vqGta+ShuRrdjURrkRD5+CeJl9NZoOPIjwlm9H0Z/jPu4sLcN9/ruOarfVxWFbslvucyVlQjrOc9bnI9FXXEu3D93ZquvPnYI4mV7/qJPaFRT2dNDLUyWbJRR51zXOWJz71X7W9fs26yiAFojEImcgAJAAAAAAAAAAAAAAAAAAAAAB//2Q==", "sejour_apres": "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", "cuisine_avant": "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", "cuisine_apres": "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"};
+
+/** Chaque étape ne s'exécute que si elle n'a pas déjà été faite (relance sans doublon). */
+function demoExtras_(sp, ownerOrg, agencyOrg, props, provU, start, today) {
+  const out = { subscriptions: 0, subscriptionPayments: 0, checklists: 0, photos: 0 };
+  // 1. Abonnements Pro depuis 6 mois : 6 mensualités puis un règlement semestriel anticipé.
+  const plan = dbGet_("SubscriptionPlans", "PRO");
+  [ownerOrg, agencyOrg].forEach(function (org) {
+    if (!plan || dbAll_("Subscriptions").some(function (x) { return String(x.organizationId) === String(org.organizationId); })) return;
+    const price = num_(plan.price), subId = newId_("sub"), paidThrough = addMonthsStr_(start, 12);
+    dbInsert_("Subscriptions", { subscriptionId: subId, organizationId: org.organizationId, planCode: "PRO", status: "ACTIVE", startDate: start, nextDueDate: paidThrough, periodEnd: paidThrough,
+      trialEnd: "", cancelAtPeriodEnd: false, price: price, currency: plan.currency || "MAD", periodicity: plan.periodicity || "MONTHLY", paidThrough: paidThrough,
+      createdAt: start + "T09:00:00.000Z", createdBy: sp.email, updatedAt: nowIso_(), updatedBy: sp.email });
+    dbUpdate_("Organizations", org.organizationId, { planCode: "PRO", updatedAt: nowIso_() });
+    const rows = [];
+    for (let k = 0; k < 6; k++) {
+      const d = addMonthsStr_(start, k); if (d > today) break;
+      rows.push({ paymentId: newId_("pay"), organizationId: org.organizationId, propertyId: "", kind: "SUBSCRIPTION", refType: "SUBSCRIPTION", refId: subId, direction: "IN", amount: price, currency: "MAD",
+        method: "TRANSFER", paidAt: d, reference: "Abonnement Pro " + d.slice(0, 7), status: "RECORDED", reconciled: true, note: "1 période — donnée de démonstration", recordedBy: sp.email, createdAt: d + "T10:00:00.000Z" });
+    }
+    const semi = addMonthsStr_(start, 6) > today ? today : addMonthsStr_(start, 6);
+    rows.push({ paymentId: newId_("pay"), organizationId: org.organizationId, propertyId: "", kind: "SUBSCRIPTION", refType: "SUBSCRIPTION", refId: subId, direction: "IN", amount: price * 6, currency: "MAD",
+      method: "TRANSFER", paidAt: semi, reference: "Abonnement Pro — règlement semestriel", status: "RECORDED", reconciled: true, note: "6 périodes — donnée de démonstration", recordedBy: sp.email, createdAt: semi + "T10:00:00.000Z" });
+    dbInsertMany_("Payments", rows);
+    audit_("SUBSCRIPTION_ASSIGNED", "Subscription", subId, org.organizationId, { planCode: "PRO", demo: true });
+    out.subscriptions++; out.subscriptionPayments += rows.length;
+  });
+  // 1 bis. Identité du prestataire sur ses devis et factures ; un devis en attente et une intervention planifiée (hors ménage).
+  const art = dbAll_("Artisans").find(function (c) { return String(c.organizationId) === platformOrgId_() && normalizeEmail_(c.email) === normalizeEmail_(DEMO_SPEC_.provider.email); });
+  if (art && !art.legalName) dbUpdate_("Artisans", art.artisanId, { legalName: "Mohamed Zetounie — Multiservices (démo)", taxId: "ICE / IF / RC : à compléter",
+    billingInfo: "Règlement par virement à réception de facture — RIB à compléter.", updatedAt: nowIso_() });
+  const openIncident = function (title) { return dbAll_("IncidentsV4").find(function (i) { return i.title === title && ["OPEN", "QUOTE_PENDING", "ASSIGNED"].indexOf(i.status) >= 0; }); };
+  const ac = openIncident("Bruit anormal du climatiseur du séjour"), bed = openIncident("Pied de lit cassé (chambre 2)");
+  const agEmail = normalizeEmail_(DEMO_SPEC_.agency.email);
+  out.pendingQuote = 0; out.scheduledWorkOrder = 0;
+  if (art && ac && !dbAll_("Quotes").some(function (q) { return String(q.incidentId) === String(ac.incidentId); })) {
+    const lines = [{ description: "Diagnostic et démontage du ventilateur intérieur", quantity: 2, unitPrice: 150, amount: 300 }, { description: "Roulement de ventilateur (pièce)", quantity: 1, unitPrice: 280, amount: 280 },
+      { description: "Nettoyage complet de l'unité intérieure", quantity: 1, unitPrice: 200, amount: 200 }, { description: "Déplacement", quantity: 1, unitPrice: 100, amount: 100 }];
+    const split = computeInvoiceSplit_(880, 20, 15, 20), at = addDaysStr_(today, -2);
+    dbInsert_("Quotes", { organizationId: ac.organizationId, propertyId: ac.propertyId, incidentId: ac.incidentId, artisanId: art.artisanId, status: "PENDING", currency: "MAD", totalAmount: split.amountTTC,
+      validUntil: addDaysStr_(today, 28), linesJson: lines, createdAt: at + "T09:00:00.000Z", createdBy: agEmail, requestNote: "Bruit fort au démarrage, merci de chiffrer la réparation.",
+      requestedAt: at + "T09:00:00.000Z", requestedBy: agEmail, submittedAt: addDaysStr_(today, -1) + "T16:00:00.000Z", amountHT: 880, vatRate: 20, amountTTC: split.amountTTC, estimatedDays: 1,
+      commissionRateEst: 15, commissionEstimate: split.commissionAmount });
+    dbUpdate_("IncidentsV4", ac.incidentId, { status: "AWAITING_OWNER", contractorId: art.artisanId, estimatedCost: split.amountTTC, updatedAt: nowIso_() });
+    out.pendingQuote = 1;
+  }
+  if (art && bed && !dbAll_("WorkOrders").some(function (w) { return String(w.incidentId) === String(bed.incidentId); })) {
+    const day = addDaysStr_(today, 2);
+    dbInsert_("WorkOrders", { organizationId: bed.organizationId, propertyId: bed.propertyId, incidentId: bed.incidentId, quoteId: "", artisanId: art.artisanId, status: "SCHEDULED",
+      scheduledAt: localToDate_(day, "10:00").toISOString(), description: "Remplacer le pied de lit cassé et vérifier la stabilité du sommier.", report: "", invoiceFileId: "", createdAt: nowIso_(), createdBy: agEmail,
+      updatedAt: nowIso_(), updatedBy: agEmail, title: "Réparation du lit (chambre 2)", desiredDate: day, acceptedAt: nowIso_(), commissionRate: 15, photoDocIdsJson: [] });
+    dbUpdate_("IncidentsV4", bed.incidentId, { status: "ASSIGNED", contractorId: art.artisanId, assignedToUserId: art.userId || "", updatedAt: nowIso_() });
+    out.scheduledWorkOrder = 1;
+  }
+  // 2. Listes de tâches par pièce pour chaque ménage validé de la démonstration.
+  const ids = Object.keys(props).map(function (k) { return String(props[k].prop.propertyId); });
+  const missions = dbAll_("CleaningMissions").filter(function (m) { return ids.indexOf(String(m.propertyId)) >= 0 && m.status === "VALIDATED" && /démonstration/.test(String(m.notes || "")); })
+    .sort(function (a, b) { return String(b.completedAt).localeCompare(String(a.completedAt)); });
+  const hasList = {}; dbAll_("CleaningChecklists").forEach(function (c) { hasList[c.missionId] = true; });
+  const tasks = ["Sols", "Surfaces", "Linge changé", "Sanitaires", "Poubelles", "Consommables"], lists = [];
+  missions.forEach(function (m) {
+    if (hasList[m.missionId]) return;
+    const prop = dbGet_("Properties", m.propertyId), rooms = parseJson_(prop.roomsJson, []);
+    rooms.forEach(function (room, i) {
+      const items = {}; tasks.forEach(function (x) { items[x] = true; });
+      const done = new Date(parseTs_(m.startedAt).getTime() + Math.round((i + 1) * num_(m.actualMinutes) / rooms.length) * 60000).toISOString();
+      lists.push({ checklistId: newId_("clc"), organizationId: m.organizationId, missionId: m.missionId, room: room, itemsJson: items, doneAt: done, updatedAt: done });
+    });
+  });
+  dbInsertMany_("CleaningChecklists", lists); out.checklists = lists.length;
+  // 3. Photos avant / après (illustrations marquées « Photo de démonstration ») sur les 6 ménages les plus récents.
+  const hasPhoto = {}; dbAll_("CleaningPhotos").forEach(function (c) { hasPhoto[c.missionId] = true; });
+  const pics = [];
+  missions.slice(0, 6).forEach(function (m) {
+    if (hasPhoto[m.missionId]) return;
+    [["Séjour", "sejour"], ["Cuisine", "cuisine"]].forEach(function (r) {
+      [["BEFORE", "avant", m.startedAt], ["AFTER", "apres", m.completedAt]].forEach(function (ph) {
+        const d = storeFile_({ propertyId: m.propertyId, organizationId: m.organizationId }, "CLEANING", m.missionId, "PHOTO",
+          { mimeType: "image/jpeg", fileName: "Demo_" + r[1] + "_" + ph[1], base64: DEMO_PHOTOS_[r[1] + "_" + ph[1]] }, provU.email);
+        pics.push({ photoId: newId_("clp"), organizationId: m.organizationId, missionId: m.missionId, propertyId: m.propertyId, room: r[0], phase: ph[0], documentId: d.documentId, takenAt: ph[2], takenBy: provU.email });
+      });
+    });
+  });
+  dbInsertMany_("CleaningPhotos", pics); out.photos = pics.length;
+  return out;
+}
+
+/* ======================================================================
+ * DriveService.gs
+ * ====================================================================== */
+/**
+ * Google Drive : stockage privé des documents.
+ * - Tous les fichiers appartiennent au compte propriétaire du script, dans un dossier racine PRIVÉ, jamais partagé.
+ * - Aucun lien « toute personne disposant du lien ». Les utilisateurs ne reçoivent jamais d'URL Drive :
+ *   le contenu est renvoyé (base64) uniquement après contrôle des droits côté serveur.
+ * - Arborescence : ImmoPilot_PRIVATE/Organisations/<orgId>/Biens/<propertyId>/<Catégorie>, + Rapports, Exports, Modeles, Sauvegardes.
+ */
+var DOC_FOLDERS_ = { PROPERTY: "Photos", RESERVATION: "Reservations", GUEST: "Voyageurs", CHECKIN: "CheckIn_CheckOut", CLEANING: "Menage",
+  INCIDENT: "Incidents", WORKORDER: "Maintenance", QUOTE: "Maintenance", INVOICE: "Factures", LEASE: "Contrats", TENANT: "Contrats", PAYMENT: "Factures", CONTRACTOR: "Documents_administratifs", REPORT: "Rapports" };
+var DOC_OWNER_TYPES_ = Object.keys(DOC_FOLDERS_);
+var MIME_SIGNATURES_ = {
+  "image/jpeg": function (b) { return b[0] === -1 && b[1] === -40 && b[2] === -1; },
+  "image/png": function (b) { return b[0] === -119 && b[1] === 80 && b[2] === 78 && b[3] === 71; },
+  "image/webp": function (b) { return b[0] === 82 && b[1] === 73 && b[2] === 70 && b[3] === 70 && b[8] === 87 && b[9] === 69 && b[10] === 66 && b[11] === 80; },
+  "application/pdf": function (b) { return b[0] === 37 && b[1] === 80 && b[2] === 68 && b[3] === 70; }
+};
+
+function driveRoot_() {
+  if (TEST_HOOKS_.driveRoot) return TEST_HOOKS_.driveRoot;
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty(IMMO_CONFIG.DRIVE_ROOT_PROPERTY);
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { throw new AppError("CONFIG", "Dossier Drive privé introuvable (IMMO_PRIVATE_ROOT_FOLDER_ID). Vérifiez la configuration."); } }
+  const f = DriveApp.createFolder("ImmoPilot_PRIVATE_FILES_DO_NOT_SHARE");
+  f.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+  props.setProperty(IMMO_CONFIG.DRIVE_ROOT_PROPERTY, f.getId());
+  return f;
+}
+/** Sous-dossier par nom (identifiant de dossier mis en cache : ce n'est pas une donnée d'autorisation). */
+function subFolder_(parent, name) {
+  const cache = CacheService.getScriptCache(), key = "fld_" + sha256Hex_(parent.getId() + "/" + name).slice(0, 40);
+  const cached = cache.get(key);
+  if (cached) { try { return DriveApp.getFolderById(cached); } catch (e) { cache.remove(key); } }
+  const it = parent.getFoldersByName(name);
+  const f = it.hasNext() ? it.next() : parent.createFolder(name);
+  cache.put(key, f.getId(), 21600);
+  return f;
+}
+function orgFolder_(orgId) { return subFolder_(subFolder_(driveRoot_(), "Organisations"), String(orgId)); }
+function propertyFolder_(orgId, propertyId, ownerType) { return subFolder_(subFolder_(subFolder_(orgFolder_(orgId), "Biens"), String(propertyId)), DOC_FOLDERS_[ownerType] || "Divers"); }
+function systemFolder_(name) { return subFolder_(driveRoot_(), name); }
+function driveRootIsPrivate_() {
+  try { const f = driveRoot_(); return { ok: f.getSharingAccess() === DriveApp.Access.PRIVATE, access: String(f.getSharingAccess()), folderId: f.getId() }; }
+  catch (e) { return { ok: false, error: e.message }; }
+}
+
+/**
+ * Contexte d'un propriétaire de document : bien, organisation, droits de lecture et d'écriture.
+ * C'est LA fonction de contrôle d'accès des fichiers (lecture, dépôt, archivage).
+ */
+function docOwnerCtx_(p, ownerType, ownerId, category) {
+  oneOf_(ownerType, DOC_OWNER_TYPES_, "Type de document");
+  ownerId = safeText_(ownerId, 120);
+  const ctx = { propertyId: "", organizationId: "", canRead: false, canWrite: false, sensitive: false };
+  const setProp = function (propId) { const pr = dbGet_("Properties", propId); if (pr) { ctx.propertyId = pr.propertyId; ctx.organizationId = pr.organizationId; } return pr; };
+  if (ownerType === "PROPERTY") {
+    const pr = setProp(ownerId); if (!pr) return ctx;
+    ctx.canRead = canProp_(p, pr, "document.view") || canProp_(p, pr, "property.edit") || (category === "PHOTO" && !!propertyAccess_(p, pr));
+    ctx.canWrite = canProp_(p, pr, "property.edit");
+  } else if (ownerType === "RESERVATION" || ownerType === "CHECKIN") {
+    const r = dbGet_("Reservations", ownerId); if (!r) return ctx; setProp(r.propertyId);
+    ctx.canRead = canResv_(p, r, "reservation.view") || canResv_(p, r, "checkin.operate");
+    ctx.canWrite = canResv_(p, r, "reservation.edit") || canResv_(p, r, "checkin.operate");
+  } else if (ownerType === "GUEST") {
+    const g = dbGet_("Guests", ownerId); if (!g) return ctx; const r = dbGet_("Reservations", g.reservationId); if (!r) return ctx; setProp(r.propertyId);
+    ctx.sensitive = true;
+    ctx.canRead = canResv_(p, r, "guestdoc.view");
+    ctx.canWrite = canResv_(p, r, "reservation.edit") || canResv_(p, r, "guestdoc.view");
+  } else if (ownerType === "CLEANING") {
+    const m = dbGet_("CleaningMissions", ownerId); if (!m) return ctx; const pr = setProp(m.propertyId);
+    const mine = String(m.providerUserId) === p.userId || normalizeEmail_(m.providerEmail) === p.email;
+    ctx.canRead = mine || canProp_(p, pr, "cleaning.manage");
+    ctx.canWrite = (mine && ["ACCEPTED", "IN_PROGRESS"].indexOf(m.status) >= 0) || canProp_(p, pr, "cleaning.manage");
+  } else if (ownerType === "INCIDENT") {
+    const i = dbGet_("IncidentsV4", ownerId); if (!i) return ctx; const pr = setProp(i.propertyId);
+    const artIds = myArtisanIds_(p);
+    const artisanLinked = artIds.length && (artIds.indexOf(String(i.contractorId)) >= 0 || dbAll_("WorkOrders").some(function (w) { return String(w.incidentId) === String(i.incidentId) && artIds.indexOf(String(w.artisanId)) >= 0; }));
+    const reporter = normalizeEmail_(i.createdBy) === p.email;
+    ctx.canRead = canProp_(p, pr, "incident.view") || reporter || !!artisanLinked;
+    ctx.canWrite = canProp_(p, pr, "incident.manage") || (reporter && canProp_(p, pr, "incident.report")) || !!artisanLinked;
+  } else if (ownerType === "WORKORDER" || ownerType === "QUOTE" || ownerType === "INVOICE") {
+    const tbl = ownerType === "WORKORDER" ? "WorkOrders" : (ownerType === "QUOTE" ? "Quotes" : "Invoices");
+    const row = dbGet_(tbl, ownerId); if (!row) return ctx; const pr = setProp(row.propertyId);
+    const mine = myArtisanIds_(p).indexOf(String(row.artisanId)) >= 0;
+    const mgrCap = ownerType === "INVOICE" ? "invoice.view" : "workorder.manage";
+    ctx.canRead = mine || canProp_(p, pr, mgrCap) || canProp_(p, pr, "incident.view");
+    ctx.canWrite = mine || canProp_(p, pr, ownerType === "INVOICE" ? "invoice.manage" : "workorder.manage");
+  } else if (ownerType === "LEASE" || ownerType === "PAYMENT") {
+    let leaseId = ownerId, propId = "";
+    if (ownerType === "PAYMENT") { const pay = dbGet_("Payments", ownerId); if (!pay) return ctx; propId = pay.propertyId; leaseId = ""; }
+    const l = leaseId ? dbGet_("Leases", leaseId) : null; if (l) propId = l.propertyId;
+    const pr = setProp(propId); if (!pr) return ctx;
+    const self = l && myTenantIds_(p).indexOf(String(l.tenantId)) >= 0;
+    ctx.canRead = canProp_(p, pr, "lease.view") || canProp_(p, pr, "finance.view") || !!self;
+    ctx.canWrite = canProp_(p, pr, "lease.manage") || canProp_(p, pr, "finance.manage") || (self && category === "PAYMENT_PROOF");
+  } else if (ownerType === "TENANT") {
+    const t = dbGet_("Tenants", ownerId); if (!t) return ctx; ctx.organizationId = t.organizationId; ctx.sensitive = true;
+    ctx.canRead = hasOrgCap_(p, t.organizationId, "lease.manage") || myTenantIds_(p).indexOf(String(t.tenantId)) >= 0;
+    ctx.canWrite = hasOrgCap_(p, t.organizationId, "lease.manage");
+  } else if (ownerType === "CONTRACTOR") {
+    const c = dbGet_("Artisans", ownerId); if (!c) return ctx; ctx.organizationId = c.organizationId;
+    ctx.canRead = hasOrgCap_(p, c.organizationId, "contractor.manage") || myArtisanIds_(p).indexOf(String(c.artisanId)) >= 0;
+    ctx.canWrite = ctx.canRead;
+  } else if (ownerType === "REPORT") {
+    ctx.canRead = ownerId === p.userId; ctx.canWrite = ownerId === p.userId; ctx.organizationId = "";
+  }
+  return ctx;
+}
+
+/** Décode, contrôle (taille, type déclaré ET signature binaire), stocke et enregistre un fichier. */
+function storeFile_(ctx, ownerType, ownerId, category, input, uploaderEmail) {
+  const mime = safeText_(input.mimeType, 100);
+  assert_(MIME_SIGNATURES_[mime], "Type de fichier interdit (JPEG, PNG, WEBP ou PDF uniquement).");
+  const data = String(input.base64 || "").replace(/^data:[^,]+,/, "");
+  assert_(data.length > 0 && data.length <= Math.ceil(IMMO_CONFIG.MAX_UPLOAD_BYTES * 4 / 3) + 8, "Fichier vide ou trop volumineux (4 Mo maximum).");
+  const bytes = Utilities.base64Decode(data);
+  assert_(bytes.length > 0 && bytes.length <= IMMO_CONFIG.MAX_UPLOAD_BYTES, "Fichier trop volumineux (4 Mo maximum).");
+  assert_(MIME_SIGNATURES_[mime](bytes), "Le contenu du fichier ne correspond pas au type annoncé.");
+  const ext = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "application/pdf": ".pdf" }[mime];
+  const cleanName = (safeText_(input.fileName || "fichier", 120).replace(/[^\w.\- ()À-ÿ]/g, "_").replace(/\.[a-z0-9]{2,5}$/i, "") || "fichier") + ext;
+  const folder = ownerType === "REPORT" ? subFolder_(systemFolder_("Exports"), "user_" + ownerId) :
+    (ctx.propertyId ? propertyFolder_(ctx.organizationId, ctx.propertyId, ownerType) : subFolder_(orgFolder_(ctx.organizationId || "platform"), "Documents_administratifs"));
+  let file;
+  try { file = folder.createFile(Utilities.newBlob(bytes, mime, cleanName)); file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE); }
+  catch (e) { throw new AppError("DRIVE", "Enregistrement Drive impossible (quota ou autorisation) : " + e.message); }
+  const sensitive = ctx.sensitive || ["ID_DOCUMENT", "PASSPORT", "CIN"].indexOf(category) >= 0;
+  const retDays = Number(getSetting_("retention.sensitiveDocDays", ctx.organizationId)) || 30;
+  let retainUntil = "";
+  if (sensitive && (ownerType === "GUEST" || ownerType === "RESERVATION")) {
+    const r = ownerType === "GUEST" ? dbGet_("Reservations", (dbGet_("Guests", ownerId) || {}).reservationId) : dbGet_("Reservations", ownerId);
+    retainUntil = addDaysStr_(r ? r.checkOut : todayStr_(), retDays);
+  }
+  return dbInsert_("Documents", { organizationId: ctx.organizationId || "", propertyId: ctx.propertyId || "", ownerType: ownerType, ownerId: ownerId, category: category,
+    fileId: file.getId(), fileName: cleanName, mimeType: mime, sizeBytes: bytes.length, sha256: bytesToHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, bytes)),
+    sensitive: sensitive, status: "ACTIVE", createdAt: nowIso_(), createdBy: uploaderEmail || "", retainUntil: retainUntil, purgedAt: "", legacy: false });
+}
+
+/* ------------------------- Routes ------------------------- */
+function docUpload_(p, a) {
+  const ownerType = String(a.ownerType || ""), category = safeText_(a.category || "GENERAL", 40).toUpperCase().replace(/[^A-Z_]/g, "");
+  const ctx = docOwnerCtx_(p, ownerType, a.ownerId, category);
+  if (!ctx.canWrite) forbid_("Dépôt de fichier non autorisé pour cet élément.");
+  if (ctx.organizationId) assertOrgWritable_(ctx.organizationId);
+  rateLimit_("upload:" + p.userId, 120, 3600);
+  const d = storeFile_(ctx, ownerType, safeText_(a.ownerId, 120), category, a, p.email);
+  audit_("DOCUMENT_UPLOADED", "Document", d.documentId, ctx.organizationId, { ownerType: ownerType, ownerId: a.ownerId, category: category, sensitive: d.sensitive, size: d.sizeBytes });
+  return { ok: true, documentId: d.documentId, fileName: d.fileName };
+}
+function docList_(p, a) {
+  const ctx = docOwnerCtx_(p, String(a.ownerType || ""), a.ownerId, a.category);
+  if (!ctx.canRead) forbid_("Accès refusé aux documents de cet élément.");
+  return dbAll_("Documents").filter(function (d) { return d.ownerType === a.ownerType && String(d.ownerId) === String(a.ownerId) && d.status === "ACTIVE" && (!a.category || d.category === a.category); })
+    .map(function (d) { return { documentId: d.documentId, fileName: d.fileName, mimeType: d.mimeType, sizeBytes: d.sizeBytes, category: d.category, sensitive: d.sensitive, createdAt: d.createdAt, createdBy: d.createdBy }; });
+}
+function docAssertRead_(p, doc) {
+  if (!doc || doc.status !== "ACTIVE") throw new AppError("FORBIDDEN", "Document introuvable ou accès refusé.");
+  const ctx = docOwnerCtx_(p, doc.ownerType, doc.ownerId, doc.category);
+  if (!ctx.canRead) { audit_("DOCUMENT_ACCESS_DENIED", "Document", doc.documentId, doc.organizationId, {}, "DENIED"); throw new AppError("FORBIDDEN", "Document introuvable ou accès refusé."); }
+  return ctx;
+}
+/** Téléchargement contrôlé : le fichier est lu par le serveur et renvoyé en base64 (jamais d'URL Drive). */
+function docGet_(p, a) {
+  const doc = dbGet_("Documents", safeText_(a.documentId, 120));
+  docAssertRead_(p, doc);
+  if (doc.sensitive) rateLimit_("sensitive:" + p.userId, 60, 3600);
+  const f = DriveApp.getFileById(doc.fileId);
+  audit_("DOCUMENT_DOWNLOADED", "Document", doc.documentId, doc.organizationId, { sensitive: doc.sensitive, grant: CTX_.grantId || "" });
+  return { fileName: doc.fileName, mimeType: doc.mimeType, base64: Utilities.base64Encode(f.getBlob().getBytes()) };
+}
+function docArchive_(p, a) {
+  const doc = dbGet_("Documents", safeText_(a.documentId, 120));
+  if (!doc || doc.status !== "ACTIVE") notFound_("Document");
+  const ctx = docOwnerCtx_(p, doc.ownerType, doc.ownerId, doc.category);
+  if (!ctx.canWrite) forbid_();
+  dbUpdate_("Documents", doc.documentId, { status: "ARCHIVED" });
+  audit_("DOCUMENT_ARCHIVED", "Document", doc.documentId, doc.organizationId, {});
+  return { ok: true };
+}
+/** Contrôle d'appartenance d'une liste de documents à un élément (utilisé par check-in, ménage, incidents...). */
+function assertDocsOf_(docIds, ownerType, ownerId) {
+  (docIds || []).forEach(function (id) {
+    const d = dbGet_("Documents", id);
+    assert_(d && d.ownerType === ownerType && String(d.ownerId) === String(ownerId) && d.status === "ACTIVE", "Photo/document non rattaché à cet élément.");
+  });
+  return (docIds || []).slice(0, 50);
+}
+
+/* ------------------------- Génération PDF ------------------------- */
+function htmlToPdf_(html, name) {
+  const blob = Utilities.newBlob(String(html), "text/html", name + ".html").getAs("application/pdf");
+  blob.setName(name + ".pdf");
+  return blob;
+}
+/** Modèle Google Docs : copie, remplacement des balises {{cle}}, export PDF. La copie Docs est conservée dans le dossier cible. */
+var GOOGLE_DOC_MIME_ = "application/vnd.google-apps.document";
+/**
+ * Un modèle doit être un Google Docs rangé dans le dossier privé « Modeles ».
+ * Sans cette règle, un administrateur d'organisation pourrait indiquer l'identifiant de n'importe quel fichier
+ * accessible au compte déployeur (par exemple le document d'un autre client) et en obtenir une copie.
+ */
+function assertTemplateAllowed_(templateId) {
+  let file;
+  try { file = DriveApp.getFileById(String(templateId)); } catch (e) { throw new AppError("VALIDATION", "Modèle introuvable : vérifiez l'identifiant du document Google Docs."); }
+  assert_(file.getMimeType() === GOOGLE_DOC_MIME_, "Le modèle doit être un document Google Docs.");
+  const modeles = systemFolder_("Modeles").getId();
+  const parents = file.getParents();
+  let inModeles = false;
+  while (parents.hasNext()) { if (parents.next().getId() === modeles) { inModeles = true; break; } }
+  assert_(inModeles, "Le modèle doit être placé dans le dossier « Modeles » du Drive privé d'ImmoPilot.");
+  return file;
+}
+function docFromTemplate_(templateId, map, folder, name) {
+  const copy = assertTemplateAllowed_(templateId).makeCopy(name, folder);
+  copy.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+  const doc = DocumentApp.openById(copy.getId()), body = doc.getBody();
+  Object.keys(map).forEach(function (k) { body.replaceText("\\{\\{" + k.replace(/[^\w]/g, "") + "\\}\\}", String(map[k] == null ? "" : map[k]).replace(/\$/g, "\\$")); });
+  doc.saveAndClose();
+  const pdf = copy.getAs("application/pdf"); pdf.setName(name + ".pdf");
+  return { pdf: pdf, docId: copy.getId() };
+}
+/** Enregistre un PDF généré et le renvoie au client (base64), avec traçabilité Documents. */
+function storeGeneratedPdf_(p, pdfBlob, ctx, ownerType, ownerId, category) {
+  const bytes = pdfBlob.getBytes();
+  const d = storeFile_(ctx, ownerType, ownerId, category, { mimeType: "application/pdf", fileName: pdfBlob.getName(), base64: Utilities.base64Encode(bytes) }, p.email);
+  return { documentId: d.documentId, fileName: d.fileName, mimeType: "application/pdf", base64: Utilities.base64Encode(bytes) };
+}
+/** Logo ImmoPilot (PNG 96 × 96) intégré aux documents PDF. */
+var PDF_LOGO_PNG_B64_ = "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";
+/**
+ * Gabarit commun des PDF : en-tête avec logo et nom de l'application, titre, sous-titre facultatif (organisation),
+ * date de génération et pied de page. opts : { subtitle, footer, issuer: { name, lines[] } } — issuer remplace la marque ImmoPilot.
+ */
+function pdfShell_(title, inner, opts) {
+  opts = opts || {};
+  const when = Utilities.formatDate(new Date(), tz_(), "dd/MM/yyyy HH:mm");
+  return "<html><head><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;color:#1d2b3a;font-size:11px}h1{font-size:18px;color:#1b3554;margin:0 0 2px}" +
+    "h2{font-size:13px;color:#1b3554;margin:16px 0 6px;border-bottom:2px solid #e9b341;padding-bottom:2px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #c9d3df;padding:4px 6px;text-align:left;vertical-align:top}" +
+    "th{background:#e8eef5}.muted{color:#64748b}.right{text-align:right}.head td{border:0;padding:0}.brand{font-size:20px;font-weight:bold;color:#13233d}.gold{color:#c9962b}" +
+    ".photos td{border:0;padding:3px;width:50%}.photos img{width:100%;border:1px solid #c9d3df}.sign td{height:70px;width:50%}.box{border:1px solid #c9d3df;padding:8px;margin:8px 0;background:#f8fafc}" +
+    ".foot{margin-top:24px;border-top:1px solid #c9d3df;padding-top:6px;color:#64748b;font-size:9px}</style></head><body>" +
+    (opts.issuer
+      // Document émis par un tiers (devis, facture d'un prestataire) : son identité en en-tête, sans la marque ImmoPilot.
+      ? "<table class='head'><tr><td><div class='brand'>" + escapeHtml_(opts.issuer.name) + "</div><div class='muted'>" + (opts.issuer.lines || []).filter(String).map(escapeHtml_).join("<br>") + "</div></td>"
+      : "<table class='head'><tr><td style='width:62px'><img src='data:image/png;base64," + PDF_LOGO_PNG_B64_ + "' width='54' height='54'></td>" +
+        "<td><div class='brand'>Immo<span class='gold'>Pilot</span></div><div class='muted'>Gestion immobilière</div></td>") +
+    "<td class='right muted'>Généré le " + escapeHtml_(when) + "</td></tr></table><hr style='border:0;border-top:3px solid #13233d;margin:8px 0 12px'>" +
+    "<h1>" + escapeHtml_(title) + "</h1>" + (opts.subtitle ? "<p class='muted' style='margin:0 0 10px'>" + escapeHtml_(opts.subtitle) + "</p>" : "") + inner +
+    "<div class='foot'>" + escapeHtml_(opts.footer || (IMMO_CONFIG.APP_NAME + " — document généré automatiquement à partir des données enregistrées dans l'application.")) + "</div></body></html>";
+}
+/** Date AAAA-MM-JJ (ou horodatage) au format JJ/MM/AAAA. */
+function pdfDate_(s) { const v = String(s || "").slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v.slice(8, 10) + "/" + v.slice(5, 7) + "/" + v.slice(0, 4) : (v || "—"); }
+var PDF_PAY_METHODS_ = { TRANSFER: "Virement", CASH: "Espèces", CARD: "Carte", CHEQUE: "Chèque", PLATFORM: "Plateforme de réservation", OTHER: "Autre" };
+/** Image d'un document (photo) au format data: pour un PDF. Les fichiers de plus de 1,5 Mo ne sont pas intégrés (le PDF resterait trop lourd). */
+function pdfImageData_(documentId) {
+  const d = dbGet_("Documents", documentId);
+  if (!d || d.status !== "ACTIVE" || ["image/jpeg", "image/png", "image/webp"].indexOf(d.mimeType) < 0) return "";
+  if (num_(d.sizeBytes) > 1.5 * 1048576) return "";
+  try { return "data:" + d.mimeType + ";base64," + Utilities.base64Encode(DriveApp.getFileById(d.fileId).getBlob().getBytes()); } catch (e) { return ""; }
+}
+function htmlTable_(headers, rows) {
+  return "<table><thead><tr>" + headers.map(function (h) { return "<th>" + escapeHtml_(h) + "</th>"; }).join("") + "</tr></thead><tbody>" +
+    rows.map(function (r) { return "<tr>" + r.map(function (c) { return "<td" + (typeof c === "number" ? " class='right'" : "") + ">" + escapeHtml_(c) + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody></table>";
+}
+
+/** Rétention : purge (corbeille Drive) des documents sensibles échus et minimisation des fiches voyageurs. */
+function purgeExpiredDocuments_() {
+  const today = todayStr_(); let n = 0;
+  dbAll_("Documents").filter(function (d) { return d.status === "ACTIVE" && d.sensitive && d.retainUntil && d.retainUntil < today; }).slice(0, 200).forEach(function (d) {
+    try { DriveApp.getFileById(d.fileId).setTrashed(true); } catch (e) { console.error("Purge " + d.documentId + " : " + e.message); }
+    dbUpdate_("Documents", d.documentId, { status: "PURGED", purgedAt: nowIso_() });
+    auditAs_("system", "", "DOCUMENT_PURGED_RETENTION", "Document", d.documentId, d.organizationId, {}); n++;
+  });
+  let g = 0;
+  dbAll_("Guests").filter(function (x) { return x.status === "ACTIVE" && (x.idType || x.idRefMasked || x.nationality); }).forEach(function (x) {
+    const r = dbGet_("Reservations", x.reservationId);
+    const days = Number(getSetting_("retention.sensitiveDocDays", x.organizationId)) || 30;
+    if (r && addDaysStr_(r.checkOut, days) < today) { dbUpdate_("Guests", x.guestId, { idType: "", idRefMasked: "", nationality: "", status: "PURGED", purgedAt: nowIso_() }); g++; }
+  });
+  return { documentsPurged: n, guestsMinimized: g };
+}
+
+/* ======================================================================
+ * FinanceService.gs
+ * ====================================================================== */
+/**
+ * Finances : calculs centralisés côté serveur (un seul moteur, finCompute_, utilisé par les tableaux de bord, rapports et Pareto).
+ *
+ * DÉFINITIONS (voir ARCHITECTURE.md § Finances) :
+ *  - PRÉVU (expected)    : revenu d'hébergement + frais des réservations CONFIRMED/IN_PROGRESS/COMPLETED, PRORATISÉ aux nuits
+ *                          comprises dans la période ; + loyers et charges des échéances dont la date d'échéance est dans la période.
+ *                          Les taxes de séjour sont suivies à part (collectées pour la commune, hors chiffre d'affaires).
+ *  - FACTURÉ (billed)    : montants exigibles des réservations ARRIVANT dans la période (prix + frais + taxes) + échéances de loyer de la période
+ *                          + factures prestataires approuvées (côté coûts).
+ *  - ENCAISSÉ (collected): paiements entrants (Payments, direction IN) datés dans la période.
+ *  - PAYÉ (paidOut)      : paiements sortants (remboursements, factures, restitutions de caution, dépenses) datés dans la période.
+ *  - RESTANT DÛ          : pour les éléments facturés de la période, montant facturé − encaissé net à ce jour.
+ *  - Résultat propriétaire = prévu − dépenses (Expenses non annulées de la période) − commissions de gestion proratisées.
+ *  - Annulations         : réservations annulées dont la date d'arrivée prévue est dans la période (même règle que le Pareto des motifs).
+ *  - Taux d'occupation   = nuits réservées / nuits disponibles (biens courte durée actifs × jours − nuits bloquées).
+ *  - Prix moyen par nuit (ADR) = revenu d'hébergement proratisé / nuits réservées ; RevPAR = revenu d'hébergement / nuits disponibles.
+ * Aucun montant n'est marqué encaissé sans paiement explicitement enregistré.
+ */
+var PAY_METHODS_ = ["CASH", "TRANSFER", "CARD", "CHEQUE", "PLATFORM", "OTHER"];
+var REVENUE_STATUSES_ = ["CONFIRMED", "IN_PROGRESS", "COMPLETED"];
+
+function finScopeProps_(p, f) {
+  f = f || {};
+  return dbAll_("Properties").filter(function (x) {
+    if (x.status === "DELETED") return false;
+    if (!(canProp_(p, x, "finance.view") || canProp_(p, x, "property.edit"))) return false;
+    if (f.propertyId && String(x.propertyId) !== String(f.propertyId)) return false;
+    if (f.organizationId && String(x.organizationId) !== String(f.organizationId)) return false;
+    if (f.agencyOrganizationId && !dbAll_("AgencyPropertyPermissions").some(function (z) { return String(z.propertyId) === String(x.propertyId) && String(z.agencyOrganizationId) === String(f.agencyOrganizationId) && z.status === "ACTIVE"; })) return false;
+    return true;
+  });
+}
+
+/** Moteur financier. Pur calcul sur les données lues ; ne modifie rien. */
+function finCompute_(p, f) {
+  const per = periodFromFilters_(f), props = finScopeProps_(p, f);
+  return finComputeForProps_(props, per, f || {});
+}
+function finComputeForProps_(props, per, f) {
+  const ids = {}; props.forEach(function (x) { ids[String(x.propertyId)] = x; });
+  const rowsBy = {}; props.forEach(function (x) { rowsBy[x.propertyId] = { propertyId: x.propertyId, name: x.name, organizationId: x.organizationId, expected: 0, accommodation: 0, rentExpected: 0, taxes: 0,
+    billed: 0, collected: 0, paidOut: 0, outstanding: 0, expenses: 0, managementCommissions: 0, result: 0, bookedNights: 0, availableNights: 0, reservations: 0, cancellations: 0, cancellationRetained: 0 }; });
+  const months = {};
+  const mk = function (m) { return months[m] = months[m] || { month: m, expected: 0, collected: 0, paidOut: 0, expenses: 0, bookedNights: 0 }; };
+  for (let d = per.from.slice(0, 7); d <= per.to.slice(0, 7); d = addMonthsStr_(d + "-01", 1).slice(0, 7)) mk(d);
+  const inP = function (dateStr) { const s = String(dateStr || "").slice(0, 10); return s >= per.from && s <= per.to; };
+  const byAgency = {};
+  const resvAll = dbAll_("Reservations").filter(function (r) { return ids[String(r.propertyId)] && (!f.agencyOrganizationId || String(r.agencyOrganizationId) === String(f.agencyOrganizationId)); });
+  const resvIds = {}; resvAll.forEach(function (r) { resvIds[String(r.reservationId)] = r; });
+  resvAll.forEach(function (r) {
+    const row = rowsBy[r.propertyId]; const nights = Math.max(diffDays_(r.checkIn, r.checkOut), 1);
+    if (REVENUE_STATUSES_.indexOf(r.status) >= 0) {
+      const n = overlapNights_(r.checkIn, r.checkOut, per.from, per.toExcl);
+      if (n > 0) {
+        const ratio = n / nights, acc = round2_(num_(r.totalPrice) * ratio), fees = round2_(num_(r.fees) * ratio), com = round2_(num_(r.commissionAmount) * ratio);
+        row.accommodation += acc; row.expected += acc + fees; row.taxes += round2_(num_(r.taxes) * ratio); row.managementCommissions += com; row.bookedNights += n;
+        // ventilation mensuelle nuit par nuit
+        for (let d = r.checkIn > per.from ? r.checkIn : per.from; d < r.checkOut && d < per.toExcl; d = addDaysStr_(d, 1)) { const m = mk(d.slice(0, 7)); m.expected += (num_(r.totalPrice) + num_(r.fees)) / nights; m.bookedNights += 1; }
+        const ag = r.agencyOrganizationId || "DIRECT";
+        byAgency[ag] = byAgency[ag] || { agencyOrganizationId: ag, expected: 0, commissions: 0, reservations: 0, nights: 0 };
+        byAgency[ag].expected += acc + fees; byAgency[ag].commissions += com; byAgency[ag].nights += n;
+      }
+      if (inP(r.checkIn)) { row.reservations++; if (byAgency[r.agencyOrganizationId || "DIRECT"]) byAgency[r.agencyOrganizationId || "DIRECT"].reservations++;
+        const m = resvMoney_(r); row.billed += m.amountDue; row.outstanding += Math.max(0, m.balance); }
+    }
+    if (r.status === "CANCELLED" && inP(r.checkIn)) {
+      row.cancellations++;
+      const m = resvMoney_(r); const kept = round2_(Math.max(0, m.paid - num_(r.refundDue)));
+      row.cancellationRetained += kept; row.expected += kept;
+    }
+  });
+  // Loyers longue durée
+  dbAll_("RentSchedules").filter(function (s) { return ids[String(s.propertyId)] && s.status === "OPEN" && inP(s.dueDate); }).forEach(function (s) {
+    const row = rowsBy[s.propertyId], due = num_(s.amountDue), paid = rentPaid_(s.scheduleId);
+    row.rentExpected += due; row.expected += due; row.billed += due; row.outstanding += Math.max(0, round2_(due - paid));
+    mk(String(s.dueDate).slice(0, 7)).expected += due;
+  });
+  // Revenus divers saisis manuellement
+  dbAll_("RevenueRecords").filter(function (v) { return ids[String(v.propertyId)] && v.status !== "CANCELLED" && inP(v.revenueDate); }).forEach(function (v) {
+    rowsBy[v.propertyId].expected += num_(v.amount); mk(String(v.revenueDate).slice(0, 7)).expected += num_(v.amount);
+  });
+  // Paiements (trésorerie)
+  dbAll_("Payments").filter(function (x) { return x.status === "RECORDED" && x.kind !== "SUBSCRIPTION" && ids[String(x.propertyId)] && inP(x.paidAt); }).forEach(function (x) {
+    if (f.agencyOrganizationId && x.refType === "RESERVATION" && !resvIds[String(x.refId)]) return;
+    const row = rowsBy[x.propertyId], m = mk(String(x.paidAt).slice(0, 7));
+    if (x.direction === "IN") { row.collected += num_(x.amount); m.collected += num_(x.amount); } else { row.paidOut += num_(x.amount); m.paidOut += num_(x.amount); }
+  });
+  // Dépenses
+  const expByCat = {};
+  dbAll_("Expenses").filter(function (e) { return ids[String(e.propertyId)] && e.status !== "CANCELLED" && inP(e.expenseDate); }).forEach(function (e) {
+    rowsBy[e.propertyId].expenses += num_(e.amount); mk(String(e.expenseDate).slice(0, 7)).expenses += num_(e.amount);
+    expByCat[e.category] = round2_((expByCat[e.category] || 0) + num_(e.amount));
+  });
+  // Commissions prestataires (revenus des bénéficiaires, pas un coût propriétaire)
+  const invCom = {};
+  dbAll_("Invoices").filter(function (v) { return ids[String(v.propertyId)] && bool_(v.commissionLocked) && inP(String(v.approvedAt || v.issueDate)); }).forEach(function (v) {
+    const k = v.commissionBeneficiaryOrgId || ""; invCom[k] = round2_((invCom[k] || 0) + num_(v.commissionAmount));
+  });
+  // Nuits disponibles
+  const blocks = dbAll_("AvailabilityBlocks").filter(function (b) { return ids[String(b.propertyId)] && b.status === "ACTIVE"; });
+  props.forEach(function (x) {
+    const row = rowsBy[x.propertyId];
+    if (x.rentalMode === "LONG_TERM" || ["ACTIVE", "MAINTENANCE"].indexOf(x.status) < 0) { row.availableNights = 0; }
+    else {
+      const created = String(x.createdAt || "").slice(0, 10), start = created && created > per.from ? created : per.from;
+      let avail = start < per.toExcl ? diffDays_(start, per.toExcl) : 0;
+      blocks.filter(function (b) { return String(b.propertyId) === String(x.propertyId); }).forEach(function (b) { avail -= overlapNights_(b.startDate, b.endDate, start, per.toExcl); });
+      row.availableNights = Math.max(avail, row.bookedNights);
+    }
+    Object.keys(row).forEach(function (k) { if (typeof row[k] === "number") row[k] = round2_(row[k]); });
+    row.result = round2_(row.expected - row.expenses - row.managementCommissions);
+    row.occupancyRate = pct_(row.bookedNights, row.availableNights);
+    row.adr = row.bookedNights ? round2_(row.accommodation / row.bookedNights) : null;
+    row.revpar = row.availableNights ? round2_(row.accommodation / row.availableNights) : null;
+  });
+  const list = props.map(function (x) { return rowsBy[x.propertyId]; });
+  const T = { expected: 0, accommodation: 0, rentExpected: 0, taxes: 0, billed: 0, collected: 0, paidOut: 0, outstanding: 0, expenses: 0, managementCommissions: 0, result: 0, bookedNights: 0, availableNights: 0, reservations: 0, cancellations: 0, cancellationRetained: 0 };
+  list.forEach(function (r) { Object.keys(T).forEach(function (k) { T[k] = round2_(T[k] + num_(r[k])); }); });
+  T.occupancyRate = pct_(T.bookedNights, T.availableNights);
+  T.adr = T.bookedNights ? round2_(T.accommodation / T.bookedNights) : null;
+  T.revpar = T.availableNights ? round2_(T.accommodation / T.availableNights) : null;
+  T.netCashFlow = round2_(T.collected - T.paidOut);
+  T.contractorCommissions = round2_(Object.keys(invCom).reduce(function (a, k) { return a + invCom[k]; }, 0));
+  T.cancellationRate = pct_(T.cancellations, T.reservations + T.cancellations);
+  const byOwner = {};
+  list.forEach(function (r) { const o = byOwner[r.organizationId] = byOwner[r.organizationId] || { organizationId: r.organizationId, expected: 0, expenses: 0, managementCommissions: 0, result: 0 };
+    o.expected = round2_(o.expected + r.expected); o.expenses = round2_(o.expenses + r.expenses); o.managementCommissions = round2_(o.managementCommissions + r.managementCommissions); o.result = round2_(o.result + r.result); });
+  const orgNames = indexBy_(dbAll_("Organizations"), "organizationId");
+  return { period: per, totals: T, byProperty: list,
+    byMonth: Object.keys(months).sort().map(function (k) { const m = months[k]; return { month: k, expected: round2_(m.expected), collected: round2_(m.collected), paidOut: round2_(m.paidOut), expenses: round2_(m.expenses), net: round2_(m.collected - m.paidOut), bookedNights: m.bookedNights }; }),
+    byAgency: Object.keys(byAgency).map(function (k) { const x = byAgency[k]; return { agencyOrganizationId: k, name: k === "DIRECT" ? "Direct (propriétaire)" : ((orgNames[k] || {}).name || k), expected: round2_(x.expected), commissions: round2_(x.commissions), reservations: x.reservations, nights: x.nights }; }),
+    byOwner: Object.keys(byOwner).map(function (k) { return Object.assign({ name: (orgNames[k] || {}).name || k }, byOwner[k]); }),
+    expensesByCategory: expByCat, contractorCommissionsByBeneficiary: invCom };
+}
+
+/* ------------------------------ Paiements ------------------------------ */
+function paymentTarget_(p, refType, refId, kind) {
+  if (refType === "RESERVATION") {
+    const r = dbGet_("Reservations", safeText_(refId, 120));
+    if (!r || !(canResv_(p, r, "reservation.edit") || canResv_(p, r, "finance.manage"))) throw new AppError("FORBIDDEN", "Réservation introuvable ou accès refusé.");
+    oneOf_(kind, ["RESERVATION", "DEPOSIT", "REFUND", "DEPOSIT_REFUND"], "Type de paiement");
+    return { propertyId: r.propertyId, organizationId: r.organizationId, row: r };
+  }
+  if (refType === "RENT_SCHEDULE") {
+    const s = dbGet_("RentSchedules", safeText_(refId, 120)); if (!s) notFound_("Échéance");
+    const prop = assertPropAny_(p, s.propertyId, ["lease.manage", "finance.manage"]);
+    oneOf_(kind, ["RENT"], "Type de paiement");
+    return { propertyId: prop.propertyId, organizationId: prop.organizationId, row: s };
+  }
+  if (refType === "LEASE") {
+    const l = dbGet_("Leases", safeText_(refId, 120)); if (!l) notFound_("Bail");
+    const prop = assertPropAny_(p, l.propertyId, ["lease.manage", "finance.manage"]);
+    oneOf_(kind, ["DEPOSIT", "DEPOSIT_REFUND"], "Type de paiement");
+    return { propertyId: prop.propertyId, organizationId: prop.organizationId, row: l };
+  }
+  if (refType === "INVOICE") {
+    const v = dbGet_("Invoices", safeText_(refId, 120)); if (!v) notFound_("Facture");
+    const prop = assertPropAny_(p, v.propertyId, ["invoice.manage", "finance.manage"]);
+    oneOf_(kind, ["INVOICE"], "Type de paiement");
+    return { propertyId: prop.propertyId, organizationId: prop.organizationId, row: v };
+  }
+  if (refType === "EXPENSE") {
+    const e = dbGet_("Expenses", safeText_(refId, 120)); if (!e) notFound_("Dépense");
+    const prop = assertPropAny_(p, e.propertyId, ["finance.manage"]);
+    oneOf_(kind, ["OTHER"], "Type de paiement");
+    return { propertyId: prop.propertyId, organizationId: prop.organizationId, row: e };
+  }
+  throw new AppError("VALIDATION", "Type de référence de paiement invalide.");
+}
+var PAY_DIRECTION_ = { RESERVATION: "IN", DEPOSIT: "IN", RENT: "IN", REFUND: "OUT", DEPOSIT_REFUND: "OUT", INVOICE: "OUT", OTHER: "OUT" };
+
+function payRecord_(p, a) {
+  const refType = String(a.refType || ""), kind = String(a.kind || "");
+  const t = paymentTarget_(p, refType, a.refId, kind);
+  assertOrgWritable_(t.organizationId);
+  const amount = money_(a.amount, "Montant", { min: 0.01 });
+  const paidAt = a.paidAt ? dateOnly_(a.paidAt, "Date de paiement") : todayStr_();
+  assert_(paidAt <= todayStr_(), "La date de paiement ne peut pas être future.");
+  if (a.proofDocId) { const d = dbGet_("Documents", a.proofDocId); assert_(d && d.status === "ACTIVE" && String(d.propertyId) === String(t.propertyId), "Justificatif invalide."); }
+  return withLock_(function () {
+    return idemRun_(a.requestKey, "PAYMENT_" + refType, t.organizationId, function () {
+      if (refType === "RESERVATION") {
+        const r = dbGet_("Reservations", t.row.reservationId), m = resvMoney_(r);
+        if (kind === "REFUND") assert_(amount <= round2_(m.paid - m.refunded) + 0.001, "Remboursement supérieur aux sommes encaissées (" + round2_(m.paid - m.refunded) + ").");
+        if (kind === "DEPOSIT_REFUND") assert_(amount <= m.depositHeld + 0.001, "Restitution supérieure à la caution détenue (" + m.depositHeld + ").");
+        if (kind === "RESERVATION") assert_(["CANCELLED", "NO_SHOW"].indexOf(r.status) < 0 || a.allowOnCancelled === true, "Réservation annulée : confirmez l'encaissement explicitement.");
+      }
+      if (refType === "RENT_SCHEDULE") { const remaining = round2_(num_(t.row.amountDue) - rentPaid_(t.row.scheduleId)); assert_(amount <= remaining + 0.001, "Montant supérieur au restant dû (" + remaining + ")."); }
+      if (refType === "INVOICE") { const v = dbGet_("Invoices", t.row.invoiceId); assert_(["APPROVED", "PARTIAL"].indexOf(v.status) >= 0, "La facture doit être approuvée.");
+        const remaining = round2_(num_(v.netToContractor || v.amountTTC) - num_(v.paidAmount)); assert_(amount <= remaining + 0.001, "Montant supérieur au net restant dû (" + remaining + ")."); }
+      if (refType === "LEASE" && kind === "DEPOSIT_REFUND") { const held = leaseDepositHeld_(t.row.leaseId); assert_(amount <= held + 0.001, "Restitution supérieure à la caution détenue (" + held + ")."); }
+      const pay = dbInsert_("Payments", { organizationId: t.organizationId, propertyId: t.propertyId, kind: kind, refType: refType, refId: safeText_(a.refId, 120), direction: PAY_DIRECTION_[kind], amount: amount,
+        currency: "MAD", method: oneOf_(a.method || "TRANSFER", PAY_METHODS_, "Mode de paiement"), paidAt: paidAt, reference: safeText_(a.reference, 120), proofDocId: safeText_(a.proofDocId || "", 120),
+        status: "RECORDED", reconciled: false, note: safeText_(a.note, 500), idempotencyKey: safeText_(a.requestKey || "", 120), recordedBy: p.email, createdAt: nowIso_() });
+      paymentRefresh_(pay);
+      audit_("PAYMENT_RECORDED", "Payment", pay.paymentId, t.organizationId, { refType: refType, refId: a.refId, kind: kind, amount: amount });
+      return { ok: true, paymentId: pay.paymentId, id: pay.paymentId };
+    });
+  });
+}
+function paymentRefresh_(pay) {
+  if (pay.refType === "RESERVATION") resvRefreshPaymentStatus_(pay.refId);
+  if (pay.refType === "INVOICE") invRefreshPaid_(pay.refId);
+  if (pay.refType === "EXPENSE") {
+    const e = dbGet_("Expenses", pay.refId);
+    const paid = sumBy_(dbAll_("Payments").filter(function (x) { return x.refType === "EXPENSE" && String(x.refId) === String(pay.refId) && x.status === "RECORDED"; }), function (x) { return x.amount; });
+    if (e) dbUpdate_("Expenses", e.expenseId, { status: paid + 0.005 >= num_(e.amount) ? "PAID" : (e.status === "PAID" ? "INVOICED" : e.status), paidAt: paid + 0.005 >= num_(e.amount) ? nowIso_() : "" });
+  }
+}
+function payVoid_(p, a) {
+  const pay = dbGet_("Payments", safeText_(a.paymentId, 120));
+  if (!pay || pay.kind === "SUBSCRIPTION") notFound_("Paiement");
+  paymentTarget_(p, pay.refType, pay.refId, pay.kind);
+  assert_(pay.status === "RECORDED", "Paiement déjà annulé.");
+  assert_(!bool_(pay.reconciled), "Paiement rapproché : annulez d'abord le rapprochement.");
+  const reason = reqText_(a.reason, "Motif", 3, 300);
+  withLock_(function () { dbUpdate_("Payments", pay.paymentId, { status: "VOID", voidedAt: nowIso_(), voidedBy: p.email, note: safeText_((pay.note ? pay.note + " | " : "") + "Annulé : " + reason, 500) }); paymentRefresh_(pay); });
+  audit_("PAYMENT_VOIDED", "Payment", pay.paymentId, pay.organizationId, { reason: reason, amount: pay.amount });
+  return { ok: true };
+}
+/** Rapprochement bancaire MANUEL (aucune connexion bancaire automatique n'existe). */
+function payReconcile_(p, a) {
+  const pay = dbGet_("Payments", safeText_(a.paymentId, 120));
+  if (!pay || pay.kind === "SUBSCRIPTION") notFound_("Paiement");
+  assertPropAny_(p, pay.propertyId, ["finance.manage"]);
+  assert_(pay.status === "RECORDED", "Paiement annulé.");
+  const on = a.reconciled !== false;
+  dbUpdate_("Payments", pay.paymentId, { reconciled: on, reconciledAt: on ? nowIso_() : "", reconciledBy: on ? p.email : "", reference: a.bankReference ? safeText_(a.bankReference, 120) : pay.reference });
+  audit_(on ? "PAYMENT_RECONCILED" : "PAYMENT_UNRECONCILED", "Payment", pay.paymentId, pay.organizationId, {});
+  return { ok: true };
+}
+function payList_(p, a) {
+  a = a || {};
+  const allowed = {}; finScopeProps_(p, {}).forEach(function (x) { allowed[String(x.propertyId)] = x; });
+  accessibleProps_(p, "reservation.edit").forEach(function (x) { allowed[String(x.propertyId)] = x; });
+  const rows = dbAll_("Payments").filter(function (x) {
+    if (x.kind === "SUBSCRIPTION" || !allowed[String(x.propertyId)]) return false;
+    if (x.refType !== "RESERVATION" && !canProp_(p, allowed[String(x.propertyId)], "finance.view") && !canProp_(p, allowed[String(x.propertyId)], "lease.manage")) return false;
+    if (a.propertyId && String(x.propertyId) !== String(a.propertyId)) return false;
+    if (a.direction && x.direction !== a.direction) return false;
+    if (a.kind && x.kind !== a.kind) return false;
+    if (a.reconciled === true && !bool_(x.reconciled)) return false; if (a.reconciled === false && bool_(x.reconciled)) return false;
+    if (a.from && x.paidAt < a.from) return false; if (a.to && x.paidAt > a.to) return false;
+    if (!a.includeVoid && x.status === "VOID") return false;
+    return matchesQuery_(a.q, [x.reference, x.refId, x.note]);
+  }).sort(function (x, y) { return String(y.paidAt).localeCompare(String(x.paidAt)); })
+    .map(function (x) { return { paymentId: x.paymentId, propertyId: x.propertyId, propertyName: (allowed[String(x.propertyId)] || {}).name, kind: x.kind, refType: x.refType, refId: x.refId, direction: x.direction,
+      amount: x.amount, method: x.method, paidAt: x.paidAt, reference: x.reference, status: x.status, reconciled: x.reconciled, reconciledAt: x.reconciledAt, proofDocId: x.proofDocId, recordedBy: x.recordedBy, note: x.note }; });
+  const page = pageOf_(rows, a);
+  page.totals = { in: sumBy_(rows.filter(function (x) { return x.direction === "IN" && x.status === "RECORDED"; }), function (x) { return x.amount; }),
+    out: sumBy_(rows.filter(function (x) { return x.direction === "OUT" && x.status === "RECORDED"; }), function (x) { return x.amount; }) };
+  return page;
+}
+
+/* ------------------------------ Dépenses / revenus divers ------------------------------ */
+function expCreate_(p, a) {
+  const prop = assertProp_(p, a.propertyId, "finance.manage");
+  const e = dbInsert_("Expenses", { organizationId: prop.organizationId, propertyId: prop.propertyId, category: oneOf_(a.category, getSetting_("list.expenseCategories", prop.organizationId), "Catégorie"),
+    description: reqText_(a.description, "Description", 2, 300), supplier: safeText_(a.supplier, 120), amount: money_(a.amount, "Montant", { min: 0.01 }), vatAmount: a.vatAmount ? money_(a.vatAmount, "TVA") : 0,
+    currency: "MAD", expenseDate: a.expenseDate ? dateOnly_(a.expenseDate, "Date") : todayStr_(), status: oneOf_(a.status || "INVOICED", ["PLANNED", "INVOICED"], "Statut"), refType: "MANUAL", refId: "",
+    uniqueKey: "manual:" + newId_("x"), documentId: safeText_(a.documentId || "", 120), createdAt: nowIso_(), createdBy: p.email });
+  audit_("EXPENSE_CREATED", "Expense", e.expenseId, prop.organizationId, { amount: e.amount, category: e.category });
+  return { ok: true, expenseId: e.expenseId, id: e.expenseId };
+}
+function expCancel_(p, a) {
+  const e = dbGet_("Expenses", safeText_(a.expenseId, 120)); if (!e) notFound_("Dépense");
+  assertProp_(p, e.propertyId, "finance.manage");
+  assert_(e.refType === "MANUAL" || e.refType === "CLEANING", "Les dépenses issues de factures se gèrent depuis la facture.");
+  assert_(e.status !== "PAID", "Dépense déjà payée : annulez d'abord le paiement.");
+  dbUpdate_("Expenses", e.expenseId, { status: "CANCELLED" });
+  audit_("EXPENSE_CANCELLED", "Expense", e.expenseId, e.organizationId, {});
+  return { ok: true };
+}
+function expList_(p, a) {
+  a = a || {};
+  const allowed = {}; finScopeProps_(p, {}).forEach(function (x) { allowed[String(x.propertyId)] = x; });
+  const rows = dbAll_("Expenses").filter(function (e) {
+    if (!allowed[String(e.propertyId)]) return false;
+    if (a.propertyId && String(e.propertyId) !== String(a.propertyId)) return false;
+    if (a.category && e.category !== a.category) return false;
+    if (a.status && e.status !== a.status) return false; else if (!a.status && e.status === "CANCELLED") return false;
+    if (a.from && e.expenseDate < a.from) return false; if (a.to && e.expenseDate > a.to) return false;
+    return matchesQuery_(a.q, [e.description, e.supplier]);
+  }).sort(function (x, y) { return String(y.expenseDate).localeCompare(String(x.expenseDate)); })
+    .map(function (e) { return { expenseId: e.expenseId, propertyId: e.propertyId, propertyName: allowed[String(e.propertyId)].name, category: e.category, description: e.description, supplier: e.supplier, amount: e.amount,
+      vatAmount: e.vatAmount, expenseDate: e.expenseDate, status: e.status, refType: e.refType, refId: e.refId, documentId: e.documentId }; });
+  const page = pageOf_(rows, a);
+  page.total = rows.length; page.sum = sumBy_(rows, function (x) { return x.amount; });
+  return page;
+}
+function revCreate_(p, a) {
+  const prop = assertProp_(p, a.propertyId, "finance.manage");
+  const r = dbInsert_("RevenueRecords", { organizationId: prop.organizationId, propertyId: prop.propertyId, category: safeText_(a.category || "OTHER", 40).toUpperCase(), description: reqText_(a.description, "Description", 2, 300),
+    amount: money_(a.amount, "Montant", { min: 0.01 }), currency: "MAD", revenueDate: a.revenueDate ? dateOnly_(a.revenueDate, "Date") : todayStr_(), status: "EXPECTED", createdAt: nowIso_(), createdBy: p.email });
+  audit_("REVENUE_RECORD_CREATED", "RevenueRecord", r.revenueId, prop.organizationId, { amount: r.amount });
+  return { ok: true, revenueId: r.revenueId };
+}
+function finSummary_(p, a) {
+  const res = finCompute_(p, a || {});
+  res.previous = finComputeForProps_(finScopeProps_(p, a || {}), previousPeriod_(res.period), a || {}).totals;
+  return res;
+}
+
+/* ======================================================================
+ * GuestService.gs
+ * ====================================================================== */
+/**
+ * Voyageurs et pièces d'identité (données sensibles).
+ * Minimisation : la référence complète de la pièce n'est conservée que si le paramètre guests.storeIdReference est activé
+ * (obligation légale validée localement) ; sinon seuls les 3 derniers caractères sont gardés. Les scans sont stockés
+ * comme documents sensibles (accès guestdoc.view uniquement), purgés automatiquement après la durée de rétention,
+ * jamais exportés, jamais joints à un e-mail, jamais écrits dans les journaux.
+ *
+ * Portail voyageur : accès sans compte, par lien à jeton (256 bits, haché en base), limité à UNE réservation,
+ * valable jusqu'au lendemain du départ, révocable.
+ */
+var ID_TYPES_ = ["CIN", "PASSPORT", "RESIDENCE_PERMIT", "DRIVING_LICENSE", "OTHER"];
+
+function maskIdRef_(ref, orgId) {
+  ref = safeText_(ref, 40).replace(/\s+/g, "").toUpperCase();
+  if (!ref) return "";
+  assert_(/^[A-Z0-9-]{3,40}$/.test(ref), "Référence de pièce invalide.");
+  return getSetting_("guests.storeIdReference", orgId) === true ? ref : "****" + ref.slice(-3);
+}
+function guestOut_(g, level) {
+  const o = { guestId: g.guestId, firstName: g.firstName, lastName: g.lastName, isPrimary: g.isPrimary, status: g.status };
+  if (level !== "min") { o.email = g.email; o.phone = g.phone; }
+  if (level === "full") { o.nationality = g.nationality; o.idType = g.idType; o.idRef = g.idRefMasked; }
+  return o;
+}
+function guestListFor_(p, r) {
+  const level = canResv_(p, r, "guestdoc.view") ? "full" : (canResv_(p, r, "guest.view") ? "std" : "min");
+  return dbAll_("Guests").filter(function (g) { return String(g.reservationId) === String(r.reservationId); }).map(function (g) {
+    const o = guestOut_(g, level);
+    if (level === "full") o.documents = dbAll_("Documents").filter(function (d) { return d.ownerType === "GUEST" && String(d.ownerId) === String(g.guestId) && d.status === "ACTIVE"; })
+      .map(function (d) { return { documentId: d.documentId, fileName: d.fileName, category: d.category, createdAt: d.createdAt }; });
+    return o;
+  });
+}
+function guestApplyInput_(a, orgId) {
+  const o = {};
+  if (a.lastName !== undefined) o.lastName = reqText_(a.lastName, "Nom", 1, 80);
+  if (a.firstName !== undefined) o.firstName = safeText_(a.firstName, 80);
+  if (a.email !== undefined) o.email = a.email ? validateEmail_(a.email) : "";
+  if (a.phone !== undefined) o.phone = safeText_(a.phone, 30);
+  if (a.nationality !== undefined) o.nationality = safeText_(a.nationality, 60);
+  if (a.idType !== undefined) o.idType = a.idType ? oneOf_(a.idType, ID_TYPES_, "Type de pièce") : "";
+  if (a.idRef !== undefined) o.idRefMasked = maskIdRef_(a.idRef, orgId);
+  return o;
+}
+
+/* --------------------------- Routes authentifiées --------------------------- */
+function guestList_(p, a) {
+  a = a || {};
+  if (a.reservationId) { const r = assertResv_(p, a.reservationId, "guest.view"); return { items: guestListFor_(p, r), total: 0 }; }
+  const props = indexBy_(dbAll_("Properties"), "propertyId"), resv = indexBy_(dbAll_("Reservations"), "reservationId");
+  const rows = dbAll_("Guests").filter(function (g) {
+    const r = resv[String(g.reservationId)];
+    if (!r || !canResv_(p, r, "guest.view")) return false;
+    if (a.propertyId && String(r.propertyId) !== String(a.propertyId)) return false;
+    if (a.from && r.checkOut < a.from) return false; if (a.to && r.checkIn > a.to) return false;
+    return matchesQuery_(a.q, [g.lastName, g.firstName, g.email, g.phone, r.reservationId]);
+  }).map(function (g) {
+    const r = resv[String(g.reservationId)];
+    return Object.assign(guestOut_(g, "std"), { reservationId: r.reservationId, propertyName: (props[String(r.propertyId)] || {}).name, checkIn: r.checkIn, checkOut: r.checkOut, idProvided: !!g.idType });
+  }).sort(function (x, y) { return String(y.checkIn).localeCompare(String(x.checkIn)); });
+  return pageOf_(rows, a);
+}
+function guestSave_(p, a) {
+  const r = assertResv_(p, a.reservationId, "reservation.edit");
+  const data = guestApplyInput_(a, r.organizationId);
+  if (data.idType || data.idRefMasked) assert_(canResv_(p, r, "guestdoc.view"), "Droits insuffisants pour enregistrer une pièce d'identité.", "FORBIDDEN");
+  return withLock_(function () {
+    if (a.guestId) {
+      const g = dbGet_("Guests", safeText_(a.guestId, 120));
+      assert_(g && String(g.reservationId) === String(r.reservationId) && g.status === "ACTIVE", "Voyageur introuvable pour cette réservation.");
+      data.updatedAt = nowIso_(); dbUpdate_("Guests", g.guestId, data);
+      audit_("GUEST_UPDATED", "Guest", g.guestId, r.organizationId, { fields: Object.keys(data) });
+      return { ok: true, guestId: g.guestId };
+    }
+    const count = dbAll_("Guests").filter(function (g) { return String(g.reservationId) === String(r.reservationId) && g.status === "ACTIVE"; }).length;
+    assert_(count < Math.max(Number(r.guestCount) || 1, 1) + 2, "Nombre de fiches voyageurs supérieur au nombre de voyageurs.");
+    assert_(data.lastName, "Nom obligatoire.");
+    const g = dbInsert_("Guests", Object.assign({ organizationId: r.organizationId, propertyId: r.propertyId, reservationId: r.reservationId, isPrimary: false, status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() }, data));
+    audit_("GUEST_CREATED", "Guest", g.guestId, r.organizationId, { reservationId: r.reservationId });
+    return { ok: true, guestId: g.guestId };
+  });
+}
+/** Effacement des données d'identité d'un voyageur (droit à l'effacement / fin de nécessité). */
+function guestPurge_(p, a) {
+  const g = dbGet_("Guests", safeText_(a.guestId, 120));
+  if (!g) notFound_("Voyageur");
+  const r = assertResv_(p, g.reservationId, "guestdoc.view");
+  dbUpdate_("Guests", g.guestId, { idType: "", idRefMasked: "", nationality: "", status: "PURGED", purgedAt: nowIso_() });
+  dbAll_("Documents").filter(function (d) { return d.ownerType === "GUEST" && String(d.ownerId) === String(g.guestId) && d.status === "ACTIVE"; }).forEach(function (d) {
+    try { DriveApp.getFileById(d.fileId).setTrashed(true); } catch (e) { console.error(e.message); }
+    dbUpdate_("Documents", d.documentId, { status: "PURGED", purgedAt: nowIso_() });
+  });
+  audit_("GUEST_DATA_PURGED", "Guest", g.guestId, r.organizationId, {});
+  return { ok: true };
+}
+
+/* --------------------------- Portail voyageur --------------------------- */
+function guestTokenCreate_(p, a) {
+  const r = assertResv_(p, a.reservationId, "reservation.edit");
+  assert_(["PENDING", "CONFIRMED", "IN_PROGRESS"].indexOf(r.status) >= 0, "Réservation inactive.");
+  assertFeature_(r.organizationId, "guest_portal");
+  const token = randomToken_();
+  withLock_(function () {
+    dbAll_("GuestAccessTokens").filter(function (t) { return String(t.reservationId) === String(r.reservationId) && t.status === "ACTIVE"; }).forEach(function (t) { dbUpdate_("GuestAccessTokens", t.tokenId, { status: "REVOKED" }); });
+    dbInsert_("GuestAccessTokens", { organizationId: r.organizationId, reservationId: r.reservationId, tokenHash: sha256Hex_(token), status: "ACTIVE",
+      expiresAt: localToDate_(addDaysStr_(r.checkOut, 1), "23:59").toISOString(), createdAt: nowIso_(), createdBy: p.email, useCount: 0 });
+  });
+  const url = appUrl_() + "?action=guest&token=" + token;
+  let emailed = false;
+  if (a.sendEmail && r.guestEmail) {
+    const prop = dbGet_("Properties", r.propertyId);
+    emailed = sendMailSafe_(r.guestEmail, "Préparez votre arrivée — " + prop.name, "Bonjour " + r.guestName + ",\n\nComplétez vos informations d'arrivée et consultez les consignes via ce lien personnel (valable jusqu'au lendemain de votre départ) :\n" + url + "\n\n" + IMMO_CONFIG.APP_NAME, "guest-portal:" + sha256Hex_(token).slice(0, 16), r.organizationId).ok;
+  }
+  audit_("GUEST_PORTAL_LINK_CREATED", "Reservation", r.reservationId, r.organizationId, { emailed: emailed });
+  return { ok: true, url: url, emailed: emailed, whatsapp: r.guestPhone ? waLink_(r.guestPhone, "Bonjour " + r.guestName + ", préparez votre arrivée ici : " + url) : "" };
+}
+function guestTokenRevoke_(p, a) {
+  const r = assertResv_(p, a.reservationId, "reservation.edit");
+  let n = 0;
+  dbAll_("GuestAccessTokens").filter(function (t) { return String(t.reservationId) === String(r.reservationId) && t.status === "ACTIVE"; }).forEach(function (t) { dbUpdate_("GuestAccessTokens", t.tokenId, { status: "REVOKED" }); n++; });
+  audit_("GUEST_PORTAL_LINK_REVOKED", "Reservation", r.reservationId, r.organizationId, { count: n });
+  return { ok: true, revoked: n };
+}
+function guestFromToken_(token) {
+  token = String(token || "");
+  assert_(/^[a-f0-9]{64}$/.test(token), "Lien invalide.", "AUTH");
+  rateLimit_("guestportal:" + token.slice(0, 16), 60, 600);
+  const h = sha256Hex_(token);
+  const t = dbAll_("GuestAccessTokens").find(function (x) { return safeEq_(x.tokenHash, h); });
+  assert_(t && t.status === "ACTIVE", "Lien invalide ou révoqué.", "AUTH");
+  assert_(parseTs_(t.expiresAt).getTime() > Date.now(), "Ce lien a expiré.", "EXPIRED");
+  const r = dbGet_("Reservations", t.reservationId);
+  assert_(r && ["PENDING", "CONFIRMED", "IN_PROGRESS"].indexOf(r.status) >= 0, "Réservation inactive.", "AUTH");
+  dbUpdate_("GuestAccessTokens", t.tokenId, { lastUsedAt: nowIso_(), useCount: (Number(t.useCount) || 0) + 1 });
+  return { t: t, r: r, prop: dbGet_("Properties", r.propertyId) };
+}
+function guestPortalGet_(a) {
+  const x = guestFromToken_(a.token), r = x.r, prop = x.prop;
+  const showAccess = todayStr_() >= addDaysStr_(r.checkIn, -1);
+  return { propertyName: prop.name, city: prop.city, address: prop.address, checkIn: r.checkIn, checkOut: r.checkOut,
+    checkInTime: prop.checkInTime || getSetting_("reservation.defaultCheckIn", r.organizationId), checkOutTime: prop.checkOutTime || getSetting_("reservation.defaultCheckOut", r.organizationId),
+    guestCount: r.guestCount, guestName: r.guestName, houseRules: prop.houseRules, arrivalInstructions: prop.arrivalInstructions, departureInstructions: prop.departureInstructions,
+    accessInstructions: showAccess ? prop.accessInstructions : "", accessAvailableFrom: showAccess ? "" : addDaysStr_(r.checkIn, -1),
+    guests: dbAll_("Guests").filter(function (g) { return String(g.reservationId) === String(r.reservationId) && g.status === "ACTIVE"; }).map(function (g) {
+      return { guestId: g.guestId, firstName: g.firstName, lastName: g.lastName, idProvided: !!g.idType, documentCount: dbAll_("Documents").filter(function (d) { return d.ownerType === "GUEST" && String(d.ownerId) === String(g.guestId) && d.status === "ACTIVE"; }).length };
+    }), incidentCategories: getSetting_("list.incidentCategories", r.organizationId), idTypes: ID_TYPES_ };
+}
+function guestPortalSave_(a) {
+  const x = guestFromToken_(a.token), r = x.r;
+  const list = Array.isArray(a.guests) ? a.guests.slice(0, Math.max(Number(r.guestCount) || 1, 1)) : [];
+  assert_(list.length, "Aucun voyageur transmis.");
+  return withLock_(function () {
+    const saved = [];
+    list.forEach(function (g) {
+      const data = guestApplyInput_({ lastName: g.lastName, firstName: g.firstName, nationality: g.nationality, idType: g.idType, idRef: g.idRef, email: g.email, phone: g.phone }, r.organizationId);
+      if (g.guestId) {
+        const ex = dbGet_("Guests", safeText_(g.guestId, 120));
+        assert_(ex && String(ex.reservationId) === String(r.reservationId) && ex.status === "ACTIVE", "Voyageur inconnu.");
+        data.updatedAt = nowIso_(); dbUpdate_("Guests", ex.guestId, data); saved.push(ex.guestId);
+      } else {
+        const n = dbAll_("Guests").filter(function (z) { return String(z.reservationId) === String(r.reservationId) && z.status === "ACTIVE"; }).length;
+        assert_(n < (Number(r.guestCount) || 1), "Nombre maximal de voyageurs atteint.");
+        saved.push(dbInsert_("Guests", Object.assign({ organizationId: r.organizationId, propertyId: r.propertyId, reservationId: r.reservationId, isPrimary: false, status: "ACTIVE", createdAt: nowIso_(), createdBy: "guest-portal", updatedAt: nowIso_() }, data)).guestId);
+      }
+    });
+    auditAs_("guest-portal", "", "GUEST_PORTAL_INFO_SAVED", "Reservation", r.reservationId, r.organizationId, { guests: saved.length });
+    return { ok: true, guestIds: saved };
+  });
+}
+function guestPortalUpload_(a) {
+  const x = guestFromToken_(a.token), r = x.r;
+  const g = dbGet_("Guests", safeText_(a.guestId, 120));
+  assert_(g && String(g.reservationId) === String(r.reservationId) && g.status === "ACTIVE", "Voyageur inconnu.");
+  assert_(dbAll_("Documents").filter(function (d) { return d.ownerType === "GUEST" && String(d.ownerId) === String(g.guestId) && d.status === "ACTIVE"; }).length < 4, "Nombre maximal de documents atteint.");
+  const ctx = { propertyId: r.propertyId, organizationId: r.organizationId, sensitive: true };
+  const d = storeFile_(ctx, "GUEST", g.guestId, "ID_DOCUMENT", a, "guest-portal");
+  auditAs_("guest-portal", "", "GUEST_PORTAL_DOCUMENT_UPLOADED", "Guest", g.guestId, r.organizationId, { size: d.sizeBytes });
+  return { ok: true, documentId: d.documentId };
+}
+function guestPortalIncident_(a) {
+  const x = guestFromToken_(a.token), r = x.r, prop = x.prop;
+  rateLimit_("guestinc:" + r.reservationId, 5, 3600);
+  const cat = oneOf_(a.category || "OTHER", getSetting_("list.incidentCategories", r.organizationId), "Catégorie");
+  const i = dbInsert_("IncidentsV4", { organizationId: r.organizationId, propertyId: r.propertyId, reservationId: r.reservationId, category: cat, priority: "NORMAL", severity: "MEDIUM",
+    title: "Signalement voyageur : " + cat, description: reqText_(a.description, "Description", 5, 2000), status: "OPEN", photoFileIdsJson: "[]", createdAt: nowIso_(), createdBy: "guest:" + r.reservationId,
+    updatedAt: nowIso_(), updatedBy: "guest-portal", source: "GUEST" });
+  auditAs_("guest-portal", "", "INCIDENT_CREATED", "Incident", i.incidentId, r.organizationId, { source: "GUEST" });
+  notify_({ eventKey: "incident-new:" + i.incidentId, userIds: propertyManagers_(prop, "canManageOperations"), type: "INCIDENT", organizationId: r.organizationId,
+    title: "Problème signalé par un voyageur : " + prop.name, body: cat + " — " + i.description.slice(0, 200), link: "#incident/" + i.incidentId });
+  return { ok: true, incidentId: i.incidentId };
+}
+
+/* ======================================================================
+ * IncidentService.gs
+ * ====================================================================== */
+/**
+ * Incidents et réclamations (feuille IncidentsV4 ; la feuille historique « Incidents » reste intacte et a été copiée par migration).
+ * Workflow : OPEN → QUALIFIED → ASSIGNED → QUOTE_PENDING → AWAITING_OWNER → APPROVED → IN_PROGRESS → RESOLVED → CLOSED.
+ * Les étapes devis/validation sont pilotées par QuoteService (WorkOrderService.gs) ; les coûts finaux viennent des factures approuvées.
+ */
+var INC_TRANSITIONS_ = {
+  OPEN: ["QUALIFIED", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "CANCELLED"],
+  QUALIFIED: ["ASSIGNED", "QUOTE_PENDING", "IN_PROGRESS", "RESOLVED", "CANCELLED"],
+  ASSIGNED: ["QUOTE_PENDING", "IN_PROGRESS", "RESOLVED", "CANCELLED"],
+  QUOTE_PENDING: ["CANCELLED"], AWAITING_OWNER: ["CANCELLED"], APPROVED: ["IN_PROGRESS", "CANCELLED"],
+  IN_PROGRESS: ["RESOLVED"], RESOLVED: ["CLOSED", "IN_PROGRESS"], CLOSED: [], CANCELLED: []
+};
+var SEVERITIES_ = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+
+/** Insertion interne (utilisée par check-in/out, ménage, portail voyageur). Le contrôle d'accès est fait par l'appelant. */
+function incidentInsert_(p, prop, d) {
+  const cat = oneOf_(d.category || "OTHER", getSetting_("list.incidentCategories", prop.organizationId), "Catégorie");
+  const sev = oneOf_(d.severity || "MEDIUM", SEVERITIES_, "Gravité");
+  const prioMap = { LOW: "LOW", MEDIUM: "NORMAL", HIGH: "HIGH", CRITICAL: "URGENT" };
+  const i = dbInsert_("IncidentsV4", { organizationId: prop.organizationId, propertyId: prop.propertyId, reservationId: safeText_(d.reservationId || "", 120), missionId: safeText_(d.missionId || "", 120),
+    category: cat, priority: prioMap[sev], severity: sev, title: safeText_(d.title || cat, 120), description: reqText_(d.description, "Description", 3, 3000), status: "OPEN",
+    photoFileIdsJson: "[]", reportedByUserId: p ? p.userId : "", createdAt: nowIso_(), createdBy: p ? p.email : "system", updatedAt: nowIso_(), updatedBy: p ? p.email : "system", source: safeText_(d.source || "MANUAL", 20),
+    estimatedCost: d.estimatedCost ? money_(d.estimatedCost, "Coût estimé") : "" });
+  (d.photoDocIds || []).forEach(function (docId) {
+    const doc = dbGet_("Documents", docId);
+    if (doc && doc.status === "ACTIVE" && String(doc.propertyId) === String(prop.propertyId) && doc.createdBy === (p ? p.email : "")) dbUpdate_("Documents", docId, { ownerType: "INCIDENT", ownerId: i.incidentId });
+  });
+  if (p) audit_("INCIDENT_CREATED", "Incident", i.incidentId, prop.organizationId, { category: cat, severity: sev, source: d.source || "MANUAL" });
+  const urgent = sev === "HIGH" || sev === "CRITICAL";
+  notify_({ eventKey: "incident-new:" + i.incidentId, userIds: propertyManagers_(prop, "canManageOperations").filter(function (u) { return !p || u !== p.userId; }), type: urgent ? "INCIDENT_SEVERE" : "INCIDENT",
+    organizationId: prop.organizationId, title: (urgent ? "Incident grave : " : "Nouvel incident : ") + prop.name, body: cat + " — " + i.description.slice(0, 200), link: "#incident/" + i.incidentId, email: urgent });
+  return i;
+}
+
+function incAccess_(p, i) {
+  const prop = dbGet_("Properties", i.propertyId);
+  const artIds = myArtisanIds_(p);
+  const artisan = artIds.length > 0 && (artIds.indexOf(String(i.contractorId)) >= 0 || dbAll_("WorkOrders").some(function (w) { return String(w.incidentId) === String(i.incidentId) && artIds.indexOf(String(w.artisanId)) >= 0; }) ||
+    dbAll_("Quotes").some(function (q) { return String(q.incidentId) === String(i.incidentId) && artIds.indexOf(String(q.artisanId)) >= 0; }));
+  return { prop: prop, view: canProp_(p, prop, "incident.view"), manage: canProp_(p, prop, "incident.manage"), reporter: normalizeEmail_(i.createdBy) === p.email, artisan: artisan,
+    decide: canProp_(p, prop, "quote.decide") };
+}
+function incLoad_(p, id, need) {
+  const i = dbGet_("IncidentsV4", safeText_(id, 120));
+  if (!i) throw new AppError("FORBIDDEN", "Incident introuvable ou accès refusé.");
+  const acc = incAccess_(p, i);
+  const ok = need === "manage" ? acc.manage : (acc.view || acc.reporter || acc.artisan);
+  if (!ok) throw new AppError("FORBIDDEN", "Incident introuvable ou accès refusé.");
+  if (need === "manage") assertOrgWritable_(i.organizationId);
+  return { i: i, acc: acc };
+}
+function incOut_(p, i, props) {
+  const prop = (props || {})[String(i.propertyId)] || dbGet_("Properties", i.propertyId) || {};
+  const ageDays = Math.max(0, Math.floor((Date.now() - (parseTs_(i.createdAt) || new Date()).getTime()) / 86400000));
+  return { incidentId: i.incidentId, propertyId: i.propertyId, propertyName: prop.name, reservationId: i.reservationId, missionId: i.missionId, title: i.title || i.category, category: i.category,
+    severity: i.severity || "MEDIUM", priority: i.priority, status: i.status, description: i.description, createdAt: i.createdAt, createdBy: i.createdBy, assignedToUserId: i.assignedToUserId,
+    contractorId: i.contractorId, estimatedCost: i.estimatedCost, finalCost: i.finalCost, resolvedAt: i.resolvedAt, closedAt: i.closedAt, source: i.source, ageDays: ageDays, legacyOrigin: i.legacyOrigin };
+}
+
+/* ------------------------------ Routes ------------------------------ */
+function incList_(p, a) {
+  a = a || {};
+  const props = indexBy_(dbAll_("Properties"), "propertyId");
+  const artIds = myArtisanIds_(p);
+  const rows = dbAll_("IncidentsV4").filter(function (i) {
+    const prop = props[String(i.propertyId)];
+    const ok = canProp_(p, prop, "incident.view") || normalizeEmail_(i.createdBy) === p.email || (artIds.length && artIds.indexOf(String(i.contractorId)) >= 0);
+    if (!ok) return false;
+    if (a.propertyId && String(i.propertyId) !== String(a.propertyId)) return false;
+    if (a.status) { if (String(a.status).split(",").indexOf(i.status) < 0) return false; } else if (a.openOnly && ["CLOSED", "CANCELLED"].indexOf(i.status) >= 0) return false;
+    if (a.category && i.category !== a.category) return false;
+    if (a.severity && i.severity !== a.severity) return false;
+    const d = String(i.createdAt).slice(0, 10);
+    if (a.from && d < a.from) return false; if (a.to && d > a.to) return false;
+    return matchesQuery_(a.q, [i.title, i.description, i.category, (prop || {}).name, i.incidentId]);
+  }).sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); });
+  const page = pageOf_(rows, a);
+  page.items = page.items.map(function (i) { return incOut_(p, i, props); });
+  return page;
+}
+function incGet_(p, a) {
+  const x = incLoad_(p, a.incidentId, "read"), i = x.i, acc = x.acc;
+  const o = incOut_(p, i);
+  o.canManage = acc.manage; o.canDecide = acc.decide;
+  o.comments = dbAll_("IncidentComments").filter(function (c) { return String(c.incidentId) === String(i.incidentId) && (acc.manage || acc.view || c.visibility !== "INTERNAL"); })
+    .sort(function (u, v) { return String(u.createdAt).localeCompare(String(v.createdAt)); }).map(function (c) { return { commentId: c.commentId, authorEmail: c.authorEmail, body: c.body, createdAt: c.createdAt, visibility: c.visibility }; });
+  o.documents = docList_(p, { ownerType: "INCIDENT", ownerId: i.incidentId });
+  const artIds = myArtisanIds_(p);
+  const mineOnly = !acc.view && !acc.manage;
+  o.quotes = dbAll_("Quotes").filter(function (q) { return String(q.incidentId) === String(i.incidentId) && (!mineOnly || artIds.indexOf(String(q.artisanId)) >= 0); }).map(quoteOut_);
+  o.workOrders = dbAll_("WorkOrders").filter(function (w) { return String(w.incidentId) === String(i.incidentId) && (!mineOnly || artIds.indexOf(String(w.artisanId)) >= 0); }).map(woOut_);
+  if (canProp_(p, acc.prop, "invoice.view") || mineOnly) o.invoices = dbAll_("Invoices").filter(function (v) { return String(v.incidentId) === String(i.incidentId) && (!mineOnly || artIds.indexOf(String(v.artisanId)) >= 0); }).map(invoiceOut_);
+  if (acc.manage || acc.view) o.history = auditHistory_("Incident", i.incidentId, 40);
+  o.allowedTransitions = acc.manage ? (INC_TRANSITIONS_[i.status] || []) : [];
+  return o;
+}
+function incCreate_(p, a) {
+  const prop = assertPropAny_(p, a.propertyId, ["incident.report", "incident.manage"]);
+  assertOrgWritable_(prop.organizationId);
+  if (a.reservationId) { const r = dbGet_("Reservations", a.reservationId); assert_(r && String(r.propertyId) === String(prop.propertyId), "Réservation d'un autre bien."); }
+  const docs = Array.isArray(a.photoDocIds) ? a.photoDocIds.slice(0, 20) : [];
+  const i = withLock_(function () { return incidentInsert_(p, prop, { category: a.category, severity: a.severity, title: a.title, description: a.description, reservationId: a.reservationId, estimatedCost: a.estimatedCost, source: "MANUAL", photoDocIds: docs }); });
+  return { ok: true, incidentId: i.incidentId, id: i.incidentId };
+}
+function incUpdate_(p, a) {
+  const x = incLoad_(p, a.incidentId, "manage"), i = x.i;
+  const patch = { updatedAt: nowIso_(), updatedBy: p.email };
+  if (a.category !== undefined) patch.category = oneOf_(a.category, getSetting_("list.incidentCategories", i.organizationId), "Catégorie");
+  if (a.severity !== undefined) patch.severity = oneOf_(a.severity, SEVERITIES_, "Gravité");
+  if (a.title !== undefined) patch.title = reqText_(a.title, "Titre", 2, 120);
+  if (a.estimatedCost !== undefined) patch.estimatedCost = a.estimatedCost === "" ? "" : money_(a.estimatedCost, "Coût estimé");
+  if (a.finalCost !== undefined && a.finalCost !== "") patch.finalCost = money_(a.finalCost, "Coût final");
+  if (a.assignedToEmail !== undefined) {
+    if (!a.assignedToEmail) patch.assignedToUserId = "";
+    else { const u = dbAll_("Users").find(function (z) { return normalizeEmail_(z.email) === normalizeEmail_(a.assignedToEmail) && z.status === "ACTIVE"; });
+      assert_(u && propertyManagers_(x.acc.prop).indexOf(String(u.userId)) >= 0, "Le responsable doit être un gestionnaire du bien."); patch.assignedToUserId = u.userId; }
+  }
+  if (a.contractorId !== undefined) {
+    if (a.contractorId) { const c = dbGet_("Artisans", a.contractorId); assert_(c && c.status === "ACTIVE" && contractorUsableFor_(p, c, x.acc.prop), "Prestataire non autorisé pour ce bien."); }
+    patch.contractorId = safeText_(a.contractorId, 120);
+  }
+  if (a.status !== undefined && a.status !== i.status) {
+    assert_((INC_TRANSITIONS_[i.status] || []).indexOf(a.status) >= 0, "Transition " + i.status + " → " + a.status + " non autorisée.");
+    if (a.status === "CLOSED") {
+      const wos = dbAll_("WorkOrders").filter(function (w) { return String(w.incidentId) === String(i.incidentId) && w.status !== "CANCELLED" && w.status !== "DECLINED"; });
+      assert_(wos.every(function (w) { return w.status === "VERIFIED"; }), "Clôture impossible : des interventions ne sont pas contrôlées.");
+      patch.closedAt = nowIso_();
+      const inv = dbAll_("Invoices").filter(function (v) { return String(v.incidentId) === String(i.incidentId) && ["APPROVED", "PARTIAL", "PAID"].indexOf(v.status) >= 0; });
+      if (inv.length && (a.finalCost === undefined || a.finalCost === "")) patch.finalCost = sumBy_(inv, function (v) { return v.amountTTC; });
+    }
+    if (a.status === "RESOLVED") patch.resolvedAt = nowIso_();
+    patch.status = a.status;
+  }
+  dbUpdate_("IncidentsV4", i.incidentId, patch);
+  audit_("INCIDENT_UPDATED", "Incident", i.incidentId, i.organizationId, diff_(i, patch, Object.keys(patch).filter(function (k) { return ["updatedAt", "updatedBy"].indexOf(k) < 0; })));
+  if (patch.severity && ["HIGH", "CRITICAL"].indexOf(patch.severity) >= 0 && ["HIGH", "CRITICAL"].indexOf(i.severity) < 0)
+    notify_({ eventKey: "incident-escalated:" + i.incidentId + ":" + patch.severity, userIds: propertyManagers_(x.acc.prop, "canManageOperations"), type: "INCIDENT_SEVERE", organizationId: i.organizationId,
+      title: "Incident escaladé (" + patch.severity + ") : " + x.acc.prop.name, body: i.title || i.category, link: "#incident/" + i.incidentId });
+  if (patch.assignedToUserId) notify_({ eventKey: "incident-assigned:" + i.incidentId + ":" + patch.assignedToUserId, userIds: [patch.assignedToUserId], type: "INCIDENT_ASSIGNED", organizationId: i.organizationId,
+    title: "Incident qui vous est confié : " + x.acc.prop.name, body: i.title || i.category, link: "#incident/" + i.incidentId });
+  return { ok: true };
+}
+function incComment_(p, a) {
+  const x = incLoad_(p, a.incidentId, "read");
+  const visibility = x.acc.manage || x.acc.view ? oneOf_(a.visibility || "SHARED", ["SHARED", "INTERNAL"], "Visibilité") : "SHARED";
+  const c = dbInsert_("IncidentComments", { organizationId: x.i.organizationId, incidentId: x.i.incidentId, authorEmail: p.email, body: reqText_(a.body, "Commentaire", 1, 2000), createdAt: nowIso_(), visibility: visibility });
+  audit_("INCIDENT_COMMENTED", "Incident", x.i.incidentId, x.i.organizationId, { visibility: visibility });
+  return { ok: true, commentId: c.commentId };
+}
+
+/** Tâche planifiée : alertes d'ancienneté et de coût (une seule fois par incident et par seuil). */
+function incidentAlertsJob_() {
+  let n = 0;
+  dbAll_("IncidentsV4").filter(function (i) { return ["CLOSED", "CANCELLED", "RESOLVED"].indexOf(i.status) < 0; }).forEach(function (i) {
+    const prop = dbGet_("Properties", i.propertyId); if (!prop) return;
+    const days = Number(getSetting_("alerts.incidentAgeDays", i.organizationId)) || 3, cost = Number(getSetting_("alerts.incidentCost", i.organizationId)) || 5000;
+    const age = (Date.now() - (parseTs_(i.createdAt) || new Date()).getTime()) / 86400000;
+    if (age >= days) { notify_({ eventKey: "incident-age:" + i.incidentId + ":" + days, userIds: propertyManagers_(prop, "canManageOperations"), type: "INCIDENT_AGE", organizationId: i.organizationId,
+      title: "Incident ouvert depuis " + Math.floor(age) + " jours : " + prop.name, body: (i.title || i.category) + " — statut " + i.status, link: "#incident/" + i.incidentId }); n++; }
+    const c = Math.max(num_(i.estimatedCost), num_(i.finalCost));
+    if (c >= cost) { notify_({ eventKey: "incident-cost:" + i.incidentId + ":" + cost, userIds: propertyManagers_(prop), type: "INCIDENT_COST", organizationId: i.organizationId,
+      title: "Incident coûteux (" + c + " MAD) : " + prop.name, body: i.title || i.category, link: "#incident/" + i.incidentId }); n++; }
+  });
+  return { alerts: n };
+}
+
+/* ======================================================================
+ * InvoiceService.gs
+ * ====================================================================== */
+/**
+ * Factures des prestataires et commission.
+ *
+ * COMMISSION (documentée dans ARCHITECTURE.md § Finances) :
+ *  - Base de calcul : montant HT de la facture approuvée (jamais le TTC, jamais le devis).
+ *  - Taux : figé sur l'ordre de travail à sa création (saisie > fiche prestataire > paramètre commission.contractorRate, 15 % par défaut).
+ *  - Bénéficiaire : l'organisation qui a commandé l'intervention (agence si l'ordre a été créé par un compte agence attribué au bien,
+ *    sinon l'organisation propriétaire).
+ *  - Traitement : la commission est RETENUE sur le versement à l'artisan (net = TTC − commission − TVA sur commission).
+ *    Le propriétaire supporte uniquement le TTC de la facture (dépense MAINTENANCE). La commission est un REVENU du bénéficiaire ;
+ *    la TVA sur commission (paramètre commission.vatRate) est due par le bénéficiaire selon son régime fiscal — à valider par un comptable.
+ *  - Calcul unique : effectué une seule fois à l'approbation, sous verrou, puis commissionLocked = TRUE. Aucun autre module ne la recalcule.
+ */
+function invoiceOut_(v) {
+  return { invoiceId: v.invoiceId, workOrderId: v.workOrderId, incidentId: v.incidentId, propertyId: v.propertyId, artisanId: v.artisanId, artisanName: ((dbGet_("Artisans", v.artisanId) || {}).name) || "",
+    invoiceNumber: v.invoiceNumber, issueDate: v.issueDate, dueDate: v.dueDate, amountHT: v.amountHT, vatRate: v.vatRate, vatAmount: v.vatAmount, amountTTC: v.amountTTC,
+    commissionRate: v.commissionRate, commissionBase: v.commissionBase, commissionAmount: v.commissionAmount, commissionVatAmount: v.commissionVatAmount, commissionLocked: v.commissionLocked,
+    commissionBeneficiaryOrgId: v.commissionBeneficiaryOrgId, netToContractor: v.netToContractor, paidAmount: v.paidAmount || 0, balance: round2_(num_(v.netToContractor || v.amountTTC) - num_(v.paidAmount)),
+    currency: v.currency || "MAD", status: v.status, documentId: v.documentId, notes: v.notes, createdAt: v.createdAt, approvedAt: v.approvedAt };
+}
+/** Calcul pur (testé) : retourne la ventilation d'une facture. */
+function computeInvoiceSplit_(amountHT, vatRate, commissionRate, commissionVatRate) {
+  const ht = round2_(amountHT), vat = round2_(ht * vatRate / 100), ttc = round2_(ht + vat);
+  const com = round2_(ht * commissionRate / 100), comVat = round2_(com * commissionVatRate / 100);
+  return { amountHT: ht, vatAmount: vat, amountTTC: ttc, commissionBase: ht, commissionAmount: com, commissionVatAmount: comVat, netToContractor: round2_(ttc - com - comVat) };
+}
+function commissionBeneficiary_(w, prop) {
+  const creator = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === normalizeEmail_(w.createdBy); });
+  if (creator) {
+    const agencyOrg = dbAll_("UserRoles").filter(function (r) { return String(r.userId) === String(creator.userId) && r.status === "ACTIVE" && (r.role === "AGENCY_ADMIN" || r.role === "AGENCY_USER"); })
+      .map(function (r) { return String(r.organizationId); })
+      .find(function (orgId) { return dbAll_("AgencyPropertyPermissions").some(function (z) { return String(z.propertyId) === String(prop.propertyId) && String(z.agencyOrganizationId) === orgId && z.status === "ACTIVE"; }); });
+    if (agencyOrg) return agencyOrg;
+  }
+  return String(prop.organizationId);
+}
+function invLoad_(p, id) {
+  const v = dbGet_("Invoices", safeText_(id, 120));
+  if (!v) throw new AppError("FORBIDDEN", "Facture introuvable ou accès refusé.");
+  const prop = dbGet_("Properties", v.propertyId);
+  const view = canProp_(p, prop, "invoice.view"), manage = canProp_(p, prop, "invoice.manage"), mine = myArtisanIds_(p).indexOf(String(v.artisanId)) >= 0;
+  if (!view && !manage && !mine) throw new AppError("FORBIDDEN", "Facture introuvable ou accès refusé.");
+  return { v: v, prop: prop, manage: manage, mine: mine };
+}
+
+/* ------------------------------ Routes ------------------------------ */
+function invSubmit_(p, a) {
+  const x = woLoad_(p, a.workOrderId, "artisan");
+  assert_(["COMPLETED", "VERIFIED"].indexOf(x.w.status) >= 0, "La facture ne peut être transmise qu'après l'intervention.");
+  const ht = money_(a.amountHT, "Montant HT", { min: 0.01 });
+  const vatRate = a.vatRate === undefined || a.vatRate === "" ? Number(getSetting_("finance.vatRate", x.w.organizationId)) : rate_(a.vatRate, "TVA");
+  const docId = safeText_(a.documentId || "", 120);
+  if (docId) { const d = dbGet_("Documents", docId); assert_(d && d.status === "ACTIVE" && ((d.ownerType === "WORKORDER" && String(d.ownerId) === String(x.w.workOrderId)) || d.ownerType === "INVOICE"), "Justificatif de facture invalide."); }
+  return withLock_(function () {
+    return idemRun_(a.requestKey, "INVOICE_SUBMIT", x.w.organizationId, function () {
+      assert_(!dbAll_("Invoices").some(function (v) { return String(v.workOrderId) === String(x.w.workOrderId) && ["CANCELLED", "REJECTED"].indexOf(v.status) < 0; }), "Une facture est déjà enregistrée pour cette intervention.");
+      const split = computeInvoiceSplit_(ht, vatRate, 0, 0);
+      let notes = safeText_(a.notes, 1000);
+      if (x.w.quoteId) {
+        const q = dbGet_("Quotes", x.w.quoteId), tol = Number(getSetting_("invoice.tolerancePercent", x.w.organizationId)) || 5;
+        if (q && num_(q.amountTTC) > 0 && split.amountTTC > num_(q.amountTTC) * (1 + tol / 100)) notes = safeText_("[ÉCART DEVIS] Facture " + split.amountTTC + " > devis " + q.amountTTC + " (+" + tol + " % tolérés). " + notes, 1000);
+      }
+      const v = dbInsert_("Invoices", { organizationId: x.w.organizationId, propertyId: x.w.propertyId, workOrderId: x.w.workOrderId, incidentId: x.w.incidentId, artisanId: x.w.artisanId,
+        invoiceNumber: reqText_(a.invoiceNumber, "Numéro de facture", 1, 60), issueDate: a.issueDate ? dateOnly_(a.issueDate, "Date de facture") : todayStr_(), dueDate: a.dueDate ? dateOnly_(a.dueDate, "Échéance") : addDaysStr_(todayStr_(), 30),
+        amountHT: split.amountHT, vatRate: vatRate, vatAmount: split.vatAmount, amountTTC: split.amountTTC, commissionRate: x.w.commissionRate, commissionLocked: false, currency: "MAD", status: "SUBMITTED",
+        documentId: docId, paidAmount: 0, createdAt: nowIso_(), createdBy: p.email, notes: notes });
+      if (docId) dbUpdate_("Documents", docId, { ownerType: "INVOICE", ownerId: v.invoiceId, category: "INVOICE" });
+      dbUpdate_("WorkOrders", x.w.workOrderId, { invoiceId: v.invoiceId, updatedAt: nowIso_() });
+      audit_("INVOICE_SUBMITTED", "Invoice", v.invoiceId, v.organizationId, { amountTTC: v.amountTTC, gap: notes.indexOf("[ÉCART") === 0 });
+      notify_({ eventKey: "invoice-pending:" + v.invoiceId, userIds: dbAll_("UserRoles").filter(function (r) { return r.status === "ACTIVE" && r.role === "OWNER" && String(r.organizationId) === String(x.prop.organizationId); }).map(function (r) { return r.userId; }),
+        type: "INVOICE_PENDING", organizationId: v.organizationId, title: "Facture en attente : " + x.prop.name, body: v.amountTTC + " MAD TTC" + (notes.indexOf("[ÉCART") === 0 ? " — écart avec le devis" : ""), link: "#invoices" });
+      return { ok: true, invoiceId: v.invoiceId, id: v.invoiceId, warning: notes.indexOf("[ÉCART") === 0 ? notes : "" };
+    });
+  });
+}
+function invApprove_(p, a) {
+  const x = invLoad_(p, a.invoiceId);
+  assert_(x.manage, "Approbation de facture non autorisée.", "FORBIDDEN");
+  assertOrgWritable_(x.v.organizationId);
+  return withLock_(function () {
+    const v = dbGet_("Invoices", x.v.invoiceId);
+    assert_(v.status === "SUBMITTED", "Facture déjà traitée (statut " + v.status + ").");
+    assert_(!bool_(v.commissionLocked), "Commission déjà calculée.");
+    const w = dbGet_("WorkOrders", v.workOrderId);
+    const rate = v.commissionRate !== null && v.commissionRate !== "" ? Number(v.commissionRate) : resolveCommissionRate_(undefined, dbGet_("Artisans", v.artisanId), v.organizationId);
+    const comVat = Number(getSetting_("commission.vatRate", v.organizationId));
+    const split = computeInvoiceSplit_(v.amountHT, v.vatRate, rate, isFinite(comVat) ? comVat : 20);
+    const beneficiary = commissionBeneficiary_(w || { createdBy: "" }, x.prop);
+    dbUpdate_("Invoices", v.invoiceId, { status: "APPROVED", approvedAt: nowIso_(), approvedBy: p.email, commissionRate: rate, commissionBase: split.commissionBase, commissionAmount: split.commissionAmount,
+      commissionVatRate: isFinite(comVat) ? comVat : 20, commissionVatAmount: split.commissionVatAmount, commissionBeneficiaryOrgId: beneficiary, commissionLocked: true, netToContractor: split.netToContractor });
+    dbInsertUnique_("Expenses", "uniqueKey", "invoice:" + v.invoiceId, { organizationId: v.organizationId, propertyId: v.propertyId, category: "MAINTENANCE", description: "Facture " + v.invoiceNumber + " — intervention " + v.workOrderId,
+      supplier: ((dbGet_("Artisans", v.artisanId) || {}).name) || "", amount: v.amountTTC, vatAmount: v.vatAmount, currency: v.currency || "MAD", expenseDate: v.issueDate, status: "INVOICED", refType: "INVOICE", refId: v.invoiceId,
+      documentId: v.documentId, createdAt: nowIso_(), createdBy: p.email });
+    const inc = dbGet_("IncidentsV4", v.incidentId);
+    if (inc) dbUpdate_("IncidentsV4", inc.incidentId, { finalCost: sumBy_(dbAll_("Invoices").filter(function (z) { return String(z.incidentId) === String(inc.incidentId) && ["APPROVED", "PARTIAL", "PAID"].indexOf(z.status) >= 0; }), function (z) { return z.amountTTC; }), updatedAt: nowIso_() });
+    audit_("INVOICE_APPROVED", "Invoice", v.invoiceId, v.organizationId, { amountTTC: v.amountTTC, commissionRate: rate, commissionAmount: split.commissionAmount, beneficiary: beneficiary });
+    const art = dbGet_("Artisans", v.artisanId);
+    if (art && art.userId) notify_({ eventKey: "invoice-approved:" + v.invoiceId, userIds: [art.userId], type: "INVOICE_APPROVED", organizationId: v.organizationId, title: "Facture approuvée : " + v.invoiceNumber,
+      body: "Net à percevoir : " + split.netToContractor + " MAD (commission " + rate + " % : " + split.commissionAmount + " MAD HT).", link: "#invoices" });
+    return Object.assign({ ok: true, status: "APPROVED", commissionRate: rate, beneficiaryOrgId: beneficiary }, split);
+  });
+}
+function invReject_(p, a) {
+  const x = invLoad_(p, a.invoiceId);
+  assert_(x.manage, "Action non autorisée.", "FORBIDDEN");
+  assert_(x.v.status === "SUBMITTED", "Facture déjà traitée.");
+  const note = reqText_(a.note, "Motif du refus", 3, 500);
+  dbUpdate_("Invoices", x.v.invoiceId, { status: "REJECTED", notes: safeText_("[REFUS] " + note + " " + (x.v.notes || ""), 1000) });
+  dbUpdate_("WorkOrders", x.v.workOrderId, { invoiceId: "" });
+  audit_("INVOICE_REJECTED", "Invoice", x.v.invoiceId, x.v.organizationId, {});
+  const art = dbGet_("Artisans", x.v.artisanId);
+  if (art && art.userId) notify_({ eventKey: "invoice-rejected:" + x.v.invoiceId, userIds: [art.userId], type: "INVOICE_REJECTED", organizationId: x.v.organizationId, title: "Facture refusée : " + x.v.invoiceNumber, body: note, link: "#invoices" });
+  return { ok: true };
+}
+function invList_(p, a) {
+  a = a || {};
+  const artIds = myArtisanIds_(p), props = indexBy_(dbAll_("Properties"), "propertyId");
+  const rows = dbAll_("Invoices").filter(function (v) {
+    if (!(artIds.indexOf(String(v.artisanId)) >= 0 || canProp_(p, props[String(v.propertyId)], "invoice.view"))) return false;
+    if (a.status && String(a.status).split(",").indexOf(v.status) < 0) return false;
+    if (a.propertyId && String(v.propertyId) !== String(a.propertyId)) return false;
+    if (a.from && v.issueDate < a.from) return false; if (a.to && v.issueDate > a.to) return false;
+    return matchesQuery_(a.q, [v.invoiceNumber, (props[String(v.propertyId)] || {}).name]);
+  }).sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); });
+  const page = pageOf_(rows, a);
+  page.items = page.items.map(function (v) { const o = invoiceOut_(v); o.propertyName = (props[String(v.propertyId)] || {}).name; o.canManage = canProp_(p, props[String(v.propertyId)], "invoice.manage"); o.isMine = artIds.indexOf(String(v.artisanId)) >= 0; return o; });
+  return page;
+}
+function invGet_(p, a) {
+  const x = invLoad_(p, a.invoiceId);
+  const o = invoiceOut_(x.v);
+  o.canManage = x.manage; o.isMine = x.mine;
+  o.payments = dbAll_("Payments").filter(function (z) { return z.refType === "INVOICE" && String(z.refId) === String(x.v.invoiceId); }).map(function (z) { return { paymentId: z.paymentId, amount: z.amount, paidAt: z.paidAt, method: z.method, reference: z.reference, status: z.status }; });
+  o.history = auditHistory_("Invoice", x.v.invoiceId, 20);
+  return o;
+}
+/** Met à jour le statut de paiement d'une facture à partir des paiements enregistrés. */
+function invRefreshPaid_(invoiceId) {
+  const v = dbGet_("Invoices", invoiceId); if (!v) return;
+  const paid = sumBy_(dbAll_("Payments").filter(function (z) { return z.refType === "INVOICE" && String(z.refId) === String(invoiceId) && z.status === "RECORDED" && z.direction === "OUT"; }), function (z) { return z.amount; });
+  const target = num_(v.netToContractor || v.amountTTC);
+  const status = paid <= 0 ? "APPROVED" : (paid + 0.005 >= target ? "PAID" : "PARTIAL");
+  dbUpdate_("Invoices", invoiceId, { paidAmount: paid, status: status, paidAt: status === "PAID" ? nowIso_() : "" });
+  const exp = dbFind_("Expenses", "uniqueKey", "invoice:" + invoiceId);
+  if (exp) dbUpdate_("Expenses", exp.expenseId, { status: status === "PAID" ? "PAID" : "INVOICED", paidAt: status === "PAID" ? nowIso_() : "" });
+}
+
+/* ======================================================================
+ * LeaseService.gs
+ * ====================================================================== */
+/**
+ * Locations longue durée : locataires, baux, échéancier, paiements partiels, retards, quittances, préavis, renouvellement,
+ * fin de bail et restitution de caution.
+ * Règles :
+ *  - Une échéance n'est JAMAIS considérée payée parce que sa date est passée : seul un paiement enregistré (Payments, RENT) la solde.
+ *  - Statut d'échéance calculé : PAID, PARTIAL, LATE (échéance + rent.graceDays dépassée avec solde), DUE, UPCOMING, CANCELLED.
+ *  - Période mensuelle k : [début + k mois, début + k+1 mois). Échéance au jour dueDay du mois de début de période (borné à la période).
+ *    Dernière période partielle proratisée au nombre de jours. Indexation annuelle à partir de nextIndexationDate.
+ *  - Bail sans date de fin : échéancier glissant sur 12 mois, prolongé chaque jour par jobDaily.
+ *  - Les modèles de contrat sont des modèles à faire valider localement par un professionnel : aucune conformité juridique n'est garantie.
+ */
+function rentPaid_(scheduleId) {
+  return sumBy_(dbAll_("Payments").filter(function (x) { return x.refType === "RENT_SCHEDULE" && String(x.refId) === String(scheduleId) && x.status === "RECORDED" && x.kind === "RENT"; }), function (x) { return x.amount; });
+}
+function leaseDepositHeld_(leaseId) {
+  const pays = dbAll_("Payments").filter(function (x) { return x.refType === "LEASE" && String(x.refId) === String(leaseId) && x.status === "RECORDED"; });
+  return round2_(sumBy_(pays.filter(function (x) { return x.kind === "DEPOSIT"; }), function (x) { return x.amount; }) - sumBy_(pays.filter(function (x) { return x.kind === "DEPOSIT_REFUND"; }), function (x) { return x.amount; }));
+}
+function rentStatus_(s, today) {
+  today = today || todayStr_();
+  const paid = rentPaid_(s.scheduleId), due = num_(s.amountDue), remaining = round2_(Math.max(0, due - paid));
+  let st;
+  if (s.status === "CANCELLED") st = "CANCELLED";
+  else if (remaining <= 0.005) st = "PAID";
+  else if (addDaysStr_(s.dueDate, Number(getSetting_("rent.graceDays", s.organizationId)) || 0) < today) st = "LATE";
+  else if (paid > 0) st = "PARTIAL";
+  else if (s.dueDate <= today) st = "DUE";
+  else st = "UPCOMING";
+  return { scheduleId: s.scheduleId, leaseId: s.leaseId, propertyId: s.propertyId, period: s.period, dueDate: s.dueDate, rentAmount: s.rentAmount, chargesAmount: s.chargesAmount, amountDue: due,
+    paid: paid, remaining: remaining, status: st, daysLate: st === "LATE" ? diffDays_(s.dueDate, today) : 0 };
+}
+/** Construction pure de l'échéancier (testée) : retourne les périodes manquantes jusqu'à untilDate. */
+function buildRentPeriods_(lease, untilDate) {
+  const out = [], start = lease.startDate, end = lease.endDate || "", dueDay = Math.min(Math.max(Number(lease.dueDay) || 1, 1), 28);
+  for (let k = 0; k < 600; k++) {
+    const ps = addMonthsStr_(start, k), pe = addMonthsStr_(start, k + 1);
+    if (ps > untilDate || (end && ps > end)) break;
+    let ratio = 1;
+    if (end && addDaysStr_(end, 1) < pe) ratio = diffDays_(ps, addDaysStr_(end, 1)) / diffDays_(ps, pe);
+    let factor = 1;
+    if (num_(lease.indexationRate) > 0 && lease.nextIndexationDate && ps >= lease.nextIndexationDate) {
+      const years = 1 + Math.floor(Math.max(0, diffDays_(lease.nextIndexationDate, ps)) / 365.25);
+      factor = Math.pow(1 + num_(lease.indexationRate) / 100, years);
+    }
+    let due = ps.slice(0, 8) + ("0" + dueDay).slice(-2);
+    if (due < ps) due = ps;
+    if (due >= pe) due = addDaysStr_(pe, -1);
+    const rent = round2_(num_(lease.monthlyRent) * factor * ratio), ch = round2_(num_(lease.charges) * ratio);
+    out.push({ period: ps.slice(0, 7), periodStart: ps, dueDate: due, rentAmount: rent, chargesAmount: ch, amountDue: round2_(rent + ch) });
+  }
+  return out;
+}
+function leaseGenerateSchedules_(lease) {
+  const until = lease.endDate || addMonthsStr_(todayStr_(), 12);
+  const existing = {}; dbAll_("RentSchedules").forEach(function (s) { if (String(s.leaseId) === String(lease.leaseId)) existing[s.uniqueKey] = true; });
+  const rows = buildRentPeriods_(lease, until).filter(function (x) { return !existing[lease.leaseId + ":" + x.period]; }).map(function (x) {
+    return { organizationId: lease.organizationId, propertyId: lease.propertyId, leaseId: lease.leaseId, period: x.period, dueDate: x.dueDate, rentAmount: x.rentAmount, chargesAmount: x.chargesAmount,
+      amountDue: x.amountDue, status: "OPEN", createdAt: nowIso_(), uniqueKey: lease.leaseId + ":" + x.period };
+  });
+  dbInsertMany_("RentSchedules", rows);
+  return rows.length;
+}
+
+function leaseOut_(p, l, props, tenants) {
+  const prop = (props || {})[String(l.propertyId)] || dbGet_("Properties", l.propertyId) || {}, t = (tenants || {})[String(l.tenantId)] || dbGet_("Tenants", l.tenantId) || {};
+  const sched = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(l.leaseId) && s.status === "OPEN"; }).map(function (s) { return rentStatus_(s); });
+  return { leaseId: l.leaseId, propertyId: l.propertyId, propertyName: prop.name, tenantId: l.tenantId, tenantName: t.fullName, tenantEmail: t.email, tenantPhone: t.phone, startDate: l.startDate, endDate: l.endDate,
+    durationMonths: l.durationMonths, monthlyRent: l.monthlyRent, charges: l.charges, deposit: l.deposit, dueDay: l.dueDay, indexationRate: l.indexationRate, nextIndexationDate: l.nextIndexationDate, terms: l.terms,
+    status: l.status, noticeDate: l.noticeDate, noticeBy: l.noticeBy, depositStatus: l.depositStatus, depositHeld: leaseDepositHeld_(l.leaseId), depositReturned: l.depositReturned, depositDeductions: l.depositDeductions,
+    documentId: l.documentId, endReason: l.endReason, renewedFromLeaseId: l.renewedFromLeaseId,
+    arrears: sumBy_(sched.filter(function (s) { return s.status === "LATE"; }), function (s) { return s.remaining; }), lateCount: sched.filter(function (s) { return s.status === "LATE"; }).length,
+    nextDue: sched.filter(function (s) { return s.remaining > 0; }).sort(function (a, b) { return String(a.dueDate).localeCompare(String(b.dueDate)); })[0] || null };
+}
+function leaseLoad_(p, id, cap) {
+  const l = dbGet_("Leases", safeText_(id, 120));
+  if (!l) throw new AppError("FORBIDDEN", "Bail introuvable ou accès refusé.");
+  const prop = dbGet_("Properties", l.propertyId);
+  const self = myTenantIds_(p).indexOf(String(l.tenantId)) >= 0;
+  if (!(canProp_(p, prop, cap) || (cap === "lease.view" && self))) throw new AppError("FORBIDDEN", "Bail introuvable ou accès refusé.");
+  if (cap === "lease.manage") { assertOrgWritable_(l.organizationId); assertFeature_(l.organizationId, "leases"); }
+  return { l: l, prop: prop, self: self };
+}
+
+/* ------------------------------ Locataires ------------------------------ */
+function tenantList_(p, a) {
+  a = a || {};
+  const orgs = p.roles.filter(function (r) { return r.caps.indexOf("lease.manage") >= 0 || r.caps.indexOf("lease.view") >= 0; }).map(function (r) { return r.organizationId; });
+  const viaLease = {}; dbAll_("Leases").forEach(function (l) { if (canProp_(p, dbGet_("Properties", l.propertyId), "lease.view")) viaLease[String(l.tenantId)] = true; });
+  const rows = dbAll_("Tenants").filter(function (t) {
+    if (!(viaLease[String(t.tenantId)] || (orgs.indexOf(String(t.organizationId)) >= 0 && hasOrgCap_(p, t.organizationId, "lease.manage")))) return false;
+    if (a.status && t.status !== a.status) return false;
+    return matchesQuery_(a.q, [t.fullName, t.email, t.phone]);
+  }).sort(function (x, y) { return String(x.fullName).localeCompare(String(y.fullName)); })
+    .map(function (t) { return { tenantId: t.tenantId, organizationId: t.organizationId, fullName: t.fullName, email: t.email, phone: t.phone, nationality: t.nationality, status: t.status, hasAccount: !!t.userId,
+      activeLeases: dbAll_("Leases").filter(function (l) { return String(l.tenantId) === String(t.tenantId) && ["ACTIVE", "NOTICE"].indexOf(l.status) >= 0; }).length }; });
+  return pageOf_(rows, a);
+}
+function tenantOrg_(p, a) {
+  if (a.propertyId) { const prop = assertProp_(p, a.propertyId, "lease.manage"); return String(prop.organizationId); }
+  const orgId = safeText_(a.organizationId, 120); assertOrgCap_(p, orgId, "lease.manage"); return orgId;
+}
+function tenantCreate_(p, a) {
+  const orgId = tenantOrg_(p, a);
+  assertFeature_(orgId, "leases");
+  const email = a.email ? validateEmail_(a.email) : "";
+  const u = email ? dbAll_("Users").find(function (x) { return normalizeEmail_(x.email) === email; }) : null;
+  const t = dbInsert_("Tenants", { organizationId: orgId, userId: u && dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(u.userId) && r.role === "TENANT" && r.status === "ACTIVE"; }) ? u.userId : "",
+    fullName: reqText_(a.fullName, "Nom complet", 2, 120), email: email, phone: safeText_(a.phone, 30), nationality: safeText_(a.nationality, 60), idType: a.idType ? oneOf_(a.idType, ID_TYPES_, "Pièce") : "",
+    status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
+  audit_("TENANT_CREATED", "Tenant", t.tenantId, orgId, {});
+  return { ok: true, tenantId: t.tenantId, id: t.tenantId };
+}
+function tenantUpdate_(p, a) {
+  const t = dbGet_("Tenants", safeText_(a.tenantId, 120)); if (!t) notFound_("Locataire");
+  assertOrgCap_(p, t.organizationId, "lease.manage");
+  const patch = { updatedAt: nowIso_() };
+  if (a.fullName !== undefined) patch.fullName = reqText_(a.fullName, "Nom", 2, 120);
+  if (a.email !== undefined) patch.email = a.email ? validateEmail_(a.email) : "";
+  if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
+  if (a.nationality !== undefined) patch.nationality = safeText_(a.nationality, 60);
+  if (a.status !== undefined) patch.status = oneOf_(a.status, ["ACTIVE", "INACTIVE"], "Statut");
+  dbUpdate_("Tenants", t.tenantId, patch);
+  audit_("TENANT_UPDATED", "Tenant", t.tenantId, t.organizationId, { fields: Object.keys(patch) });
+  return { ok: true };
+}
+
+/* ------------------------------ Baux ------------------------------ */
+function leaseInput_(a, l) {
+  const o = {};
+  if (a.startDate !== undefined) o.startDate = dateOnly_(a.startDate, "Date de début");
+  if (a.endDate !== undefined) o.endDate = a.endDate ? dateOnly_(a.endDate, "Date de fin") : "";
+  if (a.monthlyRent !== undefined) o.monthlyRent = money_(a.monthlyRent, "Loyer", { min: 1 });
+  if (a.charges !== undefined) o.charges = a.charges === "" ? 0 : money_(a.charges, "Charges");
+  if (a.deposit !== undefined) o.deposit = a.deposit === "" ? 0 : money_(a.deposit, "Caution");
+  if (a.dueDay !== undefined) { const d = parseInt(a.dueDay, 10); assert_(d >= 1 && d <= 28, "Jour d'échéance de 1 à 28."); o.dueDay = d; }
+  if (a.indexationRate !== undefined) o.indexationRate = a.indexationRate === "" ? 0 : rate_(a.indexationRate, "Indexation");
+  if (a.nextIndexationDate !== undefined) o.nextIndexationDate = a.nextIndexationDate ? dateOnly_(a.nextIndexationDate, "Date d'indexation") : "";
+  if (a.terms !== undefined) o.terms = safeText_(a.terms, 20000);
+  const s = o.startDate || (l && l.startDate), e = o.endDate !== undefined ? o.endDate : (l && l.endDate);
+  if (s && e) { assert_(e > s, "La fin doit être postérieure au début."); o.durationMonths = Math.max(1, Math.round(diffDays_(s, e) / 30.44)); }
+  else if (o.endDate === "") o.durationMonths = "";
+  if (o.indexationRate > 0 && !o.nextIndexationDate && !(l && l.nextIndexationDate) && s) o.nextIndexationDate = addMonthsStr_(s, 12);
+  return o;
+}
+function leaseList_(p, a) {
+  a = a || {};
+  const props = indexBy_(dbAll_("Properties"), "propertyId"), tenants = indexBy_(dbAll_("Tenants"), "tenantId"), mine = myTenantIds_(p);
+  const rows = dbAll_("Leases").filter(function (l) {
+    if (!(canProp_(p, props[String(l.propertyId)], "lease.view") || mine.indexOf(String(l.tenantId)) >= 0)) return false;
+    if (a.status) { if (String(a.status).split(",").indexOf(l.status) < 0) return false; }
+    if (a.propertyId && String(l.propertyId) !== String(a.propertyId)) return false;
+    return matchesQuery_(a.q, [(tenants[String(l.tenantId)] || {}).fullName, (props[String(l.propertyId)] || {}).name]);
+  }).sort(function (x, y) { return String(y.startDate).localeCompare(String(x.startDate)); });
+  const page = pageOf_(rows, a);
+  page.items = page.items.map(function (l) { return leaseOut_(p, l, props, tenants); });
+  return page;
+}
+function leaseGet_(p, a) {
+  const x = leaseLoad_(p, a.leaseId, "lease.view");
+  const o = leaseOut_(p, x.l);
+  o.canManage = canProp_(p, x.prop, "lease.manage"); o.isTenant = x.self;
+  o.schedules = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(x.l.leaseId); }).map(function (s) { return rentStatus_(s); }).sort(function (u, v) { return String(u.dueDate).localeCompare(String(v.dueDate)); });
+  o.payments = dbAll_("Payments").filter(function (z) { return (z.refType === "LEASE" && String(z.refId) === String(x.l.leaseId)) || (z.refType === "RENT_SCHEDULE" && o.schedules.some(function (s) { return s.scheduleId === z.refId; })); })
+    .map(function (z) { return { paymentId: z.paymentId, kind: z.kind, refId: z.refId, amount: z.amount, paidAt: z.paidAt, method: z.method, status: z.status, reference: z.reference }; });
+  o.documents = docList_(p, { ownerType: "LEASE", ownerId: x.l.leaseId });
+  if (o.canManage) o.history = auditHistory_("Lease", x.l.leaseId, 30);
+  return o;
+}
+function leaseCreate_(p, a) {
+  const prop = assertProp_(p, a.propertyId, "lease.manage");
+  assertFeature_(prop.organizationId, "leases");
+  assert_(prop.rentalMode !== "SHORT_TERM", "Ce bien est configuré en courte durée uniquement : passez-le en « Longue durée » ou « Mixte ».");
+  const t = dbGet_("Tenants", safeText_(a.tenantId, 120));
+  assert_(t && t.status === "ACTIVE" && String(t.organizationId) === String(prop.organizationId), "Locataire inconnu pour l'organisation de ce bien.");
+  const d = leaseInput_(a, null);
+  assert_(d.startDate && d.monthlyRent, "Date de début et loyer obligatoires.");
+  const l = dbInsert_("Leases", Object.assign({ charges: 0, deposit: 0, dueDay: 5, indexationRate: 0 }, d, { organizationId: prop.organizationId, propertyId: prop.propertyId, tenantId: t.tenantId, status: "DRAFT",
+    depositStatus: num_(d.deposit) > 0 ? "EXPECTED" : "NONE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email }));
+  audit_("LEASE_CREATED", "Lease", l.leaseId, prop.organizationId, { monthlyRent: l.monthlyRent, startDate: l.startDate });
+  return { ok: true, leaseId: l.leaseId, id: l.leaseId };
+}
+function leaseUpdate_(p, a) {
+  const x = leaseLoad_(p, a.leaseId, "lease.manage");
+  if (x.l.status !== "DRAFT") ["startDate", "monthlyRent", "charges", "deposit", "dueDay"].forEach(function (k) { assert_(a[k] === undefined, "Bail actif : « " + k + " » n'est modifiable que par renouvellement ou avenant."); });
+  const d = leaseInput_(a, x.l); d.updatedAt = nowIso_(); d.updatedBy = p.email;
+  dbUpdate_("Leases", x.l.leaseId, d);
+  audit_("LEASE_UPDATED", "Lease", x.l.leaseId, x.l.organizationId, diff_(x.l, d, Object.keys(d).filter(function (k) { return ["updatedAt", "updatedBy", "terms"].indexOf(k) < 0; })));
+  if (x.l.status === "ACTIVE" && (d.endDate !== undefined || d.indexationRate !== undefined)) leaseGenerateSchedules_(dbGet_("Leases", x.l.leaseId));
+  return { ok: true };
+}
+function leaseActivate_(p, a) {
+  const x = leaseLoad_(p, a.leaseId, "lease.manage");
+  return withLock_(function () {
+    const l = dbGet_("Leases", x.l.leaseId);
+    assert_(l.status === "DRAFT", "Seul un bail en brouillon peut être activé.");
+    const s = localToDate_(l.startDate, "00:00").getTime(), e = l.endDate ? localToDate_(addDaysStr_(l.endDate, 1), "00:00").getTime() : 8.64e15;
+    const other = dbAll_("Leases").find(function (o) { return String(o.propertyId) === String(l.propertyId) && o.leaseId !== l.leaseId && ["ACTIVE", "NOTICE"].indexOf(o.status) >= 0 &&
+      o.startDate <= (l.endDate || "9999-12-31") && (!o.endDate || o.endDate >= l.startDate); });
+    assert_(!other, "Un autre bail actif couvre cette période.", "CONFLICT");
+    const r = dbAll_("Reservations").find(function (z) { return String(z.propertyId) === String(l.propertyId) && RESV_BLOCKING_.indexOf(z.status) >= 0 && z.status !== "COMPLETED" && resvStartMs_(z, x.prop) < e && resvEndMs_(z, x.prop) > s; });
+    assert_(!r, "Des réservations courte durée existent sur cette période (" + (r ? r.checkIn + " → " + r.checkOut : "") + ").", "CONFLICT");
+    dbUpdate_("Leases", l.leaseId, { status: "ACTIVE", updatedAt: nowIso_(), updatedBy: p.email });
+    const n = leaseGenerateSchedules_(dbGet_("Leases", l.leaseId));
+    audit_("LEASE_ACTIVATED", "Lease", l.leaseId, l.organizationId, { schedules: n });
+    return { ok: true, schedulesCreated: n };
+  });
+}
+function leaseNotice_(p, a) {
+  const x = leaseLoad_(p, a.leaseId, "lease.manage");
+  assert_(x.l.status === "ACTIVE", "Préavis possible uniquement sur un bail actif.");
+  const notice = a.noticeDate ? dateOnly_(a.noticeDate, "Date du préavis") : todayStr_(), endDate = dateOnly_(a.plannedEndDate, "Date de fin prévue");
+  assert_(endDate >= notice, "La fin prévue doit suivre le préavis.");
+  dbUpdate_("Leases", x.l.leaseId, { status: "NOTICE", noticeDate: notice, noticeBy: oneOf_(a.noticeBy || "TENANT", ["TENANT", "LANDLORD"], "Origine"), endDate: endDate, updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("LEASE_NOTICE", "Lease", x.l.leaseId, x.l.organizationId, { endDate: endDate });
+  leaseCancelSchedulesAfter_(x.l.leaseId, endDate);
+  return { ok: true };
+}
+function leaseCancelSchedulesAfter_(leaseId, endDate) {
+  let n = 0;
+  dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(leaseId) && s.status === "OPEN" && s.dueDate > endDate && rentPaid_(s.scheduleId) <= 0; })
+    .forEach(function (s) { dbUpdate_("RentSchedules", s.scheduleId, { status: "CANCELLED" }); n++; });
+  return n;
+}
+function leaseEnd_(p, a) {
+  const x = leaseLoad_(p, a.leaseId, "lease.manage");
+  assert_(["ACTIVE", "NOTICE"].indexOf(x.l.status) >= 0, "Bail non actif.");
+  const end = a.endDate ? dateOnly_(a.endDate, "Date de fin") : todayStr_();
+  assert_(end >= x.l.startDate, "Date de fin antérieure au début.");
+  dbUpdate_("Leases", x.l.leaseId, { status: "ENDED", endDate: end, endReason: safeText_(a.reason, 300), depositStatus: leaseDepositHeld_(x.l.leaseId) > 0 ? "TO_RETURN" : x.l.depositStatus, updatedAt: nowIso_(), updatedBy: p.email });
+  const cancelled = leaseCancelSchedulesAfter_(x.l.leaseId, end);
+  const open = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(x.l.leaseId) && s.status === "OPEN"; }).map(function (s) { return rentStatus_(s); }).filter(function (s) { return s.remaining > 0; });
+  audit_("LEASE_ENDED", "Lease", x.l.leaseId, x.l.organizationId, { endDate: end, schedulesCancelled: cancelled, unpaid: open.length });
+  return { ok: true, schedulesCancelled: cancelled, unpaidSchedules: open.length, unpaidAmount: sumBy_(open, function (s) { return s.remaining; }), depositHeld: leaseDepositHeld_(x.l.leaseId) };
+}
+function leaseRenew_(p, a) {
+  const x = leaseLoad_(p, a.leaseId, "lease.manage");
+  assert_(["ACTIVE", "NOTICE"].indexOf(x.l.status) >= 0 && x.l.endDate, "Renouvellement possible pour un bail actif à durée déterminée.");
+  const start = a.startDate ? dateOnly_(a.startDate, "Début") : addDaysStr_(x.l.endDate, 1);
+  assert_(start > x.l.endDate, "Le nouveau bail doit commencer après la fin de l'actuel.");
+  const d = leaseInput_({ startDate: start, endDate: a.endDate || addDaysStr_(addMonthsStr_(start, 12), -1), monthlyRent: a.monthlyRent || x.l.monthlyRent, charges: a.charges !== undefined ? a.charges : x.l.charges,
+    deposit: x.l.deposit, dueDay: x.l.dueDay, indexationRate: x.l.indexationRate, terms: a.terms !== undefined ? a.terms : x.l.terms }, null);
+  return withLock_(function () {
+    const n = dbInsert_("Leases", Object.assign(d, { organizationId: x.l.organizationId, propertyId: x.l.propertyId, tenantId: x.l.tenantId, status: "ACTIVE", depositStatus: x.l.depositStatus,
+      renewedFromLeaseId: x.l.leaseId, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email }));
+    // La caution détenue est transférée comptablement : on journalise sans créer de flux financier fictif.
+    dbUpdate_("Leases", x.l.leaseId, { status: "RENEWED", updatedAt: nowIso_(), updatedBy: p.email });
+    const s = leaseGenerateSchedules_(dbGet_("Leases", n.leaseId));
+    audit_("LEASE_RENEWED", "Lease", n.leaseId, n.organizationId, { from: x.l.leaseId, schedules: s });
+    return { ok: true, leaseId: n.leaseId, schedulesCreated: s, note: "La caution du bail précédent reste rattachée à celui-ci : restituez-la ou reportez-la explicitement." };
+  });
+}
+/** Restitution de caution : paiement sortant réel + retenues justifiées. */
+function leaseDepositReturn_(p, a) {
+  const x = leaseLoad_(p, a.leaseId, "lease.manage");
+  assert_(["ENDED", "NOTICE", "RENEWED"].indexOf(x.l.status) >= 0, "La caution se restitue en fin de bail.");
+  const held = leaseDepositHeld_(x.l.leaseId);
+  const ret = money_(a.amountReturned, "Montant restitué"), ded = round2_(held - ret);
+  assert_(ret <= held + 0.001, "Montant supérieur à la caution détenue (" + held + ").");
+  if (ded > 0) reqText_(a.deductionReason, "Motif des retenues", 3, 500);
+  let paymentId = "";
+  if (ret > 0) paymentId = payRecord_(p, { refType: "LEASE", refId: x.l.leaseId, kind: "DEPOSIT_REFUND", amount: ret, method: a.method || "TRANSFER", paidAt: a.paidAt, reference: a.reference, requestKey: a.requestKey }).paymentId;
+  dbUpdate_("Leases", x.l.leaseId, { depositReturned: round2_(num_(x.l.depositReturned) + ret), depositDeductions: ded, depositStatus: ded > 0 ? "PARTIALLY_RETURNED" : "RETURNED", updatedAt: nowIso_(), updatedBy: p.email });
+  if (ded > 0) dbInsertUnique_("RevenueRecords", "description", "Retenue sur caution bail " + x.l.leaseId, { organizationId: x.l.organizationId, propertyId: x.l.propertyId, category: "DEPOSIT_DEDUCTION",
+    amount: ded, currency: "MAD", revenueDate: todayStr_(), status: "RECEIVED", receivedAt: nowIso_(), createdAt: nowIso_(), createdBy: p.email });
+  audit_("LEASE_DEPOSIT_RETURNED", "Lease", x.l.leaseId, x.l.organizationId, { returned: ret, deductions: ded, reason: safeText_(a.deductionReason, 500) });
+  return { ok: true, returned: ret, deductions: ded, paymentId: paymentId };
+}
+/** Quittance : uniquement pour une échéance intégralement payée. */
+function leaseReceipt_(p, a) {
+  const s = dbGet_("RentSchedules", safeText_(a.scheduleId, 120));
+  if (!s) notFound_("Échéance");
+  const x = leaseLoad_(p, s.leaseId, "lease.view");
+  const st = rentStatus_(s);
+  assert_(st.status === "PAID", "Quittance disponible uniquement pour une échéance entièrement réglée (statut : " + st.status + ").");
+  const t = dbGet_("Tenants", x.l.tenantId) || {}, org = dbGet_("Organizations", x.l.organizationId) || {};
+  const pays = dbAll_("Payments").filter(function (z) { return z.refType === "RENT_SCHEDULE" && String(z.refId) === String(s.scheduleId) && z.status === "RECORDED"; });
+  const map = { bailleur: org.name, locataire: t.fullName, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), periode: s.period, loyer: s.rentAmount, charges: s.chargesAmount, total: s.amountDue,
+    date_paiement: pays.map(function (z) { return z.paidAt; }).join(", "), date: todayStr_() };
+  const tpl = getSetting_("template.receiptDocId", x.l.organizationId);
+  const pdf = tpl ? docFromTemplate_(tpl, map, propertyFolder_(x.l.organizationId, x.l.propertyId, "LEASE"), "Quittance_" + s.period + "_" + x.l.leaseId).pdf :
+    htmlToPdf_(pdfShell_("Quittance de loyer — " + s.period, "<p>Je soussigné(e), " + escapeHtml_(org.name) + ", bailleur, déclare avoir reçu de <b>" + escapeHtml_(t.fullName) + "</b> la somme de <b>" + s.amountDue + " MAD</b> au titre du loyer et des charges de la période " + escapeHtml_(s.period) + " pour le logement : " + escapeHtml_(map.bien + " — " + map.adresse) + ".</p>" +
+      htmlTable_(["Poste", "Montant (MAD)"], [["Loyer", s.rentAmount], ["Charges", s.chargesAmount], ["Total", s.amountDue]]) + "<p>Paiement(s) reçu(s) le : " + escapeHtml_(map.date_paiement) + "</p><p class='muted'>Document généré automatiquement — modèle à valider localement.</p>"), "Quittance_" + s.period);
+  audit_("RENT_RECEIPT_GENERATED", "Lease", x.l.leaseId, x.l.organizationId, { period: s.period });
+  return storeGeneratedPdf_(p, pdf, { propertyId: x.l.propertyId, organizationId: x.l.organizationId }, "LEASE", x.l.leaseId, "RECEIPT");
+}
+/** Contrat de bail généré depuis un modèle Google Docs ({{balises}}) ou un gabarit intégré. */
+function leaseDocument_(p, a) {
+  const x = leaseLoad_(p, a.leaseId, "lease.manage");
+  const t = dbGet_("Tenants", x.l.tenantId) || {}, org = dbGet_("Organizations", x.l.organizationId) || {};
+  const map = { bailleur: org.name, locataire: t.fullName, locataire_email: t.email, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), surface: x.prop.surfaceM2, debut: x.l.startDate,
+    fin: x.l.endDate || "indéterminée", loyer: x.l.monthlyRent, charges: x.l.charges, caution: x.l.deposit, jour_echeance: x.l.dueDay, indexation: x.l.indexationRate, conditions: x.l.terms, date: todayStr_() };
+  const tpl = getSetting_("template.leaseDocId", x.l.organizationId);
+  const pdf = tpl ? docFromTemplate_(tpl, map, propertyFolder_(x.l.organizationId, x.l.propertyId, "LEASE"), "Bail_" + x.l.leaseId).pdf :
+    htmlToPdf_(pdfShell_("Contrat de location", "<p class='muted'>MODÈLE INDICATIF — à faire valider par un professionnel du droit marocain avant signature (loi 67-12 notamment). ImmoPilot ne garantit pas la conformité juridique.</p>" +
+      htmlTable_(["Clause", "Contenu"], Object.keys(map).map(function (k) { return [k, map[k] == null ? "" : map[k]]; })) + "<p>Fait à " + escapeHtml_(x.prop.city || "") + ", le " + todayStr_() + "</p><p>Signature bailleur : ______________ &nbsp; Signature locataire : ______________</p>"), "Bail_" + x.l.leaseId);
+  const out = storeGeneratedPdf_(p, pdf, { propertyId: x.l.propertyId, organizationId: x.l.organizationId }, "LEASE", x.l.leaseId, "CONTRACT");
+  dbUpdate_("Leases", x.l.leaseId, { documentId: out.documentId });
+  audit_("LEASE_DOCUMENT_GENERATED", "Lease", x.l.leaseId, x.l.organizationId, { template: !!tpl });
+  return out;
+}
+/** Espace locataire : ses baux, échéances et documents uniquement. */
+function leaseMine_(p) {
+  const ids = myTenantIds_(p);
+  return dbAll_("Leases").filter(function (l) { return ids.indexOf(String(l.tenantId)) >= 0 && l.status !== "DRAFT"; }).map(function (l) { return leaseGet_(p, { leaseId: l.leaseId }); });
+}
+
+/** Tâche quotidienne : prolongation des échéanciers glissants et alertes (échéances, retards, fins de bail). */
+function leaseJob_() {
+  const today = todayStr_(); let created = 0, alerts = 0;
+  dbAll_("Leases").filter(function (l) { return ["ACTIVE", "NOTICE"].indexOf(l.status) >= 0; }).forEach(function (l) {
+    if (!l.endDate) created += leaseGenerateSchedules_(l);
+    const prop = dbGet_("Properties", l.propertyId); if (!prop) return;
+    const t = dbGet_("Tenants", l.tenantId) || {};
+    const managers = propertyManagers_(prop, "canManageOperations");
+    const before = Number(getSetting_("alerts.rentDueDays", l.organizationId)) || 3;
+    dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(l.leaseId) && s.status === "OPEN"; }).forEach(function (s) {
+      const st = rentStatus_(s, today);
+      if (st.remaining > 0 && s.dueDate === addDaysStr_(today, before) && t.userId) { notify_({ eventKey: "rent-due:" + s.scheduleId, userIds: [t.userId], type: "RENT_DUE", organizationId: l.organizationId,
+        title: "Échéance de loyer le " + s.dueDate, body: st.remaining + " MAD — " + prop.name, link: "#mylease" }); alerts++; }
+      if (st.status === "LATE") { notify_({ eventKey: "rent-late:" + s.scheduleId + ":" + Math.floor(st.daysLate / 7), userIds: managers.concat(t.userId ? [t.userId] : []), type: "RENT_LATE", organizationId: l.organizationId,
+        title: "Loyer en retard (" + st.daysLate + " j) : " + prop.name, body: (t.fullName || "") + " — reste dû " + st.remaining + " MAD (période " + s.period + ").", link: "#lease/" + l.leaseId }); alerts++; }
+    });
+    if (l.endDate) (getSetting_("alerts.leaseEndDays", l.organizationId) || [60, 30]).forEach(function (d) {
+      if (l.endDate === addDaysStr_(today, d)) { notify_({ eventKey: "lease-end:" + l.leaseId + ":" + d, userIds: managers, type: "LEASE_ENDING", organizationId: l.organizationId,
+        title: "Fin de bail dans " + d + " jours : " + prop.name, body: (t.fullName || "") + " — fin le " + l.endDate + ". Préparez renouvellement ou état des lieux.", link: "#lease/" + l.leaseId }); alerts++; }
+    });
+  });
+  return { schedulesCreated: created, alerts: alerts };
+}
+
+/* ======================================================================
+ * Migrations.gs
+ * ====================================================================== */
+/**
+ * Migrations versionnées et NON DESTRUCTIVES.
+ * - Les feuilles et colonnes existantes ne sont jamais supprimées, renommées ni réordonnées.
+ * - Les colonnes manquantes sont ajoutées à droite ; les données sont lues par NOM de colonne.
+ * - Une sauvegarde complète du classeur est créée avant toute migration en attente.
+ * - Chaque migration est inscrite dans MigrationHistory (DONE / FAILED) et n'est jamais rejouée une fois DONE.
+ * - La migration de schéma (v1) est idempotente et s'exécute à chaque setupProject().
+ */
+var MIGRATIONS_ = [
+  { version: 1, name: "schema_sync", run: function () { return migSchemaSync_(); } },
+  { version: 2, name: "backfill_phase4_to_v2", run: function () { return migBackfill_(); } },
+  { version: 3, name: "platform_seed", run: function () { return migSeed_(); } }
+];
+
+function migSchemaSync_() {
+  const ss = dbSpreadsheet_(), report = { created: [], columnsAdded: {}, duplicates: [] };
+  Object.keys(schema_()).forEach(function (name) {
+    const S = schema_()[name];
+    let sh = ss.getSheetByName(name);
+    if (!sh) {
+      sh = ss.insertSheet(name);
+      if (sh.getMaxColumns() < S.cols.length) sh.insertColumnsAfter(sh.getMaxColumns(), S.cols.length - sh.getMaxColumns());
+      sh.getRange(1, 1, 1, S.cols.length).setValues([S.cols]).setFontWeight("bold");
+      sh.setFrozenRows(1);
+      report.created.push(name);
+      return;
+    }
+    const lc = sh.getLastColumn();
+    if (lc === 0 || sh.getLastRow() === 0) {
+      if (sh.getMaxColumns() < S.cols.length) sh.insertColumnsAfter(sh.getMaxColumns(), S.cols.length - sh.getMaxColumns());
+      sh.getRange(1, 1, 1, S.cols.length).setValues([S.cols]).setFontWeight("bold"); sh.setFrozenRows(1); return;
+    }
+    const headers = sh.getRange(1, 1, 1, lc).getValues()[0].map(String);
+    const seen = {};
+    headers.forEach(function (h) { if (h) { if (seen[h]) report.duplicates.push(name + "." + h); seen[h] = true; } });
+    const missing = S.cols.filter(function (c) { return !seen[c]; });
+    if (missing.length) {
+      if (sh.getMaxColumns() < lc + missing.length) sh.insertColumnsAfter(sh.getMaxColumns(), lc + missing.length - sh.getMaxColumns());
+      sh.getRange(1, lc + 1, 1, missing.length).setValues([missing]).setFontWeight("bold");
+      report.columnsAdded[name] = missing;
+    }
+  });
+  dbReset_();
+  if (report.duplicates.length) throw new AppError("SCHEMA", "En-têtes dupliqués détectés (corrigez-les manuellement, aucune donnée n'a été modifiée) : " + report.duplicates.join(", "));
+  return report;
+}
+
+/** Applique patchFn(objet) à chaque ligne ; réécrit uniquement les colonnes modifiées, ré-encodées proprement. */
+function migPatch_(table, patchFn) {
+  const S = tableDef_(table), sh = dbSheet_(table), lr = sh.getLastRow();
+  if (lr < 2) return 0;
+  const headers = dbHeaders_(table), vals = sh.getRange(2, 1, lr - 1, headers.length).getValues();
+  const objs = vals.map(function (row) { const o = {}; headers.forEach(function (h, i) { if (h) o[h] = normOut_(S, h, row[i]); }); o.__empty = !row.some(function (c) { return c !== "" && c !== null; }); return o; });
+  const changed = {}; let n = 0;
+  objs.forEach(function (o) {
+    if (o.__empty) return;
+    const patch = patchFn(o);
+    if (!patch) return;
+    let any = false;
+    Object.keys(patch).forEach(function (k) {
+      assert_(headers.indexOf(k) >= 0, "Colonne absente " + table + "." + k, "SCHEMA");
+      if (String(o[k] == null ? "" : o[k]) !== String(patch[k] == null ? "" : patch[k])) { o[k] = patch[k]; changed[k] = true; any = true; }
+    });
+    if (any) n++;
+  });
+  Object.keys(changed).forEach(function (col) {
+    const ci = headers.indexOf(col);
+    sh.getRange(2, ci + 1, objs.length, 1).setValues(objs.map(function (o) { return [o.__empty ? "" : toCell_(S, col, o[col])]; }));
+  });
+  dbReset_();
+  return n;
+}
+
+function migBackfill_() {
+  const r = {};
+  // Identifiants manquants : chaque ligne reçoit un identifiant stable.
+  r.missingIds = {};
+  Object.keys(schema_()).forEach(function (t) {
+    const S = schema_()[t];
+    if (t === "PlatformSettings" || t === "OperationRequests") return;
+    const n = migPatch_(t, function (o) { return o[S.pk] ? null : (function () { const x = {}; x[S.pk] = newId_(S.idp); return x; })(); });
+    if (n) r.missingIds[t] = n;
+  });
+  const roles = dbAll_("UserRoles");
+  r.organizations = migPatch_("Organizations", function (o) {
+    if (o.type) return null;
+    const rs = roles.filter(function (x) { return String(x.organizationId) === String(o.organizationId); });
+    const type = rs.some(function (x) { return x.role === "AGENCY_ADMIN" || x.role === "AGENCY_USER"; }) ? "AGENCY" : (rs.length && rs.every(function (x) { return x.role === "SUPER_ADMIN"; }) ? "PLATFORM" : "OWNER_ORG");
+    return { type: type, timezone: o.timezone || tz_(), locale: o.locale || "fr" };
+  });
+  r.users = migPatch_("Users", function (u) { return u.notifPrefsJson ? null : { notifPrefsJson: jsonSafe_({ email: true, mutedTypes: [] }), locale: u.locale || "fr" }; });
+  const props = indexBy_(dbAll_("Properties"), "propertyId");
+  r.reservations = migPatch_("Reservations", function (x) {
+    const pr = props[String(x.propertyId)] || {};
+    const patch = {};
+    if (!x.paymentStatus) patch.paymentStatus = "UNPAID";
+    if (x.version === null || x.version === "") patch.version = 0;
+    if (!x.currency) patch.currency = "MAD";
+    if (!x.source) patch.source = "DIRECT";
+    if (!x.checkInAt && isDateStr_(x.checkIn)) patch.checkInAt = localToDate_(x.checkIn, pr.checkInTime || DEFAULT_SETTINGS["reservation.defaultCheckIn"]).toISOString();
+    if (!x.checkOutAt && isDateStr_(x.checkOut)) patch.checkOutAt = localToDate_(x.checkOut, pr.checkOutTime || DEFAULT_SETTINGS["reservation.defaultCheckOut"]).toISOString();
+    if (IMMO_CONFIG && schema_().Reservations.enums.status.indexOf(x.status) < 0) patch.status = "CONFIRMED";
+    return Object.keys(patch).length ? patch : null;
+  });
+  const sevMap = { LOW: "LOW", NORMAL: "MEDIUM", HIGH: "HIGH", URGENT: "CRITICAL" };
+  const incStatuses = schema_().IncidentsV4.enums.status;
+  r.incidentsV4 = migPatch_("IncidentsV4", function (i) {
+    const patch = {};
+    if (!i.severity) patch.severity = sevMap[i.priority] || "MEDIUM";
+    if (incStatuses.indexOf(i.status) < 0) patch.status = "OPEN";
+    if (!i.title) patch.title = String(i.description || i.category || "Incident").slice(0, 80);
+    return Object.keys(patch).length ? patch : null;
+  });
+  // Copie (sans toucher la feuille historique) des incidents de la phase 3 vers IncidentsV4.
+  const existingInc = indexBy_(dbAll_("IncidentsV4"), "incidentId");
+  const toCopy = dbAll_("Incidents").filter(function (i) { return i.incidentId && !existingInc[String(i.incidentId)]; }).map(function (i) {
+    return { incidentId: i.incidentId, organizationId: i.organizationId, propertyId: i.propertyId, reservationId: "", category: i.category || "OTHER", priority: "NORMAL", severity: "MEDIUM",
+      description: i.description || "(incident historique)", status: incStatuses.indexOf(i.status) >= 0 ? i.status : "OPEN", photoFileIdsJson: "[]", createdAt: i.createdAt || nowIso_(),
+      createdBy: i.createdBy || "", updatedAt: nowIso_(), updatedBy: "migration", title: String(i.description || i.category || "Incident").slice(0, 80), legacyOrigin: "Incidents" };
+  }).filter(function (x) { return x.propertyId; });
+  dbInsertMany_("IncidentsV4", toCopy); r.legacyIncidentsCopied = toCopy.length;
+  r.quotes = migPatch_("Quotes", function (q) { return (q.amountHT === null || q.amountHT === "") && q.totalAmount !== null ? { amountHT: q.totalAmount, vatRate: 0, amountTTC: q.totalAmount, submittedAt: q.createdAt } : null; });
+  const users = dbAll_("Users");
+  r.artisans = migPatch_("Artisans", function (a) {
+    if (a.userId) return null;
+    const u = users.find(function (x) { return normalizeEmail_(x.email) === normalizeEmail_(a.email); });
+    return u ? { userId: u.userId } : null;
+  });
+  r.missions = migPatch_("CleaningMissions", function (m) { return m.priority ? null : { priority: "NORMAL", reassignCount: 0, source: "LEGACY" }; });
+  // Enregistrement des fichiers Drive historiques dans Documents, afin qu'ils soient servis via le contrôle d'accès.
+  const known = {}; dbAll_("Documents").forEach(function (d) { known[d.fileId] = true; });
+  const docs = [];
+  const reg = function (fileId, ownerType, ownerId, category, row) {
+    if (!fileId || known[fileId]) return; known[fileId] = true;
+    docs.push({ organizationId: row.organizationId || "", propertyId: row.propertyId || "", ownerType: ownerType, ownerId: ownerId, category: category, fileId: fileId,
+      fileName: "historique_" + fileId.slice(0, 8), mimeType: "", sizeBytes: null, sha256: "", sensitive: false, status: "ACTIVE", createdAt: row.createdAt || nowIso_(), createdBy: "migration", legacy: true });
+  };
+  dbAll_("CleaningReports").forEach(function (c) { parseJson_(c.photoFileIdsJson, []).forEach(function (f) { reg(f, "CLEANING", c.missionId, "PHOTO_AFTER", c); }); });
+  dbAll_("IncidentsV4").forEach(function (i) { parseJson_(i.photoFileIdsJson, []).forEach(function (f) { reg(f, "INCIDENT", i.incidentId, "PHOTO", i); }); });
+  dbAll_("WorkOrders").forEach(function (w) { reg(w.invoiceFileId, "WORKORDER", w.workOrderId, "INVOICE", w); });
+  dbInsertMany_("Documents", docs); r.legacyDocumentsRegistered = docs.length;
+  return r;
+}
+
+function migSeed_() {
+  const r = { plans: 0, platformOrg: false };
+  DEFAULT_PLANS.forEach(function (pl) {
+    if (dbGet_("SubscriptionPlans", pl.planCode)) return;
+    dbInsert_("SubscriptionPlans", { planCode: pl.planCode, name: pl.name, price: pl.price, currency: "MAD", periodicity: pl.periodicity, maxProperties: pl.maxProperties,
+      maxUsers: pl.maxUsers, storageMb: pl.storageMb, featuresJson: pl.features, quotasJson: { exportRows: IMMO_CONFIG.MAX_EXPORT_ROWS }, trialDays: pl.trialDays, status: "ACTIVE", sortOrder: pl.sortOrder, updatedAt: nowIso_(), updatedBy: "migration" });
+    r.plans++;
+  });
+  if (!dbAll_("Organizations").some(function (o) { return o.type === "PLATFORM"; })) {
+    dbInsert_("Organizations", { name: "ImmoPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: "MA", city: "Marrakech", timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: "migration" });
+    r.platformOrg = true;
+  }
+  return r;
+}
+
+/** Exécute les migrations en attente, avec sauvegarde préalable. Doit être appelé sous verrou. */
+function runMigrations_(actor) {
+  const ss = dbSpreadsheet_();
+  const hasHistory = !!ss.getSheetByName("MigrationHistory");
+  const done = hasHistory ? dbAll_("MigrationHistory").filter(function (m) { return m.status === "DONE"; }).map(function (m) { return Number(m.version); }) : [];
+  const pending = MIGRATIONS_.filter(function (m) { return done.indexOf(m.version) < 0; });
+  const results = [];
+  let backup = null;
+  if (pending.length && ss.getSheets().some(function (s) { return schema_()[s.getName()] && s.getLastRow() > 1; })) backup = backupDatabase_("pre-migration");
+  results.push({ version: 1, name: "schema_sync", details: migSchemaSync_() });
+  pending.forEach(function (m) {
+    if (m.version === 1) { dbInsert_("MigrationHistory", { version: 1, name: m.name, appliedAt: nowIso_(), appliedBy: actor, status: "DONE", detailsJson: results[0].details }); return; }
+    try {
+      const d = m.run();
+      dbInsert_("MigrationHistory", { version: m.version, name: m.name, appliedAt: nowIso_(), appliedBy: actor, status: "DONE", detailsJson: d });
+      results.push({ version: m.version, name: m.name, details: d });
+    } catch (e) {
+      dbInsert_("MigrationHistory", { version: m.version, name: m.name, appliedAt: nowIso_(), appliedBy: actor, status: "FAILED", detailsJson: { error: e.message } });
+      throw new AppError("MIGRATION", "Migration v" + m.version + " échouée : " + e.message + (backup ? " — sauvegarde disponible : " + backup.name : ""));
+    }
+  });
+  return { backup: backup, applied: results, schemaVersion: IMMO_CONFIG.SCHEMA_VERSION };
+}
+
+/** Rapport d'intégrité : identifiants manquants ou dupliqués, références orphelines principales. Lecture seule. */
+function integrityReport_() {
+  const out = { duplicates: {}, missingIds: {}, orphans: {} };
+  Object.keys(schema_()).forEach(function (t) {
+    const S = schema_()[t]; const seen = {}; let missing = 0, dup = 0;
+    dbAll_(t).forEach(function (r) { const id = String(r[S.pk] || ""); if (!id) missing++; else if (seen[id]) dup++; else seen[id] = true; });
+    if (missing) out.missingIds[t] = missing;
+    if (dup) out.duplicates[t] = dup;
+  });
+  const props = indexBy_(dbAll_("Properties"), "propertyId");
+  ["Reservations", "IncidentsV4", "CleaningMissions", "Leases", "WorkOrders"].forEach(function (t) {
+    const n = dbAll_(t).filter(function (r) { return r.propertyId && !props[String(r.propertyId)]; }).length;
+    if (n) out.orphans[t] = n;
+  });
+  // Séjours qui se chevauchent (nuits communes), par exemple hérités d'une version antérieure : signalés, jamais modifiés.
+  out.overlaps = [];
+  const byProp = {};
+  dbAll_("Reservations").filter(function (r) { return RESV_BLOCKING_.indexOf(r.status) >= 0 && isDateStr_(r.checkIn) && isDateStr_(r.checkOut); })
+    .forEach(function (r) { (byProp[String(r.propertyId)] = byProp[String(r.propertyId)] || []).push(r); });
+  Object.keys(byProp).forEach(function (pid) {
+    const list = byProp[pid].sort(function (a, b) { return a.checkIn < b.checkIn ? -1 : a.checkIn > b.checkIn ? 1 : 0; });
+    let maxEnd = null, maxId = null;
+    list.forEach(function (r) {
+      if (maxEnd && r.checkIn < maxEnd && out.overlaps.length < 100) out.overlaps.push({ propertyId: pid, reservationA: maxId, reservationB: r.reservationId });
+      if (!maxEnd || r.checkOut > maxEnd) { maxEnd = r.checkOut; maxId = r.reservationId; }
+    });
+  });
+  out.ok = !Object.keys(out.duplicates).length && !Object.keys(out.missingIds).length && !out.overlaps.length;
+  return out;
+}
+
+/* ------------------------- Sauvegarde / restauration ------------------------- */
+function backupDatabase_(label) {
+  const ss = dbSpreadsheet_();
+  const name = "ImmoPilot_backup_" + Utilities.formatDate(new Date(), tz_(), "yyyyMMdd_HHmmss") + "_" + String(label || "manuel").replace(/[^\w-]/g, "");
+  const folder = systemFolder_("Sauvegardes");
+  const copy = DriveApp.getFileById(ss.getId()).makeCopy(name, folder);
+  copy.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+  const keep = Number(getSettingSafe_("backup.keep")) || 14;
+  const files = [], it = folder.getFiles();
+  while (it.hasNext()) { const f = it.next(); if (/^ImmoPilot_backup_/.test(f.getName())) files.push(f); }
+  files.sort(function (a, b) { return b.getDateCreated().getTime() - a.getDateCreated().getTime(); });
+  files.slice(keep).forEach(function (f) { if (!/pre-migration|pre-restore/.test(f.getName())) f.setTrashed(true); });
+  return { fileId: copy.getId(), name: name };
+}
+function getSettingSafe_(k) { try { return getSetting_(k); } catch (e) { return DEFAULT_SETTINGS[k]; } }
+function listBackups_() {
+  const folder = systemFolder_("Sauvegardes"), out = [], it = folder.getFiles();
+  while (it.hasNext()) { const f = it.next(); out.push({ fileId: f.getId(), name: f.getName(), createdAt: f.getDateCreated().toISOString(), sizeBytes: f.getSize() }); }
+  return out.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });
+}
+
+/* ======================================================================
+ * NotificationService.gs
+ * ====================================================================== */
+/**
+ * Notifications centralisées : in-app (feuille Notifications), e-mail (MailApp/Gmail), liens WhatsApp wa.me.
+ * Anti-doublon : chaque envoi porte une clé d'événement ; NotificationLogs garde (eventKey, canal, destinataire).
+ * WhatsApp : ImmoPilot génère un lien qui OUVRE une conversation pré-remplie. Aucun message n'est envoyé automatiquement.
+ */
+function sendMailSafe_(to, subject, body, eventKey, orgId) {
+  to = validateEmail_(to);
+  const key = String(eventKey || "") ;
+  if (key && dbAll_("NotificationLogs").some(function (l) { return l.eventKey === key && l.channel === "EMAIL" && l.recipient === to && l.status === "SENT"; })) return { ok: true, duplicate: true };
+  let status = "SENT", error = "";
+  try {
+    const quota = TEST_HOOKS_.mailQuota !== null ? TEST_HOOKS_.mailQuota : MailApp.getRemainingDailyQuota();
+    if (quota < 1) throw new Error("Quota quotidien MailApp épuisé.");
+    const text = String(body || "").slice(0, 20000), html = mailHtml_(text);
+    if (TEST_HOOKS_.mailSink) TEST_HOOKS_.mailSink.push({ to: to, subject: subject, body: text, htmlBody: html });
+    else MailApp.sendEmail({ to: to, subject: safeText_(subject, 200), body: text, htmlBody: html, name: IMMO_CONFIG.APP_NAME });
+  } catch (e) { status = "FAILED"; error = String(e.message || e).slice(0, 300); }
+  try { dbInsert_("NotificationLogs", { eventKey: key || newId_("evt"), channel: "EMAIL", recipient: to, type: "", status: status, sentAt: nowIso_(), error: error, organizationId: orgId || "" }); } catch (e2) { console.error(e2.message); }
+  return status === "SENT" ? { ok: true } : { ok: false, error: error };
+}
+
+/**
+ * Version HTML d'un e-mail texte : texte échappé, sauts de ligne conservés, et chaque adresse https:// transformée
+ * en lien cliquable (bouton pour les liens de l'application). Certaines messageries ne rendent pas cliquables les liens
+ * d'un e-mail en texte brut ; la version texte reste jointe pour les autres.
+ */
+function mailHtml_(text) {
+  const parts = String(text || "").split(/(https:\/\/[^\s<>"]+)/);
+  const inner = parts.map(function (part, i) {
+    if (i % 2 === 0) return escapeHtml_(part).replace(/\n/g, "<br>");
+    const url = escapeHtml_(part);
+    return "<br><a href=\"" + url + "\" style=\"display:inline-block;background:#2f4fd8;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:bold\">Ouvrir ImmoPilot</a>" +
+      "<br><span style=\"font-size:12px;color:#64748b\">Si le bouton ne fonctionne pas, copiez ce lien en entier dans la barre d'adresse de votre navigateur :<br><a href=\"" + url + "\" style=\"color:#2f4fd8;word-break:break-all\">" + url + "</a></span><br>";
+  }).join("");
+  return "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1d2b3a\">" + inner + "</div>";
+}
+
+/**
+ * Notifie une liste d'utilisateurs : in-app toujours (sauf type désactivé), e-mail selon préférences utilisateur et organisation.
+ * opts : { eventKey, userIds, type, title, body, link, organizationId, email (bool, défaut true) }
+ */
+function notify_(opts) {
+  const ids = (opts.userIds || []).filter(function (v, i, arr) { return v && arr.indexOf(v) === i; });
+  if (!ids.length) return { sent: 0 };
+  const users = indexBy_(dbAll_("Users"), "userId");
+  const orgEmail = opts.organizationId ? getSetting_("notify.emailEnabled", opts.organizationId) !== false : true;
+  let sent = 0;
+  ids.forEach(function (uid) {
+    const u = users[String(uid)];
+    if (!u || u.status !== "ACTIVE") return;
+    const prefs = parseJson_(u.notifPrefsJson, { email: true, mutedTypes: [] }) || {};
+    const muted = Array.isArray(prefs.mutedTypes) && prefs.mutedTypes.indexOf(opts.type) >= 0;
+    if (muted) return;
+    const inAppKey = opts.eventKey + "|" + uid;
+    if (!dbAll_("Notifications").some(function (n) { return n.eventKey === inAppKey; })) {
+      dbInsert_("Notifications", { organizationId: opts.organizationId || "", userId: uid, type: opts.type || "INFO", title: safeText_(opts.title, 200),
+        body: safeText_(opts.body || "", 1000), link: safeText_(opts.link || "", 200), createdAt: nowIso_(), readAt: "", eventKey: inAppKey });
+      sent++;
+    }
+    if (opts.email !== false && orgEmail && prefs.email !== false) {
+      sendMailSafe_(u.email, "[ImmoPilot] " + opts.title, (opts.body || "") + "\n\nOuvrir ImmoPilot : " + safeAppUrl_() + (opts.link || ""), opts.eventKey, opts.organizationId);
+    }
+  });
+  return { sent: sent };
+}
+function safeAppUrl_() { try { return appUrl_(); } catch (e) { return ""; } }
+function superAdminIds_() { return dbAll_("UserRoles").filter(function (r) { return r.role === "SUPER_ADMIN" && r.status === "ACTIVE"; }).map(function (r) { return r.userId; }); }
+
+/** Normalise un numéro (format marocain 06/07 → 2126/2127) et construit un lien wa.me encodé. */
+function waLink_(phone, text) {
+  let d = String(phone || "").replace(/[^\d+]/g, "");
+  if (d.indexOf("+") === 0) d = d.slice(1);
+  if (d.indexOf("00") === 0) d = d.slice(2);
+  if (/^0[5-7]\d{8}$/.test(d)) d = "212" + d.slice(1);
+  assert_(/^\d{8,15}$/.test(d), "Numéro WhatsApp invalide (format international attendu).");
+  return "https://wa.me/" + d + "?text=" + encodeURIComponent(String(text || "").slice(0, 1500));
+}
+
+/* -------------------- Routes -------------------- */
+function notifList_(p, a) {
+  a = a || {};
+  const rows = dbAll_("Notifications").filter(function (n) { return String(n.userId) === p.userId && (!a.unread || !n.readAt); })
+    .sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); })
+    .map(function (n) { return { notificationId: n.notificationId, type: n.type, title: n.title, body: n.body, link: n.link, createdAt: n.createdAt, readAt: n.readAt }; });
+  return pageOf_(rows, a);
+}
+function notifRead_(p, a) {
+  const ids = a.all ? dbAll_("Notifications").filter(function (n) { return String(n.userId) === p.userId && !n.readAt; }).map(function (n) { return n.notificationId; }) : [safeText_(a.notificationId, 120)];
+  let n = 0;
+  ids.slice(0, 500).forEach(function (id) {
+    const row = dbGet_("Notifications", id);
+    if (row && String(row.userId) === p.userId && !row.readAt) { dbUpdate_("Notifications", id, { readAt: nowIso_() }); n++; }
+  });
+  return { ok: true, updated: n };
+}
+/** Lien WhatsApp vers le voyageur d'une réservation ou vers un numéro libre lié à un bien géré. */
+function notifWhatsApp_(p, a) {
+  let phone = a.phone, text = safeText_(a.message, 1500);
+  if (a.reservationId) {
+    const r = assertResv_(p, a.reservationId, "reservation.view");
+    phone = phone || r.guestPhone;
+    if (!text) { const prop = dbGet_("Properties", r.propertyId); text = "Bonjour " + r.guestName + ", votre séjour à " + prop.name + " du " + r.checkIn + " au " + r.checkOut + " est confirmé. Arrivée à partir de " + (prop.checkInTime || getSetting_("reservation.defaultCheckIn")) + "."; }
+  } else assertPropAny_(p, a.propertyId, ["reservation.view", "cleaning.manage", "incident.manage", "lease.view"]);
+  assert_(phone, "Aucun numéro de téléphone disponible.");
+  const url = waLink_(phone, text);
+  audit_("WHATSAPP_LINK_CREATED", "Notification", a.reservationId || a.propertyId, "", {});
+  return { ok: true, url: url, sent: false, note: "Le lien ouvre WhatsApp avec le message pré-rempli ; l'envoi reste manuel." };
+}
+function notifSendEmail_(p, a) {
+  const prop = assertPropAny_(p, a.propertyId, ["reservation.edit", "cleaning.manage", "incident.manage", "lease.manage"]);
+  rateLimit_("mail:" + p.userId, 30, 3600);
+  const r = sendMailSafe_(a.to, "[ImmoPilot] " + reqText_(a.subject, "Objet", 2, 150), reqText_(a.body, "Message", 2, 5000), "manual:" + newId_("m"), prop.organizationId);
+  audit_("EMAIL_SENT", "Notification", prop.propertyId, prop.organizationId, { ok: r.ok });
+  if (!r.ok) throw new AppError("EMAIL", "Envoi impossible : " + r.error);
+  return { ok: true };
+}
+
+/* ======================================================================
+ * OrganizationService.gs
+ * ====================================================================== */
+/**
+ * Organisations (tenants) et accès d'assistance exceptionnel du super administrateur.
+ * Suspendre une organisation n'efface aucune donnée : les rôles de ses membres deviennent inopérants
+ * et ses biens deviennent inaccessibles jusqu'à la réactivation.
+ */
+var ORG_TYPES_ = ["OWNER_ORG", "AGENCY", "PROVIDER", "PLATFORM"];
+
+function orgPublic_(o) {
+  return { organizationId: o.organizationId, name: o.name, status: o.status, type: o.type || "", city: o.city || "", country: o.country || "",
+    planCode: o.planCode || "", billingEmail: o.billingEmail || "", createdAt: o.createdAt, suspendedAt: o.suspendedAt || "", suspensionReason: o.suspensionReason || "" };
+}
+
+function orgList_(p, a) {
+  a = a || {};
+  let orgs = dbAll_("Organizations");
+  if (!p.isSuper) { const mine = memberOrgIds_(p); orgs = orgs.filter(function (o) { return mine.indexOf(String(o.organizationId)) >= 0; }); }
+  if (a.status) orgs = orgs.filter(function (o) { return o.status === a.status; });
+  if (a.type) orgs = orgs.filter(function (o) { return o.type === a.type; });
+  orgs = orgs.filter(function (o) { return matchesQuery_(a.q, [o.name, o.city, o.organizationId]); });
+  const roles = dbAll_("UserRoles"), props = dbAll_("Properties");
+  const rows = orgs.map(function (o) {
+    const r = orgPublic_(o);
+    if (p.isSuper) {
+      r.userCount = roles.filter(function (x) { return String(x.organizationId) === String(o.organizationId) && x.status === "ACTIVE"; }).length;
+      r.propertyCount = props.filter(function (x) { return String(x.organizationId) === String(o.organizationId) && x.status !== "DELETED"; }).length;
+      const e = entitlement_(o.organizationId); r.subscriptionStatus = e.status; r.planCode = e.planCode || r.planCode;
+    }
+    return r;
+  }).sort(function (x, y) { return String(x.name).localeCompare(String(y.name)); });
+  return pageOf_(rows, a);
+}
+
+function orgCreate_(p, a) {
+  requireSuper_(p);
+  const name = reqText_(a.name, "Nom de l'organisation", 2, 120);
+  const type = oneOf_(a.type || "OWNER_ORG", ORG_TYPES_, "Type d'organisation");
+  return withLock_(function () {
+    assert_(!dbAll_("Organizations").some(function (o) { return String(o.name).toLowerCase() === name.toLowerCase() && o.status !== "INACTIVE"; }), "Une organisation porte déjà ce nom.");
+    const o = dbInsert_("Organizations", { name: name, status: "ACTIVE", type: type, city: safeText_(a.city || "Marrakech", 80), country: safeText_(a.country || "MA", 2),
+      timezone: tz_(), locale: oneOf_(a.locale || "fr", ["fr", "en", "ar"], "Langue"), billingEmail: a.billingEmail ? validateEmail_(a.billingEmail) : "",
+      createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
+    audit_("ORGANIZATION_CREATED", "Organization", o.organizationId, o.organizationId, { name: name, type: type });
+    if (a.planCode) subAssign_(p, { organizationId: o.organizationId, planCode: a.planCode, trial: true });
+    return { ok: true, organizationId: o.organizationId };
+  });
+}
+
+function orgUpdate_(p, a) {
+  const id = safeText_(a.organizationId, 120), o = dbGet_("Organizations", id);
+  if (!o) notFound_("Organisation");
+  if (!p.isSuper) assertOrgCap_(p, id, "settings.manage");
+  const patch = { updatedAt: nowIso_() };
+  if (a.name !== undefined) patch.name = reqText_(a.name, "Nom", 2, 120);
+  if (a.city !== undefined) patch.city = safeText_(a.city, 80);
+  if (a.billingEmail !== undefined) patch.billingEmail = a.billingEmail ? validateEmail_(a.billingEmail) : "";
+  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, ["fr", "en", "ar"], "Langue");
+  if (a.type !== undefined) { requireSuper_(p); patch.type = oneOf_(a.type, ORG_TYPES_, "Type"); }
+  dbUpdate_("Organizations", id, patch);
+  audit_("ORGANIZATION_UPDATED", "Organization", id, id, diff_(o, patch, Object.keys(patch)));
+  return { ok: true };
+}
+
+/** Suspension / réactivation / désactivation (aucune suppression de données). */
+function orgSetStatus_(p, a) {
+  requireSuper_(p);
+  const id = safeText_(a.organizationId, 120), o = dbGet_("Organizations", id);
+  if (!o) notFound_("Organisation");
+  const status = oneOf_(a.status, ["ACTIVE", "SUSPENDED", "INACTIVE"], "Statut");
+  assert_(o.type !== "PLATFORM" || status === "ACTIVE", "L'organisation plateforme ne peut pas être suspendue.");
+  const reason = status === "ACTIVE" ? "" : reqText_(a.reason, "Motif", 3, 300);
+  dbUpdate_("Organizations", id, { status: status, suspendedAt: status === "ACTIVE" ? "" : nowIso_(), suspensionReason: reason, updatedAt: nowIso_() });
+  audit_("ORGANIZATION_STATUS_" + status, "Organization", id, id, { reason: reason });
+  return { ok: true, status: status };
+}
+
+/* ---------------- Accès d'assistance (support) ---------------- */
+function supportRequest_(p, a) {
+  requireSuper_(p);
+  const orgId = safeText_(a.organizationId, 120);
+  if (!dbGet_("Organizations", orgId)) notFound_("Organisation");
+  const hours = Math.min(Math.max(parseInt(a.hours, 10) || 4, 1), 24);
+  const g = dbInsert_("SupportGrants", { superAdminUserId: p.userId, organizationId: orgId, justification: reqText_(a.justification, "Justification", 10, 500),
+    status: "REQUESTED", requestedAt: nowIso_(), expiresAt: "", scope: "READ:" + hours });
+  audit_("SUPPORT_ACCESS_REQUESTED", "SupportGrant", g.grantId, orgId, { hours: hours, justification: g.justification });
+  const approvers = dbAll_("UserRoles").filter(function (r) { return r.status === "ACTIVE" && String(r.organizationId) === orgId && (r.role === "OWNER" || r.role === "AGENCY_ADMIN"); }).map(function (r) { return r.userId; });
+  notify_({ eventKey: "support:" + g.grantId, userIds: approvers, type: "SUPPORT_REQUEST", organizationId: orgId,
+    title: "Demande d'accès d'assistance", body: "L'équipe ImmoPilot demande un accès en lecture seule de " + hours + " h : " + g.justification, link: "#settings" });
+  return { ok: true, grantId: g.grantId };
+}
+function supportDecide_(p, a) {
+  const g = dbGet_("SupportGrants", safeText_(a.grantId, 120));
+  if (!g) notFound_("Demande");
+  assertOrgCap_(p, g.organizationId, "support.approve");
+  assert_(g.status === "REQUESTED", "Demande déjà traitée.");
+  const approve = a.decision === "APPROVE";
+  const hours = parseInt(String(g.scope).split(":")[1], 10) || 4;
+  dbUpdate_("SupportGrants", g.grantId, approve ? { status: "ACTIVE", approvedAt: nowIso_(), approvedBy: p.email, expiresAt: new Date(Date.now() + hours * 3600000).toISOString() } : { status: "DENIED", approvedAt: nowIso_(), approvedBy: p.email });
+  audit_("SUPPORT_ACCESS_" + (approve ? "APPROVED" : "DENIED"), "SupportGrant", g.grantId, g.organizationId, {});
+  notify_({ eventKey: "support-decision:" + g.grantId, userIds: [g.superAdminUserId], type: "SUPPORT_DECISION", organizationId: g.organizationId,
+    title: "Accès d'assistance " + (approve ? "accordé" : "refusé"), body: "Organisation " + g.organizationId, link: "#admin" });
+  return { ok: true };
+}
+function supportRevoke_(p, a) {
+  const g = dbGet_("SupportGrants", safeText_(a.grantId, 120));
+  if (!g) notFound_("Accès");
+  if (!(p.isSuper && String(g.superAdminUserId) === p.userId)) assertOrgCap_(p, g.organizationId, "support.approve");
+  assert_(["REQUESTED", "ACTIVE"].indexOf(g.status) >= 0, "Accès déjà clos.");
+  dbUpdate_("SupportGrants", g.grantId, { status: "REVOKED", revokedAt: nowIso_() });
+  audit_("SUPPORT_ACCESS_REVOKED", "SupportGrant", g.grantId, g.organizationId, {});
+  return { ok: true };
+}
+function supportList_(p, a) {
+  const orgs = indexBy_(dbAll_("Organizations"), "organizationId");
+  const rows = dbAll_("SupportGrants").filter(function (g) {
+    if (p.isSuper && String(g.superAdminUserId) === p.userId) return true;
+    return hasOrgCap_(p, g.organizationId, "support.approve");
+  }).map(function (g) {
+    const exp = parseTs_(g.expiresAt);
+    return { grantId: g.grantId, organizationId: g.organizationId, organizationName: (orgs[g.organizationId] || {}).name || "", justification: g.justification,
+      status: g.status === "ACTIVE" && exp && exp.getTime() < Date.now() ? "EXPIRED" : g.status, requestedAt: g.requestedAt, expiresAt: g.expiresAt, approvedBy: g.approvedBy };
+  }).sort(function (x, y) { return String(y.requestedAt).localeCompare(String(x.requestedAt)); });
+  return pageOf_(rows, a);
+}
+
+
+/* ---------------- Agences créées par un propriétaire ---------------- */
+var OWNER_AGENCY_LIMIT_ = 50;
+/**
+ * Un PROPRIÉTAIRE crée une agence pour l'un de ses biens, en une seule opération :
+ *  1. organisation de type AGENCY (créée par lui, aucune donnée du propriétaire n'y est copiée) ;
+ *  2. invitation à usage unique de l'administrateur de l'agence (rôle AGENCY_ADMIN) ;
+ *  3. attribution du bien avec les droits choisis (mêmes règles que « Attribuer une agence »).
+ * Réservé au rôle OWNER de l'organisation du bien (une agence ne peut pas créer d'autres agences).
+ */
+function ownerAgencyCreate_(p, a) {
+  const prop = assertProp_(p, a.propertyId, "property.assign");
+  if (!hasRole_(p, "OWNER", prop.organizationId)) forbid_("Seul le propriétaire du bien peut créer une agence.");
+  const name = reqText_(a.name, "Nom de l'agence", 2, 120);
+  const adminEmail = validateEmail_(a.adminEmail);
+  rateLimit_("agency-create:" + p.userId, 10, 3600);
+  assert_(dbAll_("Organizations").filter(function (o) { return o.type === "AGENCY" && normalizeEmail_(o.createdBy) === p.email && o.status !== "INACTIVE"; }).length < OWNER_AGENCY_LIMIT_,
+    "Nombre maximal d'agences créées atteint (" + OWNER_AGENCY_LIMIT_ + "). Contactez l'administrateur ImmoPilot.");
+  const agency = withLock_(function () {
+    const same = dbAll_("Organizations").find(function (o) { return String(o.name).toLowerCase() === name.toLowerCase() && o.status !== "INACTIVE"; });
+    if (same) throw new AppError("VALIDATION", "Une organisation porte déjà ce nom. S'il s'agit de la même agence, utilisez « Attribuer une agence » ; sinon, choisissez un autre nom.");
+    const o = dbInsert_("Organizations", { name: name, status: "ACTIVE", type: "AGENCY", city: safeText_(a.city || "Marrakech", 80), country: "MA", timezone: tz_(),
+      locale: oneOf_(a.locale || "fr", ["fr", "en", "ar"], "Langue"), billingEmail: adminEmail, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
+    audit_("AGENCY_CREATED_BY_OWNER", "Organization", o.organizationId, prop.organizationId, { name: name, propertyId: prop.propertyId, adminEmail: adminEmail });
+    return o;
+  });
+  const invitation = invitationInsertAndSend_(p, { email: adminEmail, displayName: a.adminName, organizationId: agency.organizationId, role: "AGENCY_ADMIN" }, agency);
+  const perm = propertyAgencySet_(p, { propertyId: prop.propertyId, agencyOrganizationId: agency.organizationId, canView: true,
+    canManageReservations: a.canManageReservations === true, canManageOperations: a.canManageOperations === true, canViewFinance: a.canViewFinance === true,
+    commissionRate: a.commissionRate, validFrom: a.validFrom, validTo: a.validTo });
+  return { ok: true, organizationId: agency.organizationId, invitationId: invitation.invitationId, emailSent: invitation.emailSent, emailError: invitation.emailError, permissionId: perm.permissionId };
+}
+
+/* ---------------- Gestion des agences par le propriétaire ---------------- */
+/** Organisations dont le connecté est PROPRIÉTAIRE. */
+function ownerOrgIds_(p) { return p.roles.filter(function (r) { return r.role === "OWNER"; }).map(function (r) { return String(r.organizationId); }); }
+/** Agence visible par ce propriétaire : il l'a créée, ou elle a (ou a eu) un accès à l'un de ses biens. */
+function ownerAgencyLoad_(p, agencyOrgId) {
+  const owners = ownerOrgIds_(p);
+  if (!owners.length) forbid_("Réservé au propriétaire.");
+  const org = dbGet_("Organizations", safeText_(agencyOrgId, 120));
+  const linked = org && dbAll_("AgencyPropertyPermissions").some(function (z) { return String(z.agencyOrganizationId) === String(org.organizationId) && owners.indexOf(String(z.ownerOrganizationId)) >= 0; });
+  const creator = !!org && normalizeEmail_(org.createdBy) === p.email;
+  if (!org || org.type !== "AGENCY" || (!linked && !creator)) throw new AppError("FORBIDDEN", "Agence introuvable ou accès refusé.");
+  return { org: org, owners: owners, creator: creator };
+}
+/** Liste « Mes agences » : chaque agence avec ses droits sur MES biens (jamais ceux des autres propriétaires). */
+function ownerAgencyList_(p) {
+  const owners = ownerOrgIds_(p);
+  if (!owners.length) forbid_("Réservé au propriétaire.");
+  const props = indexBy_(dbAll_("Properties").filter(function (x) { return owners.indexOf(String(x.organizationId)) >= 0 && x.status !== "DELETED"; }), "propertyId");
+  const perms = dbAll_("AgencyPropertyPermissions").filter(function (z) { return props[String(z.propertyId)]; });
+  const ids = {};
+  perms.forEach(function (z) { ids[String(z.agencyOrganizationId)] = true; });
+  dbAll_("Organizations").forEach(function (o) { if (o.type === "AGENCY" && normalizeEmail_(o.createdBy) === p.email) ids[String(o.organizationId)] = true; });
+  const roles = dbAll_("UserRoles"), users = indexBy_(dbAll_("Users"), "userId"), invites = dbAll_("Invitations");
+  return Object.keys(ids).map(function (id) {
+    const o = dbGet_("Organizations", id); if (!o) return null;
+    const admins = roles.filter(function (r) { return String(r.organizationId) === id && r.role === "AGENCY_ADMIN" && r.status === "ACTIVE"; }).map(function (r) { return (users[String(r.userId)] || {}).email; }).filter(Boolean);
+    const pending = invites.filter(function (i) { return String(i.organizationId) === id && i.status === "PENDING"; }).map(function (i) { return i.email; });
+    const mine = perms.filter(function (z) { return String(z.agencyOrganizationId) === id; }).map(function (z) {
+      const pr = props[String(z.propertyId)];
+      return { permissionId: z.permissionId, propertyId: z.propertyId, propertyName: pr.name, propertyCity: pr.city, status: z.status, canView: bool_(z.canView), canManageReservations: bool_(z.canManageReservations),
+        canManageOperations: bool_(z.canManageOperations), canViewFinance: bool_(z.canViewFinance), commissionRate: z.commissionRate, validFrom: z.validFrom, validTo: z.validTo };
+    });
+    return { organizationId: id, name: o.name, city: o.city, contactEmail: o.billingEmail, locale: o.locale, status: o.status, createdByMe: normalizeEmail_(o.createdBy) === p.email,
+      admins: admins, pendingInvitations: pending, activeProperties: mine.filter(function (x) { return x.status === "ACTIVE"; }).length, properties: mine };
+  }).filter(Boolean).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+}
+/** Modifier la fiche d'une agence : uniquement celle que l'on a créée (une agence partagée appartient à plusieurs clients). */
+function ownerAgencyUpdate_(p, a) {
+  const x = ownerAgencyLoad_(p, a.agencyOrganizationId);
+  if (!x.creator) forbid_("Vous pouvez modifier uniquement les agences que vous avez créées. Pour les autres, gérez seulement leurs accès à vos biens.");
+  const patch = { updatedAt: nowIso_() };
+  if (a.name !== undefined) {
+    const name = reqText_(a.name, "Nom de l'agence", 2, 120);
+    assert_(!dbAll_("Organizations").some(function (o) { return String(o.organizationId) !== String(x.org.organizationId) && String(o.name).toLowerCase() === name.toLowerCase() && o.status !== "INACTIVE"; }), "Une organisation porte déjà ce nom.");
+    patch.name = name;
+  }
+  if (a.city !== undefined) patch.city = safeText_(a.city, 80);
+  if (a.contactEmail !== undefined) patch.billingEmail = a.contactEmail ? validateEmail_(a.contactEmail) : "";
+  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, ["fr", "en", "ar"], "Langue");
+  dbUpdate_("Organizations", x.org.organizationId, patch);
+  audit_("AGENCY_UPDATED_BY_OWNER", "Organization", x.org.organizationId, x.owners[0], diff_(x.org, patch, Object.keys(patch).filter(function (k) { return k !== "updatedAt"; })));
+  return { ok: true };
+}
+/** Retirer l'accès de l'agence à TOUS mes biens (immédiat ; l'historique est conservé). */
+function ownerAgencyRevokeAll_(p, a) {
+  const x = ownerAgencyLoad_(p, a.agencyOrganizationId);
+  const active = dbAll_("AgencyPropertyPermissions").filter(function (z) { return String(z.agencyOrganizationId) === String(x.org.organizationId) && x.owners.indexOf(String(z.ownerOrganizationId)) >= 0 && z.status === "ACTIVE"; });
+  active.forEach(function (z) { propertyAgencySet_(p, { propertyId: z.propertyId, agencyOrganizationId: x.org.organizationId, canView: false }); });
+  audit_("AGENCY_ACCESS_REVOKED_ALL", "Organization", x.org.organizationId, x.owners[0], { properties: active.length });
+  return { ok: true, revoked: active.length };
+}
+/**
+ * Supprimer une agence que l'on a créée. Non destructif : accès à mes biens retirés, invitations en attente révoquées,
+ * comptes de l'agence désactivés pour cette organisation, organisation passée « inactive » ; l'historique reste consultable.
+ * Refusé si l'agence travaille aussi pour d'autres propriétaires (on retire alors seulement ses accès à mes biens).
+ */
+function ownerAgencyDelete_(p, a) {
+  const x = ownerAgencyLoad_(p, a.agencyOrganizationId);
+  if (!x.creator) forbid_("Vous pouvez supprimer uniquement les agences que vous avez créées. Pour les autres, utilisez « Retirer tous les accès ».");
+  const id = String(x.org.organizationId);
+  const elsewhere = dbAll_("AgencyPropertyPermissions").some(function (z) { return String(z.agencyOrganizationId) === id && z.status === "ACTIVE" && x.owners.indexOf(String(z.ownerOrganizationId)) < 0; });
+  assert_(!elsewhere, "Cette agence gère aussi les biens d'autres propriétaires : elle ne peut pas être supprimée. Utilisez « Retirer tous les accès » pour couper ses accès à vos biens.");
+  const revoked = ownerAgencyRevokeAll_(p, a).revoked;
+  withLock_(function () {
+    dbAll_("Invitations").filter(function (i) { return String(i.organizationId) === id && (i.status === "PENDING" || i.status === "EMAIL_FAILED"); })
+      .forEach(function (i) { dbUpdate_("Invitations", i.invitationId, { status: "REVOKED", revokedAt: nowIso_(), tokenHash: "" }); });
+    dbAll_("UserRoles").filter(function (r) { return String(r.organizationId) === id && r.status === "ACTIVE"; })
+      .forEach(function (r) { dbUpdate_("UserRoles", r.userRoleId, { status: "REVOKED", revokedAt: nowIso_(), revokedBy: p.email }); });
+    dbUpdate_("Organizations", id, { status: "INACTIVE", suspendedAt: nowIso_(), suspensionReason: "Supprimée par le propriétaire " + p.email, updatedAt: nowIso_() });
+  });
+  audit_("AGENCY_DELETED_BY_OWNER", "Organization", id, x.owners[0], { name: x.org.name, propertiesRevoked: revoked });
+  return { ok: true, revoked: revoked };
+}
+
+/* ======================================================================
+ * ParetoService.gs
+ * ====================================================================== */
+/**
+ * Analyses de Pareto (80/20), calculées côté serveur. Le même résultat alimente le tableau, le graphique et les exports.
+ * Règles de calcul (paretoCompute_, testé) :
+ *  - agrégation par clé ; libellé vide ou inconnu → « NON_CLASSE » ;
+ *  - valeurs négatives exclues (signalées dans warnings) ; valeurs nulles conservées en fin de classement, jamais « prioritaires » ;
+ *  - tri décroissant (égalité : ordre alphabétique du libellé, pour un résultat stable) ;
+ *  - part = valeur / total ; part cumulée = somme des parts jusqu'au rang ;
+ *  - éléments PRIORITAIRES : du 1er jusqu'à celui qui fait franchir (ou atteindre) le seuil de 80 % inclus ;
+ *  - total nul (aucune donnée, période sans activité) : résultat vide explicite, sans division par zéro.
+ */
+var PARETO_THRESHOLD_ = 80;
+var PARETO_TYPES_ = {
+  INCIDENTS_BY_CATEGORY: { title: "Incidents par catégorie", unit: "COUNT", cap: "incident.view" },
+  INCIDENT_COST_BY_CATEGORY: { title: "Coût des incidents par catégorie", unit: "MAD", cap: "incident.view" },
+  MAINTENANCE_BY_CATEGORY: { title: "Dépenses de maintenance par catégorie d'incident", unit: "MAD", cap: "finance.view" },
+  COST_BY_CONTRACTOR: { title: "Coûts par prestataire", unit: "MAD", cap: "invoice.view" },
+  COST_BY_PROPERTY: { title: "Biens les plus coûteux", unit: "MAD", cap: "finance.view" },
+  CANCEL_REASONS: { title: "Motifs d'annulation", unit: "COUNT", cap: "reservation.view" },
+  CLEANING_ANOMALIES: { title: "Anomalies de ménage", unit: "COUNT", cap: "cleaning.manage" },
+  DELAYS_NONCONFORMITIES: { title: "Retards et non-conformités", unit: "COUNT", cap: null },
+  EXPENSES_BY_CATEGORY: { title: "Dépenses par catégorie", unit: "MAD", cap: "finance.view" },
+  UNPAID: { title: "Impayés", unit: "MAD", cap: "finance.view" }
+};
+
+/** Calcul pur de Pareto. items : [{key, label, value}]. */
+function paretoCompute_(items, threshold) {
+  threshold = threshold || PARETO_THRESHOLD_;
+  const agg = {}, warnings = [];
+  (items || []).forEach(function (it) {
+    let key = String(it.key == null || it.key === "" ? "NON_CLASSE" : it.key);
+    const v = Number(it.value);
+    if (!isFinite(v)) { warnings.push("Valeur non numérique ignorée (" + key + ")."); return; }
+    if (v < 0) { warnings.push("Valeur négative exclue (" + key + " : " + v + ")."); return; }
+    if (!agg[key]) agg[key] = { key: key, label: String(it.label == null || it.label === "" ? key : it.label), value: 0, count: 0 };
+    agg[key].value += v; agg[key].count += 1;
+  });
+  const list = Object.keys(agg).map(function (k) { agg[k].value = round2_(agg[k].value); return agg[k]; })
+    .sort(function (a, b) { return b.value !== a.value ? b.value - a.value : String(a.label).localeCompare(String(b.label)); });
+  const total = round2_(list.reduce(function (s, x) { return s + x.value; }, 0));
+  if (total <= 0) return { total: 0, items: list.map(function (x, i) { return Object.assign(x, { rank: i + 1, share: 0, cumShare: 0, vital: false }); }), vitalCount: 0, vitalShare: 0, threshold: threshold, empty: true, warnings: warnings };
+  let cum = 0, reached = false, vitalCount = 0, vitalShare = 0;
+  list.forEach(function (x, i) {
+    x.rank = i + 1;
+    x.share = round2_(x.value / total * 100);
+    cum += x.value;
+    x.cumShare = round2_(Math.min(100, cum / total * 100));
+    x.vital = !reached && x.value > 0;
+    if (x.vital) { vitalCount++; vitalShare = x.cumShare; }
+    if (cum / total * 100 >= threshold - 1e-9) reached = true;
+  });
+  return { total: total, items: list, vitalCount: vitalCount, vitalShare: vitalShare, itemCount: list.length,
+    vitalItemShare: pct_(vitalCount, list.filter(function (x) { return x.value > 0; }).length), threshold: threshold, empty: false, warnings: warnings };
+}
+
+function paretoProps_(p, cap, f) {
+  return dbAll_("Properties").filter(function (x) {
+    if (x.status === "DELETED") return false;
+    if (cap ? !(canProp_(p, x, cap) || (cap === "finance.view" && canProp_(p, x, "property.edit"))) : !propertyAccess_(p, x)) return false;
+    if (f.propertyId && String(x.propertyId) !== String(f.propertyId)) return false;
+    if (f.organizationId && String(x.organizationId) !== String(f.organizationId)) return false;
+    if (f.agencyOrganizationId && !dbAll_("AgencyPropertyPermissions").some(function (z) { return String(z.propertyId) === String(x.propertyId) && String(z.agencyOrganizationId) === String(f.agencyOrganizationId) && z.status === "ACTIVE"; })) return false;
+    return true;
+  });
+}
+
+/** Collecte des données brutes d'une analyse pour une période. Retourne [{key,label,value}]. */
+function paretoItems_(p, type, per, f) {
+  const def = PARETO_TYPES_[type];
+  const props = paretoProps_(p, def.cap, f), ids = indexBy_(props, "propertyId");
+  const inP = function (d) { const s = String(d || "").slice(0, 10); return s >= per.from && s <= per.to; };
+  const catOk = function (c) { return !f.category || String(c) === String(f.category); };
+  const incidents = function () { return dbAll_("IncidentsV4").filter(function (i) { return ids[String(i.propertyId)] && i.status !== "CANCELLED" && inP(i.createdAt) && catOk(i.category); }); };
+  switch (type) {
+    case "INCIDENTS_BY_CATEGORY": return incidents().map(function (i) { return { key: i.category, label: i.category, value: 1 }; });
+    case "INCIDENT_COST_BY_CATEGORY": return incidents().map(function (i) { return { key: i.category, label: i.category, value: num_(i.finalCost) || num_(i.estimatedCost) }; });
+    case "MAINTENANCE_BY_CATEGORY": {
+      const inv = indexBy_(dbAll_("Invoices"), "invoiceId"), inc = indexBy_(dbAll_("IncidentsV4"), "incidentId");
+      return dbAll_("Expenses").filter(function (e) { return ids[String(e.propertyId)] && e.category === "MAINTENANCE" && e.status !== "CANCELLED" && inP(e.expenseDate); }).map(function (e) {
+        const v = e.refType === "INVOICE" ? inv[String(e.refId)] : null, i = v ? inc[String(v.incidentId)] : null;
+        const k = i ? i.category : (e.refType === "INVOICE" ? "NON_CLASSE" : "SAISIE_MANUELLE");
+        return { key: k, label: k, value: num_(e.amount) };
+      }).filter(function (x) { return catOk(x.key); });
+    }
+    case "COST_BY_CONTRACTOR": {
+      const arts = indexBy_(dbAll_("Artisans"), "artisanId");
+      return dbAll_("Invoices").filter(function (v) { return ids[String(v.propertyId)] && ["APPROVED", "PARTIAL", "PAID"].indexOf(v.status) >= 0 && inP(v.issueDate); })
+        .map(function (v) { return { key: v.artisanId, label: (arts[String(v.artisanId)] || {}).name || "Prestataire inconnu", value: num_(v.amountTTC) }; });
+    }
+    case "COST_BY_PROPERTY": return dbAll_("Expenses").filter(function (e) { return ids[String(e.propertyId)] && e.status !== "CANCELLED" && inP(e.expenseDate) && catOk(e.category); })
+      .map(function (e) { return { key: e.propertyId, label: ids[String(e.propertyId)].name, value: num_(e.amount) }; });
+    case "EXPENSES_BY_CATEGORY": return dbAll_("Expenses").filter(function (e) { return ids[String(e.propertyId)] && e.status !== "CANCELLED" && inP(e.expenseDate) && catOk(e.category); })
+      .map(function (e) { return { key: e.category, label: e.category, value: num_(e.amount) }; });
+    case "CANCEL_REASONS": return dbAll_("Reservations").filter(function (r) { return ids[String(r.propertyId)] && r.status === "CANCELLED" && inP(r.checkIn) && (!f.agencyOrganizationId || String(r.agencyOrganizationId) === String(f.agencyOrganizationId)); })
+      .map(function (r) { return { key: r.cancelReason || "NON_RENSEIGNE", label: r.cancelReason || "NON_RENSEIGNE", value: 1 }; });
+    case "CLEANING_ANOMALIES": {
+      const out = [];
+      dbAll_("CleaningMissions").filter(function (m) { return ids[String(m.propertyId)]; }).forEach(function (m) {
+        parseJson_(m.anomaliesJson, []).forEach(function (an) { if (inP(an.at)) out.push({ key: an.type || "OTHER", label: an.type || "OTHER", value: 1 }); });
+      });
+      return out;
+    }
+    case "DELAYS_NONCONFORMITIES": {
+      const out = [], has = function (prop, cap) { return canProp_(p, prop, cap); };
+      const push = function (k, n) { for (let i = 0; i < (n || 1); i++) out.push({ key: k, label: k, value: 1 }); };
+      dbAll_("CheckIns").forEach(function (c) { const pr = ids[String(c.propertyId)]; if (pr && (has(pr, "reservation.view") || has(pr, "checkin.operate")) && inP(c.actualAt) && num_(c.lateMinutes) > 0) push("CHECKIN_LATE"); });
+      dbAll_("CheckOuts").forEach(function (c) { const pr = ids[String(c.propertyId)]; if (pr && (has(pr, "reservation.view") || has(pr, "checkin.operate")) && inP(c.actualAt) && num_(c.lateMinutes) > 0) push("CHECKOUT_LATE"); });
+      dbAll_("Reservations").forEach(function (r) { const pr = ids[String(r.propertyId)]; if (pr && has(pr, "reservation.view") && r.status === "NO_SHOW" && inP(r.checkIn)) push("NO_SHOW"); });
+      const missions = indexBy_(dbAll_("CleaningMissions"), "missionId");
+      dbAll_("CleaningMissions").forEach(function (m) { const pr = ids[String(m.propertyId)]; if (pr && has(pr, "cleaning.manage") && m.completedAt && inP(m.completedAt) && parseTs_(m.endAt) && parseTs_(m.completedAt).getTime() > parseTs_(m.endAt).getTime()) push("CLEANING_LATE"); });
+      dbAll_("ActivityLogs").forEach(function (l) {
+        if ((l.action === "CLEANING_EXPIRED" || l.action === "CLEANING_REJECTED") && inP(l.timestamp)) { const m = missions[String(l.entityId)]; const pr = m && ids[String(m.propertyId)]; if (pr && has(pr, "cleaning.manage")) push(l.action === "CLEANING_EXPIRED" ? "CLEANING_NOT_ACCEPTED" : "CLEANING_REJECTED"); }
+      });
+      dbAll_("WorkOrders").forEach(function (w) { const pr = ids[String(w.propertyId)]; if (pr && has(pr, "workorder.manage") && w.desiredDate && w.completedAt && inP(w.completedAt) && String(w.completedAt).slice(0, 10) > w.desiredDate) push("WORKORDER_LATE"); });
+      dbAll_("RentSchedules").forEach(function (s) {
+        const pr = ids[String(s.propertyId)];
+        if (!pr || !has(pr, "lease.view") || s.status !== "OPEN" || !inP(s.dueDate)) return;
+        const st = rentStatus_(s), limit = addDaysStr_(s.dueDate, Number(getSetting_("rent.graceDays", s.organizationId)) || 0);
+        const lastPay = dbAll_("Payments").filter(function (z) { return z.refType === "RENT_SCHEDULE" && String(z.refId) === String(s.scheduleId) && z.status === "RECORDED"; }).map(function (z) { return z.paidAt; }).sort().pop();
+        if (st.status === "LATE" || (st.status === "PAID" && lastPay && lastPay > limit)) push("RENT_LATE");
+      });
+      return out;
+    }
+    case "UNPAID": {
+      const out = [], today = todayStr_(), byPeriod = f.groupBy === "period";
+      dbAll_("RentSchedules").filter(function (s) { return ids[String(s.propertyId)] && s.status === "OPEN" && inP(s.dueDate) && s.dueDate <= today; }).forEach(function (s) {
+        const st = rentStatus_(s); if (st.remaining > 0) out.push(byPeriod ? { key: s.dueDate.slice(0, 7), label: s.dueDate.slice(0, 7), value: st.remaining } : { key: s.propertyId, label: ids[String(s.propertyId)].name, value: st.remaining });
+      });
+      dbAll_("Reservations").filter(function (r) { return ids[String(r.propertyId)] && REVENUE_STATUSES_.indexOf(r.status) >= 0 && inP(r.checkIn) && r.checkIn <= today; }).forEach(function (r) {
+        const m = resvMoney_(r); if (m.balance > 0) out.push(byPeriod ? { key: r.checkIn.slice(0, 7), label: r.checkIn.slice(0, 7), value: m.balance } : { key: r.propertyId, label: ids[String(r.propertyId)].name, value: m.balance });
+      });
+      return out;
+    }
+  }
+  throw new AppError("VALIDATION", "Type d'analyse inconnu.");
+}
+
+function paretoRun_(p, a) {
+  a = a || {};
+  const type = oneOf_(a.type, Object.keys(PARETO_TYPES_), "Type d'analyse");
+  memberOrgIds_(p).forEach(function (o) { if (hasRole_(p, "OWNER", o) || hasRole_(p, "AGENCY_ADMIN", o)) assertFeature_(o, "pareto"); });
+  const per = periodFromFilters_(a), prev = previousPeriod_(per);
+  const f = { propertyId: a.propertyId, agencyOrganizationId: a.agencyOrganizationId, organizationId: a.organizationId, category: a.category, groupBy: a.groupBy };
+  const cur = paretoCompute_(paretoItems_(p, type, per, f), PARETO_THRESHOLD_);
+  const old = paretoCompute_(paretoItems_(p, type, prev, f), PARETO_THRESHOLD_);
+  const oldBy = indexBy_(old.items, "key");
+  cur.items.forEach(function (x) { const o = oldBy[x.key]; x.previousValue = o ? o.value : 0; x.previousRank = o ? o.rank : null; x.delta = round2_(x.value - x.previousValue); x.deltaPct = o && o.value > 0 ? round2_((x.value - o.value) / o.value * 100) : null; });
+  return { type: type, title: PARETO_TYPES_[type].title, unit: PARETO_TYPES_[type].unit, period: per, previousPeriod: prev, filters: f, result: cur,
+    previous: { total: old.total, vitalCount: old.vitalCount, items: old.items.slice(0, 20).map(function (x) { return { key: x.key, label: x.label, value: x.value, rank: x.rank }; }) },
+    totalDelta: round2_(cur.total - old.total), totalDeltaPct: old.total > 0 ? round2_((cur.total - old.total) / old.total * 100) : null,
+    priorities: cur.items.filter(function (x) { return x.vital; }).map(function (x) { return x.label; }), computedAt: nowIso_() };
+}
+function paretoTable_(r) {
+  return { headers: ["Rang", "Élément", r.unit === "MAD" ? "Montant (MAD)" : "Nombre", "Part %", "Part cumulée %", "Prioritaire (80 %)", "Période précédente", "Évolution"],
+    rows: r.result.items.map(function (x) { return [x.rank, x.label, x.value, x.share, x.cumShare, x.vital ? "OUI" : "", x.previousValue, x.delta]; }) };
+}
+function paretoExport_(p, a) {
+  const r = paretoRun_(p, a), t = paretoTable_(r), fmt = a.format === "pdf" ? "pdf" : "csv";
+  audit_("PARETO_EXPORTED", "Report", r.type, "", { format: fmt, period: r.period.from + "/" + r.period.to });
+  if (fmt === "csv") return { fileName: "pareto_" + r.type.toLowerCase() + "_" + r.period.from + "_" + r.period.to + ".csv", mimeType: "text/csv", content: toCsv_(t.headers, t.rows) };
+  const html = "<p>Période : " + r.period.from + " → " + r.period.to + " — Total : <b>" + r.result.total + (r.unit === "MAD" ? " MAD" : "") + "</b> (période précédente : " + r.previous.total + ")</p>" +
+    "<p>Éléments prioritaires (≈ 80 % du total, " + r.result.vitalCount + " sur " + (r.result.itemCount || 0) + ") : <b>" + escapeHtml_(r.priorities.join(", ") || "—") + "</b></p>" +
+    (r.result.empty ? "<p>Aucune donnée sur la période.</p>" : htmlTable_(t.headers, t.rows)) + (r.result.warnings.length ? "<p class='muted'>" + escapeHtml_(r.result.warnings.join(" ")) + "</p>" : "");
+  const pdf = htmlToPdf_(pdfShell_("Pareto — " + r.title, html), "Pareto_" + r.type);
+  return storeGeneratedPdf_(p, pdf, { propertyId: "", organizationId: "" }, "REPORT", p.userId, "PARETO");
+}
+
+/* ======================================================================
+ * Permissions.gs
+ * ====================================================================== */
+/**
+ * Autorisations centralisées. Principe : toute lecture/écriture passe par une vérification serveur
+ * d'appartenance de la ressource (organisation + bien) et de capacité. Masquer un bouton côté client
+ * n'est jamais une mesure de sécurité.
+ *
+ * Sources d'accès à un bien :
+ *  - OWNER de l'organisation du bien (capacités du rôle, éventuellement restreintes par permissionsJson) ;
+ *  - Agence : attribution active AgencyPropertyPermissions → intersection(capacités du rôle agence, capacités des drapeaux) ;
+ *  - Personnel affecté (PropertyAssignments) : gardien, ménage, artisan, locataire ;
+ *  - Mission de ménage, ordre de travail/devis, bail : accès minimal lié à la mission ;
+ *  - Super administrateur : AUCUN accès aux données privées, sauf autorisation d'assistance (SupportGrant)
+ *    approuvée par l'organisation, limitée dans le temps, en lecture seule et journalisée.
+ */
+var CTX_ = { principal: null, propMemo: {}, grantId: "" };
+
+var SUPPORT_READ_CAPS_ = ["reservation.view", "incident.view", "finance.view", "invoice.view", "lease.view", "report.view", "document.view"];
+var WRITE_CAP_RE_ = /\.(create|edit|archive|assign|cancel|manage|decide|operate|submit|invite|approve)$/;
+
+function ctxReset_() { CTX_ = { principal: null, propMemo: {}, grantId: "" }; }
+
+function capsForRole_(roleRow) {
+  const base = (ROLE_CAPS[roleRow.role] || []).slice();
+  const ov = parseJson_(roleRow.permissionsJson, []);
+  if (!Array.isArray(ov)) return base;
+  // Les surcharges ne peuvent que RETIRER des capacités du plafond du rôle (pas d'élévation possible).
+  const removed = ov.filter(function (x) { return String(x).charAt(0) === "-"; }).map(function (x) { return String(x).slice(1); });
+  return base.filter(function (c) { return removed.indexOf(c) < 0; });
+}
+
+function buildPrincipal_(user) {
+  const orgs = indexBy_(dbAll_("Organizations"), "organizationId");
+  const roles = dbAll_("UserRoles").filter(function (r) {
+    if (String(r.userId) !== String(user.userId) || r.status !== "ACTIVE") return false;
+    const o = orgs[String(r.organizationId)];
+    return r.role === "SUPER_ADMIN" || (o && o.status === "ACTIVE");
+  }).map(function (r) { return { userRoleId: r.userRoleId, role: r.role, organizationId: String(r.organizationId), caps: capsForRole_(r) }; });
+  const isSuper = roles.some(function (r) { return r.role === "SUPER_ADMIN"; });
+  const now = Date.now();
+  const grants = isSuper ? dbAll_("SupportGrants").filter(function (g) {
+    return String(g.superAdminUserId) === String(user.userId) && g.status === "ACTIVE" && parseTs_(g.expiresAt) && parseTs_(g.expiresAt).getTime() > now;
+  }) : [];
+  return { userId: String(user.userId), email: normalizeEmail_(user.email), displayName: user.displayName || user.email, locale: user.locale || "fr",
+    roles: roles, isSuper: isSuper, grants: grants, supportOrgIds: grants.map(function (g) { return String(g.organizationId); }) };
+}
+
+function hasRole_(p, role, orgId) {
+  return p.roles.some(function (r) { return r.role === role && (orgId === undefined || String(r.organizationId) === String(orgId)); });
+}
+function hasAnyRole_(p, roles) { return p.roles.some(function (r) { return roles.indexOf(r.role) >= 0; }); }
+function orgCaps_(p, orgId) {
+  const s = {};
+  p.roles.forEach(function (r) { if (String(r.organizationId) === String(orgId)) r.caps.forEach(function (c) { s[c] = true; }); });
+  return s;
+}
+function hasOrgCap_(p, orgId, cap) { return !!orgCaps_(p, orgId)[cap]; }
+function assertOrgCap_(p, orgId, cap) {
+  assert_(orgId, "Organisation manquante.");
+  if (!hasOrgCap_(p, orgId, cap)) forbid_("Accès refusé : droits insuffisants dans cette organisation.");
+  const org = dbGet_("Organizations", orgId);
+  if (!org || org.status !== "ACTIVE") forbid_("Organisation inactive ou suspendue.");
+  return org;
+}
+function requireSuper_(p) { if (!p.isSuper) forbid_("Réservé au super administrateur."); return p; }
+function memberOrgIds_(p) { const s = {}; p.roles.forEach(function (r) { if (r.role !== "SUPER_ADMIN") s[r.organizationId] = true; }); return Object.keys(s); }
+function uiCaps_(p) { const s = {}; p.roles.forEach(function (r) { r.caps.forEach(function (c) { s[c] = true; }); }); return Object.keys(s); }
+
+/** Identifiants d'artisan (fiches Artisans) liés au compte connecté. */
+function myArtisanIds_(p) {
+  if (!hasRole_(p, "ARTISAN")) return [];
+  return dbAll_("Artisans").filter(function (a) { return a.status !== "BLOCKED" && (String(a.userId) === p.userId || normalizeEmail_(a.email) === p.email); })
+    .map(function (a) { return String(a.artisanId); });
+}
+function myTenantIds_(p) {
+  if (!hasRole_(p, "TENANT")) return [];
+  return dbAll_("Tenants").filter(function (t) { return String(t.userId) === p.userId || (normalizeEmail_(t.email) === p.email && t.email); })
+    .map(function (t) { return String(t.tenantId); });
+}
+
+/** Calcule les capacités de l'utilisateur sur un bien. Retourne null si aucun accès. */
+function propertyAccess_(p, prop) {
+  if (!prop || prop.status === "DELETED") return null;
+  const memoKey = String(prop.propertyId);
+  if (CTX_.propMemo[memoKey] !== undefined) return CTX_.propMemo[memoKey];
+  const org = dbGet_("Organizations", prop.organizationId);
+  if (!org || org.status !== "ACTIVE") { CTX_.propMemo[memoKey] = null; return null; }
+  const caps = {}, via = {};
+  let guardAll = false, guardResv = [], agencyOrgIds = [], checkinOther = false;
+  const add = function (list, src) { list.forEach(function (c) { caps[c] = true; if (c === "checkin.operate" && src !== "GUARD_RESV") checkinOther = true; }); via[src] = true; };
+
+  p.roles.forEach(function (r) { if (r.role === "OWNER" && String(r.organizationId) === String(prop.organizationId)) add(r.caps, "OWNER"); });
+
+  const today = todayStr_();
+  dbAll_("AgencyPropertyPermissions").forEach(function (a) {
+    if (String(a.propertyId) !== memoKey || a.status !== "ACTIVE" || !bool_(a.canView)) return;
+    if (a.validFrom && today < a.validFrom) return;
+    if (a.validTo && today > a.validTo) return;
+    const agencyRoles = p.roles.filter(function (r) { return String(r.organizationId) === String(a.agencyOrganizationId) && (r.role === "AGENCY_ADMIN" || r.role === "AGENCY_USER"); });
+    if (!agencyRoles.length) return;
+    const agOrg = dbGet_("Organizations", a.agencyOrganizationId);
+    if (!agOrg || agOrg.status !== "ACTIVE") return;
+    const flagCaps = {};
+    Object.keys(AGENCY_FLAG_CAPS).forEach(function (f) { if (bool_(a[f])) AGENCY_FLAG_CAPS[f].forEach(function (c) { flagCaps[c] = true; }); });
+    const roleCaps = {}; agencyRoles.forEach(function (r) { r.caps.forEach(function (c) { roleCaps[c] = true; }); });
+    add(Object.keys(flagCaps).filter(function (c) { return roleCaps[c]; }), "AGENCY");
+    agencyOrgIds.push(String(a.agencyOrganizationId));
+  });
+
+  dbAll_("PropertyAssignments").forEach(function (a) {
+    if (String(a.propertyId) !== memoKey || a.status !== "ACTIVE" || String(a.userId) !== p.userId) return;
+    const r = p.roles.find(function (x) { return x.role === a.role; });
+    if (!r) return;
+    if (a.role === "GUARD" && a.reservationId) { guardResv.push(String(a.reservationId)); add(r.caps, "GUARD_RESV"); }
+    else { if (a.role === "GUARD") guardAll = true; add(r.caps, "STAFF"); }
+  });
+
+  if (hasRole_(p, "CLEANER") && dbAll_("CleaningMissions").some(function (m) {
+    return String(m.propertyId) === memoKey && (String(m.providerUserId) === p.userId || normalizeEmail_(m.providerEmail) === p.email) &&
+      ["OFFERED", "ACCEPTED", "IN_PROGRESS", "COMPLETED", "VALIDATED"].indexOf(m.status) >= 0;
+  })) add(["cleaning.operate", "incident.report"], "MISSION");
+
+  const artIds = myArtisanIds_(p);
+  if (artIds.length && (dbAll_("WorkOrders").some(function (w) { return String(w.propertyId) === memoKey && artIds.indexOf(String(w.artisanId)) >= 0 && w.status !== "CANCELLED"; }) ||
+    dbAll_("Quotes").some(function (q) { return String(q.propertyId) === memoKey && artIds.indexOf(String(q.artisanId)) >= 0 && q.status !== "CANCELLED"; })))
+    add(["workorder.operate", "quote.submit", "invoice.submit"], "ARTISAN");
+
+  const tIds = myTenantIds_(p);
+  if (tIds.length && dbAll_("Leases").some(function (l) { return String(l.propertyId) === memoKey && tIds.indexOf(String(l.tenantId)) >= 0 && ["ACTIVE", "NOTICE"].indexOf(l.status) >= 0; }))
+    add(["lease.self", "incident.report"], "TENANT");
+
+  if (p.isSuper && p.supportOrgIds.indexOf(String(prop.organizationId)) >= 0) {
+    add(SUPPORT_READ_CAPS_, "SUPPORT");
+    CTX_.grantId = (p.grants.find(function (g) { return String(g.organizationId) === String(prop.organizationId); }) || {}).grantId || "";
+  }
+
+  const result = Object.keys(caps).length ? { caps: caps, via: via, guardAll: guardAll, guardResv: guardResv, checkinRestricted: !checkinOther && !guardAll && guardResv.length > 0, agencyOrgIds: agencyOrgIds } : null;
+  CTX_.propMemo[memoKey] = result;
+  return result;
+}
+
+function canProp_(p, prop, cap) { const a = propertyAccess_(p, prop); return !!(a && (!cap || a.caps[cap])); }
+/** Charge un bien et vérifie la capacité. Message identique « introuvable ou refusé » pour éviter l'énumération (IDOR). */
+function assertProp_(p, propertyId, cap) {
+  const prop = dbGet_("Properties", safeText_(propertyId, 120));
+  if (!prop || !canProp_(p, prop, cap)) throw new AppError("FORBIDDEN", "Bien introuvable ou accès refusé.");
+  if (cap && WRITE_CAP_RE_.test(cap)) assertOrgWritable_(prop.organizationId);
+  return prop;
+}
+function assertPropAny_(p, propertyId, caps) {
+  const prop = dbGet_("Properties", safeText_(propertyId, 120));
+  if (!prop || !caps.some(function (c) { return canProp_(p, prop, c); })) throw new AppError("FORBIDDEN", "Bien introuvable ou accès refusé.");
+  return prop;
+}
+function accessibleProps_(p, cap) {
+  return dbAll_("Properties").filter(function (pr) { return pr.status !== "DELETED" && canProp_(p, pr, cap); });
+}
+function accessiblePropIds_(p, cap) { const s = {}; accessibleProps_(p, cap).forEach(function (x) { s[String(x.propertyId)] = true; }); return s; }
+
+/** Accès à une réservation : capacité sur le bien + restriction gardien à ses réservations affectées. */
+function canResv_(p, resv, cap) {
+  const prop = dbGet_("Properties", resv.propertyId);
+  const a = propertyAccess_(p, prop);
+  if (!a || !a.caps[cap]) return false;
+  if ((cap === "checkin.operate" || cap === "guest.view.min") && a.checkinRestricted) return a.guardResv.indexOf(String(resv.reservationId)) >= 0;
+  return true;
+}
+function assertResv_(p, reservationId, cap) {
+  const r = dbGet_("Reservations", safeText_(reservationId, 120));
+  if (!r || !canResv_(p, r, cap)) throw new AppError("FORBIDDEN", "Réservation introuvable ou accès refusé.");
+  if (WRITE_CAP_RE_.test(cap)) assertOrgWritable_(r.organizationId);
+  return r;
+}
+
+/** Destinataires « gestionnaires » d'un bien (propriétaires + agences ayant le drapeau requis). */
+function propertyManagers_(prop, flag) {
+  const ids = {};
+  dbAll_("UserRoles").forEach(function (r) { if (r.status === "ACTIVE" && r.role === "OWNER" && String(r.organizationId) === String(prop.organizationId)) ids[r.userId] = true; });
+  dbAll_("AgencyPropertyPermissions").forEach(function (a) {
+    if (String(a.propertyId) !== String(prop.propertyId) || a.status !== "ACTIVE" || !bool_(a.canView) || (flag && !bool_(a[flag]))) return;
+    dbAll_("UserRoles").forEach(function (r) { if (r.status === "ACTIVE" && String(r.organizationId) === String(a.agencyOrganizationId) && (r.role === "AGENCY_ADMIN" || r.role === "AGENCY_USER")) ids[r.userId] = true; });
+  });
+  return Object.keys(ids);
+}
+/** Organisation qui pilote les opérations (agence si elle a créé l'action, sinon propriétaire). */
+function actingOrgForProp_(p, prop) {
+  const a = propertyAccess_(p, prop);
+  if (a && a.via.OWNER) return String(prop.organizationId);
+  if (a && a.agencyOrgIds.length) return a.agencyOrgIds[0];
+  return String(prop.organizationId);
+}
+
+/* ---------- Abonnement : droits d'écriture, fonctionnalités et quotas ---------- */
+function entitlement_(orgId) {
+  const sub = dbAll_("Subscriptions").filter(function (s) { return String(s.organizationId) === String(orgId) && s.status !== "CANCELLED"; })
+    .sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); })[0];
+  if (!sub) return { planCode: "", status: "NONE", features: null, readOnly: false, plan: null };
+  const plan = dbGet_("SubscriptionPlans", sub.planCode);
+  const readOnly = ["SUSPENDED", "EXPIRED"].indexOf(sub.status) >= 0;
+  return { planCode: sub.planCode, status: sub.status, features: plan ? parseJson_(plan.featuresJson, []) : [], readOnly: readOnly, plan: plan, subscription: sub };
+}
+/** Organisations de démonstration (exclues des statistiques et de la facturation de la plateforme). */
+function demoOrgIdSet_() { const s = {}; dbAll_("Organizations").forEach(function (o) { if (o.isDemo === true) s[String(o.organizationId)] = true; }); return s; }
+function billingEnforced_() { return getSetting_("billing.enforce") !== false; }
+function assertOrgWritable_(orgId) {
+  if (!billingEnforced_()) return;
+  const e = entitlement_(orgId);
+  if (e.readOnly) throw new AppError("SUBSCRIPTION", "Abonnement suspendu ou expiré : le compte est en lecture seule. Contactez l'administrateur ImmoPilot.");
+}
+/** Une organisation sans abonnement (installation historique) conserve l'accès complet ; à régulariser par le super administrateur. */
+function assertFeature_(orgId, feature) {
+  if (!billingEnforced_()) return;
+  const e = entitlement_(orgId);
+  if (e.features && e.features.indexOf(feature) < 0) throw new AppError("PLAN", "Fonctionnalité non incluse dans le forfait " + (e.planCode || "") + " : " + feature + ".");
+}
+function assertQuota_(orgId, kind) {
+  if (!billingEnforced_()) return;
+  const e = entitlement_(orgId);
+  if (!e.plan) return;
+  if (kind === "properties") {
+    const n = dbAll_("Properties").filter(function (x) { return String(x.organizationId) === String(orgId) && ["ARCHIVED", "DELETED"].indexOf(x.status) < 0; }).length;
+    assert_(n < Number(e.plan.maxProperties || 0), "Quota de biens atteint pour le forfait " + e.planCode + " (" + e.plan.maxProperties + ").", "QUOTA");
+  }
+  if (kind === "users") {
+    const n = dbAll_("UserRoles").filter(function (r) { return String(r.organizationId) === String(orgId) && r.status === "ACTIVE"; }).length +
+      dbAll_("Invitations").filter(function (i) { return String(i.organizationId) === String(orgId) && i.status === "PENDING"; }).length;
+    assert_(n < Number(e.plan.maxUsers || 0), "Quota d'utilisateurs atteint pour le forfait " + e.planCode + " (" + e.plan.maxUsers + ").", "QUOTA");
+  }
+}
+
+/* ======================================================================
+ * PropertyService.gs
+ * ====================================================================== */
+/**
+ * Catalogue immobilier : biens, résidences, attributions d'agences, affectations du personnel, import/export.
+ * Conserve les fonctions historiques (création, modification, droits d'agence, affectations) en les complétant.
+ */
+var PROPERTY_TYPES_ = ["APARTMENT", "STUDIO", "HOUSE", "VILLA", "RIAD", "COMMERCIAL", "OTHER"];
+var PROPERTY_TEXT_FIELDS_ = { name: 120, address: 240, city: 80, neighborhood: 120, building: 80, floor: 30, doorNumber: 40, accessInstructions: 1000, description: 3000,
+  houseRules: 3000, arrivalInstructions: 2000, departureInstructions: 2000 };
+var PROPERTY_FIN_FIELDS_ = ["nightlyPrice", "cleaningFee", "monthlyRent", "charges", "managementCommissionRate", "touristTaxPerNight"];
+
+function propertyInput_(a, isCreate) {
+  const o = {};
+  Object.keys(PROPERTY_TEXT_FIELDS_).forEach(function (k) { if (a[k] !== undefined) o[k] = safeText_(a[k], PROPERTY_TEXT_FIELDS_[k]); });
+  if (isCreate || a.name !== undefined) assert_(String(o.name || "").length >= 2, "Le nom du bien est obligatoire.");
+  if (isCreate || a.city !== undefined) assert_(String(o.city || "").length >= 2, "La ville est obligatoire.");
+  if (a.propertyType !== undefined) o.propertyType = oneOf_(a.propertyType || "APARTMENT", PROPERTY_TYPES_, "Type de bien");
+  if (a.rentalMode !== undefined) o.rentalMode = oneOf_(a.rentalMode || "SHORT_TERM", ["SHORT_TERM", "LONG_TERM", "BOTH"], "Mode de location");
+  [["surfaceM2", 100000], ["bedrooms", 100], ["bathrooms", 100], ["capacity", 200], ["minTurnaroundMinutes", 1440]].forEach(function (x) {
+    if (a[x[0]] === undefined) return;
+    if (a[x[0]] === "" || a[x[0]] === null) { o[x[0]] = ""; return; }
+    const n = Number(a[x[0]]); assert_(isFinite(n) && n >= 0 && n <= x[1], "Valeur invalide : " + x[0]); o[x[0]] = x[0] === "surfaceM2" ? round2_(n) : Math.round(n);
+  });
+  PROPERTY_FIN_FIELDS_.forEach(function (k) {
+    if (a[k] === undefined) return;
+    o[k] = k === "managementCommissionRate" ? (a[k] === "" ? "" : rate_(a[k], "Commission de gestion")) : money_(a[k], k, { optional: true });
+  });
+  if (a.latitude !== undefined) { o.latitude = a.latitude === "" ? "" : Number(a.latitude); assert_(o.latitude === "" || (isFinite(o.latitude) && Math.abs(o.latitude) <= 90), "Latitude invalide."); }
+  if (a.longitude !== undefined) { o.longitude = a.longitude === "" ? "" : Number(a.longitude); assert_(o.longitude === "" || (isFinite(o.longitude) && Math.abs(o.longitude) <= 180), "Longitude invalide."); }
+  ["checkInTime", "checkOutTime"].forEach(function (k) { if (a[k] !== undefined) { const s = safeText_(a[k], 5); assert_(!s || /^([01]\d|2[0-3]):[0-5]\d$/.test(s), "Heure invalide (HH:MM)."); o[k] = s; } });
+  const list = function (v, max, len) { return (Array.isArray(v) ? v : String(v || "").split(/[,\n]/)).map(function (x) { return safeText_(x, len); }).filter(Boolean).slice(0, max); };
+  if (a.equipment !== undefined) o.equipmentJson = list(a.equipment, 60, 60);
+  if (a.rooms !== undefined) o.roomsJson = list(a.rooms, 30, 60);
+  if (a.cleaningChecklist !== undefined) o.cleaningChecklistJson = list(a.cleaningChecklist, 60, 120);
+  if (a.currency !== undefined) o.currency = oneOf_(String(a.currency || "MAD").toUpperCase(), ["MAD", "EUR", "USD"], "Devise");
+  return o;
+}
+
+function propertyOut_(p, x, full) {
+  const a = propertyAccess_(p, x) || { caps: {}, via: {} };
+  const canFin = !!(a.caps["finance.view"] || a.caps["property.edit"]);
+  const o = { propertyId: x.propertyId, organizationId: x.organizationId, name: x.name, city: x.city, neighborhood: x.neighborhood, address: x.address, propertyType: x.propertyType,
+    rentalMode: x.rentalMode, status: x.status, bedrooms: x.bedrooms, bathrooms: x.bathrooms, surfaceM2: x.surfaceM2, capacity: x.capacity, latitude: x.latitude, longitude: x.longitude,
+    access: Object.keys(a.via), canEdit: !!a.caps["property.edit"], canAssign: !!a.caps["property.assign"], canReserve: !!a.caps["reservation.edit"], updatedAt: x.updatedAt };
+  if (full) {
+    ["building", "floor", "doorNumber", "accessInstructions", "description", "houseRules", "arrivalInstructions", "departureInstructions", "checkInTime", "checkOutTime", "minTurnaroundMinutes", "currency", "residenceId", "createdAt", "createdBy"]
+      .forEach(function (k) { o[k] = x[k]; });
+    o.equipment = parseJson_(x.equipmentJson, []); o.rooms = parseJson_(x.roomsJson, []); o.cleaningChecklist = parseJson_(x.cleaningChecklistJson, []);
+    o.caps = Object.keys(a.caps);
+  }
+  if (canFin) PROPERTY_FIN_FIELDS_.forEach(function (k) { o[k] = x[k]; });
+  return o;
+}
+
+function propertyList_(p, a) {
+  a = a || {};
+  let rows = accessibleProps_(p).filter(function (x) {
+    if (a.status) { if (x.status !== a.status) return false; } else if (x.status === "ARCHIVED" && !a.includeArchived) return false;
+    if (a.city && String(x.city).toLowerCase() !== String(a.city).toLowerCase()) return false;
+    if (a.rentalMode && x.rentalMode !== a.rentalMode) return false;
+    if (a.organizationId && String(x.organizationId) !== String(a.organizationId)) return false;
+    if (a.agencyOrganizationId) { const acc = propertyAccess_(p, x); if (acc.agencyOrgIds.indexOf(String(a.agencyOrganizationId)) < 0 && !dbAll_("AgencyPropertyPermissions").some(function (z) { return String(z.propertyId) === String(x.propertyId) && String(z.agencyOrganizationId) === String(a.agencyOrganizationId) && z.status === "ACTIVE"; })) return false; }
+    return matchesQuery_(a.q, [x.name, x.city, x.neighborhood, x.address, x.propertyId]);
+  }).map(function (x) { return propertyOut_(p, x, false); }).sort(function (x, y) { return String(x.name).localeCompare(String(y.name)); });
+  return a.all ? { items: rows, total: rows.length } : pageOf_(rows, a);
+}
+
+/** Liste minimale (id, nom) pour les listes déroulantes, filtrée par capacité. */
+function propertyChoices_(p, a) {
+  return accessibleProps_(p, a && a.cap ? String(a.cap) : undefined).filter(function (x) { return x.status !== "ARCHIVED"; })
+    .map(function (x) { return { propertyId: x.propertyId, name: x.name, city: x.city, rentalMode: x.rentalMode, status: x.status }; })
+    .sort(function (x, y) { return String(x.name).localeCompare(String(y.name)); });
+}
+
+function propertyGet_(p, a) {
+  const x = assertProp_(p, a.propertyId);
+  const acc = propertyAccess_(p, x);
+  const out = propertyOut_(p, x, true);
+  const resv = dbAll_("Reservations").filter(function (r) { return String(r.propertyId) === String(x.propertyId); });
+  if (acc.caps["reservation.view"]) {
+    out.reservations = resv.filter(function (r) { return r.status !== "DRAFT"; }).sort(function (u, v) { return String(v.checkIn).localeCompare(String(u.checkIn)); }).slice(0, 15)
+      .map(function (r) { return { reservationId: r.reservationId, guestName: r.guestName, checkIn: r.checkIn, checkOut: r.checkOut, status: r.status, totalPrice: acc.caps["finance.view"] || acc.caps["property.edit"] ? r.totalPrice : null }; });
+  }
+  if (acc.caps["incident.view"]) out.incidents = dbAll_("IncidentsV4").filter(function (i) { return String(i.propertyId) === String(x.propertyId); })
+    .sort(function (u, v) { return String(v.createdAt).localeCompare(String(u.createdAt)); }).slice(0, 15)
+    .map(function (i) { return { incidentId: i.incidentId, title: i.title || i.category, category: i.category, severity: i.severity, status: i.status, createdAt: i.createdAt, finalCost: i.finalCost }; });
+  if (acc.caps["finance.view"] || acc.caps["property.edit"]) {
+    const to = todayStr_(), from = addDaysStr_(addMonthsStr_(to, -12), 1);
+    out.finance12m = finCompute_(p, { from: from, to: to, propertyId: x.propertyId }).totals;
+  }
+  if (acc.caps["property.assign"]) out.accessManagement = propertyAccessList_(p, { propertyId: x.propertyId });
+  out.photos = docList_(p, { ownerType: "PROPERTY", ownerId: x.propertyId, category: "PHOTO" });
+  if (acc.caps["document.view"] || acc.caps["property.edit"]) out.documents = docList_(p, { ownerType: "PROPERTY", ownerId: x.propertyId }).filter(function (d) { return d.category !== "PHOTO"; });
+  if (acc.caps["property.edit"]) out.history = auditHistory_("Property", x.propertyId, 30);
+  return out;
+}
+
+function propertyOrgChoices_(p) {
+  return dbAll_("Organizations").filter(function (o) { return o.status === "ACTIVE" && hasOrgCap_(p, o.organizationId, "property.create"); })
+    .map(function (o) { return { organizationId: o.organizationId, name: o.name }; });
+}
+
+function propertyCreate_(p, a) {
+  const orgId = safeText_(a.organizationId || (propertyOrgChoices_(p)[0] || {}).organizationId, 120);
+  assertOrgCap_(p, orgId, "property.create");
+  assertOrgWritable_(orgId);
+  const data = propertyInput_(a, true);
+  if (a.residenceId) { const res = dbGet_("Residences", a.residenceId); assert_(res && String(res.organizationId) === orgId && res.status === "ACTIVE", "Résidence inconnue ou non autorisée."); data.residenceId = res.residenceId; }
+  return withLock_(function () {
+    assertQuota_(orgId, "properties");
+    const row = dbInsert_("Properties", Object.assign({ propertyType: "APARTMENT", rentalMode: "SHORT_TERM", currency: getSetting_("currency", orgId), equipmentJson: [], roomsJson: ["Séjour", "Chambre", "Cuisine", "Salle de bain"] }, data, {
+      organizationId: orgId, ownerUserId: p.userId, status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email }));
+    audit_("PROPERTY_CREATED", "Property", row.propertyId, orgId, { name: row.name, city: row.city });
+    return { ok: true, propertyId: row.propertyId };
+  });
+}
+
+function propertyUpdate_(p, a) {
+  const x = assertProp_(p, a.propertyId, "property.edit");
+  const patch = propertyInput_(a, false);
+  if (a.status !== undefined) {
+    patch.status = oneOf_(a.status, ["ACTIVE", "INACTIVE", "MAINTENANCE"], "Statut");
+  }
+  if (a.residenceId !== undefined) { if (a.residenceId) { const res = dbGet_("Residences", a.residenceId); assert_(res && String(res.organizationId) === String(x.organizationId), "Résidence non autorisée."); } patch.residenceId = safeText_(a.residenceId, 120); }
+  patch.updatedAt = nowIso_(); patch.updatedBy = p.email;
+  dbUpdate_("Properties", x.propertyId, patch);
+  audit_("PROPERTY_UPDATED", "Property", x.propertyId, x.organizationId, diff_(x, patch, Object.keys(patch).filter(function (k) { return k !== "updatedAt" && k !== "updatedBy"; })));
+  return { ok: true };
+}
+
+/** Archivage (jamais de suppression) : refusé s'il reste des réservations à venir ou un bail actif. */
+function propertyArchive_(p, a) {
+  const x = assertProp_(p, a.propertyId, "property.archive");
+  const today = todayStr_();
+  const future = dbAll_("Reservations").some(function (r) { return String(r.propertyId) === String(x.propertyId) && ["PENDING", "CONFIRMED", "IN_PROGRESS"].indexOf(r.status) >= 0 && r.checkOut >= today; });
+  assert_(!future, "Impossible d'archiver : des réservations à venir ou en cours existent.");
+  assert_(!dbAll_("Leases").some(function (l) { return String(l.propertyId) === String(x.propertyId) && ["ACTIVE", "NOTICE"].indexOf(l.status) >= 0; }), "Impossible d'archiver : un bail est actif.");
+  dbUpdate_("Properties", x.propertyId, { status: a.restore ? "INACTIVE" : "ARCHIVED", updatedAt: nowIso_(), updatedBy: p.email });
+  audit_(a.restore ? "PROPERTY_RESTORED" : "PROPERTY_ARCHIVED", "Property", x.propertyId, x.organizationId, {});
+  return { ok: true };
+}
+
+var PROPERTY_CSV_COLS_ = ["name", "city", "neighborhood", "address", "propertyType", "rentalMode", "bedrooms", "bathrooms", "surfaceM2", "capacity", "nightlyPrice", "cleaningFee", "monthlyRent", "charges", "managementCommissionRate", "checkInTime", "checkOutTime"];
+/** Import CSV (séparateur , ou ;). Validation ligne par ligne ; mode simulation par défaut (dryRun). */
+function propertyImport_(p, a) {
+  const orgId = safeText_(a.organizationId, 120);
+  assertOrgCap_(p, orgId, "property.create"); assertOrgWritable_(orgId);
+  const rows = parseCsv_(String(a.csv || ""), 501);
+  assert_(rows.length >= 2, "Fichier CSV vide (en-tête + au moins une ligne).");
+  assert_(rows.length <= 501, "Import limité à 500 biens par fichier.");
+  const headers = rows[0].map(function (h) { return String(h).trim(); });
+  assert_(headers.indexOf("name") >= 0 && headers.indexOf("city") >= 0, "Colonnes obligatoires : name, city. Colonnes reconnues : " + PROPERTY_CSV_COLS_.join(", "));
+  const results = [], valid = [];
+  rows.slice(1).forEach(function (r, i) {
+    const o = {}; headers.forEach(function (h, j) { if (PROPERTY_CSV_COLS_.indexOf(h) >= 0) o[h] = r[j] === undefined ? "" : String(r[j]).trim(); });
+    if (!o.propertyType) delete o.propertyType; if (!o.rentalMode) delete o.rentalMode;
+    try { valid.push(propertyInput_(o, true)); results.push({ line: i + 2, ok: true, name: o.name }); }
+    catch (e) { results.push({ line: i + 2, ok: false, error: e.message }); }
+  });
+  if (a.dryRun !== false) return { dryRun: true, valid: valid.length, invalid: results.filter(function (x) { return !x.ok; }).length, results: results };
+  assert_(results.every(function (x) { return x.ok; }), "Corrigez les lignes en erreur avant l'import réel.");
+  return withLock_(function () {
+    const e = entitlement_(orgId);
+    if (billingEnforced_() && e.plan) {
+      const n = dbAll_("Properties").filter(function (x) { return String(x.organizationId) === orgId && ["ARCHIVED", "DELETED"].indexOf(x.status) < 0; }).length;
+      assert_(n + valid.length <= Number(e.plan.maxProperties), "L'import dépasserait le quota de biens du forfait (" + e.plan.maxProperties + ").", "QUOTA");
+    }
+    const ins = dbInsertMany_("Properties", valid.map(function (d) { return Object.assign({ propertyType: "APARTMENT", rentalMode: "SHORT_TERM", currency: "MAD", roomsJson: ["Séjour", "Chambre", "Cuisine", "Salle de bain"] }, d,
+      { organizationId: orgId, ownerUserId: p.userId, status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email }); }));
+    audit_("PROPERTIES_IMPORTED", "Property", "", orgId, { count: ins.length });
+    return { ok: true, imported: ins.length };
+  });
+}
+function propertyExport_(p, a) {
+  const list = propertyList_(p, Object.assign({}, a, { all: true })).items;
+  assert_(list.length <= IMMO_CONFIG.MAX_EXPORT_ROWS, "Export limité à " + IMMO_CONFIG.MAX_EXPORT_ROWS + " lignes.");
+  const cols = ["propertyId"].concat(PROPERTY_CSV_COLS_).concat(["status"]);
+  audit_("PROPERTIES_EXPORTED", "Property", "", "", { count: list.length });
+  return { fileName: "biens_" + todayStr_() + ".csv", mimeType: "text/csv", content: toCsv_(cols, list.map(function (x) { return cols.map(function (c) { return x[c] == null ? "" : x[c]; }); })) };
+}
+
+/* ---------------- Résidences (conservées de la phase 3) ---------------- */
+function residenceList_(p, a) {
+  const orgId = safeText_(a.organizationId, 120);
+  if (!hasOrgCap_(p, orgId, "property.create") && !hasOrgCap_(p, orgId, "property.edit")) forbid_();
+  return dbAll_("Residences").filter(function (r) { return String(r.organizationId) === orgId && r.status === "ACTIVE"; })
+    .map(function (r) { return { residenceId: r.residenceId, name: r.name, city: r.city, address: r.address }; });
+}
+function residenceCreate_(p, a) {
+  const orgId = safeText_(a.organizationId, 120);
+  assertOrgCap_(p, orgId, "property.create");
+  const r = dbInsert_("Residences", { organizationId: orgId, name: reqText_(a.name, "Nom", 2, 120), city: reqText_(a.city, "Ville", 2, 80), address: safeText_(a.address, 240), status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email });
+  audit_("RESIDENCE_CREATED", "Residence", r.residenceId, orgId, { name: r.name });
+  return { ok: true, residenceId: r.residenceId };
+}
+
+/* ---------------- Agences et personnel ---------------- */
+function propertyAgencyChoices_(p, a) {
+  const x = assertProp_(p, a.propertyId, "property.assign");
+  const agencyOrgs = {};
+  dbAll_("UserRoles").forEach(function (r) { if (r.status === "ACTIVE" && (r.role === "AGENCY_ADMIN" || r.role === "AGENCY_USER")) agencyOrgs[String(r.organizationId)] = true; });
+  return dbAll_("Organizations").filter(function (o) { return o.status === "ACTIVE" && String(o.organizationId) !== String(x.organizationId) && (agencyOrgs[String(o.organizationId)] || o.type === "AGENCY"); })
+    .map(function (o) { return { organizationId: o.organizationId, name: o.name }; });
+}
+/** Attribue ou modifie les droits d'une agence sur un bien. Retirer canView révoque l'attribution. */
+function propertyAgencySet_(p, a) {
+  const x = assertProp_(p, a.propertyId, "property.assign");
+  const agencyOrgId = safeText_(a.agencyOrganizationId, 120), agency = dbGet_("Organizations", agencyOrgId);
+  assert_(agency && agency.status === "ACTIVE" && agencyOrgId !== String(x.organizationId), "Organisation agence invalide.");
+  assert_(agency.type === "AGENCY" || dbAll_("UserRoles").some(function (r) { return String(r.organizationId) === agencyOrgId && (r.role === "AGENCY_ADMIN" || r.role === "AGENCY_USER") && r.status === "ACTIVE"; }), "Cette organisation n'est pas une agence active.");
+  const flags = { canView: a.canView === true, canManageReservations: a.canManageReservations === true, canManageOperations: a.canManageOperations === true, canViewFinance: a.canViewFinance === true };
+  assert_(flags.canView || (!flags.canManageReservations && !flags.canManageOperations && !flags.canViewFinance), "Les droits de gestion exigent le droit de consultation.");
+  const validFrom = a.validFrom ? dateOnly_(a.validFrom, "Début") : "", validTo = a.validTo ? dateOnly_(a.validTo, "Fin") : "";
+  assert_(!validFrom || !validTo || validFrom <= validTo, "Période d'attribution invalide.");
+  const commissionRate = a.commissionRate === "" || a.commissionRate == null ? "" : rate_(a.commissionRate, "Commission agence");
+  return withLock_(function () {
+    const ex = dbAll_("AgencyPropertyPermissions").find(function (z) { return String(z.propertyId) === String(x.propertyId) && String(z.agencyOrganizationId) === agencyOrgId; });
+    const patch = Object.assign({}, flags, { status: flags.canView ? "ACTIVE" : "REVOKED", commissionRate: commissionRate, validFrom: validFrom, validTo: validTo, updatedAt: nowIso_(), updatedBy: p.email });
+    let id;
+    if (ex) { dbUpdate_("AgencyPropertyPermissions", ex.permissionId, patch); id = ex.permissionId; }
+    else id = dbInsert_("AgencyPropertyPermissions", Object.assign(patch, { propertyId: x.propertyId, ownerOrganizationId: x.organizationId, agencyOrganizationId: agencyOrgId, createdAt: nowIso_(), createdBy: p.email })).permissionId;
+    audit_("AGENCY_PROPERTY_PERMISSION_UPDATED", "PropertyPermission", id, x.organizationId, Object.assign({ propertyId: x.propertyId, agencyOrganizationId: agencyOrgId }, flags));
+    const agencyUsers = dbAll_("UserRoles").filter(function (r) { return String(r.organizationId) === agencyOrgId && r.role === "AGENCY_ADMIN" && r.status === "ACTIVE"; }).map(function (r) { return r.userId; });
+    notify_({ eventKey: "agency-perm:" + id + ":" + patch.status + ":" + JSON.stringify(flags), userIds: agencyUsers, type: "AGENCY_ASSIGNMENT", organizationId: agencyOrgId,
+      title: flags.canView ? "Bien attribué : " + x.name : "Attribution retirée : " + x.name, body: "Droits : " + Object.keys(flags).filter(function (k) { return flags[k]; }).join(", "), link: "#properties" });
+    return { ok: true, permissionId: id, status: patch.status };
+  });
+}
+function propertyAccessList_(p, a) {
+  const x = assertProp_(p, a.propertyId, "property.assign");
+  const orgs = indexBy_(dbAll_("Organizations"), "organizationId");
+  return {
+    agencies: dbAll_("AgencyPropertyPermissions").filter(function (z) { return String(z.propertyId) === String(x.propertyId); }).map(function (z) {
+      return { permissionId: z.permissionId, agencyOrganizationId: z.agencyOrganizationId, agencyName: (orgs[z.agencyOrganizationId] || {}).name || z.agencyOrganizationId, canView: bool_(z.canView),
+        canManageReservations: bool_(z.canManageReservations), canManageOperations: bool_(z.canManageOperations), canViewFinance: bool_(z.canViewFinance), commissionRate: z.commissionRate, validFrom: z.validFrom, validTo: z.validTo, status: z.status };
+    }),
+    staff: dbAll_("PropertyAssignments").filter(function (z) { return String(z.propertyId) === String(x.propertyId); }).map(function (z) {
+      return { assignmentId: z.assignmentId, email: z.email, role: z.role, reservationId: z.reservationId || "", status: z.status, createdAt: z.createdAt };
+    })
+  };
+}
+/** Affecte un gardien / agent de ménage / artisan / locataire (compte existant titulaire du rôle). Réservation précise facultative pour un gardien. */
+function propertyStaffAssign_(p, a) {
+  const x = assertProp_(p, a.propertyId, "property.assign");
+  const email = validateEmail_(a.email), role = oneOf_(a.role, ["GUARD", "CLEANER", "ARTISAN", "TENANT"], "Rôle");
+  const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email && u.status === "ACTIVE"; });
+  const hasRole = user && dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(user.userId) && r.role === role && r.status === "ACTIVE"; });
+  assert_(hasRole, "Aucun compte actif avec ce rôle pour cette adresse. Invitez d'abord la personne (vous pouvez lier l'invitation au bien).");
+  let reservationId = safeText_(a.reservationId || "", 120);
+  if (reservationId) { assert_(role === "GUARD", "Seul un gardien peut être limité à une réservation."); const r = dbGet_("Reservations", reservationId); assert_(r && String(r.propertyId) === String(x.propertyId), "Réservation de ce bien introuvable."); }
+  return withLock_(function () {
+    const ex = dbAll_("PropertyAssignments").find(function (z) { return String(z.propertyId) === String(x.propertyId) && String(z.userId) === String(user.userId) && z.role === role && z.status === "ACTIVE" && String(z.reservationId || "") === reservationId; });
+    if (ex) return { ok: true, assignmentId: ex.assignmentId, alreadyAssigned: true };
+    const row = dbInsert_("PropertyAssignments", { propertyId: x.propertyId, reservationId: reservationId, userId: user.userId, email: email, role: role, status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email });
+    audit_("PROPERTY_USER_ASSIGNED", "PropertyAssignment", row.assignmentId, x.organizationId, { propertyId: x.propertyId, role: role, email: email });
+    notify_({ eventKey: "assign:" + row.assignmentId, userIds: [user.userId], type: "ASSIGNMENT", organizationId: x.organizationId, title: "Nouvelle affectation : " + x.name, body: "Rôle : " + role, link: "#dashboard" });
+    return { ok: true, assignmentId: row.assignmentId };
+  });
+}
+function propertyStaffRevoke_(p, a) {
+  const row = dbGet_("PropertyAssignments", safeText_(a.assignmentId, 120));
+  if (!row) notFound_("Affectation");
+  const x = assertProp_(p, row.propertyId, "property.assign");
+  dbUpdate_("PropertyAssignments", row.assignmentId, { status: "REVOKED", revokedAt: nowIso_(), revokedBy: p.email });
+  audit_("PROPERTY_USER_ASSIGNMENT_REVOKED", "PropertyAssignment", row.assignmentId, x.organizationId, { role: row.role, email: row.email });
+  return { ok: true };
+}
+
+/* ======================================================================
+ * ReportsService.gs
+ * ====================================================================== */
+/**
+ * Rapports filtrables et exports (JSON pour l'écran, CSV, PDF).
+ * Chaque rapport réutilise les fonctions de lecture déjà cloisonnées (finCompute_, resvList_, incList_…) :
+ * un export ne peut donc jamais contenir plus que ce que l'utilisateur peut voir à l'écran.
+ * Les pièces d'identité, références de pièces et jetons ne figurent dans AUCUN export.
+ */
+var REPORT_TYPES_ = {
+  OWNER_MONTHLY: "Rapport mensuel propriétaire", AGENCY_PERFORMANCE: "Performance d'agence", REVENUE_EXPENSES: "Revenus et dépenses", PROPERTY_PROFITABILITY: "Rentabilité par bien",
+  RESERVATIONS: "Réservations", UNPAID: "Impayés", MAINTENANCE: "Maintenance", CONTRACTORS: "Prestataires", CLEANING: "Ménage", INCIDENTS: "Incidents", PARETO: "Analyse de Pareto",
+  SUBSCRIPTIONS: "Abonnements", AUDIT: "Journal d'audit", CHECKINOUT: "Arrivées et départs"
+};
+function reportBuild_(p, a) {
+  const type = oneOf_(a.type, Object.keys(REPORT_TYPES_), "Type de rapport");
+  if (["SUBSCRIPTIONS", "AUDIT"].indexOf(type) < 0) assert_(p.isSuper || uiCaps_(p).some(function (c) { return ["report.view", "finance.view", "cleaning.manage", "contractor.manage", "workorder.operate", "checkin.operate"].indexOf(c) >= 0; }), "Accès aux rapports refusé.", "FORBIDDEN");
+  const per = periodFromFilters_(a), f = Object.assign({}, a, { from: per.from, to: per.to });
+  const listAll = function (fn, args) { const out = []; let page = 1; for (;;) { const r = fn(p, Object.assign({}, args, { page: page, pageSize: IMMO_CONFIG.MAX_PAGE_SIZE })); out.push.apply(out, r.items); if (out.length >= r.total || !r.items.length || out.length >= IMMO_CONFIG.MAX_EXPORT_ROWS) break; page++; } return out; };
+  let R;
+  switch (type) {
+    case "OWNER_MONTHLY": case "PROPERTY_PROFITABILITY": {
+      const fin = finCompute_(p, f);
+      R = { headers: ["Bien", "Nuits réservées", "Occupation %", "Prix moyen/nuit", "RevPAR", "Prévu", "Facturé", "Encaissé", "Restant dû", "Dépenses", "Commissions gestion", "Résultat"],
+        rows: fin.byProperty.map(function (r) { return [r.name, r.bookedNights, r.occupancyRate, r.adr, r.revpar, r.expected, r.billed, r.collected, r.outstanding, r.expenses, r.managementCommissions, r.result]; }),
+        summary: fin.totals };
+      if (type === "OWNER_MONTHLY") R.extra = { expensesByCategory: fin.expensesByCategory, byOwner: fin.byOwner };
+      break;
+    }
+    case "AGENCY_PERFORMANCE": {
+      const fin = finCompute_(p, f);
+      R = { headers: ["Agence", "Réservations", "Nuits", "Revenus déclarés", "Commissions de gestion"], rows: fin.byAgency.map(function (x) { return [x.name, x.reservations, x.nights, x.expected, x.commissions]; }), summary: fin.totals };
+      break;
+    }
+    case "REVENUE_EXPENSES": {
+      const fin = finCompute_(p, f);
+      R = { headers: ["Mois", "Prévu", "Encaissé", "Décaissé", "Dépenses", "Flux net", "Nuits"], rows: fin.byMonth.map(function (m) { return [m.month, m.expected, m.collected, m.paidOut, m.expenses, m.net, m.bookedNights]; }), summary: fin.totals };
+      break;
+    }
+    case "RESERVATIONS": {
+      const items = listAll(resvList_, { from: per.from, to: per.to, propertyId: a.propertyId, agencyOrganizationId: a.agencyOrganizationId, status: a.status, includeCancelled: true });
+      R = { headers: ["Référence", "Bien", "Voyageur", "Arrivée", "Départ", "Voyageurs", "Statut", "Origine", "Total dû", "Payé", "Solde", "Paiement", "Commission"],
+        rows: items.map(function (r) { return [r.reservationId, r.propertyName, r.guestName, r.checkIn, r.checkOut, r.guestCount, r.status, r.source || "", r.amountDue, r.paid, r.balance, r.paymentStatus || "", r.commissionAmount]; }) };
+      break;
+    }
+    case "UNPAID": {
+      const rows = [];
+      listAll(resvList_, { from: per.from, to: per.to, propertyId: a.propertyId }).forEach(function (r) { if (num_(r.balance) > 0 && REVENUE_STATUSES_.indexOf(r.status) >= 0) rows.push(["Réservation", r.propertyName, r.guestName, r.checkIn, r.amountDue, r.paid, r.balance, r.checkIn < todayStr_() ? "EN RETARD" : "À VENIR"]); });
+      const leaseProps = accessiblePropIds_(p, "lease.view");
+      dbAll_("RentSchedules").filter(function (s) { return leaseProps[String(s.propertyId)] && s.status === "OPEN" && s.dueDate >= per.from && s.dueDate <= per.to && (!a.propertyId || String(s.propertyId) === String(a.propertyId)); }).forEach(function (s) {
+        const st = rentStatus_(s); if (st.remaining > 0) { const l = dbGet_("Leases", s.leaseId), t = dbGet_("Tenants", l.tenantId) || {}; rows.push(["Loyer " + s.period, (dbGet_("Properties", s.propertyId) || {}).name, t.fullName, s.dueDate, st.amountDue, st.paid, st.remaining, st.status]); }
+      });
+      R = { headers: ["Nature", "Bien", "Débiteur", "Échéance", "Dû", "Payé", "Reste", "Statut"], rows: rows, summary: { totalOutstanding: sumBy_(rows, function (r) { return r[6]; }) } };
+      break;
+    }
+    case "MAINTENANCE": {
+      const incs = listAll(incList_, { from: per.from, to: per.to, propertyId: a.propertyId, category: a.category });
+      R = { headers: ["Incident", "Bien", "Catégorie", "Gravité", "Statut", "Déclaré le", "Coût estimé", "Coût final", "Interventions", "Factures TTC"],
+        rows: incs.map(function (i) { const w = dbAll_("WorkOrders").filter(function (x) { return String(x.incidentId) === String(i.incidentId) && x.status !== "CANCELLED"; });
+          const v = dbAll_("Invoices").filter(function (x) { return String(x.incidentId) === String(i.incidentId) && ["APPROVED", "PARTIAL", "PAID"].indexOf(x.status) >= 0; });
+          return [i.title, i.propertyName, i.category, i.severity, i.status, String(i.createdAt).slice(0, 10), i.estimatedCost, i.finalCost, w.length, sumBy_(v, function (x) { return x.amountTTC; })]; }) };
+      break;
+    }
+    case "CONTRACTORS": {
+      const items = listAll(ctrList_, { withStats: true });
+      R = { headers: ["Prestataire", "Spécialités", "Statut", "Interventions", "Contrôlées", "Taux de résolution %", "Délai moyen (j)", "Facturé TTC", "Commissions"],
+        rows: items.map(function (c) { return [c.name, (c.specialties || []).join(" / "), c.status, c.stats.interventions, c.stats.verified, c.stats.resolutionRate, c.stats.avgDelayDays, c.stats.totalInvoicedTTC, c.stats.commissionTotal]; }) };
+      break;
+    }
+    case "CLEANING": {
+      const items = listAll(cleanList_, { from: per.from, to: per.to, propertyId: a.propertyId, status: a.status });
+      R = { headers: ["Mission", "Bien", "Prestataire", "Prévue", "Statut", "Durée estimée", "Durée réelle", "Anomalies", "Note qualité", "Coût"],
+        rows: items.map(function (m) { return [m.missionId, m.propertyName, m.providerEmail, m.startAt, m.status, m.estimatedMinutes, m.actualMinutes, (m.anomalies || []).length, m.qualityScore, m.price]; }) };
+      const d = dashCleaning_(p, f, per); R.summary = { completed: d.completedInPeriod, avgMinutes: d.avgMinutes, acceptanceRate: d.acceptanceRate, onTimeRate: d.onTimeRate, anomalies: d.anomalies };
+      break;
+    }
+    case "INCIDENTS": {
+      const items = listAll(incList_, { from: per.from, to: per.to, propertyId: a.propertyId, category: a.category, status: a.status, severity: a.severity });
+      R = { headers: ["Référence", "Bien", "Titre", "Catégorie", "Gravité", "Statut", "Déclaré le", "Ancienneté (j)", "Résolu le", "Coût final"],
+        rows: items.map(function (i) { return [i.incidentId, i.propertyName, i.title, i.category, i.severity, i.status, String(i.createdAt).slice(0, 10), i.ageDays, String(i.resolvedAt || "").slice(0, 10), i.finalCost]; }) };
+      break;
+    }
+    case "CHECKINOUT": {
+      const items = listAll(opsHistory_, { from: per.from, to: per.to, propertyId: a.propertyId });
+      R = { headers: ["Type", "Bien", "Voyageur", "Prévu", "Réel", "Retard (min)", "Agent", "Incident"], rows: items.map(function (x) { return [x.kind, x.propertyName, x.guestName, x.plannedAt, x.actualAt, x.lateMinutes, x.agentEmail, x.incidentId || ""]; }) };
+      break;
+    }
+    case "PARETO": {
+      const r = paretoRun_(p, Object.assign({}, f, { type: a.paretoType || "INCIDENTS_BY_CATEGORY" }));
+      const t = paretoTable_(r);
+      R = { headers: t.headers, rows: t.rows, summary: { analyse: r.title, total: r.result.total, prioritaires: r.priorities.join(", "), periodePrecedente: r.previous.total } };
+      break;
+    }
+    case "SUBSCRIPTIONS": {
+      const r = { items: listAll(subList_, { includeClosed: true }) };
+      R = { headers: ["Organisation", "Forfait", "Statut", "Début", "Fin de période", "Prochaine échéance", "Prix", "Retard (j)", "Biens", "Utilisateurs", "Stockage Mo"],
+        rows: r.items.map(function (s) { return [s.organizationName, s.planCode, s.status, s.startDate, s.periodEnd, s.nextDueDate, s.price, s.daysOverdue, s.usage.properties, s.usage.users, s.usage.storageMb]; }) };
+      break;
+    }
+    case "AUDIT": {
+      const items = listAll(auditList_, { from: per.from, to: per.to, organizationId: a.organizationId, action: a.action });
+      R = { headers: ["Horodatage", "Acteur", "Organisation", "Action", "Type", "Élément", "Résultat"], rows: items.map(function (l) { return [l.timestamp, l.actorEmail, l.organizationId, l.action, l.entityType, l.entityId, l.result]; }) };
+      break;
+    }
+  }
+  R.type = type; R.title = REPORT_TYPES_[type]; R.period = per;
+  return R;
+}
+function exportLimit_(p) {
+  let lim = IMMO_CONFIG.MAX_EXPORT_ROWS;
+  if (!p.isSuper && billingEnforced_()) memberOrgIds_(p).forEach(function (o) { const e = entitlement_(o); if (e.plan && (e.features || []).indexOf("exports_unlimited") < 0) lim = Math.min(lim, num_((parseJson_(e.plan.quotasJson, {}) || {}).exportRows) || lim); });
+  return lim;
+}
+function reportRun_(p, a) {
+  const R = reportBuild_(p, a || {});
+  R.totalRows = R.rows.length;
+  R.rows = R.rows.slice(0, 500);
+  R.truncated = R.totalRows > 500;
+  return R;
+}
+function reportExport_(p, a) {
+  a = a || {};
+  const R = reportBuild_(p, a), fmt = a.format === "pdf" ? "pdf" : "csv";
+  const lim = exportLimit_(p);
+  assert_(R.rows.length <= lim, "Export limité à " + lim + " lignes par votre forfait : réduisez la période ou ajoutez des filtres.", "QUOTA");
+  const hasAudit = uiCaps_(p).indexOf("report.export") >= 0 || p.isSuper || R.type === "CLEANING" || R.type === "CHECKINOUT";
+  assert_(hasAudit, "Export non autorisé pour votre rôle.", "FORBIDDEN");
+  audit_("REPORT_EXPORTED", "Report", R.type, "", { format: fmt, rows: R.rows.length, period: R.period.from + "/" + R.period.to });
+  const base = "rapport_" + R.type.toLowerCase() + "_" + R.period.from + "_" + R.period.to;
+  if (fmt === "csv") return { fileName: base + ".csv", mimeType: "text/csv", content: toCsv_(R.headers, R.rows) };
+  assert_(R.rows.length <= 1500, "PDF limité à 1500 lignes : utilisez l'export CSV.");
+  let html = "<p>Période : " + R.period.from + " → " + R.period.to + "</p>";
+  if (R.summary) html += "<h2>Synthèse</h2>" + htmlTable_(["Indicateur", "Valeur"], Object.keys(R.summary).filter(function (k) { return typeof R.summary[k] !== "object"; }).map(function (k) { return [k, R.summary[k] == null ? "—" : R.summary[k]]; }));
+  html += "<h2>Détail</h2>" + (R.rows.length ? htmlTable_(R.headers, R.rows) : "<p>Aucune donnée.</p>");
+  return storeGeneratedPdf_(p, htmlToPdf_(pdfShell_(R.title, html), base), { propertyId: "", organizationId: "" }, "REPORT", p.userId, "REPORT");
+}
+
+/* ======================================================================
+ * ReservationService.gs
+ * ====================================================================== */
+/**
+ * Réservations courte durée.
+ *
+ * RÈGLE DES DATES ET HEURES (documentée dans ARCHITECTURE.md) :
+ *  - checkIn / checkOut : dates locales AAAA-MM-JJ dans le fuseau du projet (Africa/Casablanca par défaut).
+ *  - L'arrivée a lieu à l'heure d'arrivée du bien (ou paramètre reservation.defaultCheckIn, 15:00),
+ *    le départ à l'heure de départ (reservation.defaultCheckOut, 11:00). Les instants sont stockés en UTC (checkInAt / checkOutAt).
+ *  - Deux séjours sont en conflit si [arrivée, départ + battement) se chevauchent, le battement étant
+ *    minTurnaroundMinutes (bien) ou reservation.minTurnaroundMinutes (120 min). Un départ à 11:00 et une arrivée
+ *    le même jour à 15:00 sont donc AUTORISÉS ; une arrivée à 12:00 le même jour serait refusée.
+ *  - Un blocage de calendrier couvre [début 12:00, fin 12:00) : la date de fin est le jour de libération.
+ *  - Un bail longue durée actif sur le bien bloque les réservations courte durée sur sa période.
+ *  - Statuts bloquants : PENDING, CONFIRMED, IN_PROGRESS, COMPLETED. DRAFT, CANCELLED et NO_SHOW ne bloquent pas.
+ *  - La vérification est refaite côté serveur SOUS VERROU (LockService) avec relecture des données : deux requêtes
+ *    simultanées, même issues de comptes ou d'agences différents, ne peuvent pas créer de double réservation.
+ */
+var RESV_BLOCKING_ = ["PENDING", "CONFIRMED", "IN_PROGRESS", "COMPLETED"];
+var RESV_TRANSITIONS_ = { DRAFT: ["PENDING", "CONFIRMED", "CANCELLED"], PENDING: ["CONFIRMED", "CANCELLED"], CONFIRMED: ["IN_PROGRESS", "CANCELLED", "NO_SHOW", "PENDING"],
+  IN_PROGRESS: ["COMPLETED"], COMPLETED: [], CANCELLED: [], NO_SHOW: [] };
+var RESV_SOURCES_ = ["DIRECT", "AIRBNB", "BOOKING", "EXPEDIA", "PHONE", "AGENCY", "WEBSITE", "OTHER"];
+
+/** Idempotence : une même clé de requête ne produit qu'un seul effet (double clic, réseau instable). À appeler sous verrou. */
+function idemRun_(key, op, orgId, fn) {
+  if (!key) return fn();
+  key = safeText_(key, 120);
+  assert_(/^[\w-]{12,120}$/.test(key), "Clé de requête invalide.");
+  const old = dbGet_("OperationRequests", key);
+  if (old) { assert_(old.operation === op, "Clé déjà utilisée pour une autre opération."); return { ok: true, duplicate: true, id: old.resourceId }; }
+  const res = fn();
+  dbInsert_("OperationRequests", { requestKey: key, organizationId: orgId || "", operation: op, resourceId: (res && (res.id || res.reservationId || res.paymentId)) || "", createdAt: nowIso_() });
+  return res;
+}
+
+function resvTimes_(prop, checkIn, checkOut, inTime, outTime) {
+  const tin = inTime || prop.checkInTime || getSetting_("reservation.defaultCheckIn", prop.organizationId);
+  const tout = outTime || prop.checkOutTime || getSetting_("reservation.defaultCheckOut", prop.organizationId);
+  [tin, tout].forEach(function (t) { assert_(/^([01]\d|2[0-3]):[0-5]\d$/.test(t), "Heure invalide (HH:MM)."); });
+  const s = localToDate_(checkIn, tin), e = localToDate_(checkOut, tout);
+  assert_(e.getTime() > s.getTime(), "Le départ doit être postérieur à l'arrivée.");
+  return { start: s, end: e };
+}
+function resvStartMs_(r, prop) { const d = parseTs_(r.checkInAt) || localToDate_(r.checkIn, (prop && prop.checkInTime) || DEFAULT_SETTINGS["reservation.defaultCheckIn"]); return d.getTime(); }
+function resvEndMs_(r, prop) { const d = parseTs_(r.checkOutAt) || localToDate_(r.checkOut, (prop && prop.checkOutTime) || DEFAULT_SETTINGS["reservation.defaultCheckOut"]); return d.getTime(); }
+function turnaroundMs_(prop) {
+  const v = prop.minTurnaroundMinutes !== null && prop.minTurnaroundMinutes !== "" ? Number(prop.minTurnaroundMinutes) : Number(getSetting_("reservation.minTurnaroundMinutes", prop.organizationId));
+  return (isFinite(v) ? v : 120) * 60000;
+}
+/** Recherche de conflit (réservations, blocages, baux). Pure lecture : appeler sous verrou avant écriture. */
+function findConflict_(prop, startMs, endMs, ignoreId) {
+  const turn = turnaroundMs_(prop), pid = String(prop.propertyId);
+  const r = dbAll_("Reservations").find(function (x) {
+    if (String(x.propertyId) !== pid || RESV_BLOCKING_.indexOf(x.status) < 0 || String(x.reservationId) === String(ignoreId || "")) return false;
+    const s = resvStartMs_(x, prop), e = resvEndMs_(x, prop);
+    return startMs < e + turn && s < endMs + turn;
+  });
+  if (r) return { reason: "RESERVATION_CONFLICT", message: "Conflit avec une réservation existante (" + r.checkIn + " → " + r.checkOut + ").", conflict: { reservationId: r.reservationId, checkIn: r.checkIn, checkOut: r.checkOut } };
+  const b = dbAll_("AvailabilityBlocks").find(function (x) {
+    if (String(x.propertyId) !== pid || x.status !== "ACTIVE") return false;
+    const s = localToDate_(x.startDate, "12:00").getTime(), e = localToDate_(x.endDate, "12:00").getTime();
+    return startMs < e && s < endMs;
+  });
+  if (b) return { reason: "BLOCKED_PERIOD", message: "Période bloquée (" + b.startDate + " → " + b.endDate + ").", conflict: { blockId: b.blockId, startDate: b.startDate, endDate: b.endDate } };
+  const l = dbAll_("Leases").find(function (x) {
+    if (String(x.propertyId) !== pid || ["ACTIVE", "NOTICE"].indexOf(x.status) < 0) return false;
+    const s = localToDate_(x.startDate, "00:00").getTime(), e = x.endDate ? localToDate_(addDaysStr_(x.endDate, 1), "00:00").getTime() : 8.64e15;
+    return startMs < e && s < endMs;
+  });
+  if (l) return { reason: "LEASE_CONFLICT", message: "Le bien est loué en longue durée sur cette période.", conflict: { leaseId: l.leaseId } };
+  return null;
+}
+
+/** Montants : encaissements et remboursements issus UNIQUEMENT de la table Payments (jamais déduits d'une échéance). */
+function resvMoney_(r) {
+  const pays = dbAll_("Payments").filter(function (x) { return x.refType === "RESERVATION" && String(x.refId) === String(r.reservationId) && x.status === "RECORDED"; });
+  const paidIn = sumBy_(pays.filter(function (x) { return x.kind === "RESERVATION" && x.direction === "IN"; }), function (x) { return x.amount; });
+  const refunded = sumBy_(pays.filter(function (x) { return x.kind === "REFUND" && x.direction === "OUT"; }), function (x) { return x.amount; });
+  const depIn = sumBy_(pays.filter(function (x) { return x.kind === "DEPOSIT" && x.direction === "IN"; }), function (x) { return x.amount; });
+  const depOut = sumBy_(pays.filter(function (x) { return x.kind === "DEPOSIT_REFUND" && x.direction === "OUT"; }), function (x) { return x.amount; });
+  const due = r.status === "CANCELLED" || r.status === "NO_SHOW" ? round2_(Math.max(0, paidIn - num_(r.refundDue))) : round2_(num_(r.totalPrice) + num_(r.taxes) + num_(r.fees));
+  const net = round2_(paidIn - refunded);
+  const balance = round2_(due - net);
+  let status = "UNPAID";
+  if (refunded > 0 && net <= 0) status = "REFUNDED";
+  else if (net <= 0) status = due <= 0 ? "PAID" : "UNPAID";
+  else if (net < due) status = "PARTIAL";
+  else if (net === due) status = "PAID";
+  else status = "OVERPAID";
+  return { amountDue: due, paid: paidIn, refunded: refunded, netPaid: net, balance: balance, paymentStatus: status, depositHeld: round2_(depIn - depOut), depositReceived: depIn, depositReturned: depOut };
+}
+function resvRefreshPaymentStatus_(reservationId) {
+  const r = dbGet_("Reservations", reservationId); if (!r) return;
+  const m = resvMoney_(r);
+  const depositStatus = m.depositReceived <= 0 ? (num_(r.deposit) > 0 ? "EXPECTED" : "NONE") : (m.depositHeld <= 0 ? "RETURNED" : "HELD");
+  if (m.paymentStatus !== r.paymentStatus || depositStatus !== r.depositStatus) dbUpdate_("Reservations", r.reservationId, { paymentStatus: m.paymentStatus, depositStatus: depositStatus });
+}
+
+function resvAgencyFor_(p, prop, requested) {
+  const acc = propertyAccess_(p, prop);
+  if (acc.via.OWNER || acc.via.SUPPORT) {
+    if (!requested) return { agencyOrganizationId: "", rate: prop.managementCommissionRate };
+    const perm = dbAll_("AgencyPropertyPermissions").find(function (z) { return String(z.propertyId) === String(prop.propertyId) && String(z.agencyOrganizationId) === String(requested) && z.status === "ACTIVE"; });
+    assert_(perm, "Cette agence n'est pas attribuée à ce bien.");
+    return { agencyOrganizationId: String(requested), rate: perm.commissionRate !== null && perm.commissionRate !== "" ? perm.commissionRate : prop.managementCommissionRate };
+  }
+  const perms = dbAll_("AgencyPropertyPermissions").filter(function (z) { return String(z.propertyId) === String(prop.propertyId) && z.status === "ACTIVE" && bool_(z.canManageReservations) && acc.agencyOrgIds.indexOf(String(z.agencyOrganizationId)) >= 0; });
+  assert_(perms.length, "Aucune autorisation de réservation pour ce bien.", "FORBIDDEN");
+  const perm = requested ? perms.find(function (z) { return String(z.agencyOrganizationId) === String(requested); }) : perms[0];
+  assert_(perm, "Agence non autorisée pour ce bien.", "FORBIDDEN");
+  return { agencyOrganizationId: String(perm.agencyOrganizationId), rate: perm.commissionRate !== null && perm.commissionRate !== "" ? perm.commissionRate : prop.managementCommissionRate };
+}
+
+function resvPriceInput_(prop, a, nights, guestCount) {
+  const totalPrice = a.totalPrice === "" || a.totalPrice == null ? round2_(num_(prop.nightlyPrice) * nights) : money_(a.totalPrice, "Prix total");
+  const fees = a.fees === "" || a.fees == null ? round2_(num_(prop.cleaningFee)) : money_(a.fees, "Frais");
+  const taxes = a.taxes === "" || a.taxes == null ? round2_(num_(prop.touristTaxPerNight) * nights * guestCount) : money_(a.taxes, "Taxes");
+  return { totalPrice: totalPrice, fees: fees, taxes: taxes, deposit: a.deposit === "" || a.deposit == null ? 0 : money_(a.deposit, "Caution") };
+}
+
+function resvOut_(p, r, prop, acc) {
+  acc = acc || propertyAccess_(p, prop) || { caps: {} };
+  const full = !!acc.caps["reservation.view"];
+  const o = { reservationId: r.reservationId, propertyId: r.propertyId, propertyName: prop ? prop.name : "", city: prop ? prop.city : "", checkIn: r.checkIn, checkOut: r.checkOut,
+    checkInAt: r.checkInAt, checkOutAt: r.checkOutAt, guestName: r.guestName, guestCount: r.guestCount, status: r.status, guestPhone: r.guestPhone };
+  if (full) {
+    const m = resvMoney_(r);
+    Object.assign(o, { agencyOrganizationId: r.agencyOrganizationId, guestEmail: r.guestEmail, source: r.source, notes: r.notes, totalPrice: r.totalPrice, taxes: r.taxes, fees: r.fees,
+      commissionRate: r.commissionRate, commissionAmount: r.commissionAmount, deposit: r.deposit, depositStatus: r.depositStatus, paymentStatus: m.paymentStatus, amountDue: m.amountDue, paid: m.netPaid,
+      balance: m.balance, depositHeld: m.depositHeld, cancelReason: r.cancelReason, refundDue: r.refundDue, version: r.version, currency: r.currency || "MAD",
+      canEdit: !!acc.caps["reservation.edit"], canCancel: !!acc.caps["reservation.cancel"], nights: diffDays_(r.checkIn, r.checkOut) });
+  }
+  return o;
+}
+
+/* --------------------------------- Routes --------------------------------- */
+function resvList_(p, a) {
+  a = a || {};
+  const props = indexBy_(dbAll_("Properties"), "propertyId");
+  const rows = dbAll_("Reservations").filter(function (r) {
+    const prop = props[String(r.propertyId)];
+    if (!prop || !(canResv_(p, r, "reservation.view") || canResv_(p, r, "checkin.operate"))) return false;
+    if (a.propertyId && String(r.propertyId) !== String(a.propertyId)) return false;
+    if (a.agencyOrganizationId && String(r.agencyOrganizationId) !== String(a.agencyOrganizationId)) return false;
+    if (a.status) { if (r.status !== a.status) return false; } else if (!a.includeCancelled && (r.status === "CANCELLED")) return false;
+    if (a.paymentStatus && r.paymentStatus !== a.paymentStatus) return false;
+    if (a.from && String(r.checkOut) < String(a.from)) return false;
+    if (a.to && String(r.checkIn) > String(a.to)) return false;
+    return matchesQuery_(a.q, [r.guestName, r.reservationId, prop.name, r.guestEmail, r.guestPhone]);
+  }).sort(function (x, y) { return a.sort === "desc" ? String(y.checkIn).localeCompare(String(x.checkIn)) : String(x.checkIn).localeCompare(String(y.checkIn)); });
+  const page = a.all ? { items: rows, total: rows.length } : pageOf_(rows, a);
+  page.items = page.items.map(function (r) { return resvOut_(p, r, props[String(r.propertyId)]); });
+  return page;
+}
+
+function resvGet_(p, a) {
+  const r = dbGet_("Reservations", safeText_(a.reservationId, 120));
+  if (!r || !(canResv_(p, r, "reservation.view") || canResv_(p, r, "checkin.operate"))) throw new AppError("FORBIDDEN", "Réservation introuvable ou accès refusé.");
+  const prop = dbGet_("Properties", r.propertyId), acc = propertyAccess_(p, prop);
+  const o = resvOut_(p, r, prop, acc);
+  o.arrivalInstructions = prop.arrivalInstructions; o.accessInstructions = prop.accessInstructions; o.departureInstructions = prop.departureInstructions;
+  if (acc.caps["reservation.view"]) {
+    o.payments = dbAll_("Payments").filter(function (x) { return x.refType === "RESERVATION" && String(x.refId) === String(r.reservationId); })
+      .map(function (x) { return { paymentId: x.paymentId, kind: x.kind, direction: x.direction, amount: x.amount, method: x.method, paidAt: x.paidAt, reference: x.reference, status: x.status, reconciled: x.reconciled }; });
+    o.history = auditHistory_("Reservation", r.reservationId, 40);
+    o.documents = docList_(p, { ownerType: "RESERVATION", ownerId: r.reservationId });
+  }
+  if (acc.caps["guest.view"]) o.guests = guestListFor_(p, r);
+  o.checkIns = dbAll_("CheckIns").filter(function (x) { return String(x.reservationId) === String(r.reservationId); }).map(checkEventOut_);
+  o.checkOuts = dbAll_("CheckOuts").filter(function (x) { return String(x.reservationId) === String(r.reservationId); }).map(checkEventOut_);
+  o.legacyGuestEvents = dbAll_("GuestEvents").filter(function (x) { return String(x.reservationId) === String(r.reservationId); }).map(function (x) { return { eventType: x.eventType, eventAt: x.eventAt, actorEmail: x.actorEmail, travelerName: x.travelerName }; });
+  o.canOperate = canResv_(p, r, "checkin.operate");
+  return o;
+}
+
+function resvAvailability_(p, a) {
+  const prop = assertPropAny_(p, a.propertyId, ["reservation.view", "reservation.edit"]);
+  const ci = dateOnly_(a.checkIn, "Arrivée"), co = dateOnly_(a.checkOut, "Départ");
+  const t = resvTimes_(prop, ci, co, a.checkInTime, a.checkOutTime);
+  const c = findConflict_(prop, t.start.getTime(), t.end.getTime(), a.ignoreReservationId);
+  return c ? { available: false, reason: c.reason, message: c.message, conflict: c.conflict } : { available: true, nights: diffDays_(ci, co) };
+}
+
+function resvCreate_(p, a) {
+  const prop = assertProp_(p, a.propertyId, "reservation.edit");
+  assert_(prop.status === "ACTIVE", "Le bien n'est pas actif (statut " + prop.status + ").");
+  assert_(prop.rentalMode !== "LONG_TERM", "Ce bien est configuré en location longue durée uniquement.");
+  const ci = dateOnly_(a.checkIn, "Arrivée"), co = dateOnly_(a.checkOut, "Départ");
+  const nights = diffDays_(ci, co);
+  assert_(nights >= 1 && nights <= 365, "Durée de séjour invalide (1 à 365 nuits).");
+  const t = resvTimes_(prop, ci, co, a.checkInTime, a.checkOutTime);
+  const guestCount = parseInt(a.guestCount, 10) || 1;
+  assert_(guestCount >= 1 && guestCount <= 100, "Nombre de voyageurs invalide.");
+  if (prop.capacity) assert_(guestCount <= Number(prop.capacity), "Capacité maximale du bien dépassée (" + prop.capacity + ").");
+  const guestName = reqText_(a.guestName, "Nom du voyageur", 2, 120);
+  const status = oneOf_(a.status || "CONFIRMED", ["DRAFT", "PENDING", "CONFIRMED"], "Statut");
+  const ag = resvAgencyFor_(p, prop, safeText_(a.agencyOrganizationId || "", 120));
+  const price = resvPriceInput_(prop, a, nights, guestCount);
+  const rate = ag.rate === null || ag.rate === "" ? 0 : Number(ag.rate);
+  const row = {
+    organizationId: prop.organizationId, propertyId: prop.propertyId, agencyOrganizationId: ag.agencyOrganizationId, checkIn: ci, checkOut: co, checkInAt: t.start.toISOString(), checkOutAt: t.end.toISOString(),
+    guestCount: guestCount, guestName: guestName, guestEmail: a.guestEmail ? validateEmail_(a.guestEmail) : "", guestPhone: safeText_(a.guestPhone, 30), status: status,
+    notes: safeText_(a.notes, 1000), source: oneOf_(a.source || "DIRECT", RESV_SOURCES_, "Origine"), totalPrice: price.totalPrice, taxes: price.taxes, fees: price.fees,
+    commissionRate: rate, commissionAmount: round2_(price.totalPrice * rate / 100), deposit: price.deposit, depositStatus: price.deposit > 0 ? "EXPECTED" : "NONE",
+    paymentStatus: "UNPAID", currency: prop.currency || "MAD", version: 1, idempotencyKey: safeText_(a.requestKey || "", 120),
+    createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email
+  };
+  return withLock_(function () {
+    return idemRun_(a.requestKey, "RESERVATION_CREATE", prop.organizationId, function () {
+      const fresh = dbGet_("Properties", prop.propertyId);
+      assert_(fresh && fresh.status === "ACTIVE", "Bien indisponible.");
+      if (status !== "DRAFT") { const c = findConflict_(fresh, t.start.getTime(), t.end.getTime(), ""); if (c) throw new AppError("CONFLICT", c.message); }
+      const ins = dbInsert_("Reservations", row);
+      const names = guestName.split(/\s+/);
+      dbInsert_("Guests", { organizationId: prop.organizationId, propertyId: prop.propertyId, reservationId: ins.reservationId, lastName: names.length > 1 ? names.slice(1).join(" ") : names[0],
+        firstName: names.length > 1 ? names[0] : "", email: row.guestEmail, phone: row.guestPhone, isPrimary: true, status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
+      audit_("RESERVATION_CREATED", "Reservation", ins.reservationId, prop.organizationId, { propertyId: prop.propertyId, checkIn: ci, checkOut: co, status: status, agency: ag.agencyOrganizationId });
+      if (status === "CONFIRMED") notify_({ eventKey: "resv-confirmed:" + ins.reservationId, userIds: propertyManagers_(prop, "canManageReservations").filter(function (u) { return u !== p.userId; }), type: "RESERVATION_CONFIRMED",
+        organizationId: prop.organizationId, title: "Réservation confirmée : " + prop.name, body: guestName + " — " + ci + " → " + co, link: "#reservation/" + ins.reservationId });
+      return { ok: true, reservationId: ins.reservationId, id: ins.reservationId };
+    });
+  });
+}
+
+/** Modification avec contrôle de version (concurrence optimiste) et revérification des disponibilités sous verrou. */
+function resvUpdate_(p, a) {
+  const r0 = assertResv_(p, a.reservationId, "reservation.edit");
+  assert_(["DRAFT", "PENDING", "CONFIRMED", "IN_PROGRESS"].indexOf(r0.status) >= 0, "Réservation non modifiable (statut " + r0.status + ").");
+  return withLock_(function () {
+    const r = dbGet_("Reservations", r0.reservationId);
+    if (a.version !== undefined && a.version !== null && a.version !== "") assert_(Number(a.version) === Number(r.version || 0), "La réservation a été modifiée entre-temps. Rechargez-la.", "CONFLICT");
+    const prop = dbGet_("Properties", r.propertyId);
+    const patch = {};
+    const ci = a.checkIn !== undefined ? dateOnly_(a.checkIn, "Arrivée") : r.checkIn, co = a.checkOut !== undefined ? dateOnly_(a.checkOut, "Départ") : r.checkOut;
+    const datesChanged = ci !== r.checkIn || co !== r.checkOut || a.checkInTime || a.checkOutTime;
+    if (datesChanged) {
+      assert_(r.status !== "IN_PROGRESS" || ci === r.checkIn, "Séjour en cours : seule la date de départ peut être modifiée.");
+      const t = resvTimes_(prop, ci, co, a.checkInTime, a.checkOutTime);
+      if (r.status !== "DRAFT") { const c = findConflict_(prop, t.start.getTime(), t.end.getTime(), r.reservationId); if (c) throw new AppError("CONFLICT", c.message); }
+      Object.assign(patch, { checkIn: ci, checkOut: co, checkInAt: t.start.toISOString(), checkOutAt: t.end.toISOString() });
+    }
+    if (a.guestName !== undefined) patch.guestName = reqText_(a.guestName, "Nom du voyageur", 2, 120);
+    if (a.guestCount !== undefined) { const g = parseInt(a.guestCount, 10); assert_(g >= 1 && g <= 100 && (!prop.capacity || g <= Number(prop.capacity)), "Nombre de voyageurs invalide."); patch.guestCount = g; }
+    if (a.guestEmail !== undefined) patch.guestEmail = a.guestEmail ? validateEmail_(a.guestEmail) : "";
+    if (a.guestPhone !== undefined) patch.guestPhone = safeText_(a.guestPhone, 30);
+    if (a.notes !== undefined) patch.notes = safeText_(a.notes, 1000);
+    if (a.source !== undefined) patch.source = oneOf_(a.source, RESV_SOURCES_, "Origine");
+    ["totalPrice", "taxes", "fees", "deposit"].forEach(function (k) { if (a[k] !== undefined && a[k] !== "") patch[k] = money_(a[k], k); });
+    if (patch.totalPrice !== undefined) patch.commissionAmount = round2_(patch.totalPrice * num_(r.commissionRate) / 100);
+    patch.version = Number(r.version || 0) + 1; patch.updatedAt = nowIso_(); patch.updatedBy = p.email;
+    dbUpdate_("Reservations", r.reservationId, patch);
+    audit_("RESERVATION_UPDATED", "Reservation", r.reservationId, r.organizationId, diff_(r, patch, Object.keys(patch).filter(function (k) { return ["version", "updatedAt", "updatedBy"].indexOf(k) < 0; })));
+    resvRefreshPaymentStatus_(r.reservationId);
+    return { ok: true, version: patch.version };
+  });
+}
+
+function resvSetStatus_(p, a) {
+  const r0 = assertResv_(p, a.reservationId, "reservation.edit");
+  const to = oneOf_(a.status, ["PENDING", "CONFIRMED", "NO_SHOW"], "Statut");
+  return withLock_(function () {
+    const r = dbGet_("Reservations", r0.reservationId), prop = dbGet_("Properties", r.propertyId);
+    assert_((RESV_TRANSITIONS_[r.status] || []).indexOf(to) >= 0, "Transition " + r.status + " → " + to + " non autorisée.");
+    if (to === "NO_SHOW") assert_(Date.now() >= resvStartMs_(r, prop), "Le no-show ne peut être déclaré qu'après l'heure d'arrivée prévue.");
+    if (r.status === "DRAFT" && RESV_BLOCKING_.indexOf(to) >= 0) { const c = findConflict_(prop, resvStartMs_(r, prop), resvEndMs_(r, prop), r.reservationId); if (c) throw new AppError("CONFLICT", c.message); }
+    dbUpdate_("Reservations", r.reservationId, { status: to, version: Number(r.version || 0) + 1, updatedAt: nowIso_(), updatedBy: p.email });
+    audit_("RESERVATION_STATUS_" + to, "Reservation", r.reservationId, r.organizationId, { from: r.status });
+    if (to === "CONFIRMED") notify_({ eventKey: "resv-confirmed:" + r.reservationId, userIds: propertyManagers_(prop, "canManageReservations").filter(function (u) { return u !== p.userId; }), type: "RESERVATION_CONFIRMED",
+      organizationId: r.organizationId, title: "Réservation confirmée : " + prop.name, body: r.guestName + " — " + r.checkIn + " → " + r.checkOut, link: "#reservation/" + r.reservationId });
+    return { ok: true, status: to };
+  });
+}
+
+/** Pénalité d'annulation selon la politique (jours avant arrivée → % retenu). */
+function cancellationPenalty_(r, orgId, today) {
+  const policy = (getSetting_("reservation.cancellationPolicy", orgId) || []).slice().sort(function (x, y) { return y.daysBefore - x.daysBefore; });
+  const days = diffDays_(today || todayStr_(), r.checkIn);
+  let pct = 100;
+  for (let i = 0; i < policy.length; i++) if (days >= policy[i].daysBefore) { pct = policy[i].penaltyPercent; break; }
+  return { daysBefore: days, penaltyPercent: pct, penalty: round2_((num_(r.totalPrice) + num_(r.fees)) * pct / 100) };
+}
+function resvCancel_(p, a) {
+  const r0 = assertResv_(p, a.reservationId, "reservation.cancel");
+  const reason = oneOf_(a.reason || "OTHER", getSetting_("list.cancelReasons", r0.organizationId), "Motif d'annulation");
+  return withLock_(function () {
+    const r = dbGet_("Reservations", r0.reservationId);
+    assert_(["DRAFT", "PENDING", "CONFIRMED"].indexOf(r.status) >= 0, "Cette réservation ne peut plus être annulée (statut " + r.status + ").");
+    const pen = cancellationPenalty_(r, r.organizationId);
+    const m = resvMoney_(r);
+    const refundDue = a.waivePenalty === true ? m.netPaid : round2_(Math.max(0, m.netPaid - pen.penalty));
+    dbUpdate_("Reservations", r.reservationId, { status: "CANCELLED", cancelReason: reason, cancelledAt: nowIso_(), cancelledBy: p.email, refundDue: refundDue,
+      notes: a.note ? safeText_((r.notes ? r.notes + "\n" : "") + "Annulation : " + a.note, 1000) : r.notes, version: Number(r.version || 0) + 1, updatedAt: nowIso_(), updatedBy: p.email });
+    dbAll_("CleaningMissions").filter(function (mm) { return String(mm.reservationId) === String(r.reservationId) && ["CREATED", "OFFERED"].indexOf(mm.status) >= 0; })
+      .forEach(function (mm) { dbUpdate_("CleaningMissions", mm.missionId, { status: "CANCELLED", updatedAt: nowIso_() }); });
+    resvRefreshPaymentStatus_(r.reservationId);
+    audit_("RESERVATION_CANCELLED", "Reservation", r.reservationId, r.organizationId, { reason: reason, penaltyPercent: pen.penaltyPercent, refundDue: refundDue, waived: a.waivePenalty === true });
+    return { ok: true, penaltyPercent: pen.penaltyPercent, penalty: pen.penalty, refundDue: refundDue, note: refundDue > 0 ? "Le remboursement doit être enregistré comme paiement sortant (REFUND) une fois effectué." : "" };
+  });
+}
+
+/** Calendrier mensuel : réservations et blocages des biens accessibles. */
+function resvCalendar_(p, a) {
+  const month = /^\d{4}-\d{2}$/.test(String(a.month || "")) ? a.month : todayStr_().slice(0, 7);
+  const from = month + "-01", toExcl = addMonthsStr_(from, 1);
+  const props = accessibleProps_(p, "reservation.view").concat(accessibleProps_(p, "checkin.operate")).filter(function (x, i, arr) {
+    return x.status !== "ARCHIVED" && arr.findIndex(function (y) { return y.propertyId === x.propertyId; }) === i && (!a.propertyId || String(x.propertyId) === String(a.propertyId));
+  });
+  const ids = {}; props.forEach(function (x) { ids[String(x.propertyId)] = true; });
+  const events = dbAll_("Reservations").filter(function (r) { return ids[String(r.propertyId)] && ["CANCELLED", "DRAFT"].indexOf(r.status) < 0 && r.checkIn < toExcl && r.checkOut >= from && (canResv_(p, r, "reservation.view") || canResv_(p, r, "checkin.operate")); })
+    .map(function (r) { return { type: "RESERVATION", id: r.reservationId, propertyId: r.propertyId, start: r.checkIn, end: r.checkOut, label: r.guestName, status: r.status }; })
+    .concat(dbAll_("AvailabilityBlocks").filter(function (b) { return ids[String(b.propertyId)] && b.status === "ACTIVE" && b.startDate < toExcl && b.endDate >= from; })
+      .map(function (b) { return { type: "BLOCK", id: b.blockId, propertyId: b.propertyId, start: b.startDate, end: b.endDate, label: b.reason, status: "BLOCKED", canCancel: canProp_(p, dbGet_("Properties", b.propertyId), "property.edit") }; }));
+  return { month: month, from: from, days: diffDays_(from, toExcl), properties: props.map(function (x) { return { propertyId: x.propertyId, name: x.name }; }), events: events };
+}
+
+function blockCreate_(p, a) {
+  const prop = assertProp_(p, a.propertyId, "property.edit");
+  const s = dateOnly_(a.startDate, "Début"), e = dateOnly_(a.endDate, "Fin");
+  assert_(s < e, "La fin doit être postérieure au début.");
+  return withLock_(function () {
+    const st = localToDate_(s, "12:00").getTime(), en = localToDate_(e, "12:00").getTime();
+    const c = findConflict_(prop, st, en, "");
+    if (c && c.reason === "RESERVATION_CONFLICT") throw new AppError("CONFLICT", "Impossible de bloquer : " + c.message);
+    const b = dbInsert_("AvailabilityBlocks", { organizationId: prop.organizationId, propertyId: prop.propertyId, startDate: s, endDate: e, reason: safeText_(a.reason || "Bloqué par le propriétaire", 200),
+      status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email, blockType: oneOf_(a.blockType || "OWNER", ["OWNER", "MAINTENANCE", "OTHER"], "Type") });
+    audit_("AVAILABILITY_BLOCK_CREATED", "AvailabilityBlock", b.blockId, prop.organizationId, { startDate: s, endDate: e });
+    return { ok: true, blockId: b.blockId };
+  });
+}
+function blockCancel_(p, a) {
+  const b = dbGet_("AvailabilityBlocks", safeText_(a.blockId, 120));
+  if (!b) notFound_("Blocage");
+  assertProp_(p, b.propertyId, "property.edit");
+  dbUpdate_("AvailabilityBlocks", b.blockId, { status: "CANCELLED" });
+  audit_("AVAILABILITY_BLOCK_CANCELLED", "AvailabilityBlock", b.blockId, b.organizationId, {});
+  return { ok: true };
+}
+
+/** Confirmation au voyageur. Aucune pièce d'identité n'est jamais jointe. */
+function resvSendConfirmation_(p, a) {
+  const r = assertResv_(p, a.reservationId, "reservation.edit");
+  assert_(r.guestEmail, "Aucune adresse e-mail voyageur.");
+  assert_(["CONFIRMED", "PENDING"].indexOf(r.status) >= 0, "Réservation non confirmée.");
+  const prop = dbGet_("Properties", r.propertyId), m = resvMoney_(r);
+  const body = "Bonjour " + r.guestName + ",\n\nVotre réservation est " + (r.status === "CONFIRMED" ? "confirmée" : "en attente de confirmation") + ".\n\nLogement : " + prop.name + " (" + prop.city + ")\nArrivée : " + r.checkIn +
+    " à partir de " + (prop.checkInTime || getSetting_("reservation.defaultCheckIn", r.organizationId)) + "\nDépart : " + r.checkOut + " avant " + (prop.checkOutTime || getSetting_("reservation.defaultCheckOut", r.organizationId)) +
+    "\nVoyageurs : " + r.guestCount + "\nMontant total : " + m.amountDue + " " + (r.currency || "MAD") + "\nDéjà réglé : " + m.netPaid + " — Solde : " + m.balance +
+    (prop.houseRules ? "\n\nRèglement intérieur :\n" + prop.houseRules : "") + "\n\nRéférence : " + r.reservationId + "\n\nÀ bientôt,\n" + IMMO_CONFIG.APP_NAME;
+  const res = sendMailSafe_(r.guestEmail, "Votre réservation — " + prop.name + " (" + r.checkIn + ")", body, "resv-confirm-mail:" + r.reservationId + ":" + r.version, r.organizationId);
+  audit_("RESERVATION_CONFIRMATION_SENT", "Reservation", r.reservationId, r.organizationId, { ok: res.ok });
+  if (!res.ok) throw new AppError("EMAIL", "Envoi impossible : " + res.error);
+  return { ok: true, duplicate: !!res.duplicate };
+}
+
+/** Fiche de réservation PDF (modèle Google Docs si configuré, sinon gabarit HTML intégré). */
+function resvSheet_(p, a) {
+  const r = assertResv_(p, a.reservationId, "reservation.view");
+  const prop = dbGet_("Properties", r.propertyId), m = resvMoney_(r);
+  const map = { reference: r.reservationId, bien: prop.name, adresse: (prop.address || "") + " " + (prop.city || ""), voyageur: r.guestName, voyageurs: r.guestCount, arrivee: r.checkIn, depart: r.checkOut,
+    nuits: diffDays_(r.checkIn, r.checkOut), prix: r.totalPrice, frais: r.fees, taxes: r.taxes, total: m.amountDue, paye: m.netPaid, solde: m.balance, caution: r.deposit, statut: r.status, devise: r.currency || "MAD" };
+  const ctx = { propertyId: prop.propertyId, organizationId: prop.organizationId, sensitive: false };
+  const tpl = getSetting_("template.reservationDocId", prop.organizationId);
+  let pdf;
+  if (tpl) pdf = docFromTemplate_(tpl, map, propertyFolder_(prop.organizationId, prop.propertyId, "RESERVATION"), "Fiche_" + r.reservationId).pdf;
+  else pdf = htmlToPdf_(pdfShell_("Fiche de réservation", htmlTable_(["Champ", "Valeur"], Object.keys(map).map(function (k) { return [k, map[k]]; }))), "Fiche_" + r.reservationId);
+  const out = storeGeneratedPdf_(p, pdf, ctx, "RESERVATION", r.reservationId, "SHEET");
+  audit_("RESERVATION_SHEET_GENERATED", "Reservation", r.reservationId, r.organizationId, {});
+  return out;
+}
+
+/* ======================================================================
+ * SubscriptionService.gs
+ * ====================================================================== */
+/**
+ * Abonnements et forfaits (Essentiel / Pro / Business, entièrement configurables par le super administrateur).
+ * AUCUN paiement en ligne n'est simulé : les règlements d'abonnement sont enregistrés MANUELLEMENT (virement, espèces…)
+ * avec référence/justificatif. L'adaptateur PAYMENT_PROVIDERS_ permet de brancher plus tard un prestataire (CMI, Stripe, PayPal…).
+ *
+ * Cycle : TRIAL → (fin d'essai) PAST_DUE → (paiement) ACTIVE → (échéance non payée) PAST_DUE → (+15 j) SUSPENDED (lecture seule)
+ *         ACTIVE + annulation en fin de période → EXPIRED ; CANCELLED (remplacé ou annulé immédiatement).
+ */
+var SUB_GRACE_DAYS_ = 15;
+var PERIOD_MONTHS_ = { MONTHLY: 1, QUARTERLY: 3, YEARLY: 12 };
+
+/**
+ * Adaptateur de prestataire de paiement. Pour ajouter un prestataire :
+ *  1. créer une entrée { name, createCheckout(subscription, plan) → {url}, verifyNotification(e) → {subscriptionId, amount, reference} } ;
+ *  2. stocker ses secrets dans les Propriétés du script (jamais dans le code client) ;
+ *  3. exposer un doPost(e) qui appelle verifyNotification puis subApplyPayment_() — non fourni tant qu'aucun prestataire réel n'est choisi.
+ */
+var PAYMENT_PROVIDERS_ = {
+  MANUAL: {
+    name: "Paiement manuel (virement, espèces, chèque)",
+    createCheckout: function () { throw new AppError("PAYMENT", "Aucun prestataire de paiement en ligne n'est configuré. Réglez par virement puis transmettez le justificatif à l'administrateur."); },
+    verifyNotification: function () { throw new AppError("PAYMENT", "Aucune notification de paiement automatique n'est prise en charge."); }
+  }
+};
+
+function planOut_(pl) {
+  return { planCode: pl.planCode, name: pl.name, price: pl.price, currency: pl.currency || "MAD", periodicity: pl.periodicity, maxProperties: pl.maxProperties, maxUsers: pl.maxUsers, storageMb: pl.storageMb,
+    features: parseJson_(pl.featuresJson, []), quotas: parseJson_(pl.quotasJson, {}), trialDays: pl.trialDays, status: pl.status, sortOrder: pl.sortOrder };
+}
+function subOut_(s, orgs) {
+  const today = todayStr_();
+  return { subscriptionId: s.subscriptionId, organizationId: s.organizationId, organizationName: ((orgs || {})[String(s.organizationId)] || {}).name || "", planCode: s.planCode, status: s.status,
+    startDate: s.startDate, trialEnd: s.trialEnd, periodEnd: s.periodEnd, nextDueDate: s.nextDueDate, paidThrough: s.paidThrough, price: s.price, currency: s.currency || "MAD", periodicity: s.periodicity,
+    cancelAtPeriodEnd: bool_(s.cancelAtPeriodEnd), daysOverdue: s.status === "PAST_DUE" || s.status === "SUSPENDED" ? Math.max(0, diffDays_(s.nextDueDate || today, today)) : 0, createdAt: s.createdAt };
+}
+function subUsage_(orgId) {
+  return { properties: dbAll_("Properties").filter(function (x) { return String(x.organizationId) === String(orgId) && ["ARCHIVED", "DELETED"].indexOf(x.status) < 0; }).length,
+    users: dbAll_("UserRoles").filter(function (r) { return String(r.organizationId) === String(orgId) && r.status === "ACTIVE"; }).length,
+    storageMb: round2_(sumBy_(dbAll_("Documents").filter(function (d) { return String(d.organizationId) === String(orgId) && d.status === "ACTIVE"; }), function (d) { return d.sizeBytes; }) / 1048576) };
+}
+
+/* ------------------------------ Forfaits ------------------------------ */
+function planList_(p, a) {
+  return dbAll_("SubscriptionPlans").filter(function (pl) { return p.isSuper || pl.status === "ACTIVE"; }).sort(function (x, y) { return num_(x.sortOrder) - num_(y.sortOrder); }).map(planOut_);
+}
+var PLAN_FEATURES_ = ["properties", "reservations", "checkin", "cleaning", "incidents", "finance_basic", "finance_advanced", "leases", "contractors", "pareto", "reports", "automations", "guest_portal", "multi_agency", "exports_unlimited"];
+function planSave_(p, a) {
+  requireSuper_(p);
+  const code = safeText_(a.planCode, 30).toUpperCase().replace(/[^A-Z0-9_]/g, "");
+  assert_(code.length >= 2, "Code de forfait invalide.");
+  const data = { name: reqText_(a.name, "Nom", 2, 60), price: money_(a.price, "Prix"), currency: "MAD", periodicity: oneOf_(a.periodicity || "MONTHLY", Object.keys(PERIOD_MONTHS_), "Périodicité"),
+    maxProperties: Math.max(0, parseInt(a.maxProperties, 10) || 0), maxUsers: Math.max(0, parseInt(a.maxUsers, 10) || 0), storageMb: Math.max(0, parseInt(a.storageMb, 10) || 0),
+    featuresJson: (Array.isArray(a.features) ? a.features : []).filter(function (f) { return PLAN_FEATURES_.indexOf(f) >= 0; }), quotasJson: { exportRows: Math.min(Math.max(parseInt((a.quotas || {}).exportRows, 10) || 1000, 100), IMMO_CONFIG.MAX_EXPORT_ROWS) },
+    trialDays: Math.max(0, parseInt(a.trialDays, 10) || 0), status: oneOf_(a.status || "ACTIVE", ["ACTIVE", "RETIRED"], "Statut"), sortOrder: parseInt(a.sortOrder, 10) || 9, updatedAt: nowIso_(), updatedBy: p.email };
+  if (dbGet_("SubscriptionPlans", code)) dbUpdate_("SubscriptionPlans", code, data); else dbInsert_("SubscriptionPlans", Object.assign({ planCode: code }, data));
+  audit_("PLAN_SAVED", "SubscriptionPlan", code, "", { price: data.price, features: data.featuresJson.length });
+  return { ok: true, planCode: code };
+}
+
+/* ------------------------------ Abonnements ------------------------------ */
+function subAssign_(p, a) {
+  requireSuper_(p);
+  const orgId = safeText_(a.organizationId, 120), org = dbGet_("Organizations", orgId);
+  assert_(org && org.type !== "PLATFORM", "Organisation cliente introuvable.");
+  const plan = dbGet_("SubscriptionPlans", safeText_(a.planCode, 30));
+  assert_(plan && plan.status === "ACTIVE", "Forfait introuvable ou retiré.");
+  const start = a.startDate ? dateOnly_(a.startDate, "Date de début") : todayStr_();
+  const trial = a.trial === true && Number(plan.trialDays) > 0;
+  return withLock_(function () {
+    dbAll_("Subscriptions").filter(function (s) { return String(s.organizationId) === orgId && ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0; })
+      .forEach(function (s) { dbUpdate_("Subscriptions", s.subscriptionId, { status: "CANCELLED", canceledAt: nowIso_(), updatedAt: nowIso_(), updatedBy: p.email }); });
+    const trialEnd = trial ? addDaysStr_(start, Number(plan.trialDays)) : "";
+    const s = dbInsert_("Subscriptions", { organizationId: orgId, planCode: plan.planCode, status: trial ? "TRIAL" : "PAST_DUE", startDate: start, nextDueDate: trial ? trialEnd : start, periodEnd: trial ? trialEnd : start,
+      trialEnd: trialEnd, price: plan.price, currency: plan.currency || "MAD", periodicity: plan.periodicity, cancelAtPeriodEnd: false, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email });
+    dbUpdate_("Organizations", orgId, { planCode: plan.planCode, updatedAt: nowIso_() });
+    audit_("SUBSCRIPTION_ASSIGNED", "Subscription", s.subscriptionId, orgId, { planCode: plan.planCode, trial: trial });
+    return { ok: true, subscriptionId: s.subscriptionId, status: s.status, note: trial ? "" : "En attente du premier paiement (enregistrez-le pour activer)." };
+  });
+}
+/** Applique un paiement d'abonnement (manuel aujourd'hui, prestataire demain) et prolonge la période. */
+function subApplyPayment_(s, amount, paidAt, method, reference, proofDocId, periods, actorEmail) {
+  const months = (PERIOD_MONTHS_[s.periodicity] || 1) * periods;
+  const today = todayStr_();
+  const base = s.status === "ACTIVE" && s.periodEnd && s.periodEnd >= today ? s.periodEnd : today;
+  const newEnd = addMonthsStr_(base, months);
+  const pay = dbInsert_("Payments", { organizationId: s.organizationId, propertyId: "", kind: "SUBSCRIPTION", refType: "SUBSCRIPTION", refId: s.subscriptionId, direction: "IN", amount: amount, currency: s.currency || "MAD",
+    method: method, paidAt: paidAt, reference: reference, proofDocId: proofDocId, status: "RECORDED", reconciled: false, note: periods + " période(s)", recordedBy: actorEmail, createdAt: nowIso_() });
+  dbUpdate_("Subscriptions", s.subscriptionId, { status: "ACTIVE", periodEnd: newEnd, nextDueDate: newEnd, paidThrough: newEnd, suspendedAt: "", updatedAt: nowIso_(), updatedBy: actorEmail });
+  return { paymentId: pay.paymentId, periodEnd: newEnd };
+}
+function subRecordPayment_(p, a) {
+  requireSuper_(p);
+  const s = dbGet_("Subscriptions", safeText_(a.subscriptionId, 120));
+  assert_(s && ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0, "Abonnement introuvable ou clos.");
+  const periods = Math.min(Math.max(parseInt(a.periods, 10) || 1, 1), 24);
+  const amount = money_(a.amount, "Montant", { min: 0.01 });
+  const paidAt = a.paidAt ? dateOnly_(a.paidAt, "Date") : todayStr_();
+  const reference = reqText_(a.reference, "Référence du paiement (virement, reçu…)", 2, 120);
+  return withLock_(function () {
+    return idemRun_(a.requestKey, "SUBSCRIPTION_PAYMENT", s.organizationId, function () {
+      const r = subApplyPayment_(dbGet_("Subscriptions", s.subscriptionId), amount, paidAt, oneOf_(a.method || "TRANSFER", PAY_METHODS_, "Mode"), reference, safeText_(a.proofDocId || "", 120), periods, p.email);
+      audit_("SUBSCRIPTION_PAYMENT_RECORDED", "Subscription", s.subscriptionId, s.organizationId, { amount: amount, periods: periods, periodEnd: r.periodEnd, expected: round2_(num_(s.price) * periods) });
+      return { ok: true, paymentId: r.paymentId, id: r.paymentId, periodEnd: r.periodEnd, warning: amount + 0.005 < num_(s.price) * periods ? "Montant inférieur au tarif attendu (" + round2_(num_(s.price) * periods) + ")." : "" };
+    });
+  });
+}
+function subSetStatus_(p, a) {
+  const s = dbGet_("Subscriptions", safeText_(a.subscriptionId, 120));
+  if (!s) notFound_("Abonnement");
+  const action = oneOf_(a.action, ["SUSPEND", "REACTIVATE", "CANCEL_NOW", "CANCEL_AT_END", "UNDO_CANCEL"], "Action");
+  if (action === "CANCEL_AT_END" || action === "UNDO_CANCEL") { if (!p.isSuper) assertOrgCap_(p, s.organizationId, "settings.manage"); }
+  else requireSuper_(p);
+  const patch = { updatedAt: nowIso_(), updatedBy: p.email };
+  if (action === "SUSPEND") { assert_(["ACTIVE", "PAST_DUE", "TRIAL"].indexOf(s.status) >= 0, "Statut incompatible."); patch.status = "SUSPENDED"; patch.suspendedAt = nowIso_(); }
+  if (action === "REACTIVATE") { assert_(s.status === "SUSPENDED", "Abonnement non suspendu."); patch.status = s.periodEnd && s.periodEnd >= todayStr_() ? "ACTIVE" : "PAST_DUE"; patch.suspendedAt = ""; }
+  if (action === "CANCEL_NOW") { patch.status = "CANCELLED"; patch.canceledAt = nowIso_(); }
+  if (action === "CANCEL_AT_END") { assert_(["ACTIVE", "TRIAL"].indexOf(s.status) >= 0, "Statut incompatible."); patch.cancelAtPeriodEnd = true; }
+  if (action === "UNDO_CANCEL") patch.cancelAtPeriodEnd = false;
+  dbUpdate_("Subscriptions", s.subscriptionId, patch);
+  audit_("SUBSCRIPTION_" + action, "Subscription", s.subscriptionId, s.organizationId, {});
+  return { ok: true };
+}
+function subList_(p, a) {
+  requireSuper_(p);
+  a = a || {};
+  const orgs = indexBy_(dbAll_("Organizations"), "organizationId"), demo = a.includeDemo ? {} : demoOrgIdSet_();
+  const rows = dbAll_("Subscriptions").filter(function (s) { return !demo[String(s.organizationId)]; }).filter(function (s) { return (!a.status || s.status === a.status) && (!a.organizationId || String(s.organizationId) === String(a.organizationId)) && (a.includeClosed || ["CANCELLED"].indexOf(s.status) < 0); })
+    .map(function (s) { const o = subOut_(s, orgs); o.usage = subUsage_(s.organizationId); return o; })
+    .filter(function (s) { return matchesQuery_(a.q, [s.organizationName, s.planCode]); })
+    .sort(function (x, y) { return String(x.nextDueDate || "").localeCompare(String(y.nextDueDate || "")); });
+  const page = pageOf_(rows, a);
+  page.billing = dbAll_("Payments").filter(function (x) { return x.kind === "SUBSCRIPTION" && x.status === "RECORDED" && !demo[String(x.organizationId)]; }).sort(function (x, y) { return String(y.paidAt).localeCompare(String(x.paidAt)); }).slice(0, 100)
+    .map(function (x) { return { paymentId: x.paymentId, organizationName: (orgs[String(x.organizationId)] || {}).name, subscriptionId: x.refId, amount: x.amount, paidAt: x.paidAt, method: x.method, reference: x.reference }; });
+  return page;
+}
+function subMine_(p) {
+  const orgs = indexBy_(dbAll_("Organizations"), "organizationId");
+  return memberOrgIds_(p).filter(function (o) { return hasOrgCap_(p, o, "subscription.view"); }).map(function (orgId) {
+    const e = entitlement_(orgId);
+    return { organizationId: orgId, organizationName: (orgs[orgId] || {}).name, subscription: e.subscription ? subOut_(e.subscription, orgs) : null, plan: e.plan ? planOut_(e.plan) : null, usage: subUsage_(orgId),
+      readOnly: e.readOnly, billing: dbAll_("Payments").filter(function (x) { return x.kind === "SUBSCRIPTION" && String(x.organizationId) === orgId && x.status === "RECORDED"; })
+        .map(function (x) { return { amount: x.amount, paidAt: x.paidAt, method: x.method, reference: x.reference }; }), paymentProvider: PAYMENT_PROVIDERS_.MANUAL.name };
+  });
+}
+function subRequestChange_(p, a) {
+  const orgId = safeText_(a.organizationId, 120);
+  assertOrgCap_(p, orgId, "subscription.view");
+  const plan = dbGet_("SubscriptionPlans", safeText_(a.planCode, 30));
+  assert_(plan && plan.status === "ACTIVE", "Forfait inconnu.");
+  notify_({ eventKey: "sub-change:" + orgId + ":" + plan.planCode + ":" + todayStr_(), userIds: superAdminIds_(), type: "SUBSCRIPTION_REQUEST", organizationId: "",
+    title: "Demande de changement de forfait", body: ((dbGet_("Organizations", orgId) || {}).name || orgId) + " souhaite le forfait " + plan.name + ". " + safeText_(a.message, 500), link: "#subscriptions" });
+  audit_("SUBSCRIPTION_CHANGE_REQUESTED", "Organization", orgId, orgId, { planCode: plan.planCode });
+  return { ok: true };
+}
+
+/**
+ * Contrat d'abonnement et historique (PDF) : parties, forfait, tarif, période, limites, fonctionnalités, conditions,
+ * historique des abonnements et des règlements. Super administrateur, ou membre de l'organisation ayant subscription.view.
+ */
+function subContractPdf_(p, a) {
+  const orgId = safeText_(a.organizationId, 120), org = dbGet_("Organizations", orgId);
+  assert_(org && org.type !== "PLATFORM", "Organisation introuvable.");
+  if (!p.isSuper && !hasOrgCap_(p, orgId, "subscription.view")) forbid_("Accès refusé.");
+  const subs = dbAll_("Subscriptions").filter(function (s) { return String(s.organizationId) === orgId; }).sort(function (x, y) { return String(x.createdAt).localeCompare(String(y.createdAt)); });
+  assert_(subs.length, "Aucun abonnement enregistré pour cette organisation.");
+  const cur = entitlement_(orgId).subscription || subs[subs.length - 1], plan = dbGet_("SubscriptionPlans", cur.planCode) || {};
+  const platform = dbAll_("Organizations").find(function (o) { return o.type === "PLATFORM"; }) || { name: IMMO_CONFIG.APP_NAME };
+  const fmt = function (v) { return (Math.round(num_(v) * 100) / 100).toLocaleString("fr-FR") + " " + (cur.currency || "MAD"); };
+  const per = { MONTHLY: "mois", QUARTERLY: "trimestre", YEARLY: "an" }[cur.periodicity] || "période";
+  const feats = parseJson_(plan.featuresJson, []);
+  const FEAT = { properties: "Biens", reservations: "Réservations", checkin: "Arrivées et départs", cleaning: "Ménage", incidents: "Incidents", finance_basic: "Finances (base)",
+    finance_advanced: "Finances avancées", leases: "Location longue durée", contractors: "Prestataires", pareto: "Analyses de Pareto", reports: "Rapports", automations: "Automatisations",
+    guest_portal: "Portail voyageur", multi_agency: "Multi-agences", exports_unlimited: "Exports illimités" };
+  const pays = dbAll_("Payments").filter(function (x) { return x.kind === "SUBSCRIPTION" && String(x.organizationId) === orgId && x.status === "RECORDED"; }).sort(function (x, y) { return String(x.paidAt).localeCompare(String(y.paidAt)); });
+  const ST = { TRIAL: "Essai", ACTIVE: "Actif", PAST_DUE: "Échéance dépassée", SUSPENDED: "Suspendu (lecture seule)", CANCELLED: "Remplacé / annulé", EXPIRED: "Expiré" };
+  let html = "<h2>Parties</h2>" + htmlTable_(["", "Organisation", "Contact"], [["Prestataire", platform.name, ""], ["Client", org.name, org.billingEmail || ""]]);
+  html += "<h2>Abonnement en cours</h2>" + htmlTable_(["Champ", "Valeur"], [["Référence", cur.subscriptionId], ["Forfait", (plan.name || cur.planCode) + " (" + cur.planCode + ")"],
+    ["Tarif", fmt(cur.price) + " par " + per], ["Statut", ST[cur.status] || cur.status], ["Début", pdfDate_(cur.startDate)], ["Fin d'essai", pdfDate_(cur.trialEnd)],
+    ["Payé jusqu'au", pdfDate_(cur.paidThrough)], ["Prochaine échéance", pdfDate_(cur.nextDueDate)], ["Résiliation en fin de période", bool_(cur.cancelAtPeriodEnd) ? "Oui" : "Non"],
+    ["Limites", (plan.maxProperties || "—") + " biens, " + (plan.maxUsers || "—") + " utilisateurs, " + (plan.storageMb || "—") + " Mo de stockage"],
+    ["Fonctionnalités", feats.map(function (f) { return FEAT[f] || f; }).join(", ") || "—"]]);
+  html += "<h2>Conditions principales</h2><div class='box'><ol style='margin:0;padding-left:16px'>" + [
+    "L'abonnement donne accès à l'application ImmoPilot pour l'organisation cliente, dans les limites du forfait.",
+    "Le tarif est payable d'avance pour chaque " + per + ", par virement, espèces ou chèque ; aucun paiement en ligne n'est effectué par l'application.",
+    "En cas d'échéance non réglée, un délai de grâce de " + SUB_GRACE_DAYS_ + " jours s'applique ; au-delà, le compte passe en lecture seule jusqu'au règlement.",
+    "La résiliation peut être demandée à tout moment ; elle prend effet à la fin de la période payée. Les données restent conservées et exportables.",
+    "Chaque organisation n'accède qu'à ses propres données ; l'équipe ImmoPilot n'y accède qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
+    "Le client reste responsable des données qu'il saisit (voyageurs, locataires) et de ses obligations déclaratives, notamment au titre de la loi 09-08."
+  ].map(function (x) { return "<li>" + escapeHtml_(x) + "</li>"; }).join("") + "</ol></div>";
+  html += "<h2>Historique des abonnements</h2>" + htmlTable_(["Référence", "Forfait", "Statut", "Début", "Payé jusqu'au", "Tarif"], subs.map(function (s) { return [s.subscriptionId, s.planCode, ST[s.status] || s.status, pdfDate_(s.startDate), pdfDate_(s.paidThrough), fmt(s.price)]; }));
+  html += "<h2>Historique des règlements</h2>" + (pays.length ? htmlTable_(["Date", "Montant", "Mode", "Référence", "Détail"], pays.map(function (x) { return [pdfDate_(x.paidAt), fmt(x.amount), PDF_PAY_METHODS_[x.method] || x.method || "", x.reference || "", x.note || ""]; })) +
+    "<p class='right'><b>Total réglé : " + escapeHtml_(fmt(sumBy_(pays, function (x) { return x.amount; }))) + "</b></p>" : "<p class='muted'>Aucun règlement enregistré.</p>");
+  html += "<h2>Signatures</h2><table class='sign'><tr><td>Pour " + escapeHtml_(platform.name) + "</td><td>Pour " + escapeHtml_(org.name) + "</td></tr></table>";
+  html += "<p class='muted'>Modèle indicatif : conditions à faire valider par un professionnel du droit avant usage contractuel.</p>";
+  audit_("SUBSCRIPTION_CONTRACT_PDF", "Subscription", cur.subscriptionId, orgId, {});
+  return storeGeneratedPdf_(p, htmlToPdf_(pdfShell_("Contrat d'abonnement et historique", html, { subtitle: org.name }), "Abonnement_" + org.name.replace(/[^\wÀ-ÿ]+/g, "_")),
+    { propertyId: "", organizationId: orgId }, "SUBSCRIPTION", cur.subscriptionId, "CONTRACT");
+}
+
+/** Tâche quotidienne : transitions de statut, relances et alertes de quotas. */
+function subscriptionJob_() {
+  const today = todayStr_(); let changed = 0, alerts = 0;
+  const notifyOrg = function (orgId, key, title, body) {
+    const admins = dbAll_("UserRoles").filter(function (r) { return r.status === "ACTIVE" && String(r.organizationId) === String(orgId) && (r.role === "OWNER" || r.role === "AGENCY_ADMIN"); }).map(function (r) { return r.userId; });
+    notify_({ eventKey: key, userIds: admins, type: "SUBSCRIPTION", organizationId: orgId, title: title, body: body, link: "#subscriptions" }); alerts++;
+  };
+  dbAll_("Subscriptions").filter(function (s) { return ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0; }).forEach(function (s) {
+    let patch = null;
+    if (s.status === "TRIAL" && s.trialEnd && s.trialEnd < today) patch = { status: "PAST_DUE", nextDueDate: s.trialEnd };
+    else if (s.status === "ACTIVE" && s.periodEnd && s.periodEnd < today) patch = bool_(s.cancelAtPeriodEnd) ? { status: "EXPIRED" } : { status: "PAST_DUE", nextDueDate: s.periodEnd };
+    else if (s.status === "PAST_DUE" && s.nextDueDate && addDaysStr_(s.nextDueDate, SUB_GRACE_DAYS_) < today) patch = { status: "SUSPENDED", suspendedAt: nowIso_() };
+    if (patch) { patch.updatedAt = nowIso_(); patch.updatedBy = "system"; dbUpdate_("Subscriptions", s.subscriptionId, patch); changed++;
+      auditAs_("system", "", "SUBSCRIPTION_STATUS_" + patch.status, "Subscription", s.subscriptionId, s.organizationId, {});
+      notifyOrg(s.organizationId, "sub-status:" + s.subscriptionId + ":" + patch.status + ":" + (patch.nextDueDate || today), "Abonnement : " + patch.status, patch.status === "SUSPENDED" ? "Compte en lecture seule jusqu'au règlement." : "Un règlement est attendu."); }
+    const end = s.status === "TRIAL" ? s.trialEnd : s.periodEnd;
+    if (end && ["ACTIVE", "TRIAL"].indexOf(s.status) >= 0 && end === addDaysStr_(today, 7)) notifyOrg(s.organizationId, "sub-expiring:" + s.subscriptionId + ":" + end, "Abonnement arrivant à échéance le " + end, "Pensez à régler le renouvellement.");
+    const plan = dbGet_("SubscriptionPlans", s.planCode);
+    if (plan) {
+      const u = subUsage_(s.organizationId), th = Number(getSetting_("alerts.quotaPercent")) || 80;
+      [["properties", plan.maxProperties], ["users", plan.maxUsers], ["storageMb", plan.storageMb]].forEach(function (q) {
+        if (num_(q[1]) > 0 && u[q[0]] >= num_(q[1]) * th / 100) notifyOrg(s.organizationId, "quota:" + s.organizationId + ":" + q[0] + ":" + today.slice(0, 7), "Quota proche de la limite : " + q[0], u[q[0]] + " / " + q[1] + " (forfait " + plan.name + ").");
+      });
+    }
+  });
+  return { statusChanged: changed, alerts: alerts };
+}
+
+/* ======================================================================
+ * Tests.gs
+ * ====================================================================== */
+/**
+ * Suite de tests automatisés ImmoPilot.
+ *
+ * Exécution dans Google Apps Script : lancer runAllTests() depuis l'éditeur (propriétaire du script).
+ *  - Crée un classeur et un dossier Drive TEMPORAIRES (« ImmoPilot_TEST_… »), n'utilise JAMAIS la base de production,
+ *    capte les e-mails au lieu de les envoyer, puis met les éléments temporaires à la corbeille.
+ *  - Résultat : tableau { group, name, status: PASS | FAIL | SKIP, detail }. Consultez aussi le journal d'exécution.
+ * Les mêmes tests sont exécutés hors Google avec des simulateurs (tests/run-tests.js, Node.js) — voir TESTS.md.
+ */
+function runAllTests() {
+  assertEditor_();
+  const r = runTestSuite_({});
+  Logger.log(JSON.stringify(r.summary));
+  r.results.filter(function (x) { return x.status !== "PASS"; }).forEach(function (x) { Logger.log(x.status + " — " + x.group + " / " + x.name + " : " + x.detail); });
+  return r;
+}
+
+function runTestSuite_(opts) {
+  opts = opts || {};
+  const results = [], env = testEnvSetup_();
+  const T = testKit_(results);
+  try {
+    const fx = testFixtures_(T);
+    TEST_GROUPS_().forEach(function (g) {
+      if (opts.only && opts.only.indexOf(g.name) < 0) return;
+      g.tests.forEach(function (t) { T.run(g.name, t[0], function () { t[1](T, fx); }); });
+    });
+  } catch (e) {
+    results.push({ group: "Installation", name: "Préparation des données de test", status: "FAIL", detail: e.message + (e.stack ? " | " + String(e.stack).split("\n").slice(0, 3).join(" ") : "") });
+  } finally { if (!opts.keep) testEnvTeardown_(env); }
+  const summary = { total: results.length, passed: results.filter(function (x) { return x.status === "PASS"; }).length, failed: results.filter(function (x) { return x.status === "FAIL"; }).length,
+    skipped: results.filter(function (x) { return x.status === "SKIP"; }).length, ranAt: nowIso_() };
+  return { summary: summary, results: results };
+}
+
+function testEnvSetup_() {
+  const stamp = Utilities.formatDate(new Date(), "UTC", "yyyyMMdd_HHmmss");
+  const ss = SpreadsheetApp.create("ImmoPilot_TEST_" + stamp);
+  const folder = DriveApp.createFolder("ImmoPilot_TEST_FILES_" + stamp);
+  folder.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+  const env = { ss: ss, folder: folder, previousSs: DB_SS_ };
+  dbSetSpreadsheet_(ss);
+  TEST_HOOKS_ = { driveRoot: folder, mailSink: [], appUrl: "https://example.test/exec", pbkdfIters: 50, mailQuota: null, aiConfig: false, aiFetch: null };
+  ctxReset_();
+  runMigrations_("tests");
+  return env;
+}
+function testEnvTeardown_(env) {
+  try { DriveApp.getFileById(env.ss.getId()).setTrashed(true); } catch (e) { console.error(e.message); }
+  try { env.folder.setTrashed(true); } catch (e) { console.error(e.message); }
+  DB_SS_ = null; dbReset_();
+  TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null };
+}
+
+function testKit_(results) {
+  const T = {
+    run: function (group, name, fn) {
+      try { const r = fn(); results.push({ group: group, name: name, status: r === "SKIP" ? "SKIP" : "PASS", detail: r === "SKIP" ? "Non exécutable dans cet environnement" : "" }); }
+      catch (e) { results.push({ group: group, name: name, status: e && e.skip ? "SKIP" : "FAIL", detail: String(e && e.message || e) }); }
+    },
+    ok: function (cond, msg) { if (!cond) throw new Error("Assertion : " + msg); },
+    eq: function (a, b, msg) { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error((msg || "Égalité") + " — attendu " + JSON.stringify(b) + ", obtenu " + JSON.stringify(a)); },
+    near: function (a, b, msg) { if (Math.abs(Number(a) - Number(b)) > 0.011) throw new Error((msg || "Valeur") + " — attendu " + b + ", obtenu " + a); },
+    call: function (tok, route, args) { const r = api(tok, route, args || {}); if (!r.ok) throw new Error(route + " a échoué : " + r.error.code + " — " + r.error.message); return r.data; },
+    pub: function (route, args) { const r = apiPublic(route, args || {}); if (!r.ok) throw new Error(route + " a échoué : " + r.error.code + " — " + r.error.message); return r.data; },
+    fails: function (tok, route, args, code) {
+      const r = tok === null ? apiPublic(route, args || {}) : api(tok, route, args || {});
+      if (r.ok) throw new Error(route + " aurait dû échouer" + (code ? " (" + code + ")" : ""));
+      if (code && r.error.code !== code) throw new Error(route + " : code " + r.error.code + " au lieu de " + code + " (" + r.error.message + ")");
+      return r.error;
+    },
+    key: function () { return "k_" + Utilities.getUuid().replace(/-/g, ""); },
+    lastMailTo: function (email) { const m = TEST_HOOKS_.mailSink.filter(function (x) { return x.to === email; }); return m[m.length - 1] || null; },
+    tokenFrom: function (text, action) { const m = String(text || "").match(new RegExp("action=" + action + "&token=([a-f0-9]{64})")); return m ? m[1] : ""; },
+    skip: function (msg) { const e = new Error(msg); e.skip = true; throw e; }
+  };
+  return T;
+}
+
+/** Crée un utilisateur actif avec un rôle (raccourci de test : en production, passer par une invitation). */
+function tMakeUser_(email, role, orgId, pw) {
+  const u = dbInsert_("Users", { email: email, displayName: email.split("@")[0], status: "ACTIVE", createdAt: nowIso_(), createdBy: "tests", locale: "fr", notifPrefsJson: { email: true, mutedTypes: [] } });
+  dbInsert_("UserRoles", { userId: u.userId, organizationId: orgId, role: role, status: "ACTIVE", createdAt: nowIso_(), createdBy: "tests", permissionsJson: "[]" });
+  setUserPassword_(u.userId, pw);
+  return u;
+}
+function tOrg_(name, type) { return dbInsert_("Organizations", { name: name, status: "ACTIVE", type: type, city: "Marrakech", createdAt: nowIso_(), createdBy: "tests" }); }
+
+function testFixtures_(T) {
+  const pw = "Test-Passw0rd!", run = Utilities.getUuid().slice(0, 6), mail = function (n) { return n + "." + run + "@example.test"; };
+  const platform = dbAll_("Organizations").find(function (o) { return o.type === "PLATFORM"; });
+  const orgA = tOrg_("Propriétaire A " + run, "OWNER_ORG"), orgB = tOrg_("Propriétaire B " + run, "OWNER_ORG");
+  const ag1 = tOrg_("Agence 1 " + run, "AGENCY"), ag2 = tOrg_("Agence 2 " + run, "AGENCY"), prov = tOrg_("Prestataires " + run, "PROVIDER");
+  const users = {
+    superA: tMakeUser_(mail("super"), "SUPER_ADMIN", platform.organizationId, pw), ownerA: tMakeUser_(mail("ownera"), "OWNER", orgA.organizationId, pw),
+    ownerB: tMakeUser_(mail("ownerb"), "OWNER", orgB.organizationId, pw), ag1: tMakeUser_(mail("ag1"), "AGENCY_ADMIN", ag1.organizationId, pw),
+    ag1u: tMakeUser_(mail("ag1u"), "AGENCY_USER", ag1.organizationId, pw), ag2: tMakeUser_(mail("ag2"), "AGENCY_ADMIN", ag2.organizationId, pw),
+    cleaner: tMakeUser_(mail("cleaner"), "CLEANER", prov.organizationId, pw), cleaner2: tMakeUser_(mail("cleaner2"), "CLEANER", prov.organizationId, pw),
+    guard: tMakeUser_(mail("guard"), "GUARD", orgA.organizationId, pw), artisan: tMakeUser_(mail("artisan"), "ARTISAN", prov.organizationId, pw),
+    tenant: tMakeUser_(mail("tenant"), "TENANT", orgA.organizationId, pw)
+  };
+  const tok = {};
+  Object.keys(users).forEach(function (k) { tok[k] = T.pub("auth.login", { email: users[k].email, password: pw }).token; });
+  const propA = T.call(tok.ownerA, "property.create", { organizationId: orgA.organizationId, name: "Riad Test A", city: "Marrakech", bedrooms: 2, capacity: 4, nightlyPrice: 1000, cleaningFee: 200,
+    managementCommissionRate: 20, checkInTime: "15:00", checkOutTime: "11:00", rentalMode: "SHORT_TERM", rooms: ["Séjour", "Chambre"] }).propertyId;
+  const propA2 = T.call(tok.ownerA, "property.create", { organizationId: orgA.organizationId, name: "Appartement Gueliz", city: "Marrakech", rentalMode: "LONG_TERM", monthlyRent: 5000 }).propertyId;
+  const propB = T.call(tok.ownerB, "property.create", { organizationId: orgB.organizationId, name: "Villa B", city: "Marrakech", nightlyPrice: 2000 }).propertyId;
+  return { pw: pw, run: run, mail: mail, platform: platform, orgA: orgA, orgB: orgB, ag1: ag1, ag2: ag2, prov: prov, users: users, tok: tok, propA: propA, propA2: propA2, propB: propB };
+}
+
+function tDays_(n) { return addDaysStr_(todayStr_(), n); }
+
+/* ===================================== GROUPES DE TESTS ===================================== */
+function TEST_GROUPS_() {
+  return [
+    { name: "Assistant Rubban", tests: [
+      ["Assistant : guide sans clé, IA côté serveur uniquement, aucune donnée client transmise, repli automatique", function (T, fx) {
+        const pub = T.pub("assistant.kb", {});
+        T.ok(pub.name === "Rubban" && pub.articles.length >= 40 && pub.aiEnabled === false, "base de connaissances publique");
+        const routes = ["", "settings", "notifications", "properties", "agencies", "reservations", "calendar", "checkin", "cleaning", "incidents", "quotes", "workorders", "invoices", "contractors",
+          "leases", "mylease", "finance", "pareto", "reports", "dashboard", "users", "subscriptions", "audit", "admin"];
+        T.ok(pub.articles.every(function (a) { return routes.indexOf(a.go) >= 0 && a.s.length && a.r.length; }), "chaque article pointe vers une page existante");
+        T.ok(JSON.stringify(pub).indexOf("IMMO_AI_API_KEY") < 0 || JSON.stringify(pub).indexOf("sk-") < 0, "aucune clé dans la réponse");
+        const kb = T.call(fx.tok.ownerA, "assistant.kb", {});
+        T.ok(kb.roles.indexOf("OWNER") >= 0 && kb.aiEnabled === false, "rôles de l'utilisateur, IA désactivée sans clé");
+        T.eq(T.call(fx.tok.ownerA, "assistant.ask", { question: "Comment créer une réservation ?" }).mode, "guide", "sans clé : mode guide");
+        T.fails(null, "assistant.ask", { question: "test" });
+        const seen = [];
+        TEST_HOOKS_.aiConfig = { provider: "anthropic", key: "cle-secrete-test", model: "claude-haiku-5-5" };
+        TEST_HOOKS_.aiFetch = function (req) {
+          seen.push(req);
+          return { getResponseCode: function () { return 200; }, getContentText: function () { return JSON.stringify({ content: [{ type: "text", text: "1. Ouvrez « Réservations »\n2. Cliquez sur « + Nouvelle réservation »" }] }); } };
+        };
+        try {
+          T.ok(T.call(fx.tok.ownerA, "assistant.kb", {}).aiEnabled === true && T.pub("assistant.kb", {}).aiEnabled === false, "IA signalée aux seuls utilisateurs connectés");
+          const r = T.call(fx.tok.ownerA, "assistant.ask", { question: "Comment créer une réservation ?", lang: "fr", page: "dashboard",
+            history: [{ role: "assistant", content: "Bonjour" }, { role: "user", content: "Salut" }, { role: "assistant", content: "Que puis-je faire ?" }] });
+          T.ok(r.mode === "ai" && /Nouvelle réservation/.test(r.answer), "réponse IA");
+          const body = JSON.parse(seen[0].payload);
+          T.ok(seen[0].headers["x-api-key"] === "cle-secrete-test" && seen[0].url.indexOf("api.anthropic.com") > 0, "clé envoyée par le serveur au seul fournisseur");
+          T.ok(body.messages[0].role === "user" && body.messages[body.messages.length - 1].content === "Comment créer une réservation ?", "conversation bien formée");
+          T.ok(body.system.indexOf("Rubban") >= 0 && body.system.indexOf("Riad Test A") < 0 && body.system.indexOf(fx.users.ownerA.email) < 0, "aucune donnée du compte transmise");
+          TEST_HOOKS_.aiConfig = { provider: "gemini", key: "cle-g", model: "gemini-3.5-flash-lite" };
+          TEST_HOOKS_.aiFetch = function (req) { seen.push(req); return { getResponseCode: function () { return 200; }, getContentText: function () { return JSON.stringify({ candidates: [{ content: { parts: [{ text: "Réponse Gemini" }] } }] }); } }; };
+          const g = T.call(fx.tok.ownerA, "assistant.ask", { question: "Comment inviter un utilisateur ?", lang: "en" });
+          T.ok(g.mode === "ai" && g.answer === "Réponse Gemini" && seen[seen.length - 1].headers["x-goog-api-key"] === "cle-g" && JSON.parse(seen[seen.length - 1].payload).systemInstruction.parts[0].text.indexOf("English") > 0, "Gemini");
+          TEST_HOOKS_.aiFetch = function () { return { getResponseCode: function () { return 500; }, getContentText: function () { return "{}"; } }; };
+          const f = T.call(fx.tok.ownerA, "assistant.ask", { question: "Comment créer un bien ?" });
+          T.ok(f.mode === "guide" && /indisponible/.test(f.notice), "panne du service : repli sur le guide");
+        } finally { TEST_HOOKS_.aiConfig = false; TEST_HOOKS_.aiFetch = null; }
+      }]
+    ] },
+    { name: "Comptes et sécurité", tests: [
+      ["Mot de passe haché (PBKDF2 vecteurs RFC) et jamais stocké en clair", function (T, fx) {
+        T.eq(pbkdf2Hex_("password", "73616c74", 1), "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b", "PBKDF2 c=1");
+        T.eq(pbkdf2Hex_("password", "73616c74", 2), "ae4d0c95af6b46d32d0adff928f06dd02a303f8ef3c251dfd6e2d85a95474c43", "PBKDF2 c=2");
+        const u = dbGet_("Users", fx.users.ownerA.userId);
+        T.ok(u.passwordHash && u.passwordHash.length === 64 && JSON.stringify(u).indexOf(fx.pw) < 0, "le mot de passe ne doit apparaître nulle part");
+      }],
+      ["Invitation valide → compte activé → connexion", function (T, fx) {
+        const email = fx.mail("newcleaner");
+        T.call(fx.tok.ownerA, "invite.create", { email: email, organizationId: fx.orgA.organizationId, role: "CLEANER", displayName: "Nouvelle Équipe" });
+        const token = T.tokenFrom(T.lastMailTo(email).body, "accept");
+        T.ok(token, "lien d'invitation présent dans l'e-mail");
+        T.eq(T.pub("invite.info", { token: token }).role, "CLEANER", "rôle de l'invitation");
+        T.pub("invite.accept", { token: token, password: "Nouveau-Pass1", displayName: "Équipe" });
+        T.ok(T.pub("auth.login", { email: email, password: "Nouveau-Pass1" }).token, "connexion après activation");
+        T.ok(!dbAll_("Invitations").find(function (i) { return i.email === email; }).tokenHash, "le jeton est effacé après usage");
+      }],
+      ["Invitation expirée refusée", function (T, fx) {
+        const email = fx.mail("expired");
+        const r = T.call(fx.tok.ownerA, "invite.create", { email: email, organizationId: fx.orgA.organizationId, role: "GUARD" });
+        dbUpdate_("Invitations", r.invitationId, { expiresAt: new Date(Date.now() - 60000).toISOString() });
+        T.fails(null, "invite.accept", { token: T.tokenFrom(T.lastMailTo(email).body, "accept"), password: "Abcdefgh12" }, "EXPIRED");
+      }],
+      ["Invitation déjà utilisée refusée", function (T, fx) {
+        const email = fx.mail("twice");
+        T.call(fx.tok.ownerA, "invite.create", { email: email, organizationId: fx.orgA.organizationId, role: "GUARD" });
+        const token = T.tokenFrom(T.lastMailTo(email).body, "accept");
+        T.pub("invite.accept", { token: token, password: "Abcdefgh12" });
+        T.fails(null, "invite.accept", { token: token, password: "Abcdefgh12" }, "AUTH");
+      }],
+      ["Invitation révoquée inutilisable", function (T, fx) {
+        const email = fx.mail("revoked");
+        const r = T.call(fx.tok.ownerA, "invite.create", { email: email, organizationId: fx.orgA.organizationId, role: "GUARD" });
+        const token = T.tokenFrom(T.lastMailTo(email).body, "accept");
+        T.call(fx.tok.ownerA, "invite.revoke", { invitationId: r.invitationId });
+        T.fails(null, "invite.accept", { token: token, password: "Abcdefgh12" }, "AUTH");
+      }],
+      ["E-mail non autorisé / identifiants invalides / jeton forgé", function (T, fx) {
+        T.fails(null, "auth.login", { email: fx.mail("inconnu"), password: "Whatever123" }, "AUTH");
+        T.fails(null, "auth.login", { email: fx.users.ownerA.email, password: "Mauvais-pass9" }, "AUTH");
+        T.fails("0".repeat(64), "property.list", {}, "AUTH");
+        T.fails("pas-un-jeton", "property.list", {}, "AUTH");
+      }],
+      ["Verrouillage après 5 échecs de connexion", function (T, fx) {
+        const u = tMakeUser_(fx.mail("lock"), "OWNER", fx.orgB.organizationId, fx.pw);
+        for (let i = 0; i < 5; i++) T.fails(null, "auth.login", { email: u.email, password: "Mauvais-pass9" });
+        T.fails(null, "auth.login", { email: u.email, password: fx.pw }, "LOCKED");
+      }],
+      ["Utilisateur suspendu : sessions révoquées et connexion refusée", function (T, fx) {
+        const u = tMakeUser_(fx.mail("susp"), "OWNER", fx.orgB.organizationId, fx.pw);
+        const tok = T.pub("auth.login", { email: u.email, password: fx.pw }).token;
+        T.call(fx.tok.superA, "user.setStatus", { userId: u.userId, status: "SUSPENDED", reason: "test" });
+        T.fails(tok, "property.list", {}, "AUTH");
+        T.fails(null, "auth.login", { email: u.email, password: fx.pw }, "AUTH");
+      }],
+      ["Organisation suspendue : accès coupé, données conservées", function (T, fx) {
+        const org = tOrg_("Org suspendue " + fx.run, "OWNER_ORG"), u = tMakeUser_(fx.mail("orgsusp"), "OWNER", org.organizationId, fx.pw);
+        const tok = T.pub("auth.login", { email: u.email, password: fx.pw }).token;
+        const pid = T.call(tok, "property.create", { organizationId: org.organizationId, name: "Bien conservé", city: "Fès" }).propertyId;
+        T.call(fx.tok.superA, "org.setStatus", { organizationId: org.organizationId, status: "SUSPENDED", reason: "Impayé test" });
+        T.fails(tok, "property.list", {}, "AUTH");
+        T.ok(dbGet_("Properties", pid), "le bien n'est pas supprimé");
+        T.call(fx.tok.superA, "org.setStatus", { organizationId: org.organizationId, status: "ACTIVE" });
+        T.eq(T.call(tok, "property.list", {}).total, 1, "accès rétabli");
+      }],
+      ["Accès au bien d'un autre propriétaire refusé (IDOR)", function (T, fx) {
+        T.fails(fx.tok.ownerB, "property.get", { propertyId: fx.propA }, "FORBIDDEN");
+        T.fails(fx.tok.ownerB, "property.update", { propertyId: fx.propA, name: "Piraté" }, "FORBIDDEN");
+        T.ok(!T.call(fx.tok.ownerB, "property.list", {}).items.some(function (x) { return x.propertyId === fx.propA; }), "liste cloisonnée");
+        T.fails(fx.tok.ownerB, "resv.create", { propertyId: fx.propA, checkIn: tDays_(200), checkOut: tDays_(202), guestName: "Intrus" }, "FORBIDDEN");
+      }],
+      ["Super administrateur sans accès aux données privées sauf assistance approuvée", function (T, fx) {
+        T.fails(fx.tok.superA, "property.get", { propertyId: fx.propA }, "FORBIDDEN");
+        const g = T.call(fx.tok.superA, "support.request", { organizationId: fx.orgA.organizationId, justification: "Ticket 42 : analyse d'un bug d'affichage", hours: 2 });
+        T.fails(fx.tok.superA, "property.get", { propertyId: fx.propA }, "FORBIDDEN");
+        T.call(fx.tok.ownerA, "support.decide", { grantId: g.grantId, decision: "APPROVE" });
+        T.eq(T.call(fx.tok.superA, "property.get", { propertyId: fx.propA }).propertyId, fx.propA, "lecture autorisée sous assistance");
+        T.fails(fx.tok.superA, "property.update", { propertyId: fx.propA, name: "X" }, "FORBIDDEN");
+        T.call(fx.tok.ownerA, "support.revoke", { grantId: g.grantId });
+        T.fails(fx.tok.superA, "property.get", { propertyId: fx.propA }, "FORBIDDEN");
+      }],
+      ["Élévation de privilèges impossible", function (T, fx) {
+        T.fails(fx.tok.ag1u, "invite.create", { email: fx.mail("x1"), organizationId: fx.ag1.organizationId, role: "AGENCY_ADMIN" }, "FORBIDDEN");
+        T.fails(fx.tok.ownerA, "invite.create", { email: fx.mail("x2"), organizationId: fx.orgA.organizationId, role: "SUPER_ADMIN" }, "FORBIDDEN");
+        T.fails(fx.tok.ag1, "invite.create", { email: fx.mail("x3"), organizationId: fx.ag1.organizationId, role: "OWNER" }, "FORBIDDEN");
+        T.fails(fx.tok.ownerA, "invite.create", { email: fx.mail("x4"), organizationId: fx.orgB.organizationId, role: "OWNER" }, "FORBIDDEN");
+        const role = dbAll_("UserRoles").find(function (r) { return r.userId === fx.users.ag1u.userId; });
+        T.call(fx.tok.ag1, "role.setPermissions", { userRoleId: role.userRoleId, removedCaps: ["reservation.edit", "+platform.admin", "platform.admin"] });
+        T.eq(parseJson_(dbGet_("UserRoles", role.userRoleId).permissionsJson, []), ["-reservation.edit"], "seules des capacités du rôle peuvent être retirées");
+        T.call(fx.tok.ag1, "role.setPermissions", { userRoleId: role.userRoleId, removedCaps: [] });
+        const own = dbAll_("UserRoles").find(function (r) { return r.userId === fx.users.ag1.userId; });
+        T.fails(fx.tok.ag1, "role.setPermissions", { userRoleId: own.userRoleId, removedCaps: [] }, "FORBIDDEN");
+        T.fails(fx.tok.ownerA, "org.create", { name: "Pirate" }, "FORBIDDEN");
+      }],
+      ["Propriétaire : création d'une agence, invitation de son responsable et attribution du bien", function (T, fx) {
+        const email = fx.mail("agence-duplex");
+        const r = T.call(fx.tok.ownerA, "property.agencyCreate", { propertyId: fx.propA, name: "Agence Duplex Test", adminEmail: email, adminName: "Youssef", canManageReservations: true, commissionRate: 18 });
+        const org = dbGet_("Organizations", r.organizationId);
+        T.eq([org.type, org.status], ["AGENCY", "ACTIVE"], "organisation de type agence créée");
+        const inv = dbGet_("Invitations", r.invitationId);
+        T.eq([inv.role, String(inv.organizationId), inv.status], ["AGENCY_ADMIN", String(r.organizationId), "PENDING"], "invitation du responsable de l'agence");
+        const perm = dbGet_("AgencyPropertyPermissions", r.permissionId);
+        T.eq([perm.status, perm.canView, perm.canManageReservations, perm.canViewFinance, String(perm.propertyId)], ["ACTIVE", true, true, false, String(fx.propA)], "bien attribué avec les droits cochés");
+        // Le responsable active son compte : il voit le bien attribué, et seulement lui.
+        const token = T.tokenFrom(T.lastMailTo(email).body, "accept");
+        T.pub("invite.accept", { token: token, password: "Agence-Duplex1", displayName: "Youssef" });
+        const tok = T.pub("auth.login", { email: email, password: "Agence-Duplex1" }).token;
+        const seen = T.call(tok, "property.list", {}).items.map(function (x) { return String(x.propertyId); });
+        T.eq(seen, [String(fx.propA)], "l'agence ne voit que le bien attribué");
+        T.fails(tok, "property.get", { propertyId: fx.propA2 }, "FORBIDDEN");
+        // Refus : autre propriétaire, agence, nom déjà pris, e-mail invalide.
+        T.fails(fx.tok.ownerB, "property.agencyCreate", { propertyId: fx.propA, name: "Agence Pirate", adminEmail: fx.mail("pirate") }, "FORBIDDEN");
+        T.fails(tok, "property.agencyCreate", { propertyId: fx.propA, name: "Sous-agence", adminEmail: fx.mail("sous") }, "FORBIDDEN");
+        T.fails(fx.tok.ownerA, "property.agencyCreate", { propertyId: fx.propA, name: "agence duplex test", adminEmail: fx.mail("dup") }, "VALIDATION");
+        T.fails(fx.tok.ownerA, "property.agencyCreate", { propertyId: fx.propA, name: "Agence Sans Mail", adminEmail: "pas-un-email" }, "VALIDATION");
+        // Le propriétaire peut ensuite confier un 2e bien à cette agence avec « Attribuer une agence existante ».
+        T.ok(T.call(fx.tok.ownerA, "property.agencyChoices", { propertyId: fx.propA2 }).some(function (o) { return String(o.organizationId) === String(r.organizationId); }), "agence proposée pour les autres biens");
+      }],
+      ["Propriétaire : « Mes agences » — droits, fiche, retrait de tous les accès, suppression", function (T, fx) {
+        const email = fx.mail("agence-gestion");
+        const r = T.call(fx.tok.ownerA, "property.agencyCreate", { propertyId: fx.propA, name: "Agence Gestion " + fx.run, adminEmail: email, canManageReservations: true });
+        T.call(fx.tok.ownerA, "property.agencySet", { propertyId: fx.propA2, agencyOrganizationId: r.organizationId, canView: true });
+        const mine = T.call(fx.tok.ownerA, "agency.mine").find(function (a) { return a.organizationId === r.organizationId; });
+        T.ok(mine && mine.createdByMe && mine.activeProperties === 2, "agence listée avec ses 2 biens");
+        T.ok(T.call(fx.tok.ownerA, "agency.mine").every(function (a) { return a.properties.every(function (x) { return [String(fx.propA), String(fx.propA2)].indexOf(String(x.propertyId)) >= 0; }); }), "seuls mes biens apparaissent");
+        // Fiche : modifiable par le créateur seulement.
+        T.call(fx.tok.ownerA, "agency.update", { agencyOrganizationId: r.organizationId, name: "Agence Gestion Bis " + fx.run, city: "Agadir", contactEmail: email });
+        T.eq([dbGet_("Organizations", r.organizationId).name, dbGet_("Organizations", r.organizationId).city], ["Agence Gestion Bis " + fx.run, "Agadir"], "fiche modifiée");
+        T.fails(fx.tok.ownerB, "agency.update", { agencyOrganizationId: r.organizationId, name: "Piratage" }, "FORBIDDEN");
+        T.fails(fx.tok.ownerA, "agency.update", { agencyOrganizationId: fx.ag1.organizationId, name: "Pas à moi" }, "FORBIDDEN");
+        T.fails(fx.tok.ag1, "agency.mine", {}, "FORBIDDEN");
+        // Retirer tous les accès.
+        T.eq(T.call(fx.tok.ownerA, "agency.revokeAll", { agencyOrganizationId: r.organizationId }).revoked, 2, "2 accès retirés");
+        T.eq(dbAll_("AgencyPropertyPermissions").filter(function (z) { return String(z.agencyOrganizationId) === String(r.organizationId) && z.status === "ACTIVE"; }).length, 0, "plus aucun accès actif");
+        // Suppression refusée si l'agence travaille aussi pour un autre propriétaire.
+        T.call(fx.tok.ownerA, "property.agencySet", { propertyId: fx.propA, agencyOrganizationId: r.organizationId, canView: true });
+        T.call(fx.tok.ownerB, "property.agencySet", { propertyId: fx.propB, agencyOrganizationId: r.organizationId, canView: true });
+        T.fails(fx.tok.ownerA, "agency.delete", { agencyOrganizationId: r.organizationId }, "VALIDATION");
+        T.call(fx.tok.ownerB, "property.agencySet", { propertyId: fx.propB, agencyOrganizationId: r.organizationId, canView: false });
+        // Suppression : non destructive, invitations révoquées, comptes désactivés.
+        T.fails(fx.tok.ownerB, "agency.delete", { agencyOrganizationId: r.organizationId }, "FORBIDDEN");
+        T.call(fx.tok.ownerA, "agency.delete", { agencyOrganizationId: r.organizationId });
+        T.eq(dbGet_("Organizations", r.organizationId).status, "INACTIVE", "agence inactive (non effacée)");
+        T.eq(dbGet_("Invitations", r.invitationId).status, "REVOKED", "invitation en attente révoquée");
+        T.fails(null, "invite.accept", { token: "0".repeat(64), password: "Xyz-12345678" });
+        T.ok(dbAll_("AgencyPropertyPermissions").some(function (z) { return String(z.agencyOrganizationId) === String(r.organizationId); }), "historique des attributions conservé");
+      }],
+      ["Attribution d'agence, cloisonnement entre agences et révocation", function (T, fx) {
+        T.fails(fx.tok.ag1, "property.get", { propertyId: fx.propA }, "FORBIDDEN");
+        T.call(fx.tok.ownerA, "property.agencySet", { propertyId: fx.propA, agencyOrganizationId: fx.ag1.organizationId, canView: true, canManageReservations: true, canManageOperations: true });
+        T.eq(T.call(fx.tok.ag1, "property.get", { propertyId: fx.propA }).propertyId, fx.propA, "agence 1 autorisée");
+        T.fails(fx.tok.ag2, "property.get", { propertyId: fx.propA }, "FORBIDDEN");
+        const r = T.call(fx.tok.ag1, "resv.create", { propertyId: fx.propA, checkIn: tDays_(300), checkOut: tDays_(302), guestName: "Client Agence" });
+        T.fails(fx.tok.ag2, "resv.get", { reservationId: r.reservationId }, "FORBIDDEN");
+        T.ok(!T.call(fx.tok.ag2, "resv.list", {}).items.length, "aucune réservation visible pour l'agence 2");
+        T.eq(T.call(fx.tok.ag1, "fin.summary", {}).byProperty.length, 0, "sans canViewFinance, l'agence ne voit pas les finances");
+        T.call(fx.tok.ownerA, "property.agencySet", { propertyId: fx.propA, agencyOrganizationId: fx.ag1.organizationId, canView: false });
+        T.fails(fx.tok.ag1, "resv.get", { reservationId: r.reservationId }, "FORBIDDEN");
+        T.call(fx.tok.ownerA, "property.agencySet", { propertyId: fx.propA, agencyOrganizationId: fx.ag1.organizationId, canView: true, canManageReservations: true, canManageOperations: true });
+        T.call(fx.tok.ownerA, "resv.cancel", { reservationId: r.reservationId, reason: "OTHER" });
+      }],
+      ["Agence en consultation seule ne peut pas réserver", function (T, fx) {
+        T.call(fx.tok.ownerA, "property.agencySet", { propertyId: fx.propA, agencyOrganizationId: fx.ag2.organizationId, canView: true });
+        T.fails(fx.tok.ag2, "resv.create", { propertyId: fx.propA, checkIn: tDays_(310), checkOut: tDays_(311), guestName: "X" }, "FORBIDDEN");
+        T.call(fx.tok.ownerA, "property.agencySet", { propertyId: fx.propA, agencyOrganizationId: fx.ag2.organizationId, canView: false });
+      }],
+      ["Environnement de démonstration : création complète, droits cloisonnés, relance sans doublon", function (T, fx) {
+        const S = DEMO_SPEC_, before = TEST_HOOKS_.mailSink.length;
+        const r1 = demoBuild_(fx.users.superA.email);
+        T.eq(r1.organizations.map(function (o) { return o.created; }), [true, true], "2 organisations créées");
+        T.eq(r1.properties.length, 3, "3 biens");
+        T.eq(r1.properties.filter(function (p) { return Number(p.nightlyPrice) === 120 * DEMO_EUR_MAD_ && p.currency === "MAD"; }).length, 1, "duplex à 120 € convertis en MAD");
+        T.eq(r1.agencyAccess.length, 2, "2 biens confiés à l'agence");
+        T.eq(r1.guards.length, 3, "un gardien par bien");
+        T.ok(r1.provider.specialties.indexOf("CLEANING") >= 0 && r1.provider.specialties.indexOf("PLUMBING") >= 0, "prestataire ménage + tous corps de métier");
+        const sent = TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return /Activez votre compte/.test(m.subject); });
+        T.eq(sent.length, 7, "7 e-mails d'activation (super admin, propriétaire, agence, prestataire, 3 gardiens)");
+        const r2 = demoBuild_(fx.users.superA.email);
+        T.ok(r2.organizations.every(function (o) { return !o.created; }) && r2.properties.every(function (p) { return !p.created; }), "relance : rien n'est recréé");
+        T.eq(TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return /Activez votre compte/.test(m.subject); }).length, 7, "relance : aucun e-mail en double");
+        T.eq(dbAll_("Properties").filter(function (p) { return /^DÉMO – /.test(p.name); }).length, 3, "aucun bien en double");
+        const activate = function (email) {
+          const m = TEST_HOOKS_.mailSink.filter(function (x) { return x.to === email; }).pop();
+          T.pub("auth.resetPassword", { token: T.tokenFrom(m.body, "reset"), password: "Demo-Passw0rd!" });
+          return T.pub("auth.login", { email: email, password: "Demo-Passw0rd!" }).token;
+        };
+        const names = function (tok) { return T.call(tok, "property.list", {}).items.map(function (p) { return p.name; }).sort(); };
+        const ownerTok = activate(S.owner.email), agencyTok = activate(S.agency.email), guardTok = activate(S.properties[0].guard.email), provTok = activate(S.provider.email);
+        T.eq(names(ownerTok).length, 3, "le propriétaire voit ses 3 biens");
+        T.eq(names(agencyTok), [S.properties[1].name, S.properties[0].name].sort(), "l'agence ne voit que les 2 biens en courte durée");
+        T.eq(names(guardTok), [S.properties[0].name], "le gardien ne voit que son bien");
+        const duplex = r1.properties[0].propertyId;
+        T.ok(T.call(agencyTok, "ctr.choices", { propertyId: duplex, serviceType: "CLEANING" }).some(function (c) { return c.name === S.provider.name; }), "l'agence choisit Mohamed pour le ménage");
+        const m = T.call(agencyTok, "clean.create", { propertyId: duplex, startAt: tDays_(2) + "T11:00:00.000Z", providerEmail: S.provider.email, price: 200 }).missionId;
+        T.eq(dbGet_("CleaningMissions", m).organizationId, dbGet_("Properties", duplex).organizationId, "la mission (et sa dépense) est rattachée au propriétaire");
+        T.ok(T.call(provTok, "clean.list", {}).items.some(function (x) { return x.missionId === m; }), "Mohamed voit la mission");
+        T.fails(guardTok, "property.get", { propertyId: r1.properties[2].propertyId }, "FORBIDDEN");
+        T.ok(dbAll_("Users").filter(function (u) { return u.email === S.owner.email; }).every(function (u) { return u.phone === DEMO_PHONE_ && u.displayName === S.owner.name; }), "nom et téléphone renseignés");
+      }],
+      ["Historique de démonstration (6 mois) : données cohérentes, analyses alimentées, une seule exécution", function (T, fx) {
+        const S = DEMO_SPEC_, today = todayStr_(), from = addDaysStr_(today, -183);
+        demoBuild_(fx.users.superA.email);
+        const h = demoHistory_(fx.users.superA.email);
+        T.ok(!h.already && h.counts.Reservations >= 40 && h.counts.CleaningMissions >= 25 && h.counts.Invoices >= 9 && h.counts.RentSchedules === 12, "volumes : " + JSON.stringify(h.counts));
+        T.ok(demoHistory_(fx.users.superA.email).already, "deuxième exécution : rien n'est ajouté");
+        const props = dbAll_("Properties").filter(function (p) { return /^DÉMO – /.test(p.name); });
+        T.ok(props.every(function (p) { return p.currency === "MAD"; }) && props.some(function (p) { return Number(p.nightlyPrice) === 120 * DEMO_EUR_MAD_; }), "prix en MAD (120 € convertis)");
+        const ids = props.map(function (p) { return p.propertyId; });
+        const resv = dbAll_("Reservations").filter(function (r) { return ids.indexOf(r.propertyId) >= 0; });
+        const byProp = {};
+        resv.filter(function (r) { return r.status !== "CANCELLED"; }).forEach(function (r) { (byProp[r.propertyId] = byProp[r.propertyId] || []).push(r); });
+        Object.keys(byProp).forEach(function (k) {
+          const L = byProp[k].sort(function (a, b) { return a.checkIn < b.checkIn ? -1 : 1; });
+          for (let i = 1; i < L.length; i++) T.ok(L[i].checkIn >= L[i - 1].checkOut, "aucun chevauchement de séjours : " + L[i - 1].checkOut + " / " + L[i].checkIn);
+        });
+        T.ok(resv.every(function (r) { const m = resvMoney_(r); return r.status === "CANCELLED" || m.paymentStatus === r.paymentStatus; }), "statut de paiement cohérent avec les paiements");
+        T.ok(dbAll_("Payments").every(function (x) { return String(x.paidAt).slice(0, 10) <= today; }), "aucun paiement dans le futur");
+        T.ok(["COMPLETED", "CANCELLED", "CONFIRMED"].every(function (s) { return resv.some(function (r) { return r.status === s; }); }), "séjours passés, annulés et à venir");
+        const ownerTok = T.pub("auth.login", { email: S.owner.email, password: "Demo-Passw0rd!" }).token, agTok = T.pub("auth.login", { email: S.agency.email, password: "Demo-Passw0rd!" }).token;
+        const run = function (tok, type) { return T.call(tok, "pareto.run", { type: type, from: from, to: today }).result; };
+        ["INCIDENTS_BY_CATEGORY", "INCIDENT_COST_BY_CATEGORY", "MAINTENANCE_BY_CATEGORY", "COST_BY_CONTRACTOR", "COST_BY_PROPERTY", "CANCEL_REASONS", "CLEANING_ANOMALIES", "DELAYS_NONCONFORMITIES", "EXPENSES_BY_CATEGORY", "UNPAID"]
+          .forEach(function (type) { const r = run(ownerTok, type); T.ok(r.items.length >= 1 && r.total > 0, "analyse " + type + " alimentée"); });
+        const delays = run(ownerTok, "DELAYS_NONCONFORMITIES").items.map(function (x) { return x.key; });
+        T.ok(["CHECKIN_LATE", "CHECKOUT_LATE", "RENT_LATE"].every(function (k) { return delays.indexOf(k) >= 0; }), "retards variés : " + delays.join(", "));
+        T.ok(run(ownerTok, "UNPAID").items.some(function (x) { return /longue durée/.test(x.label); }), "loyer impayé visible");
+        T.ok(run(agTok, "COST_BY_PROPERTY").items.every(function (x) { return !/longue durée/.test(x.label); }), "l'agence ne voit pas le bien longue durée");
+        const fin = T.call(ownerTok, "fin.summary", { from: from, to: today });
+        T.ok(JSON.stringify(fin).length > 50, "synthèse financière calculée");
+        T.ok(T.call(ownerTok, "dash.get", {}), "tableau de bord du propriétaire");
+        // Documents PDF avec logo : contrat d'abonnement, ordre de mission et rapport de ménage avec photos avant / après
+        T.eq([h.counts.extras.subscriptions, h.counts.extras.photos], [2, 24], "2 abonnements et 24 photos de démonstration");
+        T.ok(h.counts.extras.checklists >= 100, "listes de tâches par pièce");
+        const text = function (r) { return Utilities.newBlob(Utilities.base64Decode(r.base64)).getDataAsString(); };
+        const ownerOrgId = dbAll_("Organizations").find(function (o) { return o.name === S.owner.org; }).organizationId;
+        const contract = text(T.call(ownerTok, "sub.contractPdf", { organizationId: ownerOrgId }));
+        T.ok(/^%PDF/.test(contract) && contract.indexOf("data:image/png;base64," + PDF_LOGO_PNG_B64_.slice(0, 40)) > 0, "contrat avec logo");
+        T.ok(contract.indexOf("règlement semestriel") > 0 && contract.indexOf("Historique des règlements") > 0, "historique des règlements dans le contrat");
+        T.fails(fx.tok.ownerA, "sub.contractPdf", { organizationId: ownerOrgId }, "FORBIDDEN");
+        const withPhotos = dbAll_("CleaningPhotos").map(function (x) { return x.missionId; })[0];
+        const provTok = T.pub("auth.login", { email: S.provider.email, password: "Demo-Passw0rd!" }).token;
+        const report = text(T.call(agTok, "clean.reportPdf", { missionId: withPhotos }));
+        T.ok(report.indexOf("Rapport de ménage") > 0 && (report.match(/data:image\/jpeg;base64,/g) || []).length === 4 && report.indexOf("AVANT") > 0, "rapport avec 4 photos avant / après");
+        T.ok(text(T.call(provTok, "clean.orderPdf", { missionId: withPhotos })).indexOf("Ordre de mission de ménage") > 0, "ordre de mission pour le prestataire");
+        T.fails(fx.tok.ownerB, "clean.reportPdf", { missionId: withPhotos }, "FORBIDDEN");
+        // Devis et facture au nom du prestataire (sans la marque ImmoPilot), devis en attente et intervention planifiée
+        T.eq([h.counts.extras.pendingQuote, h.counts.extras.scheduledWorkOrder], [1, 1], "devis en attente et intervention planifiée");
+        const art = dbAll_("Artisans").find(function (c) { return c.email === S.provider.email; });
+        const q = dbAll_("Quotes").find(function (x) { return x.status === "APPROVED" && String(x.artisanId) === String(art.artisanId); });
+        T.ok(parseJson_(q.linesJson, []).length >= 2, "devis type sur plusieurs lignes");
+        const qpdf = text(T.call(ownerTok, "quote.pdf", { quoteId: q.quoteId }));
+        T.ok(qpdf.indexOf("Devis n° DEV-") > 0 && qpdf.indexOf("Multiservices") > 0 && qpdf.indexOf("Bon pour accord") > 0 && qpdf.indexOf(PDF_LOGO_PNG_B64_.slice(0, 40)) < 0 && qpdf.indexOf("Immo<span") < 0, "devis sans logo ImmoPilot");
+        T.ok(text(T.call(provTok, "quote.pdf", { quoteId: q.quoteId })).indexOf("Devis") > 0, "le prestataire télécharge son devis");
+        T.fails(fx.tok.ownerB, "quote.pdf", { quoteId: q.quoteId }, "FORBIDDEN");
+        const pending = dbAll_("Quotes").find(function (x) { return x.status === "PENDING" && String(x.artisanId) === String(art.artisanId); });
+        T.ok(text(T.call(ownerTok, "quote.pdf", { quoteId: pending.quoteId })).indexOf("Diagnostic") > 0, "devis en attente téléchargeable");
+        const inv = dbAll_("Invoices").find(function (x) { return x.status === "PAID" && String(x.artisanId) === String(art.artisanId); });
+        const ipdf = text(T.call(ownerTok, "inv.pdf", { invoiceId: inv.invoiceId }));
+        T.ok(ipdf.indexOf("Facture n° " + inv.invoiceNumber) > 0 && ipdf.indexOf("Acquittée le") > 0 && ipdf.indexOf(PDF_LOGO_PNG_B64_.slice(0, 40)) < 0 && ipdf.indexOf("Commission") < 0, "facture sans logo ni commission interne");
+        T.fails(fx.tok.ownerB, "inv.pdf", { invoiceId: inv.invoiceId }, "FORBIDDEN");
+        // Démo exclue des statistiques et de la facturation de la plateforme ; pas d'e-mails automatiques ; mise en veille réversible
+        const dOrgs = dbAll_("Organizations").filter(function (o) { return o.isDemo === true; });
+        T.eq(dOrgs.length, 2, "2 organisations marquées « démo »");
+        const adm = function (inc) { return T.call(fx.tok.superA, "dash.get", { from: from, to: today, includeDemo: inc }).admin; };
+        const without = adm(false), withDemo = adm(true);
+        const demoSubPaid = sumBy_(dbAll_("Payments").filter(function (x) { return x.kind === "SUBSCRIPTION" && x.status === "RECORDED" && dOrgs.some(function (o) { return o.organizationId === x.organizationId; }) && String(x.paidAt).slice(0, 10) >= from; }), function (x) { return x.amount; });
+        T.eq(withDemo.organizations - without.organizations, 2, "organisations de démo exclues");
+        T.ok(demoSubPaid > 0 && Math.abs(withDemo.platformRevenue - without.platformRevenue - demoSubPaid) < 0.01, "revenus d'abonnement de la démo exclus");
+        T.ok(withDemo.reservations - without.reservations >= 40 && without.demoExcluded === 2, "réservations de démo exclues");
+        const subsNo = T.call(fx.tok.superA, "sub.list", {}), subsYes = T.call(fx.tok.superA, "sub.list", { includeDemo: true });
+        T.ok(subsYes.items.length - subsNo.items.length === 2 && subsNo.billing.every(function (b) { return !/^DÉMO/.test(b.organizationName || ""); }), "abonnements de démo masqués par défaut");
+        const ownerOrgRow = dOrgs.find(function (o) { return o.name === S.owner.org; }), mailsBefore = TEST_HOOKS_.mailSink.length;
+        notify_({ eventKey: "demo-test:" + Date.now(), userIds: [dbAll_("Users").find(function (u) { return u.email === S.owner.email; }).userId], type: "TEST", organizationId: ownerOrgRow.organizationId, title: "Test", body: "Test" });
+        T.eq(TEST_HOOKS_.mailSink.length, mailsBefore, "aucun e-mail automatique pour la démo");
+        demoSetSleep_(fx.users.superA.email, true);
+        T.fails(null, "auth.login", { email: S.owner.email, password: "Demo-Passw0rd!" });
+        T.ok(dbAll_("Reservations").filter(function (r) { return r.organizationId === ownerOrgRow.organizationId; }).length >= 40, "veille : aucune donnée supprimée");
+        demoSetSleep_(fx.users.superA.email, false);
+        T.ok(T.pub("auth.login", { email: S.owner.email, password: "Demo-Passw0rd!" }).token, "réveil : la démo fonctionne de nouveau");
+        T.ok(text(T.call(ownerTok, "wo.pdf", { workOrderId: dbAll_("WorkOrders").filter(function (w) { return /^DEMO|Intervention réalisée/.test(w.report || ""); })[0].workOrderId })).indexOf(PDF_LOGO_PNG_B64_.slice(0, 40)) > 0, "bon d'intervention avec logo");
+      }],
+      ["Suppression de compte : demande depuis l'application puis anonymisation par le super administrateur", function (T, fx) {
+        const email = fx.mail("a-supprimer");
+        T.call(fx.tok.ownerA, "invite.create", { email: email, organizationId: fx.orgA.organizationId, role: "GUARD" });
+        T.pub("invite.accept", { token: T.tokenFrom(T.lastMailTo(email).body, "accept"), password: "Gardien-Temp1" });
+        const tok = T.pub("auth.login", { email: email, password: "Gardien-Temp1" }).token;
+        const u = dbAll_("Users").find(function (x) { return x.email === email; });
+        T.ok(T.call(tok, "me.requestDeletion", { reason: "Je quitte l'agence" }).message, "demande enregistrée");
+        T.ok(dbAll_("Notifications").some(function (n) { return n.type === "ACCOUNT_DELETION" && String(n.userId) === String(fx.users.superA.userId); }), "super administrateur prévenu");
+        T.fails(fx.tok.ownerA, "user.erase", { userId: u.userId, confirm: "SUPPRIMER" }, "FORBIDDEN");
+        T.fails(fx.tok.superA, "user.erase", { userId: u.userId, confirm: "oui" }, "VALIDATION");
+        T.call(fx.tok.superA, "user.erase", { userId: u.userId, confirm: "SUPPRIMER", reason: "Demande de l'utilisateur" });
+        const after = dbGet_("Users", u.userId);
+        T.ok(after.email.indexOf(email) < 0 && after.displayName === "Compte supprimé" && !after.passwordHash && after.status === "DISABLED", "identité effacée");
+        T.ok(dbAll_("UserRoles").filter(function (r) { return String(r.userId) === String(u.userId); }).every(function (r) { return r.status === "REVOKED"; }), "rôles révoqués");
+        T.fails(null, "auth.login", { email: email, password: "Gardien-Temp1" }, "AUTH");
+        T.fails(tok, "me.get", {}, "AUTH");
+        const log = dbAll_("ActivityLogs").filter(function (l) { return l.action === "ACCOUNT_ERASED"; }).pop();
+        T.ok(log && JSON.stringify(log.detailsJson).indexOf(email) < 0 && JSON.stringify(log.detailsJson).indexOf(sha256Hex_(email)) >= 0, "trace sans e-mail en clair");
+      }],
+      ["Document privé : téléchargement refusé sans droit", function (T, fx) {
+        const png = Utilities.base64Encode([-119, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]);
+        const d = T.call(fx.tok.ownerA, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propA, category: "CONTRACT", fileName: "titre.png", mimeType: "image/png", base64: png });
+        T.ok(T.call(fx.tok.ownerA, "doc.get", { documentId: d.documentId }).base64, "propriétaire autorisé");
+        T.fails(fx.tok.ownerB, "doc.get", { documentId: d.documentId }, "FORBIDDEN");
+        T.fails(fx.tok.guard, "doc.get", { documentId: d.documentId }, "FORBIDDEN");
+        T.fails(fx.tok.superA, "doc.get", { documentId: d.documentId }, "FORBIDDEN");
+        const f = DriveApp.getFileById(dbGet_("Documents", d.documentId).fileId);
+        T.eq(String(f.getSharingAccess()), String(DriveApp.Access.PRIVATE), "fichier Drive privé");
+      }],
+      ["Modèle de document : seul un Google Docs du dossier « Modeles » est accepté", function (T, fx) {
+        const outside = DocumentApp.create("ImmoPilot_TEST_modele_hors_dossier");
+        const inside = DocumentApp.create("ImmoPilot_TEST_modele_bail");
+        DriveApp.getFileById(inside.getId()).moveTo(systemFolder_("Modeles"));
+        try {
+          // Un document d'un autre client (copie générée rangée dans son dossier) ou tout autre fichier hors « Modeles » est refusé.
+          T.fails(fx.tok.ownerA, "settings.set", { organizationId: fx.orgA.organizationId, key: "template.leaseDocId", value: outside.getId() }, "VALIDATION");
+          const png = Utilities.base64Encode([-119, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]);
+          const other = T.call(fx.tok.ownerB, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propB, category: "CONTRACT", fileName: "contrat_b.png", mimeType: "image/png", base64: png });
+          T.fails(fx.tok.ownerA, "settings.set", { organizationId: fx.orgA.organizationId, key: "template.leaseDocId", value: dbGet_("Documents", other.documentId).fileId }, "VALIDATION");
+          T.fails(fx.tok.ownerA, "settings.set", { organizationId: fx.orgA.organizationId, key: "template.leaseDocId", value: "x".repeat(30) }, "VALIDATION");
+          T.call(fx.tok.ownerA, "settings.set", { organizationId: fx.orgA.organizationId, key: "template.leaseDocId", value: inside.getId() });
+          T.eq(getSetting_("template.leaseDocId", fx.orgA.organizationId), inside.getId(), "modèle du dossier « Modeles » accepté");
+          let refused = false; try { docFromTemplate_(outside.getId(), {}, systemFolder_("Exports"), "x"); } catch (e) { refused = true; }
+          T.ok(refused, "contrôle refait au moment de la génération");
+        } finally {
+          T.call(fx.tok.ownerA, "settings.set", { organizationId: fx.orgA.organizationId, key: "template.leaseDocId", value: "" });
+          [outside, inside].forEach(function (d) { try { DriveApp.getFileById(d.getId()).setTrashed(true); } catch (e) { console.error(e.message); } });
+        }
+      }],
+      ["Fichier refusé si le contenu ne correspond pas au type annoncé", function (T, fx) {
+        T.fails(fx.tok.ownerA, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propA, category: "PHOTO", fileName: "x.jpg", mimeType: "image/jpeg", base64: Utilities.base64Encode(Utilities.newBlob("<script>").getBytes()) }, "VALIDATION");
+        T.fails(fx.tok.ownerA, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propA, category: "PHOTO", fileName: "x.exe", mimeType: "application/x-msdownload", base64: "TVo=" }, "VALIDATION");
+      }],
+      ["Injection de formule neutralisée (Sheets et CSV)", function (T, fx) {
+        const r = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(400), checkOut: tDays_(401), guestName: "=HYPERLINK(\"http://x\")" });
+        T.eq(dbGet_("Reservations", r.reservationId).guestName, "=HYPERLINK(\"http://x\")", "valeur conservée comme texte");
+        T.ok(csvCell_("=1+1").charAt(0) === "'" && csvCell_("+33").charAt(0) === "'" && csvCell_("@x").charAt(0) === "'", "cellules CSV préfixées");
+        T.call(fx.tok.ownerA, "resv.cancel", { reservationId: r.reservationId, reason: "OTHER" });
+      }],
+      ["Fonctions d'installation refusées hors éditeur", function (T) {
+        if (typeof __MOCK__ === "undefined") T.skip("Vérifiable uniquement en simulant un visiteur web (voir TESTS.md, test manuel M-02).");
+        __MOCK__.session.active = "";
+        try { let threw = false; try { setupProject(); } catch (e) { threw = /propriétaire du script/.test(e.message); } T.ok(threw, "setupProject doit refuser un visiteur"); }
+        finally { __MOCK__.session.active = __MOCK__.session.effective; }
+      }]
+    ] },
+    { name: "Réservations", tests: [
+      ["Réservation valide, montants calculés côté serveur", function (T, fx) {
+        const r = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(40), checkOut: tDays_(43), guestName: "Ali Benali", guestCount: 2 });
+        const g = T.call(fx.tok.ownerA, "resv.get", { reservationId: r.reservationId });
+        T.near(g.totalPrice, 3000, "3 nuits × 1000"); T.near(g.fees, 200, "frais de ménage"); T.near(g.commissionAmount, 600, "20 % de commission");
+        T.eq(g.paymentStatus, "UNPAID", "jamais payé automatiquement"); T.near(g.balance, 3200, "solde");
+        fx.r1 = r.reservationId;
+      }],
+      ["Double réservation refusée (chevauchement)", function (T, fx) {
+        T.fails(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(41), checkOut: tDays_(45), guestName: "Doublon" }, "CONFLICT");
+        T.eq(T.call(fx.tok.ownerA, "resv.availability", { propertyId: fx.propA, checkIn: tDays_(42), checkOut: tDays_(44) }).available, false, "disponibilité");
+      }],
+      ["Double réservation refusée même via une autre agence", function (T, fx) {
+        T.fails(fx.tok.ag1, "resv.create", { propertyId: fx.propA, checkIn: tDays_(42), checkOut: tDays_(44), guestName: "Agence" }, "CONFLICT");
+      }],
+      ["Départ 11:00 et arrivée 15:00 le même jour autorisés ; arrivée 12:00 refusée (battement 120 min)", function (T, fx) {
+        const ok = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(43), checkOut: tDays_(45), guestName: "Rotation" });
+        T.ok(ok.reservationId, "arrivée le jour du départ");
+        T.call(fx.tok.ownerA, "resv.cancel", { reservationId: ok.reservationId, reason: "OTHER" });
+        T.fails(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(43), checkOut: tDays_(45), checkInTime: "12:00", guestName: "Trop tôt" }, "CONFLICT");
+      }],
+      ["Double soumission (même clé) : un seul enregistrement", function (T, fx) {
+        const k = T.key();
+        const a = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(60), checkOut: tDays_(61), guestName: "Idem", requestKey: k });
+        const b = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(60), checkOut: tDays_(61), guestName: "Idem", requestKey: k });
+        T.ok(b.duplicate === true && b.id === a.reservationId, "seconde requête reconnue comme doublon");
+        T.eq(dbAll_("Reservations").filter(function (x) { return x.idempotencyKey === k; }).length, 1, "une seule ligne");
+      }],
+      ["Requêtes concurrentes : contrôle de chevauchement sous verrou", function (T, fx) {
+        if (typeof __MOCK__ === "undefined") T.skip("Concurrence réelle : test manuel M-05 (deux appels simultanés depuis deux navigateurs).");
+        const seen = [];
+        __MOCK__.onInsert = function (table) { if (table === "Reservations") seen.push(__MOCK__.lockHeld()); };
+        try {
+          T.eq(T.call(fx.tok.ag1, "resv.availability", { propertyId: fx.propA, checkIn: tDays_(70), checkOut: tDays_(72) }).available, true, "A voit le créneau libre");
+          T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(70), checkOut: tDays_(72), guestName: "B arrive en premier" });
+          T.fails(fx.tok.ag1, "resv.create", { propertyId: fx.propA, checkIn: tDays_(71), checkOut: tDays_(73), guestName: "A, après coup" }, "CONFLICT");
+          T.ok(seen.length === 1 && seen[0] === true, "l'insertion a lieu pendant que le verrou est détenu");
+        } finally { __MOCK__.onInsert = null; }
+      }],
+      ["Modification avec contrôle de version", function (T, fx) {
+        const g = T.call(fx.tok.ownerA, "resv.get", { reservationId: fx.r1 });
+        T.call(fx.tok.ownerA, "resv.update", { reservationId: fx.r1, version: g.version, guestCount: 3, notes: "Lit bébé" });
+        T.fails(fx.tok.ownerA, "resv.update", { reservationId: fx.r1, version: g.version, guestCount: 4 }, "CONFLICT");
+        T.call(fx.tok.ownerA, "resv.update", { reservationId: fx.r1, checkOut: tDays_(44), version: g.version + 1 });
+        T.near(T.call(fx.tok.ownerA, "resv.get", { reservationId: fx.r1 }).nights, 4, "nouvelle durée");
+      }],
+      ["Paiement partiel, solde restant, remboursement plafonné", function (T, fx) {
+        T.call(fx.tok.ownerA, "resv.update", { reservationId: fx.r1, totalPrice: 3000 });
+        T.call(fx.tok.ownerA, "pay.record", { refType: "RESERVATION", refId: fx.r1, kind: "RESERVATION", amount: 1000, method: "TRANSFER", reference: "VIR-1" });
+        let g = T.call(fx.tok.ownerA, "resv.get", { reservationId: fx.r1 });
+        T.eq(g.paymentStatus, "PARTIAL", "statut partiel"); T.near(g.balance, 2200, "solde 3200 − 1000");
+        T.fails(fx.tok.ownerA, "pay.record", { refType: "RESERVATION", refId: fx.r1, kind: "REFUND", amount: 1500 }, "VALIDATION");
+        T.call(fx.tok.ownerA, "pay.record", { refType: "RESERVATION", refId: fx.r1, kind: "RESERVATION", amount: 2200, method: "CASH" });
+        g = T.call(fx.tok.ownerA, "resv.get", { reservationId: fx.r1 });
+        T.eq(g.paymentStatus, "PAID", "soldé après paiement explicite"); T.near(g.balance, 0, "solde nul");
+        T.fails(fx.tok.guard, "pay.record", { refType: "RESERVATION", refId: fx.r1, kind: "RESERVATION", amount: 10 }, "FORBIDDEN");
+      }],
+      ["Annulation selon la politique (pénalité) et remboursement dû", function (T, fx) {
+        const r = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(3), checkOut: tDays_(5), guestName: "Annule" });
+        T.call(fx.tok.ownerA, "pay.record", { refType: "RESERVATION", refId: r.reservationId, kind: "RESERVATION", amount: 2200 });
+        const c = T.call(fx.tok.ownerA, "resv.cancel", { reservationId: r.reservationId, reason: "GUEST_REQUEST" });
+        T.eq(c.penaltyPercent, 50, "3 jours avant : 50 %"); T.near(c.refundDue, 1100, "2200 − 50 % × 2200");
+        T.fails(fx.tok.ownerA, "resv.cancel", { reservationId: r.reservationId, reason: "OTHER" }, "VALIDATION");
+        T.eq(T.call(fx.tok.ownerA, "resv.availability", { propertyId: fx.propA, checkIn: tDays_(3), checkOut: tDays_(5) }).available, true, "créneau libéré");
+      }],
+      ["Blocage de calendrier respecté", function (T, fx) {
+        T.call(fx.tok.ownerA, "block.create", { propertyId: fx.propA, startDate: tDays_(90), endDate: tDays_(95), reason: "Travaux" });
+        T.fails(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(92), checkOut: tDays_(93), guestName: "Client bloqué" }, "CONFLICT");
+        T.ok(T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(95), checkOut: tDays_(96), guestName: "Après blocage" }).reservationId, "arrivée le jour de fin du blocage");
+      }]
+    ] },
+    { name: "Check-in / check-out et ménage", tests: [
+      ["Gardien affecté à une réservation : accès limité à celle-ci", function (T, fx) {
+        const r = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: todayStr_(), checkOut: tDays_(2), guestName: "Arrivée du jour", guestPhone: "0612345678" });
+        fx.rToday = r.reservationId;
+        T.fails(fx.tok.guard, "resv.get", { reservationId: r.reservationId }, "FORBIDDEN");
+        T.call(fx.tok.ownerA, "property.staffAssign", { propertyId: fx.propA, email: fx.users.guard.email, role: "GUARD", reservationId: r.reservationId });
+        const g = T.call(fx.tok.guard, "resv.get", { reservationId: r.reservationId });
+        T.ok(g.totalPrice === undefined && g.payments === undefined, "aucune donnée financière pour le gardien");
+        T.eq(T.call(fx.tok.guard, "ops.today", {}).arrivals.length, 1, "une arrivée visible");
+        T.fails(fx.tok.guard, "resv.get", { reservationId: fx.r1 }, "FORBIDDEN");
+        T.fails(fx.tok.guard, "resv.update", { reservationId: r.reservationId, guestCount: 9 }, "FORBIDDEN");
+      }],
+      ["Check-in avec photo et checklist, puis check-out → mission de ménage auto", function (T, fx) {
+        T.call(fx.tok.ownerA, "property.staffAssign", { propertyId: fx.propA, email: fx.users.cleaner.email, role: "CLEANER" });
+        const jpg = Utilities.base64Encode([-1, -40, -1, -32, 0, 16, 74, 70, 73, 70]);
+        const ph = T.call(fx.tok.guard, "doc.upload", { ownerType: "RESERVATION", ownerId: fx.rToday, category: "CHECKIN", fileName: "sejour.jpg", mimeType: "image/jpeg", base64: jpg });
+        const k = T.key();
+        T.call(fx.tok.guard, "ops.checkIn", { reservationId: fx.rToday, checklist: { "Clés remises": true }, photoDocIds: [ph.documentId], conditionNotes: "RAS", requestKey: k });
+        T.eq(T.call(fx.tok.guard, "ops.checkIn", { reservationId: fx.rToday, requestKey: k }).duplicate, true, "double soumission ignorée");
+        T.fails(fx.tok.guard, "ops.checkIn", { reservationId: fx.rToday }, "VALIDATION");
+        T.eq(dbGet_("Reservations", fx.rToday).status, "IN_PROGRESS", "séjour en cours");
+        const out = T.call(fx.tok.guard, "ops.checkOut", { reservationId: fx.rToday, checklist: { "Clés rendues": true }, incident: { category: "DAMAGE", description: "Verre cassé dans la cuisine", severity: "LOW" } });
+        T.ok(out.cleaningMissionId && out.incidentId, "mission et incident créés");
+        const m = dbGet_("CleaningMissions", out.cleaningMissionId);
+        T.eq(m.status, "OFFERED", "proposée à l'équipe associée"); T.eq(m.providerEmail, fx.users.cleaner.email, "équipe par défaut");
+        T.ok(parseTs_(m.expiresAt).getTime() - Date.now() > 115 * 60000, "délai d'acceptation 2 h");
+        fx.mission = out.cleaningMissionId;
+      }],
+      ["Expiration après 2 h (tâche planifiée) puis réattribution", function (T, fx) {
+        dbUpdate_("CleaningMissions", fx.mission, { expiresAt: new Date(Date.now() - 1000).toISOString() });
+        T.fails(fx.tok.cleaner, "clean.respond", { missionId: fx.mission, decision: "ACCEPTED" }, "EXPIRED");
+        T.eq(cleaningExpireJob_().expired, 1, "une mission expirée");
+        T.eq(dbGet_("CleaningMissions", fx.mission).status, "EXPIRED", "statut expiré");
+        T.ok(dbAll_("Notifications").some(function (n) { return n.type === "CLEANING_EXPIRED" && n.userId === fx.users.ownerA.userId; }), "alerte au responsable");
+        T.call(fx.tok.ownerA, "clean.assign", { missionId: fx.mission, providerEmail: fx.users.cleaner2.email });
+        const m = dbGet_("CleaningMissions", fx.mission);
+        T.eq(m.status, "OFFERED", "réattribuée"); T.eq(m.reassignCount, 1, "compteur de réattribution");
+        T.fails(fx.tok.cleaner, "clean.respond", { missionId: fx.mission, decision: "ACCEPTED" }, "FORBIDDEN");
+      }],
+      ["Acceptation, photos avant/après obligatoires, fin, validation et dépense unique", function (T, fx) {
+        T.call(fx.tok.cleaner2, "clean.respond", { missionId: fx.mission, decision: "ACCEPTED" });
+        T.call(fx.tok.cleaner2, "clean.start", { missionId: fx.mission });
+        const jpg = Utilities.base64Encode([-1, -40, -1, -32, 0, 16]);
+        const b = T.call(fx.tok.cleaner2, "doc.upload", { ownerType: "CLEANING", ownerId: fx.mission, category: "PHOTO_BEFORE", fileName: "avant.jpg", mimeType: "image/jpeg", base64: jpg });
+        T.call(fx.tok.cleaner2, "clean.room", { missionId: fx.mission, room: "Séjour", items: { Sols: true }, beforeDocIds: [b.documentId] });
+        T.fails(fx.tok.cleaner2, "clean.complete", { missionId: fx.mission }, "VALIDATION");
+        const af = T.call(fx.tok.cleaner2, "doc.upload", { ownerType: "CLEANING", ownerId: fx.mission, category: "PHOTO_AFTER", fileName: "apres.jpg", mimeType: "image/jpeg", base64: jpg });
+        T.call(fx.tok.cleaner2, "clean.room", { missionId: fx.mission, room: "Séjour", items: { Sols: true }, afterDocIds: [af.documentId] });
+        T.call(fx.tok.cleaner2, "clean.anomaly", { missionId: fx.mission, type: "MISSING_ITEM", room: "Séjour", description: "Télécommande absente", createIncident: true });
+        T.call(fx.tok.cleaner2, "clean.complete", { missionId: fx.mission, actualMinutes: 95 });
+        T.fails(fx.tok.cleaner2, "clean.validate", { missionId: fx.mission }, "FORBIDDEN");
+        T.call(fx.tok.ownerA, "clean.validate", { missionId: fx.mission, qualityScore: 4, price: 250 });
+        T.eq(dbGet_("CleaningMissions", fx.mission).status, "VALIDATED", "validée");
+        T.eq(dbAll_("Expenses").filter(function (e) { return e.uniqueKey === "cleaning:" + fx.mission; }).length, 1, "une seule dépense");
+        T.ok(dbAll_("IncidentsV4").some(function (i) { return i.missionId === fx.mission; }), "incident lié à la mission");
+      }],
+      ["Refus de mission → retour à attribuer + alerte", function (T, fx) {
+        const m = T.call(fx.tok.ownerA, "clean.create", { propertyId: fx.propA, startAt: new Date(Date.now() + 86400000).toISOString(), providerEmail: fx.users.cleaner.email });
+        T.call(fx.tok.cleaner, "clean.respond", { missionId: m.missionId, decision: "DECLINED", reason: "Indisponible" });
+        T.eq(dbGet_("CleaningMissions", m.missionId).status, "CREATED", "à réattribuer");
+      }]
+    ] },
+    { name: "Maintenance (incident → devis → intervention → facture)", tests: [
+      ["Annuaire des prestataires géré par le super administrateur, choix par type de prestation", function (T, fx) {
+        // Propriétaires et agences ne peuvent plus créer de prestataires.
+        T.fails(fx.tok.ownerA, "ctr.create", { name: "Mon plombier", email: fx.mail("plombier-perso"), specialties: ["PLUMBING"] }, "FORBIDDEN");
+        T.fails(fx.tok.ag1, "ctr.create", { name: "Ménage agence", email: fx.mail("menage-agence"), specialties: ["CLEANING"] }, "FORBIDDEN");
+        // Le super administrateur intègre une entreprise de ménage et un prestataire multi-services : invitations automatiques.
+        const cleanMail = fx.mail("proprete-atlas"), multiMail = fx.mail("multi-services");
+        const c1 = T.call(fx.tok.superA, "ctr.create", { name: "Propreté Atlas " + fx.run, email: cleanMail, specialties: ["CLEANING"], zones: ["Guéliz"] });
+        T.eq(c1.invitations.map(function (x) { return x.role; }), ["CLEANER"], "entreprise de ménage invitée avec le rôle ménage");
+        const c2 = T.call(fx.tok.superA, "ctr.create", { name: "Multi Services " + fx.run, email: multiMail, specialties: ["CLEANING", "PLUMBING"] });
+        T.eq(c2.invitations.map(function (x) { return x.role; }).sort(), ["ARTISAN", "CLEANER"], "prestataire multi-services : deux rôles");
+        T.fails(fx.tok.superA, "ctr.create", { name: "Sans type", email: fx.mail("sans-type"), specialties: [] }, "VALIDATION");
+        // Choix par type de prestation, pour le propriétaire du bien.
+        const names = function (tok, prop, type) { return T.call(tok, "ctr.choices", { propertyId: prop, serviceType: type }).map(function (c) { return c.name; }); };
+        T.ok(names(fx.tok.ownerA, fx.propA, "CLEANING").indexOf("Propreté Atlas " + fx.run) >= 0, "entreprise de ménage proposée pour le ménage");
+        T.ok(names(fx.tok.ownerA, fx.propA, "PLUMBING").indexOf("Propreté Atlas " + fx.run) < 0, "pas proposée pour la plomberie");
+        T.ok(names(fx.tok.ownerA, fx.propA, "PLUMBING").indexOf("Multi Services " + fx.run) >= 0, "multi-services proposé pour la plomberie");
+        // Une agence non attribuée au bien ne peut pas consulter les choix ; un autre propriétaire non plus.
+        T.fails(fx.tok.ag2, "ctr.choices", { propertyId: fx.propA, serviceType: "CLEANING" }, "FORBIDDEN");
+        T.fails(fx.tok.ownerB, "ctr.choices", { propertyId: fx.propA, serviceType: "CLEANING" }, "FORBIDDEN");
+        // Avant activation, l'entreprise de ménage ne peut pas recevoir de mission ; après activation, oui.
+        const pick = function () { return T.call(fx.tok.ownerA, "ctr.choices", { propertyId: fx.propA, serviceType: "CLEANING" }).find(function (c) { return c.email === cleanMail; }); };
+        T.eq(pick().canClean, false, "compte pas encore activé");
+        const m = T.call(fx.tok.ownerA, "clean.create", { propertyId: fx.propA, startAt: new Date(Date.now() + 5 * 3600000).toISOString(), price: 180 });
+        T.fails(fx.tok.ownerA, "clean.assign", { missionId: m.missionId, providerEmail: cleanMail }, "VALIDATION");
+        const token = T.tokenFrom(T.lastMailTo(cleanMail).body, "accept");
+        T.pub("invite.accept", { token: token, password: "Proprete-Atlas1" });
+        T.eq(pick().canClean, true, "compte activé : sélectionnable");
+        T.call(fx.tok.ownerA, "clean.assign", { missionId: m.missionId, providerEmail: cleanMail });
+        const ptok = T.pub("auth.login", { email: cleanMail, password: "Proprete-Atlas1" }).token;
+        T.ok(T.call(ptok, "clean.list", {}).items.some(function (x) { return x.missionId === m.missionId; }), "l'entreprise voit sa mission");
+        T.fails(ptok, "property.get", { propertyId: fx.propA2 }, "FORBIDDEN");
+        T.fails(ptok, "ctr.update", { artisanId: c2.artisanId, name: "Piratage" }, "FORBIDDEN");
+        // Fiche du prestataire : le propriétaire la consulte sans pouvoir la modifier ni voir la facturation.
+        const g = T.call(fx.tok.ownerA, "ctr.get", { artisanId: c1.artisanId });
+        T.ok(g.platform && !g.canEdit && g.billingInfo === undefined, "fiche en lecture seule, sans données de facturation");
+        T.fails(fx.tok.ownerA, "ctr.update", { artisanId: c1.artisanId, name: "Autre nom" }, "FORBIDDEN");
+        T.call(fx.tok.superA, "ctr.update", { artisanId: c1.artisanId, zones: ["Guéliz", "Médina"] });
+      }],
+      ["Chaîne complète et commission de 15 % calculée une seule fois", function (T, fx) {
+        const inc = T.call(fx.tok.ownerA, "inc.create", { propertyId: fx.propA, category: "PLUMBING", severity: "HIGH", description: "Fuite sous l'évier" });
+        const art = T.call(fx.tok.superA, "ctr.create", { name: "Plomberie Atlas", email: fx.users.artisan.email, specialties: ["PLUMBING"] });
+        T.ok(art.hasAccount, "artisan lié à son compte");
+        const q = T.call(fx.tok.ownerA, "quote.request", { incidentId: inc.incidentId, artisanId: art.artisanId, requestNote: "Urgent" });
+        T.call(fx.tok.artisan, "quote.submit", { quoteId: q.quoteId, lines: [{ description: "Remplacement siphon", quantity: 1, unitPrice: 800 }, { description: "Main d'œuvre", quantity: 2, unitPrice: 100 }], vatRate: 20 });
+        T.eq(dbGet_("IncidentsV4", inc.incidentId).status, "AWAITING_OWNER", "en attente du propriétaire");
+        T.call(fx.tok.ownerA, "property.agencySet", { propertyId: fx.propA, agencyOrganizationId: fx.ag1.organizationId, canView: true, canManageReservations: true, canManageOperations: true });
+        T.fails(fx.tok.ag1, "quote.decide", { quoteId: q.quoteId, decision: "APPROVED" }, "FORBIDDEN");
+        T.call(fx.tok.ownerA, "quote.decide", { quoteId: q.quoteId, decision: "APPROVED" });
+        const wo = T.call(fx.tok.ownerA, "wo.create", { incidentId: inc.incidentId, artisanId: art.artisanId, quoteId: q.quoteId });
+        T.fails(fx.tok.ownerB, "wo.get", { workOrderId: wo.workOrderId }, "FORBIDDEN");
+        T.call(fx.tok.artisan, "wo.respond", { workOrderId: wo.workOrderId, decision: "ACCEPTED" });
+        T.call(fx.tok.artisan, "wo.schedule", { workOrderId: wo.workOrderId, scheduledAt: new Date(Date.now() + 3600000).toISOString() });
+        T.call(fx.tok.artisan, "wo.start", { workOrderId: wo.workOrderId });
+        T.call(fx.tok.artisan, "wo.complete", { workOrderId: wo.workOrderId, report: "Siphon remplacé, test d'étanchéité OK" });
+        T.call(fx.tok.ownerA, "wo.verify", { workOrderId: wo.workOrderId });
+        T.eq(dbGet_("IncidentsV4", inc.incidentId).status, "RESOLVED", "incident résolu après contrôle");
+        const inv = T.call(fx.tok.artisan, "inv.submit", { workOrderId: wo.workOrderId, invoiceNumber: "F-2026-001", amountHT: 1000, vatRate: 20 });
+        T.fails(fx.tok.artisan, "inv.approve", { invoiceId: inv.invoiceId }, "FORBIDDEN");
+        const ap = T.call(fx.tok.ownerA, "inv.approve", { invoiceId: inv.invoiceId });
+        T.near(ap.amountTTC, 1200, "TTC"); T.near(ap.commissionAmount, 150, "15 % de 1000 HT"); T.near(ap.commissionVatAmount, 30, "TVA 20 % sur commission"); T.near(ap.netToContractor, 1020, "net artisan");
+        T.fails(fx.tok.ownerA, "inv.approve", { invoiceId: inv.invoiceId }, "VALIDATION");
+        const fin = T.call(fx.tok.ownerA, "fin.summary", { from: addDaysStr_(todayStr_(), -1), to: tDays_(1) });
+        T.near(fin.totals.contractorCommissions, 150, "commission comptée une seule fois");
+        T.eq(dbAll_("Expenses").filter(function (e) { return e.uniqueKey === "invoice:" + inv.invoiceId; }).length, 1, "une seule dépense de maintenance");
+        T.fails(fx.tok.ownerA, "pay.record", { refType: "INVOICE", refId: inv.invoiceId, kind: "INVOICE", amount: 2000 }, "VALIDATION");
+        T.call(fx.tok.ownerA, "pay.record", { refType: "INVOICE", refId: inv.invoiceId, kind: "INVOICE", amount: 1020, reference: "VIR-ART" });
+        T.eq(dbGet_("Invoices", inv.invoiceId).status, "PAID", "facture payée");
+        T.call(fx.tok.ownerA, "inc.update", { incidentId: inc.incidentId, status: "CLOSED" });
+        const closed = dbGet_("IncidentsV4", inc.incidentId);
+        T.eq(closed.status, "CLOSED", "clôture"); T.near(closed.finalCost, 1200, "coût final = facture TTC");
+        // Prestataire de l'annuaire : chaque client ne voit que les chiffres réalisés chez lui.
+        T.near(T.call(fx.tok.ownerA, "ctr.get", { artisanId: art.artisanId }).stats.totalInvoicedTTC, 1200, "le propriétaire A voit sa facture");
+        const seenByB = T.call(fx.tok.ownerB, "ctr.get", { artisanId: art.artisanId });
+        T.eq([seenByB.stats.totalInvoicedTTC, seenByB.stats.interventions, seenByB.workOrders.length], [0, 0, 0], "le propriétaire B ne voit ni l'activité ni les montants de A");
+        T.ok(T.call(fx.tok.ownerB, "ctr.list", { withStats: true }).items.filter(function (c) { return c.artisanId === art.artisanId; }).every(function (c) { return c.stats.totalInvoicedTTC === 0; }), "idem dans la liste");
+      }],
+      ["Taux de commission configurable (prestataire et intervention)", function (T) {
+        T.near(resolveCommissionRate_(undefined, { commissionRate: 10 }, ""), 10, "taux prestataire");
+        T.near(resolveCommissionRate_(12, { commissionRate: 10 }, ""), 12, "taux saisi sur l'intervention");
+        T.near(resolveCommissionRate_(undefined, { commissionRate: "" }, ""), 15, "défaut 15 %");
+        const s = computeInvoiceSplit_(333.33, 20, 15, 20);
+        T.near(s.commissionAmount, 50, "arrondi au centime"); T.near(s.amountTTC, 400, "TTC arrondi");
+      }],
+      ["Intervention sans devis refusée (sauf urgence critique)", function (T, fx) {
+        const inc = T.call(fx.tok.ownerA, "inc.create", { propertyId: fx.propA, category: "ELECTRICITY", severity: "MEDIUM", description: "Prise HS" });
+        const art = dbAll_("Artisans").find(function (a) { return a.email === fx.users.artisan.email; });
+        T.fails(fx.tok.ownerA, "wo.create", { incidentId: inc.incidentId, artisanId: art.artisanId }, "VALIDATION");
+        T.call(fx.tok.ownerA, "inc.update", { incidentId: inc.incidentId, severity: "CRITICAL" });
+        T.ok(T.call(fx.tok.ownerA, "wo.create", { incidentId: inc.incidentId, artisanId: art.artisanId }).workOrderId, "urgence autorisée");
+      }]
+    ] },
+    { name: "Locations longue durée", tests: [
+      ["Bail : échéancier, paiement partiel, retard, quittance, fin", function (T, fx) {
+        const t = T.call(fx.tok.ownerA, "tenant.create", { propertyId: fx.propA2, fullName: "Samira Locataire", email: fx.users.tenant.email });
+        const start = addMonthsStr_(todayStr_().slice(0, 8) + "01", -2);
+        const l = T.call(fx.tok.ownerA, "lease.create", { propertyId: fx.propA2, tenantId: t.tenantId, startDate: start, endDate: addDaysStr_(addMonthsStr_(start, 6), -1), monthlyRent: 5000, charges: 300, deposit: 10000, dueDay: 5 });
+        const act = T.call(fx.tok.ownerA, "lease.activate", { leaseId: l.leaseId });
+        T.eq(act.schedulesCreated, 6, "6 échéances mensuelles");
+        const sched = T.call(fx.tok.ownerA, "lease.get", { leaseId: l.leaseId }).schedules;
+        T.near(sched[0].amountDue, 5300, "loyer + charges");
+        T.eq(sched[0].status, "LATE", "échéance passée non payée = en retard (jamais encaissée automatiquement)");
+        T.call(fx.tok.ownerA, "pay.record", { refType: "RENT_SCHEDULE", refId: sched[0].scheduleId, kind: "RENT", amount: 2000 });
+        let s0 = T.call(fx.tok.ownerA, "lease.get", { leaseId: l.leaseId }).schedules[0];
+        T.near(s0.remaining, 3300, "reste dû"); T.eq(s0.status, "LATE", "toujours en retard (partiel)");
+        T.fails(fx.tok.tenant, "lease.receipt", { scheduleId: s0.scheduleId }, "VALIDATION");
+        T.call(fx.tok.ownerA, "pay.record", { refType: "RENT_SCHEDULE", refId: s0.scheduleId, kind: "RENT", amount: 3300 });
+        T.fails(fx.tok.ownerA, "pay.record", { refType: "RENT_SCHEDULE", refId: s0.scheduleId, kind: "RENT", amount: 1 }, "VALIDATION");
+        T.ok(T.call(fx.tok.tenant, "lease.receipt", { scheduleId: s0.scheduleId }).base64, "quittance pour le locataire");
+        T.eq(T.call(fx.tok.tenant, "lease.mine", {}).length, 1, "espace locataire");
+        T.fails(fx.tok.ownerB, "lease.get", { leaseId: l.leaseId }, "FORBIDDEN");
+        T.call(fx.tok.ownerA, "pay.record", { refType: "LEASE", refId: l.leaseId, kind: "DEPOSIT", amount: 10000 });
+        const end = T.call(fx.tok.ownerA, "lease.end", { leaseId: l.leaseId, endDate: todayStr_(), reason: "Départ anticipé" });
+        T.ok(end.schedulesCancelled >= 1, "échéances futures annulées");
+        T.fails(fx.tok.ownerA, "lease.depositReturn", { leaseId: l.leaseId, amountReturned: 12000 }, "VALIDATION");
+        const dr = T.call(fx.tok.ownerA, "lease.depositReturn", { leaseId: l.leaseId, amountReturned: 9000, deductionReason: "Peinture" });
+        T.near(dr.deductions, 1000, "retenue");
+      }],
+      ["Échéancier : proratisation et indexation (calcul pur)", function (T) {
+        const p = buildRentPeriods_({ leaseId: "L", startDate: "2026-01-01", endDate: "2026-03-15", monthlyRent: 3100, charges: 0, dueDay: 5, indexationRate: 0 }, "2026-12-31");
+        T.eq(p.length, 3, "3 périodes"); T.eq(p[0].dueDate, "2026-01-05", "jour d'échéance"); T.near(p[2].rentAmount, 1500, "mars proratisé 15/31");
+        const q = buildRentPeriods_({ leaseId: "L", startDate: "2026-01-01", endDate: "2027-12-31", monthlyRent: 1000, charges: 0, dueDay: 1, indexationRate: 2, nextIndexationDate: "2027-01-01" }, "2027-12-31");
+        T.near(q[11].rentAmount, 1000, "avant indexation"); T.near(q[12].rentAmount, 1020, "après indexation 2 %");
+      }]
+    ] },
+    { name: "KPI et Pareto", tests: [
+      ["Pareto : classement, parts, cumul, seuil 80 %", function (T) {
+        const r = paretoCompute_([{ key: "B", value: 30 }, { key: "A", value: 50 }, { key: "D", value: 5 }, { key: "C", value: 15 }]);
+        T.eq(r.items.map(function (x) { return x.key; }), ["A", "B", "C", "D"], "tri décroissant");
+        T.eq(r.items.map(function (x) { return x.share; }), [50, 30, 15, 5], "parts");
+        T.eq(r.items.map(function (x) { return x.cumShare; }), [50, 80, 95, 100], "cumul");
+        T.eq(r.items.filter(function (x) { return x.vital; }).map(function (x) { return x.key; }), ["A", "B"], "prioritaires ≈ 80 %");
+        const r2 = paretoCompute_([{ key: "A", value: 70 }, { key: "B", value: 20 }, { key: "C", value: 10 }]);
+        T.eq(r2.vitalCount, 2, "l'élément qui franchit 80 % est inclus");
+      }],
+      ["Pareto : données vides, valeurs nulles, négatives, catégories inconnues, égalités", function (T) {
+        const e = paretoCompute_([]); T.ok(e.empty && e.total === 0 && e.vitalCount === 0, "vide");
+        const z = paretoCompute_([{ key: "A", value: 0 }, { key: "B", value: 0 }]); T.ok(z.empty && !z.items.some(function (x) { return x.vital; }), "tout à zéro");
+        const n = paretoCompute_([{ key: "A", value: 10 }, { key: "B", value: -5 }, { key: "", value: 10 }, { key: "C", value: 0 }]);
+        T.eq(n.total, 20, "négatif exclu"); T.ok(n.warnings.length === 1, "avertissement"); T.ok(n.items.some(function (x) { return x.key === "NON_CLASSE"; }), "inconnu → NON_CLASSE");
+        T.eq(n.items[n.items.length - 1].key, "C", "zéro en fin de classement"); T.ok(!n.items[n.items.length - 1].vital, "zéro jamais prioritaire");
+        const t = paretoCompute_([{ key: "Z", label: "Zeta", value: 5 }, { key: "A", label: "Alpha", value: 5 }]); T.eq(t.items[0].label, "Alpha", "égalité stable");
+      }],
+      ["Pareto serveur, filtre de période et cohérence tableau / export CSV", function (T, fx) {
+        const from = addDaysStr_(todayStr_(), -1), to = tDays_(1);
+        const r = T.call(fx.tok.ownerA, "pareto.run", { type: "INCIDENTS_BY_CATEGORY", from: from, to: to });
+        T.ok(r.result.total >= 3, "incidents de la période comptés");
+        const csv = T.call(fx.tok.ownerA, "pareto.export", { type: "INCIDENTS_BY_CATEGORY", from: from, to: to, format: "csv" }).content;
+        const lines = parseCsv_(csv, 1000);
+        T.eq(lines.length - 1, r.result.items.length, "même nombre de lignes");
+        r.result.items.forEach(function (x, i) { T.eq(String(lines[i + 1][1]), String(x.label), "libellé ligne " + (i + 1)); T.near(lines[i + 1][4], x.cumShare, "cumul ligne " + (i + 1)); });
+        const old = T.call(fx.tok.ownerA, "pareto.run", { type: "INCIDENTS_BY_CATEGORY", from: "2020-01-01", to: "2020-01-31" });
+        T.ok(old.result.empty, "période sans activité");
+        T.eq(T.call(fx.tok.ownerB, "pareto.run", { type: "INCIDENTS_BY_CATEGORY", from: from, to: to }).result.total, 0, "cloisonnement du Pareto");
+      }],
+      ["KPI : revenus proratisés, dépenses, occupation, annulations", function (T, fx) {
+        const org = tOrg_("KPI " + fx.run, "OWNER_ORG"), u = tMakeUser_(fx.mail("kpi"), "OWNER", org.organizationId, fx.pw);
+        const tok = T.pub("auth.login", { email: u.email, password: fx.pw }).token;
+        const from = "2030-03-01", to = "2030-03-31";
+        dbInsert_("Properties", { organizationId: org.organizationId, ownerUserId: u.userId, name: "KPI 1", city: "Marrakech", rentalMode: "SHORT_TERM", status: "ACTIVE", createdAt: "2030-01-01T00:00:00Z", nightlyPrice: 500 });
+        const pid = dbAll_("Properties").find(function (x) { return x.name === "KPI 1"; }).propertyId;
+        T.call(tok, "resv.create", { propertyId: pid, checkIn: "2030-03-30", checkOut: "2030-04-03", guestName: "Chevauche avril", totalPrice: 4000, fees: 0 });
+        T.call(tok, "resv.create", { propertyId: pid, checkIn: "2030-03-10", checkOut: "2030-03-12", guestName: "Mars", totalPrice: 1000, fees: 0 });
+        const c = T.call(tok, "resv.create", { propertyId: pid, checkIn: "2030-03-20", checkOut: "2030-03-21", guestName: "Annulée", totalPrice: 500, fees: 0 });
+        T.call(tok, "resv.cancel", { reservationId: c.reservationId, reason: "NO_PAYMENT" });
+        T.call(tok, "exp.create", { propertyId: pid, category: "UTILITIES", description: "Électricité", amount: 300, expenseDate: "2030-03-15" });
+        T.call(tok, "exp.create", { propertyId: pid, category: "UTILITIES", description: "Hors période", amount: 999, expenseDate: "2030-04-15" });
+        const k = T.call(tok, "fin.summary", { from: from, to: to }).totals;
+        T.near(k.accommodation, 3000, "1000 + 4000 × 2/4 nuits"); T.eq(k.bookedNights, 4, "nuits en mars");
+        T.eq(k.availableNights, 31, "31 nuits disponibles"); T.near(k.occupancyRate, 12.9, "4/31");
+        T.near(k.adr, 750, "prix moyen par nuit"); T.near(k.expenses, 300, "dépenses de la période uniquement");
+        T.eq(k.cancellations, 1, "annulations comptées"); T.near(k.result, 2700, "résultat = prévu − dépenses − commissions");
+        const pa = T.call(tok, "pareto.run", { type: "CANCEL_REASONS", from: from, to: to });
+        T.eq(pa.result.items[0].key, "NO_PAYMENT", "Pareto des annulations");
+      }],
+      ["Tableaux de bord par rôle sur données réelles", function (T, fx) {
+        const d = T.call(fx.tok.ownerA, "dash.get", {});
+        T.ok(d.sections.indexOf("portfolio") >= 0 && d.portfolio.propertyCount === 2, "tableau propriétaire");
+        const ad = T.call(fx.tok.superA, "dash.get", {});
+        T.ok(ad.admin.organizations >= 5 && ad.sections.indexOf("portfolio") < 0, "super admin : agrégats uniquement");
+        T.ok(T.call(fx.tok.cleaner2, "dash.get", {}).cleaning.completedInPeriod >= 0, "tableau ménage");
+        T.ok(T.call(fx.tok.artisan, "dash.get", {}).artisan.completed >= 1, "tableau artisan");
+        T.ok(T.call(fx.tok.ownerA, "dash.get", {}).lease, "tableau longue durée");
+      }],
+      ["Rapports : export respectant les permissions", function (T, fx) {
+        const csvA = T.call(fx.tok.ownerA, "report.export", { type: "RESERVATIONS", from: tDays_(-30), to: tDays_(500), format: "csv" }).content;
+        const csvB = T.call(fx.tok.ownerB, "report.export", { type: "RESERVATIONS", from: tDays_(-30), to: tDays_(500), format: "csv" }).content;
+        T.ok(csvA.indexOf("Ali Benali") >= 0 && csvB.indexOf("Ali Benali") < 0, "aucune fuite inter-propriétaires");
+        T.fails(fx.tok.ownerA, "report.run", { type: "SUBSCRIPTIONS" }, "FORBIDDEN");
+        T.fails(fx.tok.guard, "report.export", { type: "RESERVATIONS", format: "csv" }, "FORBIDDEN");
+      }]
+    ] },
+    { name: "Abonnements", tests: [
+      ["Essai, échéance impayée, suspension en lecture seule, paiement manuel", function (T, fx) {
+        const org = tOrg_("Abonné " + fx.run, "OWNER_ORG"), u = tMakeUser_(fx.mail("abo"), "OWNER", org.organizationId, fx.pw);
+        const tok = T.pub("auth.login", { email: u.email, password: fx.pw }).token;
+        const s = T.call(fx.tok.superA, "sub.assign", { organizationId: org.organizationId, planCode: "ESSENTIEL", trial: true });
+        T.eq(s.status, "TRIAL", "essai");
+        dbUpdate_("Subscriptions", s.subscriptionId, { trialEnd: "2020-01-01", nextDueDate: "2020-01-01", periodEnd: "2020-01-01" });
+        subscriptionJob_(); T.eq(dbGet_("Subscriptions", s.subscriptionId).status, "PAST_DUE", "fin d'essai → paiement attendu");
+        subscriptionJob_(); T.eq(dbGet_("Subscriptions", s.subscriptionId).status, "SUSPENDED", "délai de grâce dépassé → suspendu");
+        T.fails(tok, "property.create", { organizationId: org.organizationId, name: "Bloqué", city: "Rabat" }, "SUBSCRIPTION");
+        T.ok(T.call(tok, "property.list", {}), "lecture toujours possible");
+        T.call(fx.tok.superA, "sub.recordPayment", { subscriptionId: s.subscriptionId, amount: 199, reference: "VIR-ABO-1" });
+        T.eq(dbGet_("Subscriptions", s.subscriptionId).status, "ACTIVE", "réactivé par paiement enregistré");
+        T.ok(T.call(tok, "property.create", { organizationId: org.organizationId, name: "OK", city: "Rabat" }).propertyId, "écriture rétablie");
+        T.fails(tok, "lease.create", { propertyId: "x" }, "FORBIDDEN");
+      }],
+      ["Quota de biens du forfait appliqué", function (T, fx) {
+        const org = tOrg_("Quota " + fx.run, "OWNER_ORG"), u = tMakeUser_(fx.mail("quota"), "OWNER", org.organizationId, fx.pw);
+        const tok = T.pub("auth.login", { email: u.email, password: fx.pw }).token;
+        T.call(fx.tok.superA, "sub.assign", { organizationId: org.organizationId, planCode: "ESSENTIEL", trial: true });
+        for (let i = 0; i < 5; i++) T.call(tok, "property.create", { organizationId: org.organizationId, name: "Bien " + i, city: "Agadir" });
+        T.fails(tok, "property.create", { organizationId: org.organizationId, name: "Bien 6", city: "Agadir" }, "QUOTA");
+        T.fails(tok, "pareto.run", { type: "INCIDENTS_BY_CATEGORY" }, "PLAN");
+      }]
+    ] },
+    { name: "Données, migration et robustesse", tests: [
+      ["Installation à partir de rien : base, dossier privé, schéma, forfaits, premier super administrateur", function (T) {
+        // Propriétés simulées en mémoire : les vraies propriétés du script (base de production) ne sont jamais touchées.
+        const store = {}, fakeProps = { getProperty: function (k) { return store[k] === undefined ? null : store[k]; }, setProperty: function (k, v) { store[k] = String(v); return this; } };
+        const prevSs = DB_SS_, root = driveRoot_();
+        let created = null;
+        try {
+          const a = ensureAdminEmails_(fakeProps, "proprietaire.script@example.test");
+          T.ok(a.defaulted && store[IMMO_CONFIG.ADMIN_EMAILS_PROPERTY] === "proprietaire.script@example.test", "propriétaire du script désigné super administrateur par défaut");
+          T.eq(ensureAdminEmails_(fakeProps, "autre@example.test").defaulted, false, "liste existante conservée");
+          const d = ensureDatabase_(fakeProps, root);
+          created = d.id;
+          T.ok(d.created && store[IMMO_CONFIG.DATABASE_PROPERTY] === d.id, "base créée et enregistrée");
+          const file = DriveApp.getFileById(d.id);
+          T.eq(String(file.getSharingAccess()), String(DriveApp.Access.PRIVATE), "base privée");
+          if (typeof file.getParentId_ === "function") T.eq(file.getParentId_(), root.getId(), "base rangée dans le dossier privé");
+          T.eq(ensureDatabase_(fakeProps, root).created, false, "seconde exécution : même base, aucune recréation");
+          const mig = runMigrations_("tests-installation");
+          const ss = SpreadsheetApp.openById(d.id);
+          T.eq(Object.keys(schema_()).filter(function (n) { return !ss.getSheetByName(n); }), [], "tous les onglets créés");
+          T.ok(ss.getSheetByName("Accueil"), "onglet d'accueil explicatif");
+          T.eq(dbAll_("SubscriptionPlans").map(function (x) { return x.planCode; }).sort(), ["BUSINESS", "ESSENTIEL", "PRO"], "forfaits créés");
+          T.ok(dbAll_("Organizations").some(function (o) { return o.type === "PLATFORM"; }), "organisation plateforme créée");
+          T.ok(!mig.backup, "pas de sauvegarde inutile d'une base vide");
+          const before = TEST_HOOKS_.appUrl; TEST_HOOKS_.appUrl = "https://example.test/exec";
+          try {
+            const admins = createFirstSuperAdminInternal_("proprietaire.script@example.test", fakeProps);
+            T.ok(admins.length === 1 && admins[0].roleCreated && admins[0].activationLinkSent, "super administrateur créé, lien d'activation envoyé");
+          } finally { TEST_HOOKS_.appUrl = before; }
+          const u = dbAll_("Users").find(function (x) { return x.email === "proprietaire.script@example.test"; });
+          T.ok(u && !u.passwordHash, "aucun mot de passe tant que le lien n'est pas utilisé");
+          T.ok(dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(u.userId) && r.role === "SUPER_ADMIN" && r.status === "ACTIVE"; }), "rôle SUPER_ADMIN actif");
+        } finally {
+          dbSetSpreadsheet_(prevSs);
+          if (created) { try { DriveApp.getFileById(created).setTrashed(true); } catch (e) { console.error(e.message); } }
+        }
+      }],
+      ["Migration non destructive d'une base de la phase 4", function (T) {
+        const legacy = SpreadsheetApp.create("ImmoPilot_TEST_LEGACY_" + Utilities.getUuid().slice(0, 6));
+        const prevSs = DB_SS_;
+        try {
+          const sh = legacy.insertSheet("Properties");
+          const hdr = ["propertyId", "organizationId", "ownerUserId", "residenceId", "name", "address", "city", "neighborhood", "building", "floor", "doorNumber", "propertyType", "surfaceM2", "bedrooms", "bathrooms", "equipmentJson", "accessInstructions", "latitude", "longitude", "rentalMode", "status", "createdAt", "createdBy", "updatedAt", "updatedBy"];
+          sh.getRange(1, 1, 1, hdr.length).setValues([hdr]);
+          sh.appendRow(["prop_legacy1", "org_x", "usr_x", "", "Ancien bien", "", "Marrakech", "", "", "", "", "APARTMENT", 80, 2, 1, "[]", "", "", "", "SHORT_TERM", "ACTIVE", "2026-01-01T00:00:00", "admin", "", ""]);
+          sh.appendRow(["", "org_x", "usr_x", "", "Sans identifiant", "", "Fès", "", "", "", "", "APARTMENT", "", "", "", "[]", "", "", "", "SHORT_TERM", "ACTIVE", "", "", "", ""]);
+          const inc = legacy.insertSheet("Incidents");
+          inc.getRange(1, 1, 1, 8).setValues([["incidentId", "organizationId", "propertyId", "category", "description", "status", "createdAt", "createdBy"]]);
+          inc.appendRow(["inc_old1", "org_x", "prop_legacy1", "PLUMBING", "Ancienne fuite", "OPEN", "2026-02-01T00:00:00", "a@b.c"]);
+          const rs = legacy.insertSheet("Reservations");
+          rs.getRange(1, 1, 1, 14).setValues([["reservationId", "organizationId", "propertyId", "agencyOrganizationId", "checkIn", "checkOut", "guestCount", "guestName", "status", "notes", "createdAt", "createdBy", "updatedAt", "updatedBy"]]);
+          rs.getRange(2, 1, 3, 14).setValues([
+            ["res_old1", "org_x", "prop_legacy1", "", "2026-03-01", "2026-03-05", 2, "Ancien A", "CONFIRMED", "", "", "", "", ""],
+            ["res_old2", "org_x", "prop_legacy1", "", "2026-03-04", "2026-03-06", 2, "Ancien B", "CONFIRMED", "", "", "", "", ""],
+            ["res_old3", "org_x", "prop_legacy1", "", "2026-03-06", "2026-03-08", 1, "Ancien C", "CONFIRMED", "", "", "", "", ""]]);
+          dbSetSpreadsheet_(legacy);
+          runMigrations_("tests");
+          const props = dbAll_("Properties");
+          T.eq(props.length, 2, "aucune ligne perdue");
+          T.eq(props[0].name, "Ancien bien", "données conservées"); T.near(props[0].surfaceM2, 80, "valeur numérique conservée");
+          T.ok(props[1].propertyId && props[1].propertyId.indexOf("prop_") === 0, "identifiant manquant attribué");
+          T.ok(dbHeaders_("Properties").indexOf("nightlyPrice") > 20, "nouvelles colonnes ajoutées à droite");
+          T.eq(dbHeaders_("Properties").slice(0, hdr.length), hdr, "anciennes colonnes inchangées");
+          T.ok(dbGet_("IncidentsV4", "inc_old1") && dbGet_("Incidents", "inc_old1"), "incident historique copié, original intact");
+          const r1 = dbGet_("Reservations", "res_old1");
+          T.eq([r1.paymentStatus, r1.guestName, r1.checkIn], ["UNPAID", "Ancien A", "2026-03-01"], "réservation historique complétée, jamais marquée payée");
+          T.eq(integrityReport_().overlaps.map(function (o) { return o.reservationA + ">" + o.reservationB; }), ["res_old1>res_old2"], "chevauchement hérité signalé (départ/arrivée le même jour non signalé)");
+          T.eq(dbAll_("Reservations").length, 3, "réservations conservées sans modification de dates");
+          runMigrations_("tests");
+          T.eq(dbAll_("IncidentsV4").filter(function (i) { return i.incidentId === "inc_old1"; }).length, 1, "migration rejouable sans doublon");
+          T.eq(dbAll_("MigrationHistory").filter(function (m) { return m.status === "DONE" && Number(m.version) === 2; }).length, 1, "version 2 appliquée une seule fois");
+        } finally { dbSetSpreadsheet_(prevSs); try { DriveApp.getFileById(legacy.getId()).setTrashed(true); } catch (e) { console.error(e.message); } }
+      }],
+      ["Détection des doublons d'identifiants", function (T) {
+        const sh = dbSheet_("Residences"), hdr = dbHeaders_("Residences");
+        const row = hdr.map(function (h) { return { residenceId: "res_dup", organizationId: "o", name: "D", city: "C", status: "ACTIVE" }[h] || ""; });
+        sh.appendRow(row); sh.appendRow(row); dbReset_();
+        T.eq(integrityReport_().duplicates.Residences, 1, "doublon signalé (non corrigé automatiquement)");
+      }],
+      ["Sauvegarde et restauration non destructive", function (T) {
+        const b = backupDatabase_("test");
+        T.ok(b.fileId && /^ImmoPilot_backup_/.test(b.name), "copie créée");
+        if (typeof __MOCK__ === "undefined") T.skip("Restauration réelle : test manuel M-09 (restoreFromBackup bascule la base de production).");
+        const before = dbAll_("Organizations").length;
+        dbInsert_("Organizations", { name: "Après sauvegarde", status: "ACTIVE", type: "OWNER_ORG", createdAt: nowIso_() });
+        PropertiesService.getScriptProperties().setProperty(IMMO_CONFIG.DATABASE_PROPERTY, DB_SS_.getId());
+        const r = restoreFromBackup(b.fileId);
+        T.ok(r.activeDatabaseId !== r.previousDatabaseId, "nouvelle base active");
+        T.eq(dbAll_("Organizations").length, before, "état de la sauvegarde restauré");
+        T.ok(SpreadsheetApp.openById(r.previousDatabaseId), "ancienne base conservée");
+      }],
+      ["Erreur d'écriture : réponse propre avec référence, sans fuite technique", function (T, fx) {
+        if (typeof __MOCK__ === "undefined") T.skip("Injection de panne uniquement dans le simulateur.");
+        __MOCK__.failWrites = "Reservations";
+        try {
+          const e = T.fails(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(700), checkOut: tDays_(701), guestName: "Panne" }, "INTERNAL");
+          T.ok(/ERR-/.test(e.message) && e.message.indexOf("Error:") < 0, "référence d'erreur");
+        } finally { __MOCK__.failWrites = null; }
+        T.ok(dbAll_("ActivityLogs").some(function (l) { return l.action === "ERROR"; }), "erreur journalisée");
+        T.ok(!dbAll_("Reservations").some(function (r) { return r.guestName === "Panne"; }), "aucune donnée partielle");
+      }],
+      ["Quota e-mail épuisé : invitation enregistrée, statut EMAIL_FAILED", function (T, fx) {
+        TEST_HOOKS_.mailQuota = 0;
+        try {
+          const r = T.call(fx.tok.ownerA, "invite.create", { email: fx.mail("quotamail"), organizationId: fx.orgA.organizationId, role: "GUARD" });
+          T.eq(r.emailSent, false, "envoi non effectué"); T.eq(dbGet_("Invitations", r.invitationId).status, "EMAIL_FAILED", "statut explicite");
+          T.ok(dbAll_("NotificationLogs").some(function (l) { return l.status === "FAILED" && /Quota/.test(l.error); }), "échec journalisé");
+        } finally { TEST_HOOKS_.mailQuota = null; }
+      }],
+      ["Lien WhatsApp encodé (sans envoi automatique)", function (T) {
+        const u = waLink_("06 12 34 56 78", "Bonjour & bienvenue à Marrakech ?");
+        T.eq(u, "https://wa.me/212612345678?text=" + encodeURIComponent("Bonjour & bienvenue à Marrakech ?"), "lien");
+      }],
+      ["Notifications sans doublon (clé d'événement)", function (T, fx) {
+        const n0 = dbAll_("Notifications").length;
+        notify_({ eventKey: "dup-test", userIds: [fx.users.ownerA.userId], type: "INFO", title: "x", email: false });
+        notify_({ eventKey: "dup-test", userIds: [fx.users.ownerA.userId], type: "INFO", title: "x", email: false });
+        T.eq(dbAll_("Notifications").length, n0 + 1, "une seule notification");
+      }]
+    ] }
+  ];
+}
+
+/* ======================================================================
+ * Triggers.gs
+ * ====================================================================== */
+/**
+ * Déclencheurs installables et tâches planifiées.
+ * - installTriggers() (éditeur, une fois) : jobFrequent toutes les 15 min, jobDaily chaque jour vers 6 h (fuseau du projet).
+ * - Les tâches s'exécutent avec l'identité du propriétaire du script (autorisations accordées lors de la 1re exécution).
+ * - Chaque exécution est journalisée dans ScheduledJobs ; un verrou empêche deux exécutions simultanées ;
+ *   chaque sous-tâche est isolée (l'échec de l'une n'empêche pas les autres : reprise au passage suivant).
+ * - Les fonctions jobFrequent / jobDaily sont aussi techniquement appelables depuis le navigateur (fonctions globales) :
+ *   elles ne renvoient que des compteurs et sont limitées à une exécution toutes les 5 minutes.
+ */
+function installTriggers() {
+  assertEditor_();
+  const existing = ScriptApp.getProjectTriggers();
+  const has = function (fn) { return existing.some(function (t) { return t.getHandlerFunction() === fn; }); };
+  const created = [];
+  if (!has("jobFrequent")) { ScriptApp.newTrigger("jobFrequent").timeBased().everyMinutes(15).create(); created.push("jobFrequent"); }
+  if (!has("jobDaily")) { ScriptApp.newTrigger("jobDaily").timeBased().everyDays(1).atHour(6).inTimezone(tz_()).create(); created.push("jobDaily"); }
+  // L'ancien déclencheur de la phase 4 (p4ExpireCleaningMissions) est remplacé par jobFrequent.
+  existing.filter(function (t) { return t.getHandlerFunction() === "p4ExpireCleaningMissions"; }).forEach(function (t) { ScriptApp.deleteTrigger(t); created.push("(supprimé) p4ExpireCleaningMissions"); });
+  return { ok: true, changes: created, triggers: ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); }) };
+}
+function uninstallTriggers() {
+  assertEditor_();
+  let n = 0;
+  ScriptApp.getProjectTriggers().filter(function (t) { return ["jobFrequent", "jobDaily"].indexOf(t.getHandlerFunction()) >= 0; }).forEach(function (t) { ScriptApp.deleteTrigger(t); n++; });
+  return { ok: true, removed: n };
+}
+
+function runJob_(name, tasks) {
+  ctxReset_(); dbReset_();
+  const cache = CacheService.getScriptCache(), key = "jobrun_" + name;
+  if (cache.get(key)) return { skipped: true, reason: "Exécution récente." };
+  cache.put(key, "1", 290);
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return { skipped: true, reason: "Verrou occupé." };
+  LOCK_DEPTH_++;
+  const started = Date.now(), result = {}, errors = [];
+  let jobRow = null;
+  try {
+    jobRow = dbInsert_("ScheduledJobs", { jobName: name, startedAt: nowIso_(), status: "RUNNING" });
+    Object.keys(tasks).forEach(function (k) {
+      if (Date.now() - started > 4.5 * 60000) { result[k] = "reporté (limite de temps)"; return; }
+      try { dbReset_(); result[k] = tasks[k](); } catch (e) { errors.push(k + " : " + e.message); result[k] = "ERREUR"; console.error(name + "/" + k + " : " + (e.stack || e.message)); }
+    });
+    dbUpdate_("ScheduledJobs", jobRow.jobRunId, { finishedAt: nowIso_(), status: errors.length ? "PARTIAL" : "OK", resultJson: result, error: errors.join(" | ").slice(0, 2000) });
+  } catch (e) {
+    if (jobRow) try { dbUpdate_("ScheduledJobs", jobRow.jobRunId, { finishedAt: nowIso_(), status: "FAILED", error: String(e.message).slice(0, 2000) }); } catch (e2) { console.error(e2.message); }
+    throw e;
+  } finally { LOCK_DEPTH_--; lock.releaseLock(); }
+  return { ok: !errors.length, result: result, errors: errors };
+}
+
+/** Toutes les 15 minutes : expiration des missions de ménage, retards d'arrivée/départ. */
+function jobFrequent() {
+  return jobSummary_(runJob_("jobFrequent", { cleaning: cleaningExpireJob_, checkinAlerts: checkinAlertsJob_ }));
+}
+/** Ne renvoie qu'un résumé (le détail est consigné dans ScheduledJobs) : la fonction est aussi appelable depuis le web. */
+function jobSummary_(r) { return { ok: !!(r && r.ok), skipped: !!(r && r.skipped), errorCount: r && r.errors ? r.errors.length : 0 }; }
+/** Chaque jour : baux, abonnements, devis expirés, alertes incidents, rétention, arrivées imminentes, sauvegarde. */
+function jobDaily() {
+  return jobSummary_(runJob_("jobDaily", { leases: leaseJob_, subscriptions: subscriptionJob_, quotes: quoteExpireJob_, incidents: incidentAlertsJob_, retention: purgeExpiredDocuments_,
+    arrivals: upcomingArrivalsJob_, guestTokens: guestTokenExpireJob_, backup: function () { return backupDatabase_("quotidien").name; } }));
+}
+
+/** Arrivées non enregistrées et départs dépassés (une alerte par réservation). */
+function checkinAlertsJob_() {
+  const now = Date.now(); let n = 0;
+  const cis = indexBy_(dbAll_("CheckIns"), "reservationId"), cos = indexBy_(dbAll_("CheckOuts"), "reservationId");
+  dbAll_("Reservations").filter(function (r) { return r.status === "CONFIRMED" || r.status === "IN_PROGRESS"; }).forEach(function (r) {
+    const prop = dbGet_("Properties", r.propertyId); if (!prop) return;
+    const grace = (Number(getSetting_("checkin.graceMinutes", r.organizationId)) || 120) * 60000;
+    if (r.status === "CONFIRMED" && !cis[String(r.reservationId)] && resvStartMs_(r, prop) + grace < now && r.checkOut >= todayStr_()) {
+      notify_({ eventKey: "arrival-missing:" + r.reservationId, userIds: propertyManagers_(prop, "canManageReservations").concat(guardsOf_(prop, r)), type: "ARRIVAL_LATE", organizationId: r.organizationId,
+        title: "Arrivée non enregistrée : " + prop.name, body: r.guestName + " était attendu(e) le " + r.checkIn + ". Retard ou absence (no-show) à confirmer.", link: "#reservation/" + r.reservationId }); n++;
+    }
+    if (r.status === "IN_PROGRESS" && !cos[String(r.reservationId)] && resvEndMs_(r, prop) + grace < now) {
+      notify_({ eventKey: "departure-missing:" + r.reservationId, userIds: propertyManagers_(prop, "canManageReservations").concat(guardsOf_(prop, r)), type: "DEPARTURE_LATE", organizationId: r.organizationId,
+        title: "Départ non enregistré : " + prop.name, body: r.guestName + " devait partir le " + r.checkOut + ".", link: "#checkin" }); n++;
+    }
+  });
+  return { alerts: n };
+}
+function guardsOf_(prop, r) {
+  return dbAll_("PropertyAssignments").filter(function (a) { return String(a.propertyId) === String(prop.propertyId) && a.role === "GUARD" && a.status === "ACTIVE" && (!a.reservationId || String(a.reservationId) === String(r.reservationId)); }).map(function (a) { return a.userId; });
+}
+/** Arrivées du lendemain : rappel aux gardiens et gestionnaires. */
+function upcomingArrivalsJob_() {
+  const tomorrow = addDaysStr_(todayStr_(), 1); let n = 0;
+  dbAll_("Reservations").filter(function (r) { return r.status === "CONFIRMED" && r.checkIn === tomorrow; }).forEach(function (r) {
+    const prop = dbGet_("Properties", r.propertyId); if (!prop) return;
+    notify_({ eventKey: "arrival-soon:" + r.reservationId, userIds: guardsOf_(prop, r).concat(propertyManagers_(prop, "canManageReservations")), type: "ARRIVAL_SOON", organizationId: r.organizationId,
+      title: "Arrivée demain : " + prop.name, body: r.guestName + " (" + r.guestCount + " pers.) — " + Utilities.formatDate(new Date(resvStartMs_(r, prop)), tz_(), "dd/MM HH:mm"), link: "#checkin", email: false }); n++;
+  });
+  return { reminders: n };
+}
+function guestTokenExpireJob_() {
+  let n = 0;
+  dbAll_("GuestAccessTokens").filter(function (t) { return t.status === "ACTIVE" && parseTs_(t.expiresAt) && parseTs_(t.expiresAt).getTime() < Date.now(); }).forEach(function (t) { dbUpdate_("GuestAccessTokens", t.tokenId, { status: "EXPIRED" }); n++; });
+  return { expired: n };
+}
+
+/* ======================================================================
+ * UserService.gs
+ * ====================================================================== */
+/**
+ * Utilisateurs, invitations, rôles et permissions.
+ * Prévention de l'élévation de privilèges :
+ *  - aucun rôle SUPER_ADMIN ne peut être attribué depuis l'application (uniquement createFirstSuperAdmin, depuis l'éditeur) ;
+ *  - on ne peut inviter que les rôles listés dans INVITABLE_ROLES pour son propre rôle, dans sa propre organisation ;
+ *  - les surcharges de permissions ne peuvent que retirer des capacités ; on ne peut pas modifier ses propres rôles.
+ */
+/** Durée de validité d'une invitation (jours). Fonction et non variable : le fichier ne déclare aucune variable globale. */
+function inviteDays_() { return 7; }
+
+function bestRoleIn_(p, orgId) {
+  const order = ["SUPER_ADMIN", "OWNER", "AGENCY_ADMIN"];
+  if (p.isSuper) return "SUPER_ADMIN";
+  for (let i = 0; i < order.length; i++) if (hasRole_(p, order[i], orgId)) return order[i];
+  return "";
+}
+function assertCanGrantRole_(p, orgId, role) {
+  assertValidRole_(role);
+  assert_(role !== "SUPER_ADMIN", "Le rôle SUPER_ADMIN ne peut pas être attribué depuis l'application.", "FORBIDDEN");
+  if (!p.isSuper) assertOrgCap_(p, orgId, "user.invite");
+  const best = bestRoleIn_(p, orgId);
+  const allowed = INVITABLE_ROLES[best] || [];
+  if (allowed.indexOf(role) < 0) forbid_("Vous ne pouvez pas attribuer le rôle " + role + " dans cette organisation.");
+  const org = dbGet_("Organizations", orgId);
+  assert_(org && org.status === "ACTIVE", "Organisation inactive ou introuvable.");
+  return org;
+}
+function assertValidRole_(role) { assert_(IMMO_CONFIG.ROLES.indexOf(String(role)) >= 0, "Rôle inconnu."); return role; }
+function sanitizeRemovals_(role, list) {
+  if (!Array.isArray(list)) return [];
+  const base = ROLE_CAPS[role] || [];
+  return list.map(function (c) { return String(c).replace(/^-/, ""); }).filter(function (c) { return base.indexOf(c) >= 0; }).map(function (c) { return "-" + c; });
+}
+function appUrl_() {
+  if (TEST_HOOKS_.appUrl) return TEST_HOOKS_.appUrl;
+  const fixed = normalizeAppUrl_(PropertiesService.getScriptProperties().getProperty(IMMO_CONFIG.APP_URL_PROPERTY));
+  if (fixed) return fixed;
+  let u = "";
+  try { u = ScriptApp.getService().getUrl() || ""; } catch (e) { u = ""; }
+  assert_(/^https:\/\//.test(u), "Adresse de l'application inconnue : déployez l'application web et renseignez IMMO_APP_URL avec l'URL complète se terminant par /exec.", "CONFIG");
+  return u;
+}
+/**
+ * Accepte l'URL complète (https://script.google.com/macros/s/…/exec) ou, par erreur fréquente, le seul identifiant
+ * de déploiement (AKfycb…) : l'URL complète est alors reconstruite. Toute autre valeur est ignorée (retour "").
+ */
+function normalizeAppUrl_(raw) {
+  let v = String(raw || "").trim().replace(/^["'<\s]+|["'>\s]+$/g, "");
+  if (!v) return "";
+  if (/^https:\/\/script\.google\.com\/\S+$/.test(v)) return v.replace(/\/dev(\?.*)?$/, "/exec").replace(/\?.*$/, "");
+  if (/^https:\/\/\S+$/.test(v)) return v.replace(/\?.*$/, "");
+  if (/^script\.google\.com\//.test(v)) return normalizeAppUrl_("https://" + v);
+  if (/^[A-Za-z0-9_-]{30,}$/.test(v)) return "https://script.google.com/macros/s/" + v + "/exec";
+  return "";
+}
+
+function inviteCreate_(p, a) {
+  const email = validateEmail_(a.email), orgId = safeText_(a.organizationId, 120), role = String(a.role || "");
+  const org = assertCanGrantRole_(p, orgId, role);
+  assertQuota_(orgId, "users");
+  let propertyId = "";
+  if (a.propertyId) { assert_(["GUARD", "CLEANER", "ARTISAN", "TENANT"].indexOf(role) >= 0, "Seuls les rôles de terrain peuvent être liés à un bien."); propertyId = assertProp_(p, a.propertyId, "property.assign").propertyId; }
+  return invitationInsertAndSend_(p, { email: email, displayName: a.displayName, organizationId: orgId, role: role, removedCaps: a.removedCaps, propertyId: propertyId }, org);
+}
+/**
+ * Enregistre une invitation (jeton à usage unique, haché) et envoie l'e-mail. Les droits de l'invitant doivent avoir été
+ * vérifiés AVANT l'appel (inviteCreate_, ou création d'agence par un propriétaire).
+ */
+function invitationInsertAndSend_(p, a, org) {
+  const email = validateEmail_(a.email), orgId = String(a.organizationId), role = String(a.role), propertyId = a.propertyId || "";
+  const displayName = safeText_(a.displayName || email.split("@")[0], 100);
+  const token = randomToken_();
+  const inv = withLock_(function () {
+    const existing = dbAll_("Invitations").find(function (i) { return normalizeEmail_(i.email) === email && String(i.organizationId) === orgId && i.role === role && i.status === "PENDING" && parseTs_(i.expiresAt) && parseTs_(i.expiresAt).getTime() > Date.now(); });
+    assert_(!existing, "Une invitation est déjà en attente pour cet e-mail, ce rôle et cette organisation. Révoquez-la ou renvoyez-la.");
+    const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });
+    if (user) assert_(!dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(user.userId) && String(r.organizationId) === orgId && r.role === role && r.status === "ACTIVE"; }), "Cette personne possède déjà ce rôle dans l'organisation.");
+    return dbInsert_("Invitations", { email: email, displayName: displayName, organizationId: orgId, role: role, tokenHash: sha256Hex_(token), status: "PENDING",
+      expiresAt: new Date(Date.now() + inviteDays_() * 86400000).toISOString(), createdAt: nowIso_(), createdBy: p.email, acceptedAt: "", revokedAt: "",
+      permissionsJson: sanitizeRemovals_(role, a.removedCaps), propertyId: propertyId });
+  });
+  const sent = sendInvitationEmail_(inv, token, org, p);
+  audit_("INVITATION_SENT", "Invitation", inv.invitationId, orgId, { email: email, role: role, emailSent: sent.ok });
+  return { ok: true, invitationId: inv.invitationId, emailSent: sent.ok, emailError: sent.error || "", status: sent.ok ? "PENDING" : "EMAIL_FAILED" };
+}
+function sendInvitationEmail_(inv, token, org, p) {
+  const url = appUrl_() + "?action=accept&token=" + token;
+  const body = "Bonjour " + inv.displayName + ",\n\n" + p.displayName + " vous invite à rejoindre ImmoPilot.\n\nOrganisation : " + org.name + "\nRôle : " + inv.role +
+    "\n\nAcceptez l'invitation avec ce lien personnel, à usage unique, valable " + inviteDays_() + " jours :\n" + url +
+    "\n\nSi vous n'attendiez pas cette invitation, ignorez ce message.\n\nImmoPilot";
+  const r = sendMailSafe_(inv.email, "Invitation à rejoindre ImmoPilot — " + org.name, body, "invite:" + inv.invitationId + ":" + inv.tokenHash.slice(0, 8));
+  if (!r.ok) dbUpdate_("Invitations", inv.invitationId, { status: "EMAIL_FAILED" });
+  return r;
+}
+function inviteResend_(p, a) {
+  const inv = dbGet_("Invitations", safeText_(a.invitationId, 120));
+  if (!inv) notFound_("Invitation");
+  const org = assertCanGrantRole_(p, inv.organizationId, inv.role);
+  assert_(["PENDING", "EMAIL_FAILED", "EXPIRED"].indexOf(inv.status) >= 0, "Cette invitation ne peut plus être renvoyée.");
+  const token = randomToken_();
+  dbUpdate_("Invitations", inv.invitationId, { tokenHash: sha256Hex_(token), status: "PENDING", expiresAt: new Date(Date.now() + inviteDays_() * 86400000).toISOString() });
+  const fresh = dbGet_("Invitations", inv.invitationId);
+  const r = sendInvitationEmail_(fresh, token, org, p);
+  audit_("INVITATION_RESENT", "Invitation", inv.invitationId, inv.organizationId, { emailSent: r.ok });
+  return { ok: true, emailSent: r.ok, emailError: r.error || "" };
+}
+function inviteRevoke_(p, a) {
+  const inv = dbGet_("Invitations", safeText_(a.invitationId, 120));
+  if (!inv) notFound_("Invitation");
+  if (!p.isSuper) assertOrgCap_(p, inv.organizationId, "user.invite");
+  assert_(["PENDING", "EMAIL_FAILED"].indexOf(inv.status) >= 0, "Cette invitation ne peut plus être révoquée.");
+  dbUpdate_("Invitations", inv.invitationId, { status: "REVOKED", revokedAt: nowIso_(), tokenHash: "" });
+  audit_("INVITATION_REVOKED", "Invitation", inv.invitationId, inv.organizationId, { email: inv.email });
+  return { ok: true };
+}
+function inviteList_(p, a) {
+  a = a || {};
+  const orgs = indexBy_(dbAll_("Organizations"), "organizationId");
+  const rows = dbAll_("Invitations").filter(function (i) {
+    if (a.organizationId && String(i.organizationId) !== String(a.organizationId)) return false;
+    return p.isSuper || hasOrgCap_(p, i.organizationId, "user.invite");
+  }).map(function (i) {
+    const expired = i.status === "PENDING" && parseTs_(i.expiresAt) && parseTs_(i.expiresAt).getTime() < Date.now();
+    return { invitationId: i.invitationId, email: i.email, displayName: i.displayName, organizationId: i.organizationId, organizationName: (orgs[i.organizationId] || {}).name || "",
+      role: i.role, status: expired ? "EXPIRED" : i.status, expiresAt: i.expiresAt, createdAt: i.createdAt, createdBy: i.createdBy, acceptedAt: i.acceptedAt };
+  }).filter(function (i) { return (!a.status || i.status === a.status) && matchesQuery_(a.q, [i.email, i.displayName, i.organizationName]); })
+    .sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); });
+  return pageOf_(rows, a);
+}
+
+/* ------------- Routes publiques d'acceptation (le jeton est la seule preuve) ------------- */
+function inviteFromToken_(token) {
+  token = String(token || "");
+  assert_(/^[a-f0-9]{64}$/.test(token), "Lien d'invitation invalide.", "AUTH");
+  const h = sha256Hex_(token);
+  const inv = dbAll_("Invitations").find(function (i) { return i.tokenHash && safeEq_(i.tokenHash, h); });
+  assert_(inv, "Invitation invalide, déjà utilisée ou révoquée.", "AUTH");
+  assert_(inv.status === "PENDING", "Cette invitation n'est plus active.", "AUTH");
+  assert_(parseTs_(inv.expiresAt) && parseTs_(inv.expiresAt).getTime() > Date.now(), "Cette invitation a expiré. Demandez-en une nouvelle.", "EXPIRED");
+  return inv;
+}
+function inviteInfo_(a) {
+  rateLimit_("invinfo:" + String(a.token || "").slice(0, 16), 20, 600);
+  const inv = inviteFromToken_(a.token), org = dbGet_("Organizations", inv.organizationId);
+  const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === normalizeEmail_(inv.email); });
+  return { email: inv.email, displayName: inv.displayName, organizationName: org ? org.name : "", role: inv.role, expiresAt: inv.expiresAt,
+    existingAccount: !!(user && user.passwordHash) };
+}
+function inviteAccept_(a) {
+  rateLimit_("invaccept:" + String(a.token || "").slice(0, 16), 10, 600);
+  return withLock_(function () {
+    const inv = inviteFromToken_(a.token);
+    const org = dbGet_("Organizations", inv.organizationId);
+    assert_(org && org.status === "ACTIVE", "Organisation inactive.");
+    let user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === normalizeEmail_(inv.email); });
+    if (user && user.passwordHash) {
+      // Compte existant : la personne prouve qu'elle détient le compte avant qu'un nouveau rôle y soit ajouté.
+      if (!verifyPassword_(user, a.currentPassword)) throw new AppError("AUTH", "Mot de passe du compte existant incorrect.");
+      assert_(user.status !== "DISABLED", "Compte désactivé : contactez l'administrateur.");
+    } else {
+      validatePassword_(a.password);
+      const displayName = safeText_(a.displayName || inv.displayName, 100) || inv.email.split("@")[0];
+      if (!user) user = dbInsert_("Users", { email: normalizeEmail_(inv.email), displayName: displayName, status: "ACTIVE", createdAt: nowIso_(), createdBy: "invitation:" + inv.invitationId, locale: org.locale || "fr", notifPrefsJson: { email: true, mutedTypes: [] } });
+      else dbUpdate_("Users", user.userId, { displayName: displayName, status: user.status === "DISABLED" ? "DISABLED" : "ACTIVE" });
+      setUserPassword_(user.userId, a.password);
+    }
+    const already = dbAll_("UserRoles").find(function (r) { return String(r.userId) === String(user.userId) && String(r.organizationId) === String(inv.organizationId) && r.role === inv.role && r.status === "ACTIVE"; });
+    if (!already) dbInsert_("UserRoles", { userId: user.userId, organizationId: inv.organizationId, role: inv.role, status: "ACTIVE", createdAt: nowIso_(), createdBy: "invitation:" + inv.invitationId, permissionsJson: inv.permissionsJson || "[]" });
+    if (inv.propertyId) {
+      const exists = dbAll_("PropertyAssignments").some(function (x) { return String(x.propertyId) === String(inv.propertyId) && String(x.userId) === String(user.userId) && x.role === inv.role && x.status === "ACTIVE"; });
+      if (!exists) dbInsert_("PropertyAssignments", { propertyId: inv.propertyId, reservationId: "", userId: user.userId, email: normalizeEmail_(inv.email), role: inv.role, status: "ACTIVE", createdAt: nowIso_(), createdBy: "invitation:" + inv.invitationId });
+    }
+    if (inv.role === "ARTISAN") dbAll_("Artisans").filter(function (x) { return normalizeEmail_(x.email) === normalizeEmail_(inv.email) && !x.userId; }).forEach(function (x) { dbUpdate_("Artisans", x.artisanId, { userId: user.userId }); });
+    if (inv.role === "TENANT") dbAll_("Tenants").filter(function (x) { return normalizeEmail_(x.email) === normalizeEmail_(inv.email) && !x.userId; }).forEach(function (x) { dbUpdate_("Tenants", x.tenantId, { userId: user.userId }); });
+    dbUpdate_("Invitations", inv.invitationId, { status: "ACCEPTED", acceptedAt: nowIso_(), tokenHash: "" });
+    auditAs_(inv.email, user.userId, "INVITATION_ACCEPTED", "Invitation", inv.invitationId, inv.organizationId, { role: inv.role });
+    return { ok: true, message: "Invitation acceptée. Connectez-vous avec " + inv.email + ".", email: inv.email };
+  });
+}
+
+/* ------------- Gestion des utilisateurs d'une organisation ------------- */
+function userList_(p, a) {
+  a = a || {};
+  const orgId = safeText_(a.organizationId || "", 120);
+  if (orgId && !p.isSuper) assertOrgCap_(p, orgId, "user.manage");
+  const visibleOrgs = p.isSuper ? null : p.roles.filter(function (r) { return r.caps.indexOf("user.manage") >= 0; }).map(function (r) { return r.organizationId; });
+  const users = indexBy_(dbAll_("Users"), "userId"), orgs = indexBy_(dbAll_("Organizations"), "organizationId");
+  const rows = dbAll_("UserRoles").filter(function (r) {
+    if (orgId && String(r.organizationId) !== orgId) return false;
+    return visibleOrgs === null || visibleOrgs.indexOf(String(r.organizationId)) >= 0;
+  }).map(function (r) {
+    const u = users[r.userId] || {};
+    return { userRoleId: r.userRoleId, userId: r.userId, email: u.email || "", displayName: u.displayName || "", userStatus: u.status || "", role: r.role,
+      roleStatus: r.status, organizationId: r.organizationId, organizationName: (orgs[r.organizationId] || {}).name || "", removedCaps: parseJson_(r.permissionsJson, []),
+      lastLoginAt: u.lastLoginAt || "", activated: !!u.passwordHash, createdAt: r.createdAt };
+  }).filter(function (x) { return (!a.role || x.role === a.role) && (!a.status || x.roleStatus === a.status) && matchesQuery_(a.q, [x.email, x.displayName, x.organizationName]); })
+    .sort(function (x, y) { return String(x.organizationName + x.email).localeCompare(String(y.organizationName + y.email)); });
+  return pageOf_(rows, a);
+}
+function roleTarget_(p, userRoleId, cap) {
+  const r = dbGet_("UserRoles", safeText_(userRoleId, 120));
+  if (!r) notFound_("Rôle");
+  assert_(r.role !== "SUPER_ADMIN", "Le rôle SUPER_ADMIN ne se gère pas depuis l'application.", "FORBIDDEN");
+  assert_(String(r.userId) !== p.userId, "Vous ne pouvez pas modifier vos propres droits.", "FORBIDDEN");
+  if (!p.isSuper) {
+    assertOrgCap_(p, r.organizationId, cap);
+    if ((INVITABLE_ROLES[bestRoleIn_(p, r.organizationId)] || []).indexOf(r.role) < 0) forbid_("Vous ne pouvez pas gérer ce rôle.");
+  }
+  return r;
+}
+function roleSetStatus_(p, a) {
+  const r = roleTarget_(p, a.userRoleId, "user.manage");
+  const status = oneOf_(a.status, ["ACTIVE", "SUSPENDED", "REVOKED"], "Statut");
+  dbUpdate_("UserRoles", r.userRoleId, { status: status, revokedAt: status === "ACTIVE" ? "" : nowIso_(), revokedBy: status === "ACTIVE" ? "" : p.email });
+  if (status !== "ACTIVE") dbAll_("PropertyAssignments").filter(function (x) {
+    const prop = dbGet_("Properties", x.propertyId);
+    return String(x.userId) === String(r.userId) && x.role === r.role && x.status === "ACTIVE" && prop && String(prop.organizationId) === String(r.organizationId);
+  }).forEach(function (x) { dbUpdate_("PropertyAssignments", x.assignmentId, { status: "REVOKED", revokedAt: nowIso_(), revokedBy: p.email }); });
+  audit_("ROLE_STATUS_" + status, "UserRole", r.userRoleId, r.organizationId, { userId: r.userId, role: r.role });
+  return { ok: true };
+}
+function roleSetPermissions_(p, a) {
+  const r = roleTarget_(p, a.userRoleId, "user.manage");
+  const removals = sanitizeRemovals_(r.role, a.removedCaps);
+  dbUpdate_("UserRoles", r.userRoleId, { permissionsJson: removals });
+  audit_("ROLE_PERMISSIONS_UPDATED", "UserRole", r.userRoleId, r.organizationId, { removed: removals });
+  return { ok: true, removedCaps: removals };
+}
+function roleCapsCatalog_(p, a) { assertValidRole_(a.role); return { role: a.role, caps: ROLE_CAPS[a.role] || [] }; }
+
+/** Suspension globale d'un compte (super administrateur) : révoque aussi toutes ses sessions. */
+function userSetStatus_(p, a) {
+  requireSuper_(p);
+  const u = dbGet_("Users", safeText_(a.userId, 120));
+  if (!u) notFound_("Utilisateur");
+  assert_(String(u.userId) !== p.userId, "Vous ne pouvez pas suspendre votre propre compte.");
+  const status = oneOf_(a.status, ["ACTIVE", "SUSPENDED", "DISABLED"], "Statut");
+  dbUpdate_("Users", u.userId, { status: status, updatedAt: nowIso_(), failedAttempts: 0, lockedUntil: "" });
+  if (status !== "ACTIVE") revokeAllSessions_(u.userId);
+  audit_("USER_STATUS_" + status, "User", u.userId, "", { email: u.email, reason: safeText_(a.reason, 300) });
+  return { ok: true };
+}
+/** Renvoie un lien d'activation (comptes historiques sans mot de passe, ou compte bloqué). */
+function userSendActivation_(p, a) {
+  const u = dbGet_("Users", safeText_(a.userId, 120));
+  if (!u) notFound_("Utilisateur");
+  if (!p.isSuper) {
+    const ok = dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(u.userId) && r.status === "ACTIVE" && hasOrgCap_(p, r.organizationId, "user.manage"); });
+    if (!ok) forbid_();
+  }
+  assert_(u.status === "ACTIVE", "Le compte doit être actif.");
+  sendPasswordLink_(u, u.passwordHash ? "RESET" : "ACTIVATION");
+  audit_("ACTIVATION_LINK_SENT", "User", u.userId, "", {});
+  return { ok: true };
+}
+
+/* ---------------- Suppression de compte (exigence Google Play / loi 09-08) ---------------- */
+/**
+ * L'utilisateur demande la suppression de son compte depuis l'application (Paramètres › Mon profil).
+ * La demande est journalisée et transmise aux super administrateurs, qui la traitent avec user.erase.
+ */
+function meRequestDeletion_(p, a) {
+  rateLimit_("delete-request:" + p.userId, 3, 86400);
+  if (p.isSuper) {
+    const others = superAdminIds_().filter(function (id) { return String(id) !== p.userId; });
+    assert_(others.length > 0, "Vous êtes le seul super administrateur : désignez-en un autre avant de demander la suppression de votre compte.");
+  }
+  const reason = safeText_(a.reason || "", 1000);
+  audit_("ACCOUNT_DELETION_REQUESTED", "User", p.userId, "", { reason: reason });
+  notify_({ eventKey: "delete-request:" + p.userId + ":" + todayStr_(), userIds: superAdminIds_(), type: "ACCOUNT_DELETION", organizationId: "",
+    title: "Demande de suppression de compte : " + p.email, body: "Motif : " + (reason || "non précisé") + ". À traiter dans Utilisateurs › « Supprimer le compte ».", link: "#users" });
+  return { ok: true, message: "Votre demande a été transmise. Le compte et les données personnelles associées seront supprimés dans un délai de 30 jours ; certaines données comptables peuvent être conservées pour des obligations légales." };
+}
+/**
+ * Super administrateur : suppression (anonymisation) d'un compte. Les données personnelles du compte sont effacées
+ * (nom, e-mail, téléphone, mot de passe, préférences) ; accès, sessions, invitations et liens en cours sont révoqués.
+ * Les enregistrements métier (réservations, paiements, factures, journal) sont conservés pour les obligations légales,
+ * sans données d'identification du compte. Irréversible.
+ */
+function userErase_(p, a) {
+  requireSuper_(p);
+  const u = dbGet_("Users", safeText_(a.userId, 120));
+  if (!u) notFound_("Utilisateur");
+  assert_(String(u.userId) !== p.userId, "Vous ne pouvez pas supprimer votre propre compte.");
+  assert_(String(a.confirm || "") === "SUPPRIMER", "Confirmation attendue : tapez SUPPRIMER.");
+  const oldEmail = normalizeEmail_(u.email);
+  withLock_(function () {
+    dbUpdate_("Users", u.userId, { displayName: "Compte supprimé", email: "supprime-" + String(u.userId).toLowerCase() + "@compte-supprime.invalid", phone: "", passwordHash: "", passwordSalt: "",
+      status: "DISABLED", failedAttempts: 0, lockedUntil: "", notifPrefsJson: {}, updatedAt: nowIso_() });
+    revokeAllSessions_(u.userId);
+    dbAll_("UserRoles").filter(function (r) { return String(r.userId) === String(u.userId) && r.status !== "REVOKED"; })
+      .forEach(function (r) { dbUpdate_("UserRoles", r.userRoleId, { status: "REVOKED", revokedAt: nowIso_(), revokedBy: p.email }); });
+    dbAll_("PasswordResets").filter(function (r) { return String(r.userId) === String(u.userId) && !r.usedAt; })
+      .forEach(function (r) { dbUpdate_("PasswordResets", r.resetId, { usedAt: nowIso_() }); });
+    dbAll_("Invitations").filter(function (i) { return normalizeEmail_(i.email) === oldEmail && (i.status === "PENDING" || i.status === "EMAIL_FAILED"); })
+      .forEach(function (i) { dbUpdate_("Invitations", i.invitationId, { status: "REVOKED", revokedAt: nowIso_(), tokenHash: "" }); });
+    dbAll_("PropertyAssignments").filter(function (x) { return String(x.userId) === String(u.userId) && x.status === "ACTIVE"; })
+      .forEach(function (x) { dbUpdate_("PropertyAssignments", x.assignmentId, { status: "REVOKED", revokedAt: nowIso_(), revokedBy: p.email }); });
+  });
+  // Trace sans donnée personnelle : empreinte de l'ancienne adresse (permet de prouver le traitement d'une demande).
+  audit_("ACCOUNT_ERASED", "User", u.userId, "", { emailSha256: sha256Hex_(oldEmail), reason: safeText_(a.reason || "", 300) });
+  return { ok: true };
+}
+
+/* ======================================================================
+ * Utils.gs
+ * ====================================================================== */
+/** Utilitaires partagés. Toutes les fonctions se terminant par "_" sont privées (non appelables depuis le navigateur). */
+/**
+ * Points d'injection réservés à la suite de tests (Tests.gs). Ce sont des variables d'exécution : elles ne peuvent être
+ * modifiées que par du code serveur dans la même exécution (jamais par le navigateur) et reviennent à null à chaque requête.
+ */
+var TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null };
+class AppError extends Error {
+  constructor(code, message) { super(message); this.name = "AppError"; this.code = code; }
+}
+function assert_(condition, message, code) { if (!condition) throw new AppError(code || "VALIDATION", message || "Validation échouée."); }
+function forbid_(message) { throw new AppError("FORBIDDEN", message || "Accès refusé."); }
+function notFound_(what) { throw new AppError("NOT_FOUND", (what || "Ressource") + " introuvable."); }
+
+function nowIso_() { return new Date().toISOString(); }
+function newId_(prefix) { return prefix + "_" + Utilities.getUuid().replace(/-/g, ""); }
+function normalizeEmail_(email) { return String(email || "").trim().toLowerCase(); }
+function validateEmail_(email) {
+  const v = normalizeEmail_(email);
+  assert_(v.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), "Adresse e-mail invalide.");
+  return v;
+}
+function safeText_(value, maxLength) {
+  const t = String(value == null ? "" : value).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").trim();
+  assert_(t.length <= (maxLength || 250), "Texte trop long (maximum " + (maxLength || 250) + " caractères).");
+  return t;
+}
+function reqText_(value, label, min, max) {
+  const t = safeText_(value, max || 250);
+  assert_(t.length >= (min || 1), label + " obligatoire.");
+  return t;
+}
+function num_(v, def) { if (v === "" || v == null) return def === undefined ? 0 : def; const n = Number(v); return isFinite(n) ? n : (def === undefined ? 0 : def); }
+function round2_(n) { return Math.round((Number(n) + Number.EPSILON) * 100) / 100; }
+function money_(v, label, opts) {
+  opts = opts || {};
+  if ((v === "" || v == null) && opts.optional) return "";
+  const n = Number(v);
+  assert_(isFinite(n), label + " invalide.");
+  assert_(n >= (opts.min === undefined ? 0 : opts.min) && n <= (opts.max || 1e9), label + " hors limites.");
+  return round2_(n);
+}
+function rate_(v, label) { const n = Number(v); assert_(isFinite(n) && n >= 0 && n <= 100, label + " doit être entre 0 et 100."); return round2_(n); }
+function bool_(v) { return v === true || /^true$/i.test(String(v)); }
+function parseJson_(s, fallback) { if (s === "" || s == null) return fallback; if (typeof s === "object") return s; try { return JSON.parse(s); } catch (e) { return fallback; } }
+function jsonSafe_(v) { try { return JSON.stringify(v === undefined ? null : v); } catch (e) { return JSON.stringify({ serializationError: true }); } }
+function oneOf_(v, list, label) { assert_(list.indexOf(v) >= 0, (label || "Valeur") + " invalide."); return v; }
+function escapeHtml_(v) { return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
+
+function bytesToHex_(bytes) { return bytes.map(function (b) { const v = (b + 256) % 256; return (v < 16 ? "0" : "") + v.toString(16); }).join(""); }
+function sha256Hex_(s) { return bytesToHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(s), Utilities.Charset.UTF_8)); }
+function randomToken_() { return (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, ""); }
+function safeEq_(a, b) { a = String(a); b = String(b); if (a.length !== b.length) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; }
+
+/* ---------- Dates : les dates métier sont AAAA-MM-JJ (locales), les instants sont ISO UTC ---------- */
+function tz_() { return IMMO_CONFIG.TIMEZONE; }
+function localToDate_(dateStr, timeStr, tz) { return Utilities.parseDate(dateStr + " " + (timeStr || "00:00"), tz || tz_(), "yyyy-MM-dd HH:mm"); }
+function dateStr_(d, tz) { return Utilities.formatDate(d, tz || tz_(), "yyyy-MM-dd"); }
+function todayStr_(tz) { return dateStr_(new Date(), tz); }
+function parseTs_(s) {
+  if (!s) return null;
+  if (isDateObj_(s)) return new Date(s.getTime());
+  s = String(s);
+  if (/[zZ]$/.test(s) || /T\d{2}:\d{2}(:\d{2}(\.\d+)?)?[+-]\d{2}:?\d{2}$/.test(s)) { const d = new Date(s); return isNaN(d.getTime()) ? null : d; }
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}))?/);
+  return m ? localToDate_(m[1], m[2] || "00:00") : null;
+}
+function isDateStr_(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s))) return false;
+  const d = new Date(s + "T12:00:00Z");
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+function dateOnly_(value, label) { const s = safeText_(value, 40).slice(0, 10); assert_(isDateStr_(s), label + " doit être au format AAAA-MM-JJ."); return s; }
+function addDaysStr_(s, n) { const d = new Date(s + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function addMonthsStr_(s, n) {
+  const y = Number(s.slice(0, 4)), m = Number(s.slice(5, 7)) - 1 + n, day = Number(s.slice(8, 10));
+  const first = new Date(Date.UTC(y, m, 1)), last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), Math.min(day, last))).toISOString().slice(0, 10);
+}
+function diffDays_(a, b) { return Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86400000); }
+/** Nuits d'un séjour [ci, co) comprises dans la période [pFrom, pToExcl). */
+function overlapNights_(ci, co, pFrom, pToExcl) { const s = ci > pFrom ? ci : pFrom, e = co < pToExcl ? co : pToExcl; return e > s ? diffDays_(s, e) : 0; }
+function monthKey_(dateString) { return String(dateString || "").slice(0, 7); }
+function periodFromFilters_(f) {
+  f = f || {};
+  const today = todayStr_();
+  const from = f.from ? dateOnly_(f.from, "Début de période") : today.slice(0, 8) + "01";
+  const to = f.to ? dateOnly_(f.to, "Fin de période") : addDaysStr_(addMonthsStr_(from, 1), -1);
+  assert_(from <= to, "La période est inversée.");
+  assert_(diffDays_(from, to) <= 1100, "Période trop longue (maximum 3 ans).");
+  return { from: from, to: to, toExcl: addDaysStr_(to, 1), days: diffDays_(from, to) + 1 };
+}
+function previousPeriod_(p) { const len = p.days; const to = addDaysStr_(p.from, -1); const from = addDaysStr_(to, -(len - 1)); return { from: from, to: to, toExcl: p.from, days: len }; }
+
+/* ---------- Collections ---------- */
+function groupBy_(arr, keyFn) { const o = {}; arr.forEach(function (x) { const k = keyFn(x); (o[k] = o[k] || []).push(x); }); return o; }
+function sumBy_(arr, fn) { return round2_(arr.reduce(function (a, x) { return a + (Number(fn(x)) || 0); }, 0)); }
+function pct_(a, b) { return b > 0 ? round2_((a / b) * 100) : 0; }
+function indexBy_(arr, key) { const o = {}; arr.forEach(function (x) { o[String(x[key])] = x; }); return o; }
+function pageOf_(arr, input) {
+  const size = Math.min(Math.max(parseInt(input && input.pageSize, 10) || 25, 1), IMMO_CONFIG.MAX_PAGE_SIZE);
+  const page = Math.max(parseInt(input && input.page, 10) || 1, 1);
+  return { items: arr.slice((page - 1) * size, page * size), total: arr.length, page: page, pageSize: size };
+}
+function matchesQuery_(q, values) { q = String(q || "").trim().toLowerCase(); if (!q) return true; return values.some(function (v) { return String(v == null ? "" : v).toLowerCase().indexOf(q) >= 0; }); }
+
+/* ---------- CSV (protection contre l'injection de formules) ---------- */
+function csvCell_(v) {
+  let s = v == null ? "" : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return /[",\n\r;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function toCsv_(headers, rows) { return [headers.map(csvCell_).join(",")].concat(rows.map(function (r) { return r.map(csvCell_).join(","); })).join("\n"); }
+function parseCsv_(text, maxRows) {
+  const rows = []; let row = [], cur = "", inQ = false; text = String(text || "").replace(/^\ufeff/, "");
+  const delim = (text.split("\n")[0].split(";").length > text.split("\n")[0].split(",").length) ? ";" : ",";
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else inQ = false; } else cur += c; }
+    else if (c === '"') inQ = true;
+    else if (c === delim) { row.push(cur); cur = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cur); cur = ""; if (row.some(function (x) { return x !== ""; })) rows.push(row); row = []; if (rows.length > (maxRows || 1001)) break; }
+    else cur += c;
+  }
+  if (cur !== "" || row.length) { row.push(cur); if (row.some(function (x) { return x !== ""; })) rows.push(row); }
+  return rows;
+}
+
+/** Exécute fn sous verrou global (section critique) ; relit les données fraîches. Réentrant au sein d'une même exécution. */
+var LOCK_DEPTH_ = 0;
+function withLock_(fn, waitMs) {
+  if (LOCK_DEPTH_ > 0) return fn();
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(waitMs || 15000)) throw new AppError("BUSY", "Le système est occupé. Réessayez dans quelques secondes.");
+  LOCK_DEPTH_++;
+  try { dbReset_(); return fn(); } finally { LOCK_DEPTH_--; lock.releaseLock(); }
+}
+/** Vrai pour un objet Date, y compris issu d'un autre contexte d'exécution (valeurs renvoyées par Sheets). */
+function isDateObj_(v) { return Object.prototype.toString.call(v) === "[object Date]" && !isNaN(v.getTime()); }
+
+/* ======================================================================
+ * WorkOrderService.gs
+ * ====================================================================== */
+/**
+ * Devis et ordres de travail (interventions).
+ * Devis : REQUESTED (demandé) → PENDING (reçu, à valider) → APPROVED / REJECTED ; DECLINED si l'artisan refuse de chiffrer ; EXPIRED après validité.
+ * Validation : le PROPRIÉTAIRE (capacité quote.decide). Une agence ne peut approuver que sous le plafond quote.agencyApprovalLimit
+ * fixé par le propriétaire (0 par défaut = jamais).
+ * Intervention : ASSIGNED → ACCEPTED → SCHEDULED → IN_PROGRESS → COMPLETED → VERIFIED (contrôle) ; DECLINED / CANCELLED.
+ * Le taux de commission est figé sur l'ordre de travail à sa création (priorité : saisie > fiche prestataire > paramètre organisation, 15 % par défaut).
+ */
+function quoteOut_(q) {
+  return { quoteId: q.quoteId, incidentId: q.incidentId, propertyId: q.propertyId, artisanId: q.artisanId, artisanName: ((dbGet_("Artisans", q.artisanId) || {}).name) || "", status: q.status,
+    currency: q.currency || "MAD", amountHT: q.amountHT, vatRate: q.vatRate, amountTTC: q.amountTTC !== null && q.amountTTC !== "" ? q.amountTTC : q.totalAmount, validUntil: q.validUntil,
+    estimatedDays: q.estimatedDays, lines: parseJson_(q.linesJson, []), requestNote: q.requestNote, requestedAt: q.requestedAt, submittedAt: q.submittedAt, decisionAt: q.decisionAt,
+    decisionBy: q.decisionBy, decisionNote: q.decisionNote, commissionRateEst: q.commissionRateEst, commissionEstimate: q.commissionEstimate };
+}
+function woOut_(w) {
+  return { workOrderId: w.workOrderId, incidentId: w.incidentId, propertyId: w.propertyId, propertyName: ((dbGet_("Properties", w.propertyId) || {}).name) || "", quoteId: w.quoteId, artisanId: w.artisanId,
+    artisanName: ((dbGet_("Artisans", w.artisanId) || {}).name) || "", status: w.status, title: w.title, description: w.description, desiredDate: w.desiredDate, scheduledAt: w.scheduledAt,
+    acceptedAt: w.acceptedAt, startedAt: w.startedAt, completedAt: w.completedAt, verifiedAt: w.verifiedAt, report: w.report, commissionRate: w.commissionRate, createdAt: w.createdAt,
+    invoiceId: w.invoiceId, legacyInvoiceFileId: w.invoiceFileId, declineReason: w.declineReason };
+}
+function resolveCommissionRate_(override, artisan, orgId) {
+  if (override !== undefined && override !== null && override !== "") return rate_(override, "Commission");
+  if (artisan && artisan.commissionRate !== null && artisan.commissionRate !== "") return Number(artisan.commissionRate);
+  const s = Number(getSetting_("commission.contractorRate", orgId));
+  return isFinite(s) ? s : 15;
+}
+function quoteLines_(lines) {
+  assert_(Array.isArray(lines) && lines.length >= 1 && lines.length <= 100, "Le devis doit comporter de 1 à 100 lignes.");
+  let total = 0;
+  const out = lines.map(function (l) {
+    const desc = reqText_(l.description, "Libellé de ligne", 1, 250), qty = Number(l.quantity), unit = Number(l.unitPrice);
+    assert_(isFinite(qty) && qty > 0 && qty <= 100000 && isFinite(unit) && unit >= 0 && unit <= 1e7, "Ligne de devis invalide : " + desc);
+    const amount = round2_(qty * unit); total += amount;
+    return { description: desc, quantity: qty, unitPrice: round2_(unit), amount: amount };
+  });
+  return { lines: out, totalHT: round2_(total) };
+}
+function quoteLoad_(p, id) {
+  const q = dbGet_("Quotes", safeText_(id, 120));
+  if (!q) throw new AppError("FORBIDDEN", "Devis introuvable ou accès refusé.");
+  const prop = dbGet_("Properties", q.propertyId);
+  const mgr = canProp_(p, prop, "workorder.manage"), dec = canProp_(p, prop, "quote.decide"), mine = myArtisanIds_(p).indexOf(String(q.artisanId)) >= 0;
+  if (!mgr && !dec && !mine && !canProp_(p, prop, "incident.view")) throw new AppError("FORBIDDEN", "Devis introuvable ou accès refusé.");
+  return { q: q, prop: prop, mgr: mgr, dec: dec, mine: mine };
+}
+function decisionMakers_(prop, amountTTC) {
+  const owners = dbAll_("UserRoles").filter(function (r) { return r.status === "ACTIVE" && r.role === "OWNER" && String(r.organizationId) === String(prop.organizationId); }).map(function (r) { return r.userId; });
+  const limit = Number(getSetting_("quote.agencyApprovalLimit", prop.organizationId)) || 0;
+  return amountTTC <= limit ? owners.concat(propertyManagers_(prop, "canManageOperations")) : owners;
+}
+
+/* ------------------------------ Devis ------------------------------ */
+function quoteRequest_(p, a) {
+  const i = dbGet_("IncidentsV4", safeText_(a.incidentId, 120));
+  if (!i) notFound_("Incident");
+  const prop = assertProp_(p, i.propertyId, "workorder.manage");
+  const c = dbGet_("Artisans", safeText_(a.artisanId, 120));
+  assert_(contractorUsableFor_(p, c, prop), "Prestataire non autorisé pour ce bien.");
+  assert_(["CLOSED", "CANCELLED", "RESOLVED"].indexOf(i.status) < 0, "Incident clos.");
+  return withLock_(function () {
+    const q = dbInsert_("Quotes", { organizationId: prop.organizationId, propertyId: prop.propertyId, incidentId: i.incidentId, artisanId: c.artisanId, status: "REQUESTED", currency: prop.currency || "MAD",
+      totalAmount: "", validUntil: "", linesJson: "[]", decisionAt: "", decisionBy: "", decisionNote: "", createdAt: nowIso_(), createdBy: p.email, requestNote: safeText_(a.requestNote, 1000), requestedAt: nowIso_(), requestedBy: p.email });
+    if (["OPEN", "QUALIFIED", "ASSIGNED"].indexOf(i.status) >= 0) dbUpdate_("IncidentsV4", i.incidentId, { status: "QUOTE_PENDING", contractorId: c.artisanId, updatedAt: nowIso_(), updatedBy: p.email });
+    audit_("QUOTE_REQUESTED", "Quote", q.quoteId, prop.organizationId, { incidentId: i.incidentId, artisanId: c.artisanId });
+    if (c.userId) notify_({ eventKey: "quote-request:" + q.quoteId, userIds: [c.userId], type: "QUOTE_REQUEST", organizationId: prop.organizationId, title: "Demande de devis : " + prop.name,
+      body: (i.title || i.category) + (q.requestNote ? " — " + q.requestNote : ""), link: "#quotes" });
+    return { ok: true, quoteId: q.quoteId, id: q.quoteId, whatsapp: !c.userId && c.phone ? waLink_(c.phone, "Bonjour " + c.name + ", pouvez-vous nous transmettre un devis pour : " + (i.title || i.category) + " (" + prop.name + ", " + prop.city + ") ?") : "" };
+  });
+}
+/** Transmission du devis chiffré (par l'artisan lui-même, ou saisi par le gestionnaire pour un artisan sans compte). */
+function quoteSubmit_(p, a) {
+  const x = quoteLoad_(p, a.quoteId);
+  assert_(x.mine || x.mgr, "Accès refusé.", "FORBIDDEN");
+  assertOrgWritable_(x.q.organizationId);
+  const L = quoteLines_(a.lines);
+  const vat = a.vatRate === undefined || a.vatRate === "" ? Number(getSetting_("finance.vatRate", x.q.organizationId)) : rate_(a.vatRate, "TVA");
+  const validUntil = a.validUntil ? dateOnly_(a.validUntil, "Validité") : addDaysStr_(todayStr_(), 30);
+  assert_(validUntil >= todayStr_(), "Date de validité dépassée.");
+  return withLock_(function () {
+    const q = dbGet_("Quotes", x.q.quoteId);
+    assert_(q.status === "REQUESTED", "Ce devis n'est plus modifiable (statut " + q.status + ").");
+    const ttc = round2_(L.totalHT * (1 + vat / 100));
+    const art = dbGet_("Artisans", q.artisanId), rate = resolveCommissionRate_(undefined, art, q.organizationId);
+    dbUpdate_("Quotes", q.quoteId, { status: "PENDING", linesJson: L.lines, amountHT: L.totalHT, vatRate: vat, amountTTC: ttc, totalAmount: ttc, validUntil: validUntil,
+      estimatedDays: a.estimatedDays ? Math.max(0, Math.round(Number(a.estimatedDays))) : "", submittedAt: nowIso_(), commissionRateEst: rate, commissionEstimate: round2_(L.totalHT * rate / 100) });
+    const inc = dbGet_("IncidentsV4", q.incidentId);
+    if (inc && ["QUOTE_PENDING", "OPEN", "QUALIFIED", "ASSIGNED"].indexOf(inc.status) >= 0) dbUpdate_("IncidentsV4", inc.incidentId, { status: "AWAITING_OWNER", estimatedCost: ttc, updatedAt: nowIso_(), updatedBy: p.email });
+    audit_("QUOTE_SUBMITTED", "Quote", q.quoteId, q.organizationId, { amountHT: L.totalHT, amountTTC: ttc, byArtisan: x.mine });
+    notify_({ eventKey: "quote-pending:" + q.quoteId, userIds: decisionMakers_(x.prop, ttc), type: "QUOTE_TO_VALIDATE", organizationId: q.organizationId,
+      title: "Devis à valider : " + x.prop.name, body: ttc + " " + (q.currency || "MAD") + " TTC — " + ((art || {}).name || ""), link: "#incident/" + q.incidentId });
+    return { ok: true, amountHT: L.totalHT, amountTTC: ttc };
+  });
+}
+/** Création directe d'un devis reçu (compatibilité avec l'ancien p4CreateQuote). */
+function quoteCreate_(p, a) {
+  const r = quoteRequest_(p, a);
+  quoteSubmit_(p, { quoteId: r.quoteId, lines: a.lines, vatRate: a.vatRate, validUntil: a.validUntil, estimatedDays: a.estimatedDays });
+  return { ok: true, quoteId: r.quoteId, id: r.quoteId };
+}
+function quoteDeclineRequest_(p, a) {
+  const x = quoteLoad_(p, a.quoteId);
+  assert_(x.mine, "Accès refusé.", "FORBIDDEN");
+  assert_(x.q.status === "REQUESTED", "Demande déjà traitée.");
+  dbUpdate_("Quotes", x.q.quoteId, { status: "DECLINED", decisionNote: safeText_(a.reason, 500), decisionAt: nowIso_(), decisionBy: p.email });
+  audit_("QUOTE_DECLINED_BY_ARTISAN", "Quote", x.q.quoteId, x.q.organizationId, {});
+  notify_({ eventKey: "quote-declined:" + x.q.quoteId, userIds: propertyManagers_(x.prop, "canManageOperations"), type: "QUOTE_DECLINED", organizationId: x.q.organizationId,
+    title: "Demande de devis refusée par l'artisan", body: x.prop.name + (a.reason ? " — " + a.reason : ""), link: "#incident/" + x.q.incidentId });
+  return { ok: true };
+}
+function quoteDecide_(p, a) {
+  const x = quoteLoad_(p, a.quoteId);
+  assert_(x.dec, "Validation de devis non autorisée.", "FORBIDDEN");
+  assertOrgWritable_(x.q.organizationId);
+  const decision = oneOf_(a.decision, ["APPROVED", "REJECTED"], "Décision");
+  const acc = propertyAccess_(p, x.prop);
+  if (!acc.via.OWNER) {
+    const limit = Number(getSetting_("quote.agencyApprovalLimit", x.prop.organizationId)) || 0;
+    assert_(num_(x.q.amountTTC || x.q.totalAmount) <= limit, "Montant supérieur au plafond de validation délégué à l'agence (" + limit + " MAD) : validation du propriétaire requise.", "FORBIDDEN");
+  }
+  const note = safeText_(a.note, 1000);
+  return withLock_(function () {
+    const q = dbGet_("Quotes", x.q.quoteId);
+    assert_(q.status === "PENDING", "Devis déjà traité ou non reçu (statut " + q.status + ").");
+    if (decision === "APPROVED") assert_(!q.validUntil || q.validUntil >= todayStr_(), "Devis expiré.");
+    dbUpdate_("Quotes", q.quoteId, { status: decision, decisionAt: nowIso_(), decisionBy: p.email, decisionNote: note });
+    dbInsert_("QuoteDecisions", { organizationId: q.organizationId, quoteId: q.quoteId, decision: decision, note: note, decidedAt: nowIso_(), decidedBy: p.email });
+    const inc = dbGet_("IncidentsV4", q.incidentId);
+    if (decision === "APPROVED") {
+      dbAll_("Quotes").filter(function (o) { return String(o.incidentId) === String(q.incidentId) && o.quoteId !== q.quoteId && ["PENDING", "REQUESTED"].indexOf(o.status) >= 0; })
+        .forEach(function (o) { dbUpdate_("Quotes", o.quoteId, { status: "REJECTED", decisionAt: nowIso_(), decisionBy: p.email, decisionNote: "Autre devis retenu" }); });
+      if (inc && ["AWAITING_OWNER", "QUOTE_PENDING"].indexOf(inc.status) >= 0) dbUpdate_("IncidentsV4", inc.incidentId, { status: "APPROVED", contractorId: q.artisanId, estimatedCost: q.amountTTC, updatedAt: nowIso_(), updatedBy: p.email });
+    } else if (inc && inc.status === "AWAITING_OWNER" && !dbAll_("Quotes").some(function (o) { return String(o.incidentId) === String(q.incidentId) && o.status === "PENDING" && o.quoteId !== q.quoteId; }))
+      dbUpdate_("IncidentsV4", inc.incidentId, { status: "QUOTE_PENDING", updatedAt: nowIso_(), updatedBy: p.email });
+    audit_("QUOTE_" + decision, "Quote", q.quoteId, q.organizationId, { amountTTC: q.amountTTC });
+    const art = dbGet_("Artisans", q.artisanId);
+    notify_({ eventKey: "quote-decision:" + q.quoteId, userIds: (art && art.userId ? [art.userId] : []).concat(propertyManagers_(x.prop, "canManageOperations").filter(function (u) { return u !== p.userId; })),
+      type: "QUOTE_DECISION", organizationId: q.organizationId, title: "Devis " + (decision === "APPROVED" ? "accepté" : "refusé") + " : " + x.prop.name, body: note, link: "#incident/" + q.incidentId });
+    return { ok: true, status: decision };
+  });
+}
+function quoteList_(p, a) {
+  a = a || {};
+  const artIds = myArtisanIds_(p), props = indexBy_(dbAll_("Properties"), "propertyId");
+  const rows = dbAll_("Quotes").filter(function (q) {
+    const prop = props[String(q.propertyId)];
+    if (!(artIds.indexOf(String(q.artisanId)) >= 0 || canProp_(p, prop, "workorder.manage") || canProp_(p, prop, "quote.decide"))) return false;
+    if (a.status && String(a.status).split(",").indexOf(q.status) < 0) return false;
+    if (a.propertyId && String(q.propertyId) !== String(a.propertyId)) return false;
+    if (a.incidentId && String(q.incidentId) !== String(a.incidentId)) return false;
+    return true;
+  }).sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); });
+  const page = pageOf_(rows, a);
+  page.items = page.items.map(function (q) { const o = quoteOut_(q); o.propertyName = (props[String(q.propertyId)] || {}).name; o.isMine = artIds.indexOf(String(q.artisanId)) >= 0; o.canDecide = canProp_(p, props[String(q.propertyId)], "quote.decide"); return o; });
+  return page;
+}
+function quoteExpireJob_() {
+  const today = todayStr_(); let n = 0;
+  dbAll_("Quotes").filter(function (q) { return q.status === "PENDING" && q.validUntil && q.validUntil < today; }).forEach(function (q) { dbUpdate_("Quotes", q.quoteId, { status: "EXPIRED" }); n++; });
+  return { expired: n };
+}
+
+/* ------------------------------ Ordres de travail ------------------------------ */
+function woLoad_(p, id, mode) {
+  const w = dbGet_("WorkOrders", safeText_(id, 120));
+  if (!w) throw new AppError("FORBIDDEN", "Intervention introuvable ou accès refusé.");
+  const prop = dbGet_("Properties", w.propertyId);
+  const mgr = canProp_(p, prop, "workorder.manage"), mine = myArtisanIds_(p).indexOf(String(w.artisanId)) >= 0;
+  const ok = mode === "manager" ? mgr : mode === "artisan" ? (mine || mgr) : (mgr || mine || canProp_(p, prop, "incident.view"));
+  if (!ok) throw new AppError("FORBIDDEN", "Intervention introuvable ou accès refusé.");
+  if (mode !== "read") assertOrgWritable_(w.organizationId);
+  return { w: w, prop: prop, mgr: mgr, mine: mine };
+}
+function woCreate_(p, a) {
+  const i = dbGet_("IncidentsV4", safeText_(a.incidentId, 120));
+  if (!i) notFound_("Incident");
+  const prop = assertProp_(p, i.propertyId, "workorder.manage");
+  const c = dbGet_("Artisans", safeText_(a.artisanId, 120));
+  assert_(contractorUsableFor_(p, c, prop), "Prestataire non autorisé pour ce bien.");
+  let q = null;
+  if (a.quoteId) { q = dbGet_("Quotes", safeText_(a.quoteId, 120)); assert_(q && q.status === "APPROVED" && String(q.incidentId) === String(i.incidentId) && String(q.artisanId) === String(c.artisanId), "Un devis APPROUVÉ de ce prestataire pour cet incident est requis."); }
+  else if (getSetting_("workorder.requireQuote", prop.organizationId) !== false) assert_(i.severity === "CRITICAL", "Un devis approuvé est requis (sauf incident CRITIQUE — intervention d'urgence).");
+  const rate = resolveCommissionRate_(a.commissionRate, c, prop.organizationId);
+  return withLock_(function () {
+    assert_(!dbAll_("WorkOrders").some(function (w) { return q && String(w.quoteId) === String(q.quoteId) && w.status !== "CANCELLED" && w.status !== "DECLINED"; }), "Une intervention existe déjà pour ce devis.");
+    const w = dbInsert_("WorkOrders", { organizationId: prop.organizationId, propertyId: prop.propertyId, incidentId: i.incidentId, quoteId: q ? q.quoteId : "", artisanId: c.artisanId, status: "ASSIGNED",
+      scheduledAt: "", description: safeText_(a.description || i.description, 2000), report: "", invoiceFileId: "", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email,
+      title: safeText_(a.title || i.title || i.category, 120), desiredDate: a.desiredDate ? dateOnly_(a.desiredDate, "Date souhaitée") : "", commissionRate: rate });
+    if (["OPEN", "QUALIFIED"].indexOf(i.status) >= 0) dbUpdate_("IncidentsV4", i.incidentId, { status: "ASSIGNED", contractorId: c.artisanId, updatedAt: nowIso_(), updatedBy: p.email });
+    else dbUpdate_("IncidentsV4", i.incidentId, { contractorId: c.artisanId, updatedAt: nowIso_(), updatedBy: p.email });
+    audit_("WORK_ORDER_CREATED", "WorkOrder", w.workOrderId, prop.organizationId, { incidentId: i.incidentId, artisanId: c.artisanId, quoteId: w.quoteId, commissionRate: rate });
+    if (c.userId) notify_({ eventKey: "wo-assigned:" + w.workOrderId, userIds: [c.userId], type: "WORK_ORDER", organizationId: prop.organizationId, title: "Nouvelle intervention : " + prop.name,
+      body: w.title + (w.desiredDate ? " — souhaitée le " + w.desiredDate : ""), link: "#workorders" });
+    return { ok: true, workOrderId: w.workOrderId, id: w.workOrderId };
+  });
+}
+function woRespond_(p, a) {
+  const x = woLoad_(p, a.workOrderId, "artisan");
+  assert_(x.mine, "Seul l'artisan affecté peut répondre.", "FORBIDDEN");
+  assert_(x.w.status === "ASSIGNED", "Intervention déjà traitée.");
+  const decision = oneOf_(a.decision, ["ACCEPTED", "DECLINED"], "Décision");
+  dbUpdate_("WorkOrders", x.w.workOrderId, { status: decision, acceptedAt: decision === "ACCEPTED" ? nowIso_() : "", declineReason: decision === "DECLINED" ? safeText_(a.reason, 500) : "", updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("WORK_ORDER_" + decision, "WorkOrder", x.w.workOrderId, x.w.organizationId, {});
+  if (decision === "DECLINED") notify_({ eventKey: "wo-declined:" + x.w.workOrderId, userIds: propertyManagers_(x.prop, "canManageOperations"), type: "WORK_ORDER_DECLINED", organizationId: x.w.organizationId,
+    title: "Intervention refusée : " + x.prop.name, body: a.reason || "", link: "#incident/" + x.w.incidentId });
+  return { ok: true, status: decision };
+}
+function woSchedule_(p, a) {
+  const x = woLoad_(p, a.workOrderId, "artisan");
+  assert_(["ASSIGNED", "ACCEPTED", "SCHEDULED"].indexOf(x.w.status) >= 0, "Intervention non planifiable.");
+  assert_(x.w.status !== "ASSIGNED" || x.mgr, "Acceptez d'abord l'intervention.");
+  const at = parseTs_(a.scheduledAt); assert_(at && at.getTime() > Date.now() - 86400000, "Date d'intervention invalide.");
+  dbUpdate_("WorkOrders", x.w.workOrderId, { status: "SCHEDULED", scheduledAt: at.toISOString(), updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("WORK_ORDER_SCHEDULED", "WorkOrder", x.w.workOrderId, x.w.organizationId, { scheduledAt: at.toISOString() });
+  const art = dbGet_("Artisans", x.w.artisanId);
+  notify_({ eventKey: "wo-scheduled:" + x.w.workOrderId + ":" + at.toISOString(), userIds: propertyManagers_(x.prop, "canManageOperations").concat(art && art.userId ? [art.userId] : []).filter(function (u) { return u !== p.userId; }),
+    type: "WORK_ORDER_SCHEDULED", organizationId: x.w.organizationId, title: "Intervention planifiée : " + x.prop.name, body: Utilities.formatDate(at, tz_(), "dd/MM/yyyy HH:mm") + " — " + (x.w.title || ""), link: "#workorders" });
+  return { ok: true };
+}
+function woStart_(p, a) {
+  const x = woLoad_(p, a.workOrderId, "artisan");
+  assert_(["ACCEPTED", "SCHEDULED"].indexOf(x.w.status) >= 0, "L'intervention doit être acceptée ou planifiée.");
+  dbUpdate_("WorkOrders", x.w.workOrderId, { status: "IN_PROGRESS", startedAt: nowIso_(), updatedAt: nowIso_(), updatedBy: p.email });
+  const inc = dbGet_("IncidentsV4", x.w.incidentId);
+  if (inc && ["APPROVED", "ASSIGNED", "QUALIFIED", "OPEN"].indexOf(inc.status) >= 0) dbUpdate_("IncidentsV4", inc.incidentId, { status: "IN_PROGRESS", updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("WORK_ORDER_STARTED", "WorkOrder", x.w.workOrderId, x.w.organizationId, {});
+  return { ok: true };
+}
+function woComplete_(p, a) {
+  const x = woLoad_(p, a.workOrderId, "artisan");
+  assert_(["IN_PROGRESS", "SCHEDULED", "ACCEPTED"].indexOf(x.w.status) >= 0, "Intervention non terminable (statut " + x.w.status + ").");
+  const report = reqText_(a.report, "Rapport d'intervention", 5, 3000);
+  const photos = assertDocsOf_(a.photoDocIds || [], "WORKORDER", x.w.workOrderId);
+  dbUpdate_("WorkOrders", x.w.workOrderId, { status: "COMPLETED", report: report, completedAt: nowIso_(), startedAt: x.w.startedAt || nowIso_(), photoDocIdsJson: photos, updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("WORK_ORDER_COMPLETED", "WorkOrder", x.w.workOrderId, x.w.organizationId, { photos: photos.length });
+  notify_({ eventKey: "wo-completed:" + x.w.workOrderId, userIds: propertyManagers_(x.prop, "canManageOperations"), type: "WORK_ORDER_COMPLETED", organizationId: x.w.organizationId,
+    title: "Intervention terminée, à contrôler : " + x.prop.name, body: report.slice(0, 200), link: "#incident/" + x.w.incidentId });
+  return { ok: true };
+}
+/** Contrôle par le gestionnaire : VERIFIED (incident résolu) ou reprise. */
+function woVerify_(p, a) {
+  const x = woLoad_(p, a.workOrderId, "manager");
+  assert_(x.w.status === "COMPLETED", "Seule une intervention terminée peut être contrôlée.");
+  if (a.decision === "REWORK") {
+    dbUpdate_("WorkOrders", x.w.workOrderId, { status: "IN_PROGRESS", report: safeText_((x.w.report || "") + "\n[Reprise demandée] " + reqText_(a.note, "Motif", 3, 500), 3000), updatedAt: nowIso_(), updatedBy: p.email });
+    audit_("WORK_ORDER_REWORK", "WorkOrder", x.w.workOrderId, x.w.organizationId, {});
+    return { ok: true, status: "IN_PROGRESS" };
+  }
+  dbUpdate_("WorkOrders", x.w.workOrderId, { status: "VERIFIED", verifiedAt: nowIso_(), verifiedBy: p.email, updatedAt: nowIso_(), updatedBy: p.email });
+  const inc = dbGet_("IncidentsV4", x.w.incidentId);
+  const others = dbAll_("WorkOrders").filter(function (w) { return String(w.incidentId) === String(x.w.incidentId) && w.workOrderId !== x.w.workOrderId && ["CANCELLED", "DECLINED", "VERIFIED"].indexOf(w.status) < 0; });
+  if (inc && !others.length && ["RESOLVED", "CLOSED", "CANCELLED"].indexOf(inc.status) < 0) dbUpdate_("IncidentsV4", inc.incidentId, { status: "RESOLVED", resolvedAt: nowIso_(), updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("WORK_ORDER_VERIFIED", "WorkOrder", x.w.workOrderId, x.w.organizationId, {});
+  return { ok: true, status: "VERIFIED" };
+}
+function woCancel_(p, a) {
+  const x = woLoad_(p, a.workOrderId, "manager");
+  assert_(["ASSIGNED", "ACCEPTED", "SCHEDULED", "DECLINED"].indexOf(x.w.status) >= 0, "Intervention non annulable.");
+  dbUpdate_("WorkOrders", x.w.workOrderId, { status: "CANCELLED", declineReason: safeText_(a.reason, 500), updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("WORK_ORDER_CANCELLED", "WorkOrder", x.w.workOrderId, x.w.organizationId, {});
+  return { ok: true };
+}
+function woList_(p, a) {
+  a = a || {};
+  const artIds = myArtisanIds_(p), props = indexBy_(dbAll_("Properties"), "propertyId");
+  const rows = dbAll_("WorkOrders").filter(function (w) {
+    if (!(artIds.indexOf(String(w.artisanId)) >= 0 || canProp_(p, props[String(w.propertyId)], "workorder.manage"))) return false;
+    if (a.status && String(a.status).split(",").indexOf(w.status) < 0) return false;
+    if (a.propertyId && String(w.propertyId) !== String(a.propertyId)) return false;
+    if (a.artisanId && String(w.artisanId) !== String(a.artisanId)) return false;
+    return matchesQuery_(a.q, [w.title, w.description, (props[String(w.propertyId)] || {}).name]);
+  }).sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); });
+  const page = pageOf_(rows, a);
+  page.items = page.items.map(function (w) { const o = woOut_(w); o.isMine = artIds.indexOf(String(w.artisanId)) >= 0; o.canManage = canProp_(p, props[String(w.propertyId)], "workorder.manage"); return o; });
+  return page;
+}
+function woGet_(p, a) {
+  const x = woLoad_(p, a.workOrderId, "read");
+  const o = woOut_(x.w);
+  o.isMine = x.mine; o.canManage = x.mgr; o.address = x.prop.address; o.city = x.prop.city;
+  if (x.mine || x.mgr) o.accessInstructions = x.prop.accessInstructions;
+  o.quote = x.w.quoteId ? quoteOut_(dbGet_("Quotes", x.w.quoteId)) : null;
+  o.documents = docList_(p, { ownerType: "WORKORDER", ownerId: x.w.workOrderId });
+  o.history = auditHistory_("WorkOrder", x.w.workOrderId, 30);
+  return o;
+}
+/** Bon d'intervention PDF. */
+/* ------------------------- Documents PDF : devis, facture (au nom du prestataire) et bon d'intervention ------------------------- */
+/** Identité du prestataire pour l'en-tête de ses devis et factures. */
+function providerIssuer_(art) {
+  art = art || {};
+  return { name: art.legalName || art.name || "Prestataire", lines: [art.legalName && art.name && art.legalName !== art.name ? art.name : "", art.taxId || "", [art.phone, art.email].filter(String).join(" — ")] };
+}
+/** Organisation cliente : l'agence qui gère le bien si c'est elle qui a fait la demande, sinon le propriétaire. */
+function requesterOrg_(prop, email) { return dbGet_("Organizations", commissionBeneficiary_({ createdBy: email || "" }, prop)) || dbGet_("Organizations", prop.organizationId) || {}; }
+function fmtAmount_(v, cur) { return (Math.round(num_(v) * 100) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + (cur || "MAD"); }
+function docLinesHtml_(lines, cur) {
+  return htmlTable_(["Désignation", "Qté", "PU HT", "Montant HT"], lines.map(function (l) { return [l.description, String(l.quantity), fmtAmount_(l.unitPrice, cur), fmtAmount_(l.amount, cur)]; }));
+}
+function docTotalsHtml_(ht, vatRate, vat, ttc, cur, extra) {
+  const rows = [["Total HT", fmtAmount_(ht, cur)], ["TVA " + num_(vatRate) + " %", fmtAmount_(vat, cur)], ["<b>Total TTC</b>", "<b>" + escapeHtml_(fmtAmount_(ttc, cur)) + "</b>"]].concat(extra || []);
+  return "<table style='width:45%;margin:8px 0 0 auto'>" + rows.map(function (r) { return "<tr><td>" + (r[0].charAt(0) === "<" ? r[0] : escapeHtml_(r[0])) + "</td><td class='right'>" + (r[1].charAt(0) === "<" ? r[1] : escapeHtml_(r[1])) + "</td></tr>"; }).join("") + "</table>";
+}
+
+/** Devis du prestataire (sans la marque ImmoPilot). */
+function quotePdf_(p, a) {
+  const x = quoteLoad_(p, a.quoteId), q = x.q, prop = x.prop, art = dbGet_("Artisans", q.artisanId) || {};
+  assert_(["PENDING", "APPROVED", "REJECTED", "EXPIRED"].indexOf(q.status) >= 0, "Le devis n'a pas encore été établi par le prestataire.");
+  const inc = dbGet_("IncidentsV4", q.incidentId) || {}, client = requesterOrg_(prop, q.requestedBy || q.createdBy), cur = q.currency || "MAD";
+  const num = "DEV-" + String(q.quoteId).slice(-6).toUpperCase(), lines = parseJson_(q.linesJson, []);
+  const ht = num_(q.amountHT) || sumBy_(lines, function (l) { return l.amount; }), vatRate = q.vatRate === "" || q.vatRate == null ? 20 : num_(q.vatRate);
+  const ttc = num_(q.amountTTC) || num_(q.totalAmount) || round2_(ht * (1 + vatRate / 100)), vat = round2_(ttc - ht);
+  let html = "<table><tr><td style='width:50%'><b>Devis n° " + escapeHtml_(num) + "</b><br>Date : " + escapeHtml_(pdfDate_(q.submittedAt || q.createdAt)) + "<br>Valable jusqu'au : " + escapeHtml_(pdfDate_(q.validUntil)) +
+    "</td><td><b>Client</b><br>" + escapeHtml_(client.name || "") + "<br>" + escapeHtml_(client.billingEmail || "") + "<br><span class='muted'>Lieu d'intervention : " + escapeHtml_(prop.name + ", " + [prop.address, prop.city].filter(String).join(", ")) + "</span></td></tr></table>";
+  html += "<h2>Objet</h2><p>" + escapeHtml_(inc.title || inc.description || "Intervention") + (q.requestNote ? "<br><span class='muted'>Demande : " + escapeHtml_(q.requestNote) + "</span>" : "") + "</p>";
+  html += "<h2>Détail</h2>" + (lines.length ? docLinesHtml_(lines, cur) : "<p class='muted'>Montant forfaitaire.</p>") + docTotalsHtml_(ht, vatRate, vat, ttc, cur);
+  html += "<h2>Conditions</h2><div class='box'>Délai d'exécution estimé : " + escapeHtml_(q.estimatedDays ? q.estimatedDays + " jour(s)" : "à convenir") + " après acceptation.<br>" +
+    "Travaux réalisés après acceptation du devis ; paiement à réception de la facture.<br>" + escapeHtml_(art.billingInfo || "") + "</div>";
+  if (q.status === "APPROVED") html += "<p><b>Devis accepté le " + escapeHtml_(pdfDate_(q.decisionAt)) + "</b>" + (q.decisionNote ? " — " + escapeHtml_(q.decisionNote) : "") + "</p>";
+  if (q.status === "REJECTED") html += "<p><b>Devis refusé le " + escapeHtml_(pdfDate_(q.decisionAt)) + "</b>" + (q.decisionNote ? " — " + escapeHtml_(q.decisionNote) : "") + "</p>";
+  html += "<h2>Signatures</h2><table class='sign'><tr><td>Le prestataire<br><span class='muted'>" + escapeHtml_(art.name || "") + "</span></td><td>Le client — « Bon pour accord »<br><span class='muted'>" + escapeHtml_(client.name || "") + "</span></td></tr></table>";
+  audit_("QUOTE_PDF", "Quote", q.quoteId, q.organizationId, {});
+  return storeGeneratedPdf_(p, htmlToPdf_(pdfShell_("Devis", html, { issuer: providerIssuer_(art), subtitle: num, footer: "Devis établi par " + (art.legalName || art.name || "le prestataire") + "." }), "Devis_" + num),
+    { propertyId: prop.propertyId, organizationId: prop.organizationId }, "QUOTE", q.quoteId, "QUOTE");
+}
+
+/** Facture du prestataire au propriétaire du bien (sans la marque ImmoPilot ; la commission interne n'y figure pas). */
+function invoicePdf_(p, a) {
+  const x = invLoad_(p, a.invoiceId), v = x.v, prop = x.prop, art = dbGet_("Artisans", v.artisanId) || {}, cur = v.currency || "MAD";
+  const owner = dbGet_("Organizations", prop.organizationId) || {}, w = v.workOrderId ? dbGet_("WorkOrders", v.workOrderId) : null, q = w && w.quoteId ? dbGet_("Quotes", w.quoteId) : null;
+  let lines = q ? parseJson_(q.linesJson, []) : [];
+  if (!lines.length || Math.abs(sumBy_(lines, function (l) { return l.amount; }) - num_(v.amountHT)) > 0.01) lines = [{ description: (w && (w.title || w.description)) || "Intervention", quantity: 1, unitPrice: num_(v.amountHT), amount: num_(v.amountHT) }];
+  const paidOn = v.status === "PAID" ? pdfDate_(v.paidAt) : "";
+  let html = "<table><tr><td style='width:50%'><b>Facture n° " + escapeHtml_(v.invoiceNumber || "") + "</b><br>Date : " + escapeHtml_(pdfDate_(v.issueDate)) + "<br>Échéance : " + escapeHtml_(pdfDate_(v.dueDate)) +
+    (w ? "<br>Intervention : " + escapeHtml_(String(w.workOrderId).slice(-8).toUpperCase()) : "") + (q ? "<br>Devis : DEV-" + escapeHtml_(String(q.quoteId).slice(-6).toUpperCase()) : "") +
+    "</td><td><b>Facturé à</b><br>" + escapeHtml_(owner.name || "") + "<br>" + escapeHtml_(owner.billingEmail || "") + "<br><span class='muted'>Lieu d'intervention : " + escapeHtml_(prop.name + ", " + [prop.address, prop.city].filter(String).join(", ")) + "</span></td></tr></table>";
+  html += "<h2>Prestations</h2>" + docLinesHtml_(lines, cur) + docTotalsHtml_(v.amountHT, v.vatRate, v.vatAmount, v.amountTTC, cur, paidOn ? [["Statut", "Acquittée le " + paidOn]] : [["Reste à payer", fmtAmount_(v.amountTTC, cur)]]);
+  html += "<h2>Règlement</h2><div class='box'>" + escapeHtml_(art.billingInfo || "Règlement par virement à réception de facture.") + "<br>Mentions légales du prestataire (ICE, IF, RC, patente) : " + escapeHtml_(art.taxId || "à compléter dans la fiche du prestataire") + ".</div>";
+  if (w && w.report) html += "<h2>Compte rendu d'intervention</h2><p>" + escapeHtml_(w.report) + "</p>";
+  audit_("INVOICE_PDF", "Invoice", v.invoiceId, v.organizationId, {});
+  return storeGeneratedPdf_(p, htmlToPdf_(pdfShell_("Facture", html, { issuer: providerIssuer_(art), subtitle: "N° " + (v.invoiceNumber || ""), footer: "Facture établie par " + (art.legalName || art.name || "le prestataire") + "." }),
+    "Facture_" + String(v.invoiceNumber || v.invoiceId).replace(/[^\w-]+/g, "_")), { propertyId: prop.propertyId, organizationId: prop.organizationId }, "INVOICE", v.invoiceId, "INVOICE");
+}
+
+function woOrderPdf_(p, a) {
+  const x = woLoad_(p, a.workOrderId, "read"), w = x.w, prop = x.prop;
+  const art = dbGet_("Artisans", w.artisanId) || {}, q = w.quoteId ? dbGet_("Quotes", w.quoteId) : null, inc = dbGet_("IncidentsV4", w.incidentId) || {};
+  const orderer = requesterOrg_(prop, w.createdBy), owner = dbGet_("Organizations", prop.organizationId) || {}, cur = (q && q.currency) || "MAD";
+  const ST = { ASSIGNED: "Attribuée", ACCEPTED: "Acceptée", DECLINED: "Refusée", SCHEDULED: "Planifiée", IN_PROGRESS: "En cours", COMPLETED: "Terminée", VERIFIED: "Contrôlée", CANCELLED: "Annulée" };
+  let html = "<h2>Parties</h2>" + htmlTable_(["", "Organisation / personne", "Contact"], [["Donneur d'ordre", orderer.name || "", orderer.billingEmail || ""],
+    ["Propriétaire du bien (règlement)", owner.name || "", owner.billingEmail || ""], ["Prestataire", art.legalName || art.name || "", [art.email, art.phone].filter(String).join(" — ")]]);
+  html += "<h2>Intervention</h2>" + htmlTable_(["Champ", "Valeur"], [["Référence", String(w.workOrderId).slice(-8).toUpperCase()], ["Bien", prop.name], ["Adresse", [prop.address, prop.neighborhood, prop.city].filter(String).join(", ")],
+    ["Objet", w.title || inc.title || ""], ["Description", w.description || inc.description || ""], ["Catégorie", ({ PLUMBING: "Plomberie", ELECTRICITY: "Électricité", AC: "Climatisation", HUMIDITY: "Humidité", LOCKSMITH: "Serrurerie", FURNITURE: "Mobilier", APPLIANCE: "Électroménager", CLEANING: "Ménage", DAMAGE: "Dégradation", SECURITY: "Sécurité", OTHER: "Autre" })[inc.category] || inc.category || ""], ["Date souhaitée", pdfDate_(w.desiredDate)],
+    ["Date planifiée", w.scheduledAt ? Utilities.formatDate(parseTs_(w.scheduledAt), tz_(), "dd/MM/yyyy HH:mm") : "—"], ["Statut", ST[w.status] || w.status],
+    ["Devis", q ? "DEV-" + String(q.quoteId).slice(-6).toUpperCase() + " — " + fmtAmount_(q.amountTTC || q.totalAmount, cur) + " TTC" : "Sans devis (urgence ou petit dépannage)"]]);
+  if (q) html += "<h2>Travaux prévus (devis accepté)</h2>" + docLinesHtml_(parseJson_(q.linesJson, []), cur);
+  html += "<h2>Consignes</h2><div class='box'><ul style='margin:0;padding-left:16px'>" + ["Confirmer l'acceptation et la date d'intervention dans l'application.", "Respecter les consignes d'accès du bien et prévenir le gardien de votre arrivée.",
+    "Joindre des photos et un compte rendu à la fin de l'intervention ; signaler tout dépassement du devis avant de poursuivre.", "Déposer la facture dans l'application ; elle est réglée après contrôle des travaux."]
+    .map(function (t) { return "<li>" + escapeHtml_(t) + "</li>"; }).join("") + "</ul></div>";
+  if (w.report) html += "<h2>Compte rendu</h2><p>" + escapeHtml_(w.report) + "</p>";
+  html += "<h2>Signatures</h2><table class='sign'><tr><td>Le donneur d'ordre<br><span class='muted'>" + escapeHtml_(orderer.name || "") + "</span></td><td>Le prestataire<br><span class='muted'>" + escapeHtml_(art.name || "") + "</span></td></tr></table>";
+  return storeGeneratedPdf_(p, htmlToPdf_(pdfShell_("Bon d'intervention", html, { subtitle: prop.name + " — " + (w.title || "") }), "BonIntervention_" + w.workOrderId), { propertyId: prop.propertyId, organizationId: prop.organizationId }, "WORKORDER", w.workOrderId, "ORDER");
+}
+
+/* FIN DU FICHIER ImmoPilot.gs — si cette ligne manque, le copier-coller est incomplet. */

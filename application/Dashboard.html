@@ -1,0 +1,277 @@
+<script>
+"use strict";
+/* Tableaux de bord par rôle, finances, rapports et analyses de Pareto.
+   Tous les chiffres proviennent du serveur (calculs centralisés) ; le client ne fait que les afficher. */
+function periodBar(state, onChange, extra) {
+  const from = h("input", { type: "date", value: state.from, "aria-label": t("Du") }), to = h("input", { type: "date", value: state.to, "aria-label": t("Au") });
+  const presets = h("select", { "aria-label": t("Période"), onchange: function (e) {
+    const v = e.target.value, d = today();
+    if (v === "month") { state.from = monthStart(d); state.to = monthEnd(d); }
+    if (v === "prev") { const p = addDays(monthStart(d), -1); state.from = monthStart(p); state.to = monthEnd(p); }
+    if (v === "q") { state.from = addDays(d, -89); state.to = d; }
+    if (v === "y") { state.from = d.slice(0, 4) + "-01-01"; state.to = d.slice(0, 4) + "-12-31"; }
+    if (v === "12m") { state.from = addDays(d, -364); state.to = d; }
+    from.value = state.from; to.value = state.to; onChange();
+  } }, [["", t("Période…")], ["month", t("Ce mois-ci")], ["prev", t("Mois précédent")], ["q", t("90 derniers jours")], ["12m", t("12 derniers mois")], ["y", t("Année en cours")]].map(function (o) { return h("option", { value: o[0] }, o[1]); }));
+  from.addEventListener("change", function () { state.from = from.value; onChange(); });
+  to.addEventListener("change", function () { state.to = to.value; onChange(); });
+  const bar = h("div", { class: "toolbar" }, presets, h("label", { class: "small muted" }, t("Du") + " "), from, h("label", { class: "small muted" }, t("au") + " "), to);
+  if (can("reservation.view") || can("finance.view") || can("incident.view")) {
+    const ps = h("select", { "aria-label": t("Bien"), onchange: function (e) { state.propertyId = e.target.value; onChange(); } }, h("option", { value: "" }, t("Tous les biens")));
+    propChoices().then(function (l) { l.forEach(function (o) { ps.appendChild(h("option", { value: o[0] }, o[1])); }); ps.value = state.propertyId || ""; });
+    bar.appendChild(ps);
+  }
+  if (extra) append(bar, extra);
+  return bar;
+}
+function deltaOf(cur, prev, k) { return prev && cur ? Number(cur[k] || 0) - Number(prev[k] || 0) : null; }
+
+/* =============================== Tableau de bord =============================== */
+PAGES.dashboard = function (el) {
+  const state = { from: monthStart(), to: monthEnd(), propertyId: "" };
+  el.appendChild(pageHead(t("Bonjour") + ", " + S.me.displayName, t("Indicateurs calculés en temps réel sur votre périmètre autorisé.")));
+  const body = h("div");
+  el.appendChild(periodBar(state, function () { load(); }, S.me.isSuper ? h("label", { class: "small" }, h("input", { type: "checkbox", onchange: function (e) { state.includeDemo = e.target.checked; load(); } }), " " + t("Inclure la démo")) : null));
+  el.appendChild(body);
+  const load = function () {
+    destroyCharts();
+    clear(body).appendChild(h("div", { class: "loading" }, t("Calcul des indicateurs…")));
+    api("dash.get", state).then(function (d) {
+      clear(body);
+      if (d.today) body.appendChild(dashToday(d.today));
+      if (d.admin) dashAdmin(body, d.admin);
+      if (d.portfolio) dashPortfolio(body, d.portfolio);
+      if (d.operations) body.appendChild(kpis([{ l: "Biens accessibles", v: fmtNum(d.operations.propertyCount, 0) }, { l: "Réservations sur la période", v: fmtNum(d.operations.reservationsInPeriod, 0) },
+        { l: "Arrivées aujourd'hui", v: fmtNum(d.operations.arrivalsToday, 0) }, { l: "Départs aujourd'hui", v: fmtNum(d.operations.departuresToday, 0) }, { l: "Incidents ouverts", v: fmtNum(d.operations.openIncidents, 0), tone: d.operations.openIncidents ? "warn" : "good" }]));
+      if (d.cleaning) dashCleaning(body, d.cleaning);
+      if (d.artisan) dashArtisan(body, d.artisan);
+      if (d.lease) dashLease(body, d.lease);
+      if (d.tenant) d.tenant.forEach(function (l) { body.appendChild(panel("Mon bail", h("div", null, kv([["Bien", l.propertyName], ["Statut", stTag(l.status)], ["Prochaine échéance", l.nextDue ? fmtDate(l.nextDue.dueDate) + " · " + fmtMoney(l.nextDue.remaining) : "—"], ["Arriérés", fmtMoney(l.arrears)]]), btn(t("Voir mon bail"), function () { NAV_HASH.v = "mylease"; }, "sm")))); });
+      if (!body.children.length) body.appendChild(h("div", { class: "empty" }, t("Aucun indicateur disponible pour votre rôle.")));
+    }).catch(function (e) { clear(body).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+  };
+  load();
+};
+function dashToday(x) {
+  return panel("Aujourd'hui sur le terrain", h("div", null, kpis([{ l: "Arrivées", v: x.arrivalsDone + " / " + x.arrivals, tone: x.arrivalsDone < x.arrivals ? "warn" : "good" }, { l: "Départs", v: x.departuresDone + " / " + x.departures, tone: x.departuresDone < x.departures ? "warn" : "good" },
+    { l: "Retards / absences", v: fmtNum(x.overdue, 0), tone: x.overdue ? "bad" : "good" }]), btn(t("Ouvrir les arrivées et départs"), function () { NAV_HASH.v = "checkin"; }, "primary")));
+}
+function dashAdmin(body, a) {
+  body.appendChild(h("h3", null, t("Plateforme")));
+  if (a.demoExcluded) body.appendChild(h("p", { class: "small muted" }, t("Organisations de démonstration exclues de ces indicateurs") + " : " + a.demoExcluded + "."));
+  body.appendChild(kpis([{ l: "Organisations", v: fmtNum(a.organizations, 0), sub: a.organizationsActive + " " + t("actives") + " · " + a.organizationsSuspended + " " + t("suspendues") },
+    { l: "Comptes actifs", v: fmtNum(a.usersActive, 0), sub: "+" + a.usersNew + " " + t("sur la période") + " · " + a.usersNeverActivated + " " + t("non activés") },
+    { l: "Biens", v: fmtNum(a.properties, 0), sub: a.propertiesActive + " " + t("actifs") }, { l: "Réservations (période)", v: fmtNum(a.reservations, 0) },
+    { l: "CA déclaré par les clients", v: fmtMoney(a.declaredRevenue), sub: t("Données déclaratives, non auditées"), tone: "neutral" }, { l: "Revenus plateforme encaissés", v: fmtMoney(a.platformRevenue), tone: "good" },
+    { l: "Abonnements actifs", v: fmtNum(a.subscriptionsActive, 0), sub: a.subscriptionsTrial + " " + t("en essai") }, { l: "Impayés d'abonnement", v: fmtMoney(a.subscriptionUnpaidAmount), sub: a.subscriptionsPastDue + " " + t("en retard") + " · " + a.subscriptionsSuspended + " " + t("suspendus"), tone: a.subscriptionUnpaidAmount ? "bad" : "good" },
+    { l: "Abonnements expirés", v: fmtNum(a.subscriptionsExpired, 0) }, { l: "Renouvellements sous 15 j", v: fmtNum(a.upcomingRenewals, 0), tone: a.upcomingRenewals ? "warn" : "" },
+    { l: "Stockage utilisé", v: fmtNum(a.storageMb, 1) + " Mo" }, { l: "Volume d'activité", v: fmtNum(a.activityVolume, 0), sub: a.loginsFailed + " " + t("échecs de connexion") }, { l: "Erreurs techniques", v: fmtNum(a.errors, 0), tone: a.errors ? "bad" : "good" }]));
+  const g = h("div", { class: "grid c2" }), c1 = h("div"), c2 = h("div"), c3 = h("div");
+  g.appendChild(panel("Nouvelles organisations par mois", c1)); g.appendChild(panel("Taux d'utilisation des fonctionnalités", c2)); body.appendChild(g); body.appendChild(panel("Activité quotidienne", c3));
+  chart(c1, { type: "bar", data: { labels: a.newOrganizationsByMonth.map(function (x) { return x.month; }), datasets: [{ label: t("Organisations"), data: a.newOrganizationsByMonth.map(function (x) { return x.count; }), backgroundColor: PALETTE.primary }] } });
+  const fu = a.featureUsage, keys = Object.keys(fu);
+  chart(c2, { type: "bar", data: { labels: keys.map(function (k) { return st("feat." + k); }), datasets: [{ label: "%", data: keys.map(function (k) { return fu[k]; }), backgroundColor: PALETTE.palm }] }, options: { indexAxis: "y", scales: { x: { max: 100 } }, plugins: { legend: { display: false } } } });
+  chart(c3, { type: "line", data: { labels: a.activityByDay.map(function (x) { return x.date; }), datasets: [{ label: t("Actions journalisées"), data: a.activityByDay.map(function (x) { return x.count; }), borderColor: PALETTE.navy, tension: .25 }] } });
+}
+function dashPortfolio(body, p) {
+  const T = p.totals, P = p.previousTotals;
+  body.appendChild(h("h3", null, p.isAgency ? t("Portefeuille géré") : t("Mon patrimoine")));
+  body.appendChild(kpis([
+    { l: "Biens", v: fmtNum(p.propertyCount, 0), sub: p.propertiesActive + " " + t("actifs") }, { l: "Réservations (arrivées sur la période)", v: fmtNum(p.reservationsInPeriod, 0) },
+    { l: "Réservations à venir (30 j)", v: fmtNum(p.upcomingReservations, 0) }, { l: "Revenus prévus", v: fmtMoney(T.expected), delta: deltaOf(T, P, "expected"), deltaFmt: fmtMoney },
+    { l: "Encaissé", v: fmtMoney(T.collected), delta: deltaOf(T, P, "collected"), deltaFmt: fmtMoney, tone: "good" }, { l: "Dépenses", v: fmtMoney(T.expenses), delta: deltaOf(T, P, "expenses"), deltaFmt: fmtMoney, invert: true, tone: "warn" },
+    { l: "Résultat", v: fmtMoney(T.result), delta: deltaOf(T, P, "result"), deltaFmt: fmtMoney, tone: T.result >= 0 ? "good" : "bad" }, { l: "Taux d'occupation", v: fmtPct(T.occupancyRate), delta: deltaOf(T, P, "occupancyRate"), deltaFmt: function (x) { return fmtNum(x, 1) + " pts"; } },
+    { l: "Prix moyen par nuit", v: fmtMoney(T.adr) }, { l: "Revenu par nuit disponible", v: fmtMoney(T.revpar) }, { l: "Annulations", v: fmtNum(T.cancellations, 0), sub: fmtPct(T.cancellationRate), tone: T.cancellations ? "warn" : "" },
+    { l: "Restant dû", v: fmtMoney(T.outstanding), tone: T.outstanding ? "bad" : "good", sub: p.latePayments + " " + t("paiements en retard") },
+    { l: "Commissions de gestion", v: fmtMoney(p.commissions.management) }, p.isAgency ? { l: "Commissions prestataires perçues", v: fmtMoney(p.commissions.contractor) } : null,
+    { l: "Incidents ouverts", v: fmtNum(p.openIncidents, 0), sub: p.severeIncidents + " " + t("graves") + (p.avgResolutionDays !== null ? " · " + t("résolution moy.") + " " + fmtNum(p.avgResolutionDays, 1) + " j" : ""), tone: p.severeIncidents ? "bad" : (p.openIncidents ? "warn" : "good") },
+    { l: "Coût de maintenance", v: fmtMoney(p.maintenanceCost) }, { l: "Ménage en attente", v: fmtNum(p.cleaningPending, 0), sub: p.cleaningToValidate + " " + t("à valider"), tone: p.cleaningPending ? "warn" : "" },
+    { l: "Factures en attente", v: fmtNum(p.invoicesPending, 0), sub: p.quotesToValidate + " " + t("devis à valider"), tone: p.invoicesPending || p.quotesToValidate ? "warn" : "" },
+    { l: "Arrivées / départs du jour", v: p.arrivalsToday + " / " + p.departuresToday }]));
+  const g = h("div", { class: "grid c2" }), c1 = h("div"), c2 = h("div");
+  g.appendChild(panel("Évolution sur 12 mois", c1)); g.appendChild(panel("Dépenses par catégorie", c2)); body.appendChild(g);
+  chart(c1, { type: "bar", data: { labels: p.byMonth.map(function (m) { return m.month; }), datasets: [
+    { type: "line", label: t("Prévu"), data: p.byMonth.map(function (m) { return m.expected; }), borderColor: PALETTE.primary, tension: .25 },
+    { label: t("Encaissé"), data: p.byMonth.map(function (m) { return m.collected; }), backgroundColor: PALETTE.palm }, { label: t("Dépenses"), data: p.byMonth.map(function (m) { return m.expenses; }), backgroundColor: PALETTE.saffron }] } });
+  const ec = p.expensesByCategory, ek = Object.keys(ec);
+  if (ek.length) chart(c2, { type: "doughnut", data: { labels: ek.map(st), datasets: [{ data: ek.map(function (k) { return ec[k]; }), backgroundColor: [PALETTE.primary, PALETTE.palm, PALETTE.saffron, PALETTE.clay, PALETTE.grey, PALETTE.navy, "#7C8BE8", "#6FB596"] }] } });
+  else c2.appendChild(h("div", { class: "empty" }, t("Aucune dépense sur la période.")));
+  body.appendChild(panel("Classement de performance des biens", table([{ l: "#", k: "rank" }, { l: "Bien", k: "name" }, { l: "Occupation", pct: true, k: "occupancyRate" }, { l: "Prix moyen/nuit", money: true, k: "adr" },
+    { l: "Prévu", money: true, k: "expected" }, { l: "Encaissé", money: true, k: "collected" }, { l: "Dépenses", money: true, k: "expenses" }, { l: "Résultat", money: true, k: "result" }], p.ranking, { onRow: function (r) { NAV_HASH.v = "property/" + r.propertyId; } })));
+  if (p.byAgency && p.byAgency.length > 1) body.appendChild(panel("Performance par agence", table([{ l: "Agence", k: "name" }, { l: "Réservations", num: true, k: "reservations" }, { l: "Nuits", num: true, k: "nights" }, { l: "Revenus", money: true, k: "expected" }, { l: "Commissions", money: true, k: "commissions" }], p.byAgency)));
+}
+function dashCleaning(body, c) {
+  body.appendChild(h("h3", null, t("Ménage")));
+  body.appendChild(kpis([{ l: "À accepter", v: fmtNum(c.toAccept, 0), tone: c.toAccept ? "warn" : "" }, { l: "À attribuer", v: fmtNum(c.unassigned, 0), tone: c.unassigned ? "warn" : "" }, { l: "Expirées", v: fmtNum(c.expired, 0), tone: c.expired ? "bad" : "" },
+    { l: "Acceptées", v: fmtNum(c.accepted, 0) }, { l: "En cours", v: fmtNum(c.inProgress, 0) }, { l: "À valider", v: fmtNum(c.toValidate, 0) }, { l: "En retard", v: fmtNum(c.late, 0), tone: c.late ? "bad" : "good" },
+    { l: "Terminées (période)", v: fmtNum(c.completedInPeriod, 0), tone: "good" }, { l: "Durée moyenne", v: c.avgMinutes === null ? "—" : c.avgMinutes + " min" }, { l: "Taux d'acceptation", v: fmtPct(c.acceptanceRate) },
+    { l: "Réalisées à l'heure", v: fmtPct(c.onTimeRate) }, { l: "Anomalies", v: fmtNum(c.anomalies, 0) }, { l: "Qualité moyenne", v: c.qualityAvg === null ? "—" : fmtNum(c.qualityAvg, 1) + " / 5" }]));
+  if (c.byTeam.length) body.appendChild(panel("Qualité par équipe", table([{ l: "Équipe", k: "provider" }, { l: "Missions", num: true, k: "missions" }, { l: "Durée moy. (min)", num: true, k: "avgMinutes" }, { l: "Retards", pct: true, k: "lateRate" }, { l: "Anomalies", num: true, k: "anomalies" }, { l: "Note", num: true, k: "qualityAvg" }], c.byTeam)));
+  if (c.anomaliesByProperty.length) body.appendChild(panel("Anomalies par bien", table([{ l: "Bien", k: "propertyName" }, { l: "Anomalies", num: true, k: "anomalies" }], c.anomaliesByProperty)));
+}
+function dashArtisan(body, a) {
+  body.appendChild(h("h3", null, t("Mes interventions")));
+  body.appendChild(kpis([{ l: "Devis à établir", v: fmtNum(a.quotesToSend, 0), tone: a.quotesToSend ? "warn" : "" }, { l: "Devis en attente de décision", v: fmtNum(a.quotesPending, 0) }, { l: "Devis acceptés", v: fmtNum(a.quotesApproved, 0), tone: "good" },
+    { l: "Interventions à venir", v: fmtNum(a.upcoming, 0) }, { l: "En cours", v: fmtNum(a.inProgress, 0) }, { l: "Terminées", v: fmtNum(a.completed, 0), tone: "good" },
+    { l: "Factures transmises", v: fmtNum(a.invoicesSubmitted, 0) }, { l: "Montant dû", v: fmtMoney(a.amountDue), tone: a.amountDue ? "warn" : "" }, { l: "Montant perçu", v: fmtMoney(a.amountPaid) }, { l: "Délai moyen", v: a.avgDelayDays === null ? "—" : fmtNum(a.avgDelayDays, 1) + " j" }]));
+  const c = h("div"); body.appendChild(panel("Historique de performance", c));
+  chart(c, { type: "bar", data: { labels: a.completedByMonth.map(function (x) { return x.month; }), datasets: [{ label: t("Interventions terminées"), data: a.completedByMonth.map(function (x) { return x.count; }), backgroundColor: PALETTE.primary }] } });
+}
+function dashLease(body, l) {
+  body.appendChild(h("h3", null, t("Location longue durée")));
+  body.appendChild(kpis([{ l: "Baux actifs", v: fmtNum(l.activeLeases, 0), sub: l.noticeLeases + " " + t("en préavis") }, { l: "Loyers attendus", v: fmtMoney(l.rentExpected) }, { l: "Loyers encaissés", v: fmtMoney(l.rentCollected), tone: "good" },
+    { l: "Impayés", v: fmtMoney(l.unpaid), tone: l.unpaid ? "bad" : "good" }, { l: "Échéances en retard", v: fmtNum(l.lateCount, 0), tone: l.lateCount ? "bad" : "good" }, { l: "Taux d'occupation", v: fmtPct(l.occupancyRate) }, { l: "Dépenses", v: fmtMoney(l.expenses) }]));
+  const g = h("div", { class: "grid c2" });
+  g.appendChild(panel("Fins de bail à venir (60 j)", table([{ l: "Bien", k: "propertyName" }, { l: "Fin", date: true, k: "endDate" }], l.endingSoon, { onRow: function (x) { NAV_HASH.v = "lease/" + x.leaseId; }, empty: "Aucune fin de bail proche." })));
+  g.appendChild(panel("Résultat par bien", table([{ l: "Bien", k: "name" }, { l: "Loyers", money: true, k: "rentExpected" }, { l: "Dépenses", money: true, k: "expenses" }, { l: "Résultat", money: true, k: "result" }], l.resultByProperty)));
+  body.appendChild(g);
+}
+
+/* =============================== Finances =============================== */
+PAGES.finance = function (el) {
+  const state = { from: monthStart(), to: monthEnd(), propertyId: "" };
+  el.appendChild(pageHead(t("Finances"), t("Prévu, facturé, encaissé, payé et restant dû : calculs centralisés côté serveur. Aucun montant n'est considéré encaissé sans paiement enregistré.")));
+  tabs(el, [
+    { id: "sum", label: "Synthèse", render: function (b) {
+      const out = h("div");
+      b.appendChild(periodBar(state, function () { load(); }, [btn(t("Exporter rentabilité (CSV)"), function () { api("report.export", Object.assign({ type: "PROPERTY_PROFITABILITY", format: "csv" }, state)).then(download).catch(showErr); })]));
+      b.appendChild(out);
+      const load = function () {
+        destroyCharts(); clear(out).appendChild(h("div", { class: "loading" }, t("Calcul…")));
+        api("fin.summary", state).then(function (f) {
+          const T = f.totals, P = f.previous; clear(out);
+          out.appendChild(kpis([{ l: "Prévu", v: fmtMoney(T.expected), delta: deltaOf(T, P, "expected"), deltaFmt: fmtMoney, sub: t("dont loyers") + " " + fmtMoney(T.rentExpected) }, { l: "Facturé", v: fmtMoney(T.billed) },
+            { l: "Encaissé", v: fmtMoney(T.collected), tone: "good", delta: deltaOf(T, P, "collected"), deltaFmt: fmtMoney }, { l: "Payé (décaissé)", v: fmtMoney(T.paidOut), tone: "warn" },
+            { l: "Restant dû", v: fmtMoney(T.outstanding), tone: T.outstanding ? "bad" : "good" }, { l: "Dépenses", v: fmtMoney(T.expenses), invert: true, delta: deltaOf(T, P, "expenses"), deltaFmt: fmtMoney },
+            { l: "Commissions de gestion", v: fmtMoney(T.managementCommissions) }, { l: "Commissions prestataires", v: fmtMoney(T.contractorCommissions) }, { l: "Taxes de séjour collectées", v: fmtMoney(T.taxes), tone: "neutral" },
+            { l: "Flux de trésorerie net", v: fmtMoney(T.netCashFlow), tone: T.netCashFlow >= 0 ? "good" : "bad" }, { l: "Résultat", v: fmtMoney(T.result), tone: T.result >= 0 ? "good" : "bad", delta: deltaOf(T, P, "result"), deltaFmt: fmtMoney },
+            { l: "Occupation", v: fmtPct(T.occupancyRate), sub: T.bookedNights + " / " + T.availableNights + " " + t("nuits") }]));
+          const c = h("div"); out.appendChild(panel("Flux de trésorerie mensuel", c));
+          chart(c, { type: "bar", data: { labels: f.byMonth.map(function (m) { return m.month; }), datasets: [{ label: t("Encaissé"), data: f.byMonth.map(function (m) { return m.collected; }), backgroundColor: PALETTE.palm },
+            { label: t("Décaissé"), data: f.byMonth.map(function (m) { return -m.paidOut; }), backgroundColor: PALETTE.clay }, { type: "line", label: t("Prévu"), data: f.byMonth.map(function (m) { return m.expected; }), borderColor: PALETTE.primary }] } });
+          out.appendChild(panel("Résultat par bien", table([{ l: "Bien", k: "name" }, { l: "Prévu", money: true, k: "expected" }, { l: "Facturé", money: true, k: "billed" }, { l: "Encaissé", money: true, k: "collected" }, { l: "Payé", money: true, k: "paidOut" },
+            { l: "Restant dû", money: true, k: "outstanding" }, { l: "Dépenses", money: true, k: "expenses" }, { l: "Commissions", money: true, k: "managementCommissions" }, { l: "Résultat", money: true, k: "result" }, { l: "Occupation", pct: true, k: "occupancyRate" }], f.byProperty, { onRow: function (r) { NAV_HASH.v = "property/" + r.propertyId; } })));
+          const g = h("div", { class: "grid c2" });
+          g.appendChild(panel("Résultat par propriétaire", table([{ l: "Propriétaire", k: "name" }, { l: "Prévu", money: true, k: "expected" }, { l: "Dépenses", money: true, k: "expenses" }, { l: "Résultat", money: true, k: "result" }], f.byOwner)));
+          g.appendChild(panel("Résultat par agence", table([{ l: "Agence", k: "name" }, { l: "Réservations", num: true, k: "reservations" }, { l: "Revenus", money: true, k: "expected" }, { l: "Commissions", money: true, k: "commissions" }], f.byAgency)));
+          out.appendChild(g);
+        }).catch(function (e) { clear(out).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+      };
+      load();
+    } },
+    { id: "pay", label: "Paiements et rapprochement", render: function (b) {
+      const totals = h("div");
+      const lv = listView(b, { route: "pay.list", filters: [{ k: "from", l: "Du", t: "date" }, { k: "to", l: "Au", t: "date" }, { k: "direction", l: "Sens", t: "select", opts: [["IN", t("Encaissement")], ["OUT", t("Décaissement")]] },
+        { k: "kind", l: "Nature", t: "select", opts: ["RESERVATION", "DEPOSIT", "REFUND", "RENT", "INVOICE", "DEPOSIT_REFUND", "OTHER"] }, { k: "propertyId", l: "Bien", t: "select", opts: function () { return propChoices(); } }, { k: "includeVoid", l: "Inclure les annulés", t: "checkbox" }],
+        columns: [{ l: "Date", date: true, k: "paidAt" }, { l: "Bien", k: "propertyName" }, { l: "Nature", f: function (x) { return st(x.kind); } }, { l: "Sens", f: function (x) { return x.direction === "IN" ? tag(t("Entrée"), "good") : tag(t("Sortie"), "warn"); } },
+          { l: "Montant", money: true, k: "amount" }, { l: "Mode", f: function (x) { return st(x.method); } }, { l: "Référence", k: "reference" }, { l: "Statut", status: true, k: "status" },
+          { l: "Rapproché", f: function (x) { return x.status !== "RECORDED" ? "—" : h("label", { class: "small" }, h("input", { type: "checkbox", checked: !!x.reconciled, onchange: function (e) {
+            const on = e.target.checked; (on ? formModal(t("Rapprochement bancaire"), [{ k: "bankReference", l: "Référence du relevé bancaire" }], { bankReference: x.reference }, function (v) { return api("pay.reconcile", { paymentId: x.paymentId, reconciled: true, bankReference: v.bankReference }); }) : api("pay.reconcile", { paymentId: x.paymentId, reconciled: false })).then(function () { lv.reload(); }).catch(showErr);
+          } }), " ", t("oui")); } },
+          { l: "", f: function (x) { return h("span", { class: "actions" }, x.proofDocId ? btn(t("Justificatif"), function () { openDoc(x.proofDocId); }, "sm") : null, x.status === "RECORDED" && !x.reconciled ? btn(t("Annuler"), function () { formModal(t("Annuler le paiement"), [{ k: "reason", l: "Motif", req: true }], {}, function (v) { return api("pay.void", { paymentId: x.paymentId, reason: v.reason }).then(lv.reload); }); }, "sm danger") : null); } }],
+        after: function (r) { clear(totals).appendChild(kpis([{ l: "Total encaissé (filtre)", v: fmtMoney(r.totals.in), tone: "good" }, { l: "Total décaissé (filtre)", v: fmtMoney(r.totals.out), tone: "warn" }, { l: "Solde", v: fmtMoney(r.totals.in - r.totals.out) }])); } });
+      b.insertBefore(totals, b.firstChild);
+      b.insertBefore(h("div", { class: "alert info" }, t("Aucune connexion bancaire automatique : rapprochez manuellement chaque paiement avec votre relevé.")), b.firstChild);
+    } },
+    { id: "exp", label: "Dépenses", render: function (b) {
+      const sumBox = h("div");
+      const lv = listView(b, { route: "exp.list", filters: [{ k: "from", l: "Du", t: "date" }, { k: "to", l: "Au", t: "date" }, { k: "propertyId", l: "Bien", t: "select", opts: function () { return propChoices("finance.manage"); } }, { k: "category", l: "Catégorie", t: "select", opts: listOpts("expenseCategories") }, { k: "status", l: "Statut", t: "select", opts: ["PLANNED", "INVOICED", "PAID", "CANCELLED"] }],
+        tools: function () { return can("finance.manage") ? [btn("+ " + t("Dépense"), function () { expenseDialog().then(function (x) { if (x) lv.reload(); }); }, "primary"), btn("+ " + t("Revenu divers"), function () {
+          formModal(t("Revenu divers"), [{ k: "propertyId", l: "Bien", t: "select", req: true, opts: function () { return propChoices("finance.manage"); } }, { k: "category", l: "Catégorie", def: "OTHER" }, { k: "description", l: "Description", req: true }, { k: "amount", l: "Montant (MAD)", t: "number", req: true }, { k: "revenueDate", l: "Date", t: "date", def: today() }], {},
+            function (v) { return api("rev.create", v); }, { success: "Revenu enregistré." }); })] : []; },
+        columns: [{ l: "Date", date: true, k: "expenseDate" }, { l: "Bien", k: "propertyName" }, { l: "Catégorie", f: function (x) { return st(x.category); } }, { l: "Description", k: "description" }, { l: "Fournisseur", k: "supplier" }, { l: "Montant", money: true, k: "amount" }, { l: "Statut", status: true, k: "status" },
+          { l: "", f: function (x) { return h("span", { class: "actions" }, x.documentId ? btn(t("Pièce"), function () { openDoc(x.documentId); }, "sm") : null,
+            can("finance.manage") && ["PLANNED", "INVOICED"].indexOf(x.status) >= 0 && x.refType !== "INVOICE" ? btn(t("Payer"), function () { payDialog({ refType: "EXPENSE", refId: x.expenseId, kind: "OTHER", amount: x.amount }).then(function (r) { if (r) lv.reload(); }); }, "sm") : null,
+            can("finance.manage") && ["MANUAL", "CLEANING"].indexOf(x.refType) >= 0 && x.status !== "PAID" && x.status !== "CANCELLED" ? btn(t("Annuler"), function () { confirmBox(t("Annuler cette dépense ?"), { danger: true }).then(function (ok) { if (ok) api("exp.cancel", { expenseId: x.expenseId }).then(lv.reload).catch(showErr); }); }, "sm danger") : null); } }],
+        after: function (r) { clear(sumBox).appendChild(h("p", { class: "muted" }, t("Total filtré") + " : ", h("b", null, fmtMoney(r.sum)))); } });
+      b.appendChild(sumBox);
+    } }
+  ]);
+};
+function expenseDialog(preset) {
+  return formModal(t("Nouvelle dépense"), [{ k: "propertyId", l: "Bien", t: "select", req: true, opts: function () { return propChoices("finance.manage"); } }, { k: "category", l: "Catégorie", t: "select", req: true, opts: listOpts("expenseCategories") },
+    { k: "description", l: "Description", req: true }, { k: "supplier", l: "Fournisseur" }, { k: "amount", l: "Montant TTC (MAD)", t: "number", req: true, min: 0, step: "0.01" }, { k: "vatAmount", l: "Dont TVA", t: "number", min: 0, step: "0.01" },
+    { k: "expenseDate", l: "Date", t: "date", def: today() }, { k: "status", l: "Statut", t: "select", opts: ["INVOICED", "PLANNED"] }, { k: "file", l: "Justificatif (photo ou PDF)", t: "file", capture: "environment" }], preset || {},
+    function (v) {
+      const files = v.file; delete v.file;
+      return api("exp.create", v).then(function (r) { if (files && files.length) return uploadFiles(files, "PROPERTY", v.propertyId, "EXPENSE_PROOF").then(function () { return r; }); return r; });
+    }, { success: "Dépense enregistrée." });
+}
+/** Enregistrement d'un paiement réel (jamais automatique). */
+function payDialog(p) {
+  const fields = [{ k: "amount", l: "Montant (MAD)", t: "number", req: true, min: 0.01, step: "0.01" }, { k: "paidAt", l: "Date du paiement", t: "date", def: today(), max: today() },
+    { k: "method", l: "Mode", t: "select", req: true, opts: (S.meta.payMethods || []).map(function (m) { return [m, st(m)]; }), def: "TRANSFER" }, { k: "reference", l: "Référence (virement, reçu…)" }, { k: "note", l: "Note" }];
+  if (p.kinds) fields.unshift({ k: "kind", l: "Nature", t: "select", req: true, opts: p.kinds.map(function (k) { return [k, st(k)]; }) });
+  return formModal(p.title || t("Enregistrer un paiement"), fields, { amount: p.amount, kind: p.kind }, function (v) {
+    return api("pay.record", Object.assign({ refType: p.refType, refId: p.refId, kind: p.kind, requestKey: rk() }, v));
+  }, { intro: t("Enregistrez uniquement un paiement réellement reçu ou effectué. Le statut est mis à jour à partir des paiements enregistrés."), success: "Paiement enregistré." });
+}
+
+/* =============================== Rapports =============================== */
+PAGES.reports = function (el) {
+  const state = { type: "OWNER_MONTHLY", from: monthStart(), to: monthEnd(), propertyId: "" };
+  el.appendChild(pageHead(t("Rapports"), t("Rapports filtrables. Les exports n'incluent que les données que vous êtes autorisé à consulter ; aucune pièce d'identité n'y figure.")));
+  const types = (S.meta.reportTypes || []).filter(function (x) { return S.me.isSuper || ["SUBSCRIPTIONS", "AUDIT"].indexOf(x.type) < 0; });
+  const sel = h("select", { onchange: function (e) { state.type = e.target.value; extra.classList.toggle("hidden", state.type !== "PARETO"); load(); } }, types.map(function (x) { return h("option", { value: x.type }, st("rep." + x.type) === "rep." + x.type ? x.title : st("rep." + x.type)); }));
+  const extra = h("select", { class: "hidden", onchange: function (e) { state.paretoType = e.target.value; load(); } }, (S.meta.paretoTypes || []).map(function (x) { return h("option", { value: x.type }, st("par." + x.type) === "par." + x.type ? x.title : st("par." + x.type)); }));
+  const out = h("div");
+  el.appendChild(periodBar(state, function () { load(); }, [sel, extra, btn(t("CSV"), function () { exp("csv"); }), btn(t("PDF"), function () { exp("pdf"); })]));
+  el.appendChild(out);
+  const exp = function (fmt) { toast(t("Génération en cours…")); api("report.export", Object.assign({ format: fmt }, state)).then(download).catch(showErr); };
+  const load = function () {
+    clear(out).appendChild(h("div", { class: "loading" }, t("Génération du rapport…")));
+    api("report.run", state).then(function (R) {
+      clear(out);
+      if (R.summary) out.appendChild(panel("Synthèse", kv(Object.keys(R.summary).filter(function (k) { return typeof R.summary[k] !== "object"; }).map(function (k) { const v = R.summary[k]; return [st("kpi." + k) === "kpi." + k ? k : st("kpi." + k), typeof v === "number" ? fmtNum(v) : v]; }))));
+      out.appendChild(panel(R.title + " — " + fmtDate(R.period.from) + " → " + fmtDate(R.period.to), h("div", null, R.truncated ? h("div", { class: "alert info" }, t("Aperçu limité à 500 lignes ; l'export contient l'ensemble.") + " (" + R.totalRows + ")") : null,
+        table(R.headers.map(function (hd, i) { return { l: hd, f: function (row) { const v = row[i]; return typeof v === "number" ? fmtNum(v) : (isNil(v) ? "—" : String(v)); }, num: false }; }), R.rows))));
+    }).catch(function (e) { clear(out).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+  };
+  load();
+};
+
+/* =============================== Pareto =============================== */
+PAGES.pareto = function (el) {
+  const state = { type: "INCIDENTS_BY_CATEGORY", from: addDays(today(), -89), to: today(), propertyId: "", agencyOrganizationId: "", category: "", groupBy: "property" };
+  el.appendChild(pageHead(t("Analyses de Pareto"), t("Identifiez les quelques causes qui expliquent environ 80 % des volumes ou des coûts. Calcul serveur ; le tableau, le graphique et les exports utilisent le même résultat.")));
+  const typeSel = h("select", { onchange: function (e) { state.type = e.target.value; state.category = ""; renderCat(); load(); } }, (S.meta.paretoTypes || []).map(function (x) { return h("option", { value: x.type }, st("par." + x.type) === "par." + x.type ? x.title : st("par." + x.type)); }));
+  const catSel = h("select", { onchange: function (e) { state.category = e.target.value; load(); } });
+  const grpSel = h("select", { class: "hidden", onchange: function (e) { state.groupBy = e.target.value; load(); } }, h("option", { value: "property" }, t("par bien")), h("option", { value: "period" }, t("par mois")));
+  const agSel = h("select", { onchange: function (e) { state.agencyOrganizationId = e.target.value; load(); } }, h("option", { value: "" }, t("Toutes les agences")));
+  myOrgs(["AGENCY_ADMIN", "AGENCY_USER"]).forEach(function (o) { agSel.appendChild(h("option", { value: o[0] }, o[1])); });
+  const renderCat = function () {
+    clear(catSel).appendChild(h("option", { value: "" }, t("Toutes catégories")));
+    const lst = ["INCIDENTS_BY_CATEGORY", "INCIDENT_COST_BY_CATEGORY", "MAINTENANCE_BY_CATEGORY"].indexOf(state.type) >= 0 ? "incidentCategories" : (["COST_BY_PROPERTY", "EXPENSES_BY_CATEGORY"].indexOf(state.type) >= 0 ? "expenseCategories" : "");
+    catSel.classList.toggle("hidden", !lst); grpSel.classList.toggle("hidden", state.type !== "UNPAID");
+    if (lst) listOpts(lst).forEach(function (o) { catSel.appendChild(h("option", { value: o[0] }, o[1])); });
+  };
+  renderCat();
+  const out = h("div");
+  el.appendChild(periodBar(state, function () { load(); }, [typeSel, catSel, grpSel, agSel.children.length > 1 ? agSel : null, btn(t("CSV"), function () { api("pareto.export", Object.assign({ format: "csv" }, state)).then(download).catch(showErr); }), btn(t("PDF"), function () { api("pareto.export", Object.assign({ format: "pdf" }, state)).then(download).catch(showErr); })]));
+  el.appendChild(out);
+  const load = function () {
+    destroyCharts(); clear(out).appendChild(h("div", { class: "loading" }, t("Calcul de l'analyse…")));
+    api("pareto.run", state).then(function (r) {
+      clear(out);
+      const R = r.result, money = r.unit === "MAD", fv = function (v) { return money ? fmtMoney(v) : fmtNum(v, 0); };
+      out.appendChild(kpis([{ l: money ? "Montant total" : "Nombre total", v: fv(R.total), delta: r.previous.total || R.total ? r.totalDelta : null, deltaFmt: fv, invert: true },
+        { l: "Éléments prioritaires", v: R.vitalCount + " / " + (R.itemCount || 0), sub: R.empty ? "" : fmtPct(R.vitalItemShare) + " " + t("des éléments") + " → " + fmtPct(R.vitalShare) + " " + t("du total"), tone: "warn" },
+        { l: "Période précédente", v: fv(r.previous.total), sub: fmtDate(r.previousPeriod.from) + " → " + fmtDate(r.previousPeriod.to), tone: "neutral" }]));
+      if (R.warnings && R.warnings.length) out.appendChild(h("div", { class: "alert warn" }, R.warnings.join(" ")));
+      if (R.empty) { out.appendChild(h("div", { class: "empty panel" }, t("Aucune donnée sur la période et les filtres choisis."))); return; }
+      out.appendChild(h("div", { class: "alert info" }, t("Priorités (≈ 80 %)") + " : ", h("b", null, r.priorities.map(function (p) { return st(p) !== p ? st(p) : p; }).join(", "))));
+      const c = h("div"); out.appendChild(panel(st("par." + r.type) === "par." + r.type ? r.title : st("par." + r.type), c));
+      const items = R.items.slice(0, 30), lbl = function (x) { return st(x.label) !== x.label ? st(x.label) : x.label; };
+      chart(c, { type: "bar", data: { labels: items.map(lbl), datasets: [
+        { type: "line", label: t("Part cumulée %"), data: items.map(function (x) { return x.cumShare; }), yAxisID: "y1", borderColor: PALETTE.navy, pointRadius: 3, tension: 0 },
+        { type: "line", label: t("Seuil 80 %"), data: items.map(function () { return R.threshold; }), yAxisID: "y1", borderColor: PALETTE.clay, borderDash: [6, 4], pointRadius: 0 },
+        { label: money ? t("Montant") : t("Nombre"), data: items.map(function (x) { return x.value; }), backgroundColor: items.map(function (x) { return x.vital ? PALETTE.primary : "#B9C3E8"; }), yAxisID: "y" }] },
+        options: { scales: { y: { beginAtZero: true, position: "left" }, y1: { beginAtZero: true, max: 100, position: "right", grid: { drawOnChartArea: false }, ticks: { callback: function (v) { return v + " %"; } } } } } });
+      out.appendChild(panel("Détail du classement", table([{ l: "Rang", k: "rank" }, { l: "Élément", f: lbl }, { l: money ? "Montant" : "Nombre", f: function (x) { return fv(x.value); }, num: true }, { l: "Part", pct: true, k: "share" }, { l: "Part cumulée", pct: true, k: "cumShare" },
+        { l: "Prioritaire", f: function (x) { return x.vital ? tag(t("Oui"), "info") : ""; } }, { l: "Période précédente", f: function (x) { return fv(x.previousValue); }, num: true },
+        { l: "Évolution", f: function (x) { return h("span", { class: "delta " + (x.delta > 0 ? "down" : (x.delta < 0 ? "up" : "")) }, (x.delta > 0 ? "+" : "") + fv(x.delta) + (x.deltaPct !== null ? " (" + fmtNum(x.deltaPct, 1) + " %)" : "")); } }], R.items, { rowClass: function (x) { return x.vital ? "vital" : ""; } })));
+    }).catch(function (e) { clear(out).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+  };
+  load();
+};
+</script>

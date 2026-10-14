@@ -1,0 +1,33 @@
+/** Test navigateur de l'assistant Rubban (serveur de prévisualisation requis : node tests/preview-server.js). */
+const { chromium } = require("playwright");
+const BASE = process.env.BASE || "http://localhost:8787";
+(async () => {
+  const b = await chromium.launch(), out = [], ok = function (c, m) { out.push((c ? "✔ " : "✘ ") + m); };
+  const pg = await b.newPage({ viewport: { width: 1280, height: 860 } });
+  const errors = []; pg.on("pageerror", function (e) { errors.push(e.message); });
+  await pg.goto(BASE + "/?as=ownerA"); await pg.waitForSelector("#rb-fab", { timeout: 15000 }); await pg.waitForTimeout(2500);
+  ok(await pg.isVisible("#rb-fab"), "bulle visible en bas à droite");
+  await pg.click("#rb-fab"); await pg.waitForSelector("#rb-panel.open"); await pg.waitForTimeout(800);
+  const welcome = await pg.textContent(".rb-body");
+  ok(/Rubban/.test(welcome) && /Créer une agence/.test(welcome), "accueil avec suggestions du propriétaire");
+  await pg.fill("#rb-panel textarea", "comment je confie mon appart à une agence ?"); await pg.keyboard.press("Enter"); await pg.waitForTimeout(1200);
+  const last = await pg.$$eval(".rb-msg.rb-bot", function (l) { return l[l.length - 1].textContent; });
+  ok(/agence/i.test(last) && /Agences et équipes/.test(last), "réponse guidée pertinente : " + last.slice(0, 70));
+  await pg.click(".rb-msg.rb-bot:last-child .rb-chip.go"); await pg.waitForTimeout(1200);
+  ok((await pg.evaluate(function () { return location.hash || S.route; })).indexOf("properties") >= 0, "bouton « Ouvrir la page » navigue");
+  await pg.fill("#rb-panel textarea", "xqzw blorf"); await pg.keyboard.press("Enter"); await pg.waitForTimeout(800);
+  ok(/pas trouvé/.test(await pg.$$eval(".rb-msg.rb-bot", function (l) { return l[l.length - 1].textContent; })), "question inconnue : proposition de sujets");
+  await pg.screenshot({ path: process.env.SHOT || "assistant.png" });
+  await pg.keyboard.press("Escape"); await pg.waitForTimeout(300);
+  ok(!(await pg.isVisible("#rb-panel.open")), "Échap ferme la fenêtre");
+  const pg2 = await b.newPage({ viewport: { width: 390, height: 800 } });
+  await pg2.goto(BASE + "/"); await pg2.waitForSelector("#rb-fab", { timeout: 15000 }); await pg2.click("#rb-fab"); await pg2.waitForTimeout(1200);
+  ok(/Activer mon compte/.test(await pg2.textContent(".rb-body")), "écran de connexion : aide à l'activation (sans compte)");
+  await pg2.screenshot({ path: (process.env.SHOT || "assistant.png").replace(".png", "-mobile.png") });
+  const pg3 = await b.newPage(); await pg3.goto(BASE + "/?as=cleaner&lang=ar"); await pg3.waitForSelector("#rb-fab"); await pg3.waitForTimeout(2000); await pg3.click("#rb-fab"); await pg3.waitForTimeout(1000);
+  const box = await pg3.$eval("#rb-fab", function (e) { return e.getBoundingClientRect().left; });
+  ok(box < 200 && /Réaliser une mission de ménage/.test(await pg3.textContent(".rb-body")), "arabe : bulle à gauche (RTL) et suggestions de l'équipe de ménage");
+  ok(!errors.length, "aucune erreur JavaScript" + (errors.length ? " : " + errors.join(" | ") : ""));
+  console.log(out.join("\n")); console.log("Résultat : " + out.filter(function (x) { return x[0] === "✔"; }).length + "/" + out.length);
+  await b.close();
+})();

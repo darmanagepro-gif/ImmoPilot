@@ -1,0 +1,12 @@
+{
+  "appId": "ma.immopilot.app",
+  "appName": "ImmoPilot",
+  "webDir": "www",
+  "server": {
+    "url": "https://VOTRE-NOM.github.io/",
+    "cleartext": false,
+    "allowNavigation": ["script.google.com", "*.googleusercontent.com", "VOTRE-NOM.github.io"]
+  },
+  "ios": { "contentInset": "never", "backgroundColor": "#13233d" },
+  "android": { "backgroundColor": "#13233d", "allowMixedContent": false }
+}
