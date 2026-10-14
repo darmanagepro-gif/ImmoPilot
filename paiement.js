@@ -61,15 +61,20 @@
     return { ttc: ttc, commanditaire: cm, total: ttc + cm, artisan: ca, net: ttc - ca, taux: t };
   }
 
-  // Devise d'affichage : l'euro (« € ») par défaut, sinon le code de la devise du compte SumUp.
+  // Devise d'affichage des prix : dirham marocain (« MAD ») par défaut ; « € » pour l'euro.
   function devise() {
-    var d = String(pay.devise || "EUR").toUpperCase();
+    var d = String(pay.devise || "MAD").toUpperCase();
     return d === "EUR" ? " €" : " " + d;
+  }
+
+  // Vrai si SumUp débite dans une autre devise que celle des prix (conversion nécessaire).
+  function conversionNecessaire() {
+    return !!pay.devisePaiement && String(pay.devisePaiement).toUpperCase() !== String(pay.devise || "MAD").toUpperCase();
   }
 
   function montantTexte(centimes) {
     return (centimes / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
-  window.ImmoPay = { cfg: cfg, pay: pay, lienSumUpValide: lienSumUpValide, param: param, texte: texte, aller: aller, enregistrerAcceptation: enregistrerAcceptation, taux: taux, commissions: commissions, montantTexte: montantTexte, devise: devise };
+  window.ImmoPay = { cfg: cfg, pay: pay, lienSumUpValide: lienSumUpValide, param: param, texte: texte, aller: aller, enregistrerAcceptation: enregistrerAcceptation, taux: taux, commissions: commissions, montantTexte: montantTexte, devise: devise, conversionNecessaire: conversionNecessaire };
 })();

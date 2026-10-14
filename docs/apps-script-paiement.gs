@@ -8,7 +8,10 @@
  * Configuration (Paramètres du projet › Propriétés du script) :
  *   SUMUP_API_KEY       clé API SumUp (secrète — jamais dans GitHub)
  *   SUMUP_MERCHANT_CODE code marchand SumUp
- *   SUMUP_CURRENCY      devise du compte SumUp : EUR
+ *   SUMUP_CURRENCY      devise du compte SumUp (EUR)
+ *   DEVISE_PRIX         devise des prix et des commissions (MAD)
+ *   TAUX_CONVERSION     obligatoire si DEVISE_PRIX ≠ SUMUP_CURRENCY : montant en SUMUP_CURRENCY pour 1 unité de DEVISE_PRIX
+ *                       (à fixer, à indiquer dans les contrats et à faire valider). Sans lui, le script refuse de créer un paiement.
  *   PRIX_ABONNEMENT     prix mensuel (ex. 29.00)
  *   SITE_URL            https://darmanagepro-gif.github.io/ImmoPilot
  *
@@ -26,6 +29,18 @@ var SUMUP_API = "https://api.sumup.com/v0.1";
 
 function prop_(k) { return PropertiesService.getScriptProperties().getProperty(k); }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+
+/**
+ * Les prix et commissions sont en DEVISE_PRIX (MAD) ; SumUp débite dans la devise de votre compte (SUMUP_CURRENCY, EUR).
+ * Garde-fou : on ne laisse jamais partir un montant en MAD tel quel vers un compte en EUR (le client paierait ~10 fois trop).
+ */
+function versDevisePaiement_(montant) {
+  var devPrix = prop_("DEVISE_PRIX") || "MAD", devSumUp = prop_("SUMUP_CURRENCY");
+  if (devPrix === devSumUp) return Number(montant);
+  var taux = Number(prop_("TAUX_CONVERSION"));
+  if (!(taux > 0)) throw new Error("Devise des prix (" + devPrix + ") différente de celle de SumUp (" + devSumUp + ") : définir TAUX_CONVERSION");
+  return Math.round(Number(montant) * taux * 100) / 100;
+}
 
 function sumup_(methode, chemin, corps) {
   var r = UrlFetchApp.fetch(SUMUP_API + chemin, {
@@ -83,7 +98,7 @@ function abonnementFinaliser_(checkoutId) {
 
   var ref = "ABO-" + Utilities.getUuid();
   var co = sumup_("post", "/checkouts", {
-    checkout_reference: ref, amount: Number(prop_("PRIX_ABONNEMENT")), currency: prop_("SUMUP_CURRENCY"),
+    checkout_reference: ref, amount: versDevisePaiement_(prop_("PRIX_ABONNEMENT")), currency: prop_("SUMUP_CURRENCY"),
     merchant_code: prop_("SUMUP_MERCHANT_CODE"), description: "ImmoPilot — abonnement, 1er mois", customer_id: t.abo.customer_id
   });
   var res = sumup_("put", "/checkouts/" + co.id, { payment_type: "card", token: token, customer_id: t.abo.customer_id });
@@ -105,7 +120,7 @@ function prelevementsMensuels() {
     try {
       var ref = "ABO-" + Utilities.getUuid();
       var co = sumup_("post", "/checkouts", {
-        checkout_reference: ref, amount: Number(prop_("PRIX_ABONNEMENT")), currency: prop_("SUMUP_CURRENCY"),
+        checkout_reference: ref, amount: versDevisePaiement_(prop_("PRIX_ABONNEMENT")), currency: prop_("SUMUP_CURRENCY"),
         merchant_code: prop_("SUMUP_MERCHANT_CODE"), description: "ImmoPilot — abonnement mensuel", customer_id: a.customer_id
       });
       var res = sumup_("put", "/checkouts/" + co.id, { payment_type: "card", token: a.token, customer_id: a.customer_id });
@@ -141,7 +156,7 @@ function commissionsMission_(ttc) {
 function missionCreerLienPaiement_(factureId, montantTtc, description) {
   var m = commissionsMission_(montantTtc); // le commanditaire paie la facture TTC + sa commission, en un seul paiement
   var co = sumup_("post", "/checkouts", {
-    checkout_reference: "MISSION-" + factureId, amount: m.totalAPayer, currency: prop_("SUMUP_CURRENCY"),
+    checkout_reference: "MISSION-" + factureId, amount: versDevisePaiement_(m.totalAPayer), currency: prop_("SUMUP_CURRENCY"),
     merchant_code: prop_("SUMUP_MERCHANT_CODE"), description: String(description || "Mission ImmoPilot").slice(0, 200),
     redirect_url: prop_("SITE_URL") + "/payer-mission.html?retour=1&ref=" + encodeURIComponent(factureId),
     hosted_checkout: { enabled: true } // à vérifier dans la doc SumUp (page de paiement hébergée)

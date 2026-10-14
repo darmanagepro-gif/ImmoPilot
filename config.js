@@ -32,7 +32,8 @@ window.IMMOPILOT_CONFIG = {
     missionUrl: "",
     enregistrerAcceptation: false,
     prixMensuel: "",
-    devise: "EUR",
+    devise: "MAD",          // devise des prix, des commissions et des contrats
+    devisePaiement: "EUR",  // devise du compte SumUp : si elle diffère de « devise », la page de paiement prévient d'une conversion
     hotesAutorises: ["sumup.com", "sum.up"],
     commissions: { commanditaire: 6, artisan: 15 }
   }

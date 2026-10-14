@@ -35,7 +35,7 @@
 <label class="ck"><input type="checkbox" id="cL"><span>J'ai lu et j'accepte le <a id="lienContratL" href="contrat-mission.html?mode=ligne" target="_blank" rel="noopener">contrat de mise en relation moyennant commissions, avec accès à l'assurance</a>.</span></label>
 <button class="pay" id="payer" type="button" disabled>Payer</button>
 <p id="etatL" class="note" role="status"></p>
-<p class="alerte" style="font-size:13px">Sur la page SumUp, vérifiez que le montant est bien égal au « Total à payer en ligne » ci-dessus avant de payer.</p>
+<p class="alerte" id="alerteMontant" style="font-size:13px">Sur la page SumUp, vérifiez que le montant est bien égal au « Total à payer en ligne » ci-dessus avant de payer.</p>
 </div>
 
 <div id="direct" class="card" hidden>
@@ -85,6 +85,10 @@
     $("comm").textContent = P.montantTexte(calc.commanditaire) + P.devise();
     $("rowComm").hidden = false;
     if (mode === "ligne") { $("total").textContent = P.montantTexte(calc.total) + P.devise(); $("rowTotal").hidden = false; }
+  }
+  // Compte SumUp dans une autre devise que les prix : le montant débité est la conversion du total.
+  if (P.conversionNecessaire()) {
+    $("alerteMontant").textContent = "Le paiement est débité en " + String(pay.devisePaiement).toUpperCase() + " : le montant affiché sur la page SumUp est la conversion du « Total à payer en ligne » ci-dessus, au taux indiqué dans le contrat.";
   }
 
   if (mode === "ligne") {
