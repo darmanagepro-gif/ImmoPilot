@@ -23,7 +23,7 @@
 <table>
 <tr><th>Référence de la mission</th><td data-f="ref" class="todo">[référence]</td></tr>
 <tr><th>Objet de la mission</th><td data-f="objet" class="todo">[nature des travaux / du service]</td></tr>
-<tr><th>Montant de la facture finale TTC</th><td><span data-f="montant" class="todo">[montant]</span> <span class="todo">[devise]</span></td></tr>
+<tr><th>Montant de la facture finale TTC</th><td><span data-f="montant" class="todo">[montant]</span> €</td></tr>
 <tr><th>Commission du Commanditaire (<span data-taux="commanditaire">6</span> % du TTC, en plus de la facture)</th><td id="cCommanditaire" class="todo">[calculée sur le montant TTC]</td></tr>
 <tr><th>Commission de l'Artisan (<span data-taux="artisan">15</span> % du TTC)</th><td id="cArtisan" class="todo">[calculée sur le montant TTC]</td></tr>
 <tr><th>Date</th><td data-f="date" class="todo">[jj/mm/aaaa]</td></tr>
@@ -135,8 +135,9 @@
   var mt = P.param("montant", champs.montant), c = mt ? P.commissions(mt) : null;
   if (c) {
     var a = document.getElementById("cCommanditaire"), b = document.getElementById("cArtisan");
-    a.textContent = P.montantTexte(c.commanditaire) + " (total payé par le Commanditaire : " + P.montantTexte(c.total) + ")";
-    b.textContent = P.montantTexte(c.artisan) + " (montant reversé à l'Artisan : " + P.montantTexte(c.net) + ")";
+    var d = P.devise();
+    a.textContent = P.montantTexte(c.commanditaire) + d + " (total payé par le Commanditaire : " + P.montantTexte(c.total) + d + ")";
+    b.textContent = P.montantTexte(c.artisan) + d + " (montant reversé à l'Artisan : " + P.montantTexte(c.net) + d + ")";
     a.classList.remove("todo"); b.classList.remove("todo");
   }
 })();

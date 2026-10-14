@@ -8,7 +8,7 @@
  * Configuration (Paramètres du projet › Propriétés du script) :
  *   SUMUP_API_KEY       clé API SumUp (secrète — jamais dans GitHub)
  *   SUMUP_MERCHANT_CODE code marchand SumUp
- *   SUMUP_CURRENCY      devise du compte SumUp (ex. EUR)
+ *   SUMUP_CURRENCY      devise du compte SumUp : EUR
  *   PRIX_ABONNEMENT     prix mensuel (ex. 29.00)
  *   SITE_URL            https://darmanagepro-gif.github.io/ImmoPilot
  *

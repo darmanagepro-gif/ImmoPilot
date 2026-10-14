@@ -57,7 +57,7 @@
   var champs = { ref: /^[A-Za-z0-9_.\-\/ ]{1,40}$/, proprio: /^[^<>]{1,100}$/, artisan: /^[^<>]{1,100}$/, objet: /^[^<>]{1,200}$/, montant: /^[0-9]{1,9}([.,][0-9]{1,2})?$/ };
   var v = {};
   Object.keys(champs).forEach(function (k) { v[k] = P.param(k, champs[k]); });
-  P.texte("ref", v.ref); P.texte("objet", v.objet); P.texte("artisan", v.artisan); P.texte("montant", v.montant);
+  P.texte("ref", v.ref); P.texte("objet", v.objet); P.texte("artisan", v.artisan); P.texte("montant", v.montant ? v.montant + P.devise() : "");
 
   // Paramètres transmis au contrat (le lien de paiement n'y figure pas).
   function paramsContrat(mode) {
@@ -82,9 +82,9 @@
   var calc = v.montant ? P.commissions(v.montant) : null;
   if (calc) {
     $("tauxComm").textContent = String(calc.taux.commanditaire).replace(".", ",");
-    $("comm").textContent = P.montantTexte(calc.commanditaire);
+    $("comm").textContent = P.montantTexte(calc.commanditaire) + P.devise();
     $("rowComm").hidden = false;
-    if (mode === "ligne") { $("total").textContent = P.montantTexte(calc.total); $("rowTotal").hidden = false; }
+    if (mode === "ligne") { $("total").textContent = P.montantTexte(calc.total) + P.devise(); $("rowTotal").hidden = false; }
   }
 
   if (mode === "ligne") {

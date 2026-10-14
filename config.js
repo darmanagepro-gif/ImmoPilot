@@ -32,6 +32,7 @@ window.IMMOPILOT_CONFIG = {
     missionUrl: "",
     enregistrerAcceptation: false,
     prixMensuel: "",
+    devise: "EUR",
     hotesAutorises: ["sumup.com", "sum.up"],
     commissions: { commanditaire: 6, artisan: 15 }
   }

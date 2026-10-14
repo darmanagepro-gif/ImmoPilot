@@ -61,9 +61,15 @@
     return { ttc: ttc, commanditaire: cm, total: ttc + cm, artisan: ca, net: ttc - ca, taux: t };
   }
 
+  // Devise d'affichage : l'euro (« € ») par défaut, sinon le code de la devise du compte SumUp.
+  function devise() {
+    var d = String(pay.devise || "EUR").toUpperCase();
+    return d === "EUR" ? " €" : " " + d;
+  }
+
   function montantTexte(centimes) {
     return (centimes / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
-  window.ImmoPay = { cfg: cfg, pay: pay, lienSumUpValide: lienSumUpValide, param: param, texte: texte, aller: aller, enregistrerAcceptation: enregistrerAcceptation, taux: taux, commissions: commissions, montantTexte: montantTexte };
+  window.ImmoPay = { cfg: cfg, pay: pay, lienSumUpValide: lienSumUpValide, param: param, texte: texte, aller: aller, enregistrerAcceptation: enregistrerAcceptation, taux: taux, commissions: commissions, montantTexte: montantTexte, devise: devise };
 })();
