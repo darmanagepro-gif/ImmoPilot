@@ -63,15 +63,48 @@ jobs:
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
           printf '{"scriptId":"%s","rootDir":"."}' "$SCRIPT_ID" > application/dist/.clasp.json
 
+      - name: Vérifier la connexion Google
+        if: env.SKIP != '1'
+        working-directory: application/dist
+        run: |
+          set +e
+          out=$(clasp show-authorized-user 2>&1); code=$?
+          echo "$out"
+          if [ $code -ne 0 ] || echo "$out" | grep -qi "not logged in\|no credentials\|invalid_grant\|unauthorized"; then
+            echo "::error title=Connexion Google refusée::La clé CLASPRC_JSON est invalide ou expirée. Refaites l'étape 3 (Codespace, clasp login) et remplacez le secret. Détail : $(echo "$out" | tail -n 3 | tr '\n' ' ' | cut -c1-400)"
+            exit 1
+          fi
+          echo "::notice title=Compte Google::$(echo "$out" | tail -n 1 | cut -c1-200)"
+
       - name: Envoyer le code dans Apps Script
         if: env.SKIP != '1'
         working-directory: application/dist
-        run: clasp push --force
+        run: |
+          set +e
+          out=$(clasp push --force 2>&1); code=$?
+          echo "$out"
+          if [ $code -ne 0 ]; then
+            hint="Voir le détail ci-dessous."
+            echo "$out" | grep -qi "Apps Script API" && hint="Activez « API Google Apps Script » sur https://script.google.com/home/usersettings (même compte Google), attendez 2 minutes, puis relancez."
+            echo "$out" | grep -qi "not found\|404\|Requested entity" && hint="ID du script introuvable : vérifiez le secret APPS_SCRIPT_ID (Paramètres du projet › ID du script) et que la clé a été créée avec le compte propriétaire du script."
+            echo "$out" | grep -qi "permission\|403\|caller does not have" && hint="Le compte Google de la clé n'a pas accès à ce script : refaites clasp login avec le compte propriétaire du script."
+            echo "$out" | grep -qi "invalid_grant\|unauthorized\|401" && hint="Clé expirée ou révoquée : refaites l'étape 3 et remplacez le secret CLASPRC_JSON."
+            echo "::error title=Envoi vers Apps Script impossible::$hint Message de Google : $(echo "$out" | grep -v '^\s*$' | tail -n 4 | tr '\n' ' ' | cut -c1-500)"
+            exit 1
+          fi
 
       - name: Mettre à jour le déploiement (même adresse /exec)
         if: env.SKIP != '1'
         working-directory: application/dist
-        run: clasp update-deployment "$DEPLOYMENT_ID" --description "GitHub ${GITHUB_SHA::7}"
+        run: |
+          set +e
+          out=$(clasp update-deployment "$DEPLOYMENT_ID" --description "GitHub ${GITHUB_SHA::7}" 2>&1); code=$?
+          echo "$out"
+          if [ $code -ne 0 ]; then
+            echo "::error title=Mise à jour du déploiement impossible::Le code est bien envoyé, mais le déploiement /exec n'a pas été mis à jour. Faites-le à la main (Déployer › Gérer les déploiements › Nouvelle version) et envoyez-moi ce message : $(echo "$out" | grep -v '^\s*$' | tail -n 4 | tr '\n' ' ' | cut -c1-500)"
+            exit 1
+          fi
+          echo "::notice title=En ligne::Version ${GITHUB_SHA::7} déployée sur l'adresse /exec habituelle."
 
       - name: Effacer les identifiants
         if: always()
