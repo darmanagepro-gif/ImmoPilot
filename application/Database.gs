@@ -73,9 +73,11 @@ function reencodeRaw_(v) { return typeof v === "string" && v !== "" ? "'" + v : 
 
 function dbAll_(name) {
   if (DB_MEMO_[name]) return DB_MEMO_[name];
-  const S = tableDef_(name), sh = dbSheet_(name), lr = sh.getLastRow(), lc = sh.getLastColumn(), rows = [];
-  if (lr >= 2) {
-    const vals = sh.getRange(1, 1, lr, lc).getValues(), headers = vals[0].map(String);
+  // Une seule lecture (getDataRange) au lieu de trois appels au service Sheets.
+  const S = tableDef_(name), sh = dbSheet_(name), rows = [];
+  const vals = sh.getDataRange().getValues();
+  if (vals.length >= 2) {
+    const headers = vals[0].map(String);
     for (let r = 1; r < vals.length; r++) {
       const row = vals[r];
       if (!row.some(function (c) { return c !== "" && c !== null; })) continue;
@@ -87,6 +89,46 @@ function dbAll_(name) {
   }
   DB_MEMO_[name] = rows;
   return rows;
+}
+/**
+ * Lignes récentes d'une table où l'on ajoute toujours en fin (journal) : lecture par paquets depuis la fin jusqu'à la
+ * première ligne antérieure à fromIso (champ field). Évite de relire tout l'historique pour un tableau de bord.
+ */
+function dbTailSince_(name, field, fromIso, chunk) {
+  if (DB_MEMO_[name]) return DB_MEMO_[name].filter(function (r) { return String(r[field]) >= fromIso; });
+  chunk = chunk || 2000;
+  const S = tableDef_(name), sh = dbSheet_(name), headers = dbHeaders_(name), lr = sh.getLastRow(), out = [];
+  let end = lr;
+  while (end >= 2) {
+    const start = Math.max(2, end - chunk + 1), vals = sh.getRange(start, 1, end - start + 1, headers.length).getValues();
+    let older = false;
+    for (let r = vals.length - 1; r >= 0; r--) {
+      const row = vals[r]; if (!row.some(function (c) { return c !== "" && c !== null; })) continue;
+      const o = {}; headers.forEach(function (h, i) { if (h) o[h] = normOut_(S, h, row[i]); });
+      if (String(o[field]) < fromIso) { older = true; continue; }
+      out.push(o);
+    }
+    if (older) break;
+    end = start - 1;
+  }
+  return out.reverse();
+}
+/**
+ * Recherche rapide d'UNE ligne par valeur exacte d'une colonne (ex. empreinte de jeton de session), sans lire toute la feuille :
+ * TextFinder de Sheets sur la seule colonne concernée, puis lecture de la ligne trouvée. Repli sur dbAll_ si indisponible.
+ */
+function dbFindFast_(name, field, value) {
+  if (DB_MEMO_[name]) return dbFind_(name, field, value);
+  const S = tableDef_(name), sh = dbSheet_(name), headers = dbHeaders_(name), col = headers.indexOf(field), lr = sh.getLastRow();
+  if (col < 0 || lr < 2) return dbFind_(name, field, value);
+  const range = sh.getRange(2, col + 1, lr - 1, 1);
+  if (typeof range.createTextFinder !== "function") return dbFind_(name, field, value);
+  const hit = range.createTextFinder(String(value)).matchEntireCell(true).findNext();
+  if (!hit) return null;
+  const row = sh.getRange(hit.getRow(), 1, 1, headers.length).getValues()[0], o = {};
+  headers.forEach(function (h, i) { if (h) o[h] = normOut_(S, h, row[i]); });
+  S.cols.forEach(function (c) { if (!(c in o)) o[c] = normOut_(S, c, ""); });
+  return String(o[field]) === String(value) ? o : dbFind_(name, field, value);
 }
 function dbWhere_(name, pred) { return dbAll_(name).filter(pred); }
 function dbGet_(name, id) {

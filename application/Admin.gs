@@ -128,6 +128,22 @@ function restoreFromBackup(backupFileId) {
 /** Diagnostic non destructif (éditeur). */
 function healthCheck() { assertEditor_(); ctxReset_(); return diagnostics_(); }
 
+/** Fonction d'éditeur : mesure le temps des étapes de la connexion et de la lecture des tables (aucune donnée modifiée). */
+function mesurerPerformance() {
+  assertEditor_(); ctxReset_(); dbReset_();
+  const out = {}, time = function (label, fn) { const t = Date.now(); const r = fn(); out[label] = (Date.now() - t) + " ms"; return r; };
+  time("Mot de passe (PBKDF2, " + pbkdfIters_() + " itérations)", function () { return pbkdf2Hex_("Mesure-Perf1", "0123456789abcdef0123456789abcdef", pbkdfIters_()); });
+  time("Ouverture de la base", function () { return dbSpreadsheet_(); });
+  ["Users", "UserRoles", "Organizations", "Sessions", "Notifications", "Reservations", "Payments", "Expenses", "ActivityLogs", "Documents"].forEach(function (t) {
+    const n = time("Lecture " + t, function () { return dbAll_(t).length; }); out["Lignes " + t] = n;
+  });
+  dbReset_();
+  const s = dbAll_("Sessions").slice(-1)[0]; dbReset_();
+  if (s) time("Recherche ciblée d'une session", function () { return dbFindFast_("Sessions", "tokenHash", s.tokenHash); });
+  out.conseil = "Si une lecture dépasse 2 000 ms, envoyez ce résultat au support : la table concernée peut être allégée (archivage) sans perte.";
+  Logger.log(JSON.stringify(out, null, 2));
+  return out;
+}
 function diagnostics_() {
   const ss = dbSpreadsheet_();
   const missing = Object.keys(schema_()).filter(function (n) { return !ss.getSheetByName(n); });

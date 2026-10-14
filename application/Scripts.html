@@ -65,12 +65,14 @@ const App = window.App = {
     S.token = store("ip_token");
     if (!S.token) return Public.login();
     clear($("app")).appendChild(h("div", { class: "loading" }, t("Chargement…")));
-    api("me.get").then(function (me) { S.me = me; App.enter(); }).catch(function (e) { if (e.code !== "AUTH") Public.login(errMsg(e)); });
+    api("me.boot").then(function (b) { S.me = b.me; S.meta = b.meta; App.enter(); }).catch(function (e) { if (e.code !== "AUTH") Public.login(errMsg(e)); });
   },
   renderLogin: function (msg) { Public.login(msg); },
   enter: function () {
     if (!lstore("ip_lang") && S.me.locale) setLang(S.me.locale);
-    api("meta.get").then(function (m) { S.meta = m; App.shell(); App.go(location.hash.replace(/^#/, "") || "dashboard"); }).catch(showErr);
+    const show = function () { App.shell(); App.go(location.hash.replace(/^#/, "") || "dashboard"); };
+    if (S.meta) { show(); return; }
+    api("meta.get").then(function (m) { S.meta = m; show(); }).catch(showErr);
   },
   shell: function () {
     const app = clear($("app"));

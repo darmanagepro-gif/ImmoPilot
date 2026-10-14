@@ -20,7 +20,7 @@ const Public = {
       ev.preventDefault(); const v = f.get(); if (f.validate()) { err.textContent = f.validate(); err.classList.remove("hidden"); return; }
       go.disabled = true; go.textContent = t("Connexion…");
       apiP("auth.login", { email: v.email, password: v.password, userAgent: navigator.userAgent.slice(0, 180) }).then(function (r) {
-        S.token = r.token; store("ip_token", r.token); S.me = r.me; if (r.me.locale && !lstore("ip_lang")) setLang(r.me.locale); App.enter();
+        S.token = r.token; store("ip_token", r.token); S.me = r.me; S.meta = r.meta || null; go.textContent = t("Ouverture de votre espace…"); if (r.me.locale && !lstore("ip_lang")) setLang(r.me.locale); App.enter();
       }).catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); go.disabled = false; go.textContent = t("Se connecter"); });
     });
     const forgot = h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.forgot(); } }, t("Mot de passe oublié ou compte à activer ?"));

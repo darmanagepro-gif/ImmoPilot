@@ -157,6 +157,30 @@ function TEST_GROUPS_() {
         const u = dbGet_("Users", fx.users.ownerA.userId);
         T.ok(u.passwordHash && u.passwordHash.length === 64 && JSON.stringify(u).indexOf(fx.pw) < 0, "le mot de passe ne doit apparaître nulle part");
       }],
+      ["Connexion rapide : PBKDF2 en JavaScript (RFC), re-hachage transparent, un seul aller-retour, lectures ciblées", function (T, fx) {
+        T.eq(pbkdf2Hex_("password", "73616c74", 4096), "c5e478d59288c841aa530db6845c4c8d962893a001ce4e11a4963873aa98134a", "vecteur RFC c=4096");
+        T.eq(pbkdf2Hex_("passwordPASSWORDpassword", "73616c7453414c5473616c7453414c5473616c7453414c5473616c7453414c5473616c74", 4096).slice(0, 64),
+          "348c89dbcbd32b2f32d814b8116e84cf2b17347ebc1800181c4e2a1fb8dd53e1", "vecteur RFC (sel long)");
+        const email = fx.mail("rehash"), u = tMakeUser_(email, "OWNER", fx.orgA.organizationId, "Rehash-Pass1");
+        const before = dbGet_("Users", u.userId).passwordIters;
+        TEST_HOOKS_.pbkdfIters = Number(before) + 10;
+        try {
+          const r = T.pub("auth.login", { email: email, password: "Rehash-Pass1" });
+          T.ok(r.token && r.me && r.meta && r.meta.roleCaps, "la connexion renvoie aussi les métadonnées (pas d'appel supplémentaire)");
+          T.eq(Number(dbGet_("Users", u.userId).passwordIters), Number(before) + 10, "mot de passe re-haché avec le nouveau nombre d'itérations");
+          T.ok(T.pub("auth.login", { email: email, password: "Rehash-Pass1" }).token, "connexion toujours valide après re-hachage");
+          T.fails(null, "auth.login", { email: email, password: "Mauvais-Pass1" }, "AUTH");
+          const b = T.call(r.token, "me.boot", {});
+          T.ok(b.me.email === email && b.meta.roleCaps, "reprise de session en un seul appel");
+        } finally { TEST_HOOKS_.pbkdfIters = 50; }
+        const s = dbAll_("Sessions")[dbAll_("Sessions").length - 1];
+        dbReset_();
+        T.eq(dbFindFast_("Sessions", "tokenHash", s.tokenHash).sessionId, s.sessionId, "recherche ciblée de la session");
+        T.eq(dbFindFast_("Sessions", "tokenHash", "0".repeat(64)), null, "jeton inconnu");
+        dbReset_();
+        const from = addDaysStr_(todayStr_(), -1);
+        T.eq(dbTailSince_("ActivityLogs", "timestamp", from, 7).length, dbAll_("ActivityLogs").filter(function (l) { return String(l.timestamp) >= from; }).length, "lecture des journaux récents seulement");
+      }],
       ["Invitation valide → compte activé → connexion", function (T, fx) {
         const email = fx.mail("newcleaner");
         T.call(fx.tok.ownerA, "invite.create", { email: email, organizationId: fx.orgA.organizationId, role: "CLEANER", displayName: "Nouvelle Équipe" });

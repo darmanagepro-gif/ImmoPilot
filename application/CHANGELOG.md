@@ -6,6 +6,7 @@ Refonte complète en SaaS multi-organisations à partir de la phase 4, avec migr
 
 ### Ajouté
 
+- **Connexion plus rapide** : mot de passe vérifié en JavaScript pur (au lieu de 4 000 appels au service Google), application affichée en un seul aller-retour après la connexion ou au rechargement, session retrouvée sans relire toute la table, tableau de bord super admin limité aux journaux de la période ; fonction `mesurerPerformance()`. Itérations PBKDF2 portées à 10 000 avec re-hachage transparent à la connexion.
 - **Démo — voyageurs complets** : chaque occupant des réservations courte durée est enregistré (nom, prénom, nationalité, CIN ou passeport avec numéro au format du pays, e-mail et téléphone fictifs du voyageur principal), avec copies de pièce « SPÉCIMEN » sur les séjours récents et à venir ; procédure complète dans `PROCEDURE_COMPLETE.md`.
 - **Mes agences** : fiche complète modifiable par le propriétaire (nom, adresse, ville, téléphone, e-mail de contact, nom et e-mail du responsable) ; changement d'e-mail du responsable = ancien accès retiré et nouveau lien d'activation envoyé ; bouton « Renvoyer le lien d'activation ».
 - **Option agences** : les agences créées par un propriétaire n'ont plus d'abonnement propre ; elles sont facturées en option sur l'abonnement du propriétaire (prix par agence réglable dans chaque forfait) et suivent son statut. Ajout automatique des nouvelles colonnes au premier lancement.

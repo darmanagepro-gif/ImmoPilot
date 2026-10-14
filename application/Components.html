@@ -119,7 +119,7 @@ function api(route, args) {
 }
 function apiP(route, args) { return run("apiPublic", [route, args || {}]).then(function (r) { if (r && r.ok) return r.data; throw (r && r.error) || { message: t("Réponse invalide.") }; }); }
 IP.api = api;
-function localLogout(msg) { S.token = null; S.me = null; store("ip_token", null); if (window.App) App.renderLogin(msg); }
+function localLogout(msg) { S.token = null; S.me = null; S.meta = null; store("ip_token", null); if (window.App) App.renderLogin(msg); }
 
 /* ------------------------------ retours ------------------------------ */
 function toast(msg, tone) {

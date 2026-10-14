@@ -62,7 +62,7 @@ Les propriétés sont visibles dans l'éditeur Apps Script › ⚙️ Paramètre
 | `IMMO_ADMIN_EMAILS` | `setupProject()` (votre adresse) ; vous pouvez en ajouter | Adresse(s) des super administrateurs, séparées par des virgules. Lue **uniquement** par `setupProject()` / `createFirstSuperAdmin()` lancées depuis l'éditeur ; une adresse ajoutée ici ne donne aucun droit tant que le compte n'est pas activé par son lien à usage unique. |
 | `IMMO_APP_URL` | vous, à l'étape 12 | URL `/exec` du déploiement, utilisée dans les liens envoyés par e-mail. |
 | `IMMO_EMBED_ORIGINS` | facultatif | Sites autorisés à afficher ImmoPilot (votre site web et vos applications mobiles), ex. `https://monnom.github.io`. Vide = intégration interdite. Voir `deploiement-web-mobile/GUIDE_3_MODES.md`. |
-| `IMMO_PBKDF_ITERATIONS` | facultatif | Itérations PBKDF2 (défaut 2000, minimum 1000). Voir SECURITE.md avant de modifier. |
+| `IMMO_PBKDF_ITERATIONS` | facultatif | Itérations PBKDF2 (défaut 10 000, minimum 1000). Voir SECURITE.md avant de modifier. |
 | `IMMO_AI_PROVIDER` | facultatif | Mode IA de l'assistant Rubban : `anthropic` (Claude) ou `gemini` (Google). Vide = mode Guide uniquement (gratuit, toujours disponible). |
 | `IMMO_AI_API_KEY` | facultatif | Clé d'API du fournisseur choisi. Lue **uniquement par le serveur**, jamais envoyée au navigateur. |
 | `IMMO_AI_MODEL` | facultatif | Modèle (défaut : `claude-haiku-5-5` ou `gemini-3.5-flash-lite`). |

@@ -73,9 +73,19 @@ function createMock() {
         return this;
       },
       setValue: function (v) { sh.checkWrite(); sh.put(row, col, v); return this; },
-      setFontWeight: function () { return this; }
+      setFontWeight: function () { return this; },
+      createTextFinder: function (text) {
+        let entire = false;
+        const tf = { matchEntireCell: function (b) { entire = !!b; return tf; }, matchCase: function () { return tf; },
+          findNext: function () {
+            for (let r = 0; r < nr; r++) for (let c = 0; c < nc; c++) { const v = String(sh.cell(row + r, col + c)); if (entire ? v === String(text) : v.indexOf(String(text)) >= 0) { const rr = row + r; return { getRow: function () { return rr; } }; } }
+            return null;
+          } };
+        return tf;
+      }
     };
   };
+  Sheet.prototype.getDataRange = function () { return this.getRange(1, 1, Math.max(this.getLastRow(), 1), Math.max(this.getLastColumn(), 1)); };
   function Spreadsheet(name) { this.id = nid("ss_"); this.name = name; this.sheets = []; sheetsById[this.id] = this; registerFile(this.id, name, "application/vnd.google-apps.spreadsheet", [], null, this); }
   Spreadsheet.prototype.getId = function () { return this.id; };
   Spreadsheet.prototype.getName = function () { return this.name; };

@@ -1148,3 +1148,5 @@ option agences|agency option|خيار الوكالات
 Total par période|Total per period|المجموع لكل فترة
 
 Nom du responsable|Manager's name|اسم المسؤول
+
+Ouverture de votre espace…|Opening your workspace…|جارٍ فتح مساحتك…

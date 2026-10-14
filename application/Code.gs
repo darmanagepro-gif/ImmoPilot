@@ -21,7 +21,7 @@ function resolveHandler_(name) {
 }
 function routes_() { return {
   "me.get": function (p) { return meBootstrap_(p); }, "me.logout": "meLogout_", "me.logoutAll": "meLogoutAll_", "me.changePassword": "meChangePassword_", "me.updateProfile": "meUpdateProfile_", "me.requestDeletion": "meRequestDeletion_",
-  "meta.get": function (p) { return metaGet_(p); },
+  "meta.get": function (p) { return metaGet_(p); }, "me.boot": function (p) { return { me: meBootstrap_(p), meta: metaGet_(p) }; },
   "org.list": "orgList_", "org.create": "orgCreate_", "org.update": "orgUpdate_", "org.setStatus": "orgSetStatus_",
   "support.request": "supportRequest_", "support.decide": "supportDecide_", "support.revoke": "supportRevoke_", "support.list": "supportList_",
   "invite.create": "inviteCreate_", "invite.resend": "inviteResend_", "invite.revoke": "inviteRevoke_", "invite.list": "inviteList_",

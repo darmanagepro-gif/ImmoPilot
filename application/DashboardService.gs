@@ -31,7 +31,7 @@ function dashAdmin_(per, includeDemo) {
   const activeOrgIds = orgs.filter(function (o) { return o.status === "ACTIVE"; }).map(function (o) { return String(o.organizationId); });
   const uses = function (table, field) { const s = {}; all(table).forEach(function (r) { s[String(r[field || "organizationId"])] = true; }); return pct_(activeOrgIds.filter(function (o) { return s[o]; }).length, activeOrgIds.length); };
   const unpaidSubs = subs.filter(function (s) { return ["PAST_DUE", "SUSPENDED"].indexOf(s.status) >= 0; });
-  const logs = all("ActivityLogs").filter(function (l) { return inP(l.timestamp); });
+  const logs = dbTailSince_("ActivityLogs", "timestamp", per.from).filter(keep).filter(function (l) { return inP(l.timestamp); });
   const months = {};
   orgs.forEach(function (o) { const m = String(o.createdAt).slice(0, 7); months[m] = (months[m] || 0) + 1; });
   const daily = {};
