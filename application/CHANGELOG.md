@@ -6,6 +6,7 @@ Refonte complète en SaaS multi-organisations à partir de la phase 4, avec migr
 
 ### Ajouté
 
+- **Démo — voyageurs complets** : chaque occupant des réservations courte durée est enregistré (nom, prénom, nationalité, CIN ou passeport avec numéro au format du pays, e-mail et téléphone fictifs du voyageur principal), avec copies de pièce « SPÉCIMEN » sur les séjours récents et à venir ; procédure complète dans `PROCEDURE_COMPLETE.md`.
 - **Mes agences** : fiche complète modifiable par le propriétaire (nom, adresse, ville, téléphone, e-mail de contact, nom et e-mail du responsable) ; changement d'e-mail du responsable = ancien accès retiré et nouveau lien d'activation envoyé ; bouton « Renvoyer le lien d'activation ».
 - **Option agences** : les agences créées par un propriétaire n'ont plus d'abonnement propre ; elles sont facturées en option sur l'abonnement du propriétaire (prix par agence réglable dans chaque forfait) et suivent son statut. Ajout automatique des nouvelles colonnes au premier lancement.
 - **Assistant Rubban (رُبّان, « le pilote »)** : bulle d'aide en bas à droite sur toutes les pages, disponible 24 h/24. Mode Guide gratuit (44 fiches pas à pas filtrées selon le rôle, bouton « Ouvrir la page ») et mode IA facultatif (Claude ou Gemini) appelé uniquement par le serveur, sans transmettre de données de la base, avec limites d'usage et repli automatique.

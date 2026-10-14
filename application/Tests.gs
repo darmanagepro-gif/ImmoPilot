@@ -433,6 +433,20 @@ function TEST_GROUPS_() {
         const fin = T.call(ownerTok, "fin.summary", { from: from, to: today });
         T.ok(JSON.stringify(fin).length > 50, "synthèse financière calculée");
         T.ok(T.call(ownerTok, "dash.get", {}), "tableau de bord du propriétaire");
+        // Voyageurs complets : un enregistrement par occupant, nationalité, pièce et numéro ; copies « spécimen » protégées
+        const gBy = {}; dbAll_("Guests").forEach(function (g) { (gBy[g.reservationId] = gBy[g.reservationId] || []).push(g); });
+        T.ok(resv.every(function (r) { const gs = gBy[r.reservationId] || []; return gs.length === Number(r.guestCount) && gs.every(function (g) { return g.lastName && g.firstName && g.nationality && g.idType && g.idRefMasked && g.idRefMasked.indexOf("*") < 0; }); }), "tous les occupants identifiés (numéros complets en démo)");
+        T.ok(h.counts.extras.companions > 40 && h.counts.extras.idCopies >= 3, "accompagnants et copies de pièce : " + JSON.stringify(h.counts.extras));
+        T.ok(resv.every(function (r) { return /@example\.com$/.test(r.guestEmail); }), "e-mail fictif du voyageur principal (domaine réservé)");
+        const big = resv.filter(function (r) { return Number(r.guestCount) >= 3 && r.status === "COMPLETED"; })[0];
+        const gl = T.call(ownerTok, "guest.list", { reservationId: big.reservationId }).items;
+        T.ok(gl.length === Number(big.guestCount) && gl.every(function (g) { return g.idRef && g.idType && g.nationality; }) && gl.filter(function (g) { return g.isPrimary; }).length === 1, "fiche réservation : liste complète des voyageurs");
+        T.ok(dbAll_("Documents").filter(function (d) { return d.ownerType === "GUEST" && d.category === "ID_DOCUMENT"; }).every(function (d) { return d.sensitive === true && d.retainUntil; }), "copies de pièce sensibles avec date de purge");
+        const guardTokD = T.pub("auth.login", { email: S.properties[0].guard.email, password: "Demo-Passw0rd!" }).token;
+        const dup = resv.filter(function (r) { return r.propertyId === dbAll_("Properties").find(function (p) { return p.name === S.properties[0].name; }).propertyId && r.status === "COMPLETED"; })[0];
+        const gr = api(guardTokD, "guest.list", { reservationId: dup.reservationId });
+        T.ok(!gr.ok || gr.data.items.every(function (g) { return g.idRef === undefined; }), "le gardien ne voit pas les numéros de pièce");
+        T.eq(demoGuests_(dbAll_("Organizations").find(function (o) { return o.name === S.owner.org; }), (function () { const P = {}; S.properties.forEach(function (d) { P[d.key] = { prop: dbAll_("Properties").find(function (x) { return x.name === d.name; }) }; }); return P; })(), today).companions, 0, "relance : aucun voyageur en double");
         // Documents PDF avec logo : contrat d'abonnement, ordre de mission et rapport de ménage avec photos avant / après
         T.eq([h.counts.extras.subscriptions, h.counts.extras.photos], [1, 24], "abonnement du propriétaire (agence en option) et 24 photos de démonstration");
         T.ok(h.counts.extras.checklists >= 100, "listes de tâches par pièce");
