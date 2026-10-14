@@ -209,9 +209,9 @@ PAGES.subscriptions = function (el) {
     { id: "subs", label: "Abonnements clients", render: function (b) {
       const lv = listView(b, { route: "sub.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["TRIAL", "ACTIVE", "PAST_DUE", "SUSPENDED", "EXPIRED", "CANCELLED"] }, { k: "includeClosed", l: "Inclure les clos", t: "checkbox" }, { k: "includeDemo", l: "Inclure la démo", t: "checkbox" }],
         columns: [{ l: "Organisation", k: "organizationName" }, { l: "Forfait", k: "planCode" }, { l: "Statut", status: true, k: "status" }, { l: "Fin de période", date: true, k: "periodEnd" }, { l: "Échéance", date: true, k: "nextDueDate" },
-          { l: "Retard (j)", num: true, k: "daysOverdue" }, { l: "Prix", money: true, k: "price" }, { l: "Biens", num: true, f: function (r) { return r.usage.properties; } }, { l: "Utilisateurs", num: true, f: function (r) { return r.usage.users; } },
+          { l: "Retard (j)", num: true, k: "daysOverdue" }, { l: "Prix", money: true, k: "price" }, { l: "Option agences", f: function (r) { return r.agencyOption && r.agencyOption.count ? r.agencyOption.count + " × " + fmtMoney(r.agencyOption.unitPrice) : "—"; } }, { l: "Total / période", money: true, f: function (r) { return r.agencyOption ? r.agencyOption.totalPrice : r.price; } }, { l: "Biens", num: true, f: function (r) { return r.usage.properties; } }, { l: "Utilisateurs", num: true, f: function (r) { return r.usage.users; } },
           { l: "", f: function (r) { return h("span", { class: "actions" }, btn(t("Paiement"), function () {
-            formModal(t("Enregistrer un paiement d'abonnement"), [{ k: "amount", l: "Montant (MAD)", t: "number", req: true, def: r.price }, { k: "periods", l: "Nombre de périodes", t: "number", def: 1, min: 1 }, { k: "paidAt", l: "Date", t: "date", def: today() },
+            formModal(t("Enregistrer un paiement d'abonnement"), [{ k: "amount", l: "Montant (MAD)", t: "number", req: true, def: r.agencyOption ? r.agencyOption.totalPrice : r.price }, { k: "periods", l: "Nombre de périodes", t: "number", def: 1, min: 1 }, { k: "paidAt", l: "Date", t: "date", def: today() },
               { k: "method", l: "Mode", t: "select", opts: (S.meta.payMethods || []).map(function (m) { return [m, st(m)]; }) }, { k: "reference", l: "Référence (virement, reçu…)", req: true }], {},
               function (v) { v.subscriptionId = r.subscriptionId; v.requestKey = rk(); return api("sub.recordPayment", v).then(function (x) { if (x.warning) toast(x.warning, "bad"); lv.reload(); }); }, { intro: t("Aucun paiement en ligne n'est simulé : enregistrez un règlement réellement reçu.") });
           }, "sm"), btn(t("Contrat (PDF)"), function () { api("sub.contractPdf", { organizationId: r.organizationId }).then(download).catch(showErr); }, "sm"), h("select", { class: "btn sm", onchange: function (e) { const a = e.target.value; e.target.value = ""; if (!a) return; confirmBox(t("Confirmer l'action") + " : " + st("sub." + a) + " ?", { danger: a !== "REACTIVATE" && a !== "UNDO_CANCEL" }).then(function (ok) { if (ok) api("sub.setStatus", { subscriptionId: r.subscriptionId, action: a }).then(lv.reload).catch(showErr); }); } },
@@ -230,7 +230,7 @@ PAGES.subscriptions = function (el) {
   ]);
 };
 function planDialog(p) {
-  return formModal(p.planCode ? t("Forfait") + " " + p.planCode : t("Nouveau forfait"), [{ k: "planCode", l: "Code", req: true }, { k: "name", l: "Nom", req: true }, { k: "price", l: "Prix (MAD)", t: "number", req: true },
+  return formModal(p.planCode ? t("Forfait") + " " + p.planCode : t("Nouveau forfait"), [{ k: "planCode", l: "Code", req: true }, { k: "name", l: "Nom", req: true }, { k: "price", l: "Prix (MAD)", t: "number", req: true }, { k: "agencyOptionPrice", l: "Option agences : prix par agence et par période (MAD)", t: "number", min: 0, help: "Agences créées par un propriétaire : facturées sur son abonnement, pas d'abonnement propre." },
     { k: "periodicity", l: "Périodicité", t: "select", opts: ["MONTHLY", "QUARTERLY", "YEARLY"] }, { k: "maxProperties", l: "Nombre de biens", t: "number" }, { k: "maxUsers", l: "Nombre d'utilisateurs", t: "number" },
     { k: "storageMb", l: "Stockage (Mo)", t: "number" }, { k: "trialDays", l: "Jours d'essai", t: "number" }, { k: "exportRows", l: "Lignes d'export max.", t: "number" }, { k: "sortOrder", l: "Ordre d'affichage", t: "number" },
     { k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "RETIRED"] }, { k: "features", l: "Fonctionnalités", t: "multi", opts: (S.meta.planFeatures || []).map(function (f) { return [f, st("feat." + f)]; }) }],
@@ -248,10 +248,14 @@ function mySubscriptions(el) {
     if (!list.length) { el.appendChild(h("div", { class: "empty" }, t("Aucune organisation à afficher."))); return; }
     list.forEach(function (o) {
       const s = o.subscription, pl = o.plan;
+      if (o.includedIn) { el.appendChild(panel(o.organizationName, h("div", null, o.readOnly ? h("div", { class: "alert bad" }, t("Abonnement suspendu ou expiré : votre compte est en lecture seule. Contactez l'administrateur ImmoPilot.")) : null,
+        h("div", { class: "alert info" }, t("Agence incluse dans l'abonnement de") + " « " + o.includedIn + " » (" + t("option agences") + "). " + t("Aucun abonnement séparé à régler.")),
+        o.plan ? h("p", { class: "small muted" }, t("Forfait") + " : " + o.plan.name + " · " + t("Fonctionnalités") + " : " + o.plan.features.map(function (f) { return st("feat." + f); }).join(", ")) : null))); return; }
       el.appendChild(panel(o.organizationName, h("div", null,
         o.readOnly ? h("div", { class: "alert bad" }, t("Abonnement suspendu ou expiré : votre compte est en lecture seule. Contactez l'administrateur ImmoPilot.")) : null,
         !s ? h("div", { class: "alert info" }, t("Aucun abonnement enregistré pour cette organisation.")) :
-          kv([["Forfait", pl ? pl.name : s.planCode], ["Statut", stTag(s.status)], ["Fin de période", fmtDate(s.periodEnd)], ["Prochaine échéance", fmtDate(s.nextDueDate)], ["Tarif", fmtMoney(s.price) + " / " + st(s.periodicity)], ["Paiement", o.paymentProvider]]),
+          kv([["Forfait", pl ? pl.name : s.planCode], ["Statut", stTag(s.status)], ["Fin de période", fmtDate(s.periodEnd)], ["Prochaine échéance", fmtDate(s.nextDueDate)], ["Tarif", fmtMoney(s.price) + " / " + st(s.periodicity)], s.agencyOption && s.agencyOption.count ? ["Option agences", s.agencyOption.count + " × " + fmtMoney(s.agencyOption.unitPrice) + " (" + s.agencyOption.agencies.join(", ") + ")"] : null,
+            ["Total par période", h("b", null, fmtMoney(s.agencyOption ? s.agencyOption.totalPrice : s.price))], ["Paiement", o.paymentProvider]]),
         h("h3", { style: { marginTop: "16px" } }, t("Utilisation")),
         kpis([{ l: "Biens", v: fmtNum(o.usage.properties, 0) + (pl ? " / " + pl.maxProperties : ""), tone: pl && o.usage.properties >= pl.maxProperties ? "bad" : "" },
           { l: "Utilisateurs", v: fmtNum(o.usage.users, 0) + (pl ? " / " + pl.maxUsers : ""), tone: pl && o.usage.users >= pl.maxUsers ? "bad" : "" },
@@ -338,7 +342,7 @@ PAGES.admin = function (el) {
           { k: "city", l: "Ville", def: "Marrakech" }, { k: "billingEmail", l: "E-mail de facturation", t: "email" }, { k: "locale", l: "Langue", t: "select", opts: [["fr", "Français"], ["en", "English"], ["ar", "العربية"]] },
           { k: "planCode", l: "Forfait (essai)", t: "select", opts: function () { return api("plan.list").then(function (p) { return p.map(function (x) { return [x.planCode, x.name]; }); }); } }], {}, function (v) { return api("org.create", v).then(lv.reload); }, { success: "Organisation créée." }); }, "primary")]; },
         columns: [{ l: "Nom", k: "name" }, { l: "Type", f: function (o) { return st(o.type); } }, { l: "Statut", status: true, k: "status" }, { l: "Ville", k: "city" }, { l: "Utilisateurs", num: true, k: "userCount" }, { l: "Biens", num: true, k: "propertyCount" },
-          { l: "Abonnement", f: function (o) { return o.planCode ? o.planCode + " · " + st(o.subscriptionStatus) : "—"; } }, { l: "Créée le", date: true, k: "createdAt" },
+          { l: "Abonnement", f: function (o) { return o.billedToName ? t("Option agences de") + " " + o.billedToName : (o.planCode ? o.planCode + " · " + st(o.subscriptionStatus) : "—"); } }, { l: "Créée le", date: true, k: "createdAt" },
           { l: "", f: function (o) { return o.type === "PLATFORM" ? null : h("span", { class: "actions" },
             btn(o.status === "ACTIVE" ? t("Suspendre") : t("Réactiver"), function () { const to = o.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
               formModal(to === "SUSPENDED" ? t("Suspendre l'organisation") : t("Réactiver l'organisation"), to === "SUSPENDED" ? [{ k: "reason", l: "Motif", req: true }] : [], {}, function (v) { return api("org.setStatus", { organizationId: o.organizationId, status: to, reason: v.reason }).then(lv.reload); },

@@ -33,7 +33,7 @@ function routes_() { return {
   "property.list": "propertyList_", "property.choices": "propertyChoices_", "property.get": "propertyGet_", "property.orgChoices": function (p) { return propertyOrgChoices_(p); },
   "property.create": "propertyCreate_", "property.update": "propertyUpdate_", "property.archive": "propertyArchive_", "property.import": "propertyImport_", "property.export": "propertyExport_",
   "residence.list": "residenceList_", "residence.create": "residenceCreate_",
-  "property.agencyChoices": "propertyAgencyChoices_", "property.agencySet": "propertyAgencySet_", "property.agencyCreate": "ownerAgencyCreate_", "agency.mine": "ownerAgencyList_", "agency.update": "ownerAgencyUpdate_", "agency.revokeAll": "ownerAgencyRevokeAll_", "agency.delete": "ownerAgencyDelete_", "property.access": "propertyAccessList_", "property.staffAssign": "propertyStaffAssign_", "property.staffRevoke": "propertyStaffRevoke_",
+  "property.agencyChoices": "propertyAgencyChoices_", "property.agencySet": "propertyAgencySet_", "property.agencyCreate": "ownerAgencyCreate_", "agency.mine": "ownerAgencyList_", "agency.update": "ownerAgencyUpdate_", "agency.resendInvite": "ownerAgencyResendInvite_", "agency.revokeAll": "ownerAgencyRevokeAll_", "agency.delete": "ownerAgencyDelete_", "property.access": "propertyAccessList_", "property.staffAssign": "propertyStaffAssign_", "property.staffRevoke": "propertyStaffRevoke_",
   "resv.list": "resvList_", "resv.get": "resvGet_", "resv.availability": "resvAvailability_", "resv.create": "resvCreate_", "resv.update": "resvUpdate_", "resv.setStatus": "resvSetStatus_", "resv.cancel": "resvCancel_",
   "resv.calendar": "resvCalendar_", "resv.sendConfirmation": "resvSendConfirmation_", "resv.sheet": "resvSheet_", "block.create": "blockCreate_", "block.cancel": "blockCancel_",
   "guest.list": "guestList_", "guest.save": "guestSave_", "guest.purge": "guestPurge_", "guest.tokenCreate": "guestTokenCreate_", "guest.tokenRevoke": "guestTokenRevoke_",
@@ -167,6 +167,7 @@ function errorResponse_(e, route) {
 /** Appel authentifié. Le jeton est vérifié côté serveur à chaque appel ; aucune donnée d'identité fournie par le navigateur n'est crue. */
 function api(token, route, args) {
   ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0;
+  ensureSchemaCurrent_();
   route = String(route || "");
   try {
     const R = routes_(), name = Object.prototype.hasOwnProperty.call(R, route) ? R[route] : null;
@@ -181,6 +182,7 @@ function api(token, route, args) {
 /** Appel public : uniquement les routes dont la sécurité repose sur un secret à usage unique ou un mot de passe. */
 function apiPublic(route, args) {
   ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0;
+  ensureSchemaCurrent_();
   route = String(route || "");
   try {
     const R = publicRoutes_(), name = Object.prototype.hasOwnProperty.call(R, route) ? R[route] : null;

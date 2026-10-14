@@ -24,6 +24,7 @@ function orgList_(p, a) {
       r.userCount = roles.filter(function (x) { return String(x.organizationId) === String(o.organizationId) && x.status === "ACTIVE"; }).length;
       r.propertyCount = props.filter(function (x) { return String(x.organizationId) === String(o.organizationId) && x.status !== "DELETED"; }).length;
       const e = entitlement_(o.organizationId); r.subscriptionStatus = e.status; r.planCode = e.planCode || r.planCode;
+      if (e.inheritedFrom) r.billedToName = ((dbGet_("Organizations", e.inheritedFrom) || {}).name) || "";
     }
     return r;
   }).sort(function (x, y) { return String(x.name).localeCompare(String(y.name)); });
@@ -144,7 +145,8 @@ function ownerAgencyCreate_(p, a) {
     const same = dbAll_("Organizations").find(function (o) { return String(o.name).toLowerCase() === name.toLowerCase() && o.status !== "INACTIVE"; });
     if (same) throw new AppError("VALIDATION", "Une organisation porte déjà ce nom. S'il s'agit de la même agence, utilisez « Attribuer une agence » ; sinon, choisissez un autre nom.");
     const o = dbInsert_("Organizations", { name: name, status: "ACTIVE", type: "AGENCY", city: safeText_(a.city || "Marrakech", 80), country: "MA", timezone: tz_(),
-      locale: oneOf_(a.locale || "fr", ["fr", "en", "ar"], "Langue"), billingEmail: adminEmail, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
+      locale: oneOf_(a.locale || "fr", ["fr", "en", "ar"], "Langue"), billingEmail: adminEmail, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(),
+      managedByOrgId: prop.organizationId, contactName: safeText_(a.adminName || "", 100), phone: safeText_(a.phone || "", 30), address: safeText_(a.address || "", 240) });
     audit_("AGENCY_CREATED_BY_OWNER", "Organization", o.organizationId, prop.organizationId, { name: name, propertyId: prop.propertyId, adminEmail: adminEmail });
     return o;
   });
@@ -180,14 +182,21 @@ function ownerAgencyList_(p) {
   const roles = dbAll_("UserRoles"), users = indexBy_(dbAll_("Users"), "userId"), invites = dbAll_("Invitations");
   return Object.keys(ids).map(function (id) {
     const o = dbGet_("Organizations", id); if (!o) return null;
-    const admins = roles.filter(function (r) { return String(r.organizationId) === id && r.role === "AGENCY_ADMIN" && r.status === "ACTIVE"; }).map(function (r) { return (users[String(r.userId)] || {}).email; }).filter(Boolean);
-    const pending = invites.filter(function (i) { return String(i.organizationId) === id && i.status === "PENDING"; }).map(function (i) { return i.email; });
+    const adminUsers = roles.filter(function (r) { return String(r.organizationId) === id && r.role === "AGENCY_ADMIN" && r.status === "ACTIVE"; }).map(function (r) { return users[String(r.userId)]; }).filter(Boolean);
+    const admins = adminUsers.map(function (u) { return u.email; });
+    const pendingInv = invites.filter(function (i) { return String(i.organizationId) === id && (i.status === "PENDING" || i.status === "EMAIL_FAILED") && i.role === "AGENCY_ADMIN"; });
+    const pending = pendingInv.map(function (i) { return i.email; });
+    const resp = adminUsers[0] ? { name: adminUsers[0].displayName, email: adminUsers[0].email, phone: adminUsers[0].phone || "", activated: !!adminUsers[0].passwordHash }
+      : pendingInv[0] ? { name: pendingInv[0].displayName, email: pendingInv[0].email, phone: "", activated: false, pending: true } : null;
+    const billedTo = agencyBillingParent_(o);
     const mine = perms.filter(function (z) { return String(z.agencyOrganizationId) === id; }).map(function (z) {
       const pr = props[String(z.propertyId)];
       return { permissionId: z.permissionId, propertyId: z.propertyId, propertyName: pr.name, propertyCity: pr.city, status: z.status, canView: bool_(z.canView), canManageReservations: bool_(z.canManageReservations),
         canManageOperations: bool_(z.canManageOperations), canViewFinance: bool_(z.canViewFinance), commissionRate: z.commissionRate, validFrom: z.validFrom, validTo: z.validTo };
     });
     return { organizationId: id, name: o.name, city: o.city, contactEmail: o.billingEmail, locale: o.locale, status: o.status, createdByMe: normalizeEmail_(o.createdBy) === p.email,
+      address: o.address || "", phone: o.phone || "", contactName: o.contactName || "", responsible: resp, adminName: resp ? resp.name : "", adminEmail: resp ? resp.email : "",
+      includedInMySubscription: !!billedTo && owners.indexOf(billedTo) >= 0,
       admins: admins, pendingInvitations: pending, activeProperties: mine.filter(function (x) { return x.status === "ACTIVE"; }).length, properties: mine };
   }).filter(Boolean).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
 }
@@ -204,9 +213,67 @@ function ownerAgencyUpdate_(p, a) {
   if (a.city !== undefined) patch.city = safeText_(a.city, 80);
   if (a.contactEmail !== undefined) patch.billingEmail = a.contactEmail ? validateEmail_(a.contactEmail) : "";
   if (a.locale !== undefined) patch.locale = oneOf_(a.locale, ["fr", "en", "ar"], "Langue");
+  if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
+  if (a.address !== undefined) patch.address = safeText_(a.address, 240);
+  if (a.adminName !== undefined) patch.contactName = safeText_(a.adminName, 100);
   dbUpdate_("Organizations", x.org.organizationId, patch);
   audit_("AGENCY_UPDATED_BY_OWNER", "Organization", x.org.organizationId, x.owners[0], diff_(x.org, patch, Object.keys(patch).filter(function (k) { return k !== "updatedAt"; })));
-  return { ok: true };
+  let responsible = null;
+  if (a.adminEmail !== undefined && String(a.adminEmail || "").trim()) responsible = ownerAgencySetResponsible_(p, x, validateEmail_(a.adminEmail), safeText_(a.adminName || "", 100), a.adminPhone);
+  return { ok: true, responsible: responsible };
+}
+/** Responsable actuel de l'agence : comptes AGENCY_ADMIN actifs et invitations en attente. */
+function ownerAgencyResponsibles_(orgId) {
+  const users = indexBy_(dbAll_("Users"), "userId");
+  return {
+    roles: dbAll_("UserRoles").filter(function (r) { return String(r.organizationId) === String(orgId) && r.role === "AGENCY_ADMIN" && r.status === "ACTIVE"; }).map(function (r) { return { role: r, user: users[String(r.userId)] || {} }; }),
+    invites: dbAll_("Invitations").filter(function (i) { return String(i.organizationId) === String(orgId) && i.role === "AGENCY_ADMIN" && (i.status === "PENDING" || i.status === "EMAIL_FAILED"); })
+  };
+}
+/**
+ * Changement d'e-mail du responsable (agence créée par le propriétaire) : l'ancien responsable perd son accès à CETTE agence
+ * (son compte n'est pas supprimé : il peut travailler pour d'autres organisations), ses invitations en attente sont révoquées,
+ * et un nouveau lien d'activation, à usage unique, est envoyé à la nouvelle adresse. Même adresse : seuls le nom et le téléphone sont mis à jour.
+ */
+function ownerAgencySetResponsible_(p, x, email, name, phone) {
+  const id = String(x.org.organizationId), cur = ownerAgencyResponsibles_(id);
+  const same = cur.roles.some(function (r) { return normalizeEmail_(r.user.email) === email; }) || cur.invites.some(function (i) { return normalizeEmail_(i.email) === email; });
+  if (same) {
+    cur.roles.filter(function (r) { return normalizeEmail_(r.user.email) === email; }).forEach(function (r) {
+      const patch = {}; if (name && !r.user.passwordHash) patch.displayName = name; if (phone !== undefined && !r.user.phone) patch.phone = safeText_(phone, 30);
+      if (Object.keys(patch).length) dbUpdate_("Users", r.user.userId, Object.assign(patch, { updatedAt: nowIso_() }));
+    });
+    return { changed: false, email: email };
+  }
+  withLock_(function () {
+    cur.invites.forEach(function (i) { dbUpdate_("Invitations", i.invitationId, { status: "REVOKED", revokedAt: nowIso_(), tokenHash: "" }); });
+    cur.roles.forEach(function (r) {
+      dbUpdate_("UserRoles", r.role.userRoleId, { status: "REVOKED", revokedAt: nowIso_(), revokedBy: p.email });
+      // Ses sessions ne doivent plus donner accès à l'agence : le principal est recalculé à chaque appel, la révocation du rôle suffit.
+    });
+    dbUpdate_("Organizations", id, { billingEmail: email, contactName: name || x.org.contactName || "", updatedAt: nowIso_() });
+  });
+  const inv = invitationInsertAndSend_(p, { email: email, displayName: name || email.split("@")[0], organizationId: id, role: "AGENCY_ADMIN" }, dbGet_("Organizations", id));
+  audit_("AGENCY_RESPONSIBLE_CHANGED", "Organization", id, x.owners[0], { from: cur.roles.map(function (r) { return r.user.email; }).concat(cur.invites.map(function (i) { return i.email; })), to: email, emailSent: inv.emailSent });
+  return { changed: true, email: email, emailSent: inv.emailSent, emailError: inv.emailError };
+}
+/** Renvoyer le lien d'activation au responsable (invitation en attente, ou compte jamais activé). */
+function ownerAgencyResendInvite_(p, a) {
+  const x = ownerAgencyLoad_(p, a.agencyOrganizationId);
+  if (!x.creator) forbid_("Réservé aux agences que vous avez créées.");
+  const id = String(x.org.organizationId), cur = ownerAgencyResponsibles_(id);
+  rateLimit_("agency-resend:" + id, 5, 3600);
+  if (cur.invites.length) {
+    const last = cur.invites[cur.invites.length - 1];
+    withLock_(function () { cur.invites.forEach(function (i) { dbUpdate_("Invitations", i.invitationId, { status: "REVOKED", revokedAt: nowIso_(), tokenHash: "" }); }); });
+    const inv = invitationInsertAndSend_(p, { email: last.email, displayName: last.displayName, organizationId: id, role: "AGENCY_ADMIN" }, x.org);
+    audit_("AGENCY_INVITE_RESENT", "Organization", id, x.owners[0], { email: last.email, emailSent: inv.emailSent });
+    return { ok: true, email: last.email, emailSent: inv.emailSent, emailError: inv.emailError };
+  }
+  const notActivated = cur.roles.find(function (r) { return !r.user.passwordHash; });
+  if (notActivated) { sendPasswordLink_(notActivated.user, "ACTIVATION"); audit_("AGENCY_INVITE_RESENT", "Organization", id, x.owners[0], { email: notActivated.user.email }); return { ok: true, email: notActivated.user.email, emailSent: true }; }
+  assert_(cur.roles.length, "Aucun responsable : indiquez son e-mail dans « Modifier la fiche ».");
+  throw new AppError("VALIDATION", "Le compte du responsable est déjà activé : il se connecte avec son mot de passe (en cas d'oubli, « Mot de passe oublié » sur l'écran de connexion).");
 }
 /** Retirer l'accès de l'agence à TOUS mes biens (immédiat ; l'historique est conservé). */
 function ownerAgencyRevokeAll_(p, a) {

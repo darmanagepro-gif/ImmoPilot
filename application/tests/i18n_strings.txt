@@ -1058,7 +1058,6 @@ L'agence aura accès à ce bien uniquement, avec les droits cochés. Vous pourre
 Liste tenue par l'administrateur ImmoPilot, filtrée par type de prestation.|List maintained by the ImmoPilot administrator, filtered by service type.|قائمة يديرها مسؤول ImmoPilot، مصفاة حسب نوع الخدمة.
 Nom de l'agence|Agency name|اسم الوكالة
 Nom de l'entreprise ou de l'artisan|Company or tradesperson name|اسم الشركة أو الحرفي
-Nom du responsable|Manager's name|اسم المسؤول
 Prestataire ajouté.|Provider added.|تمت إضافة مقدم الخدمة.
 Prestataire ajouté. Invitation envoyée :|Provider added. Invitation sent:|تمت إضافة مقدم الخدمة. أُرسلت الدعوة:
 Type de prestation|Service type|نوع الخدمة
@@ -1129,3 +1128,23 @@ Votre question|Your question|سؤالك
 Votre question…|Your question…|سؤالك…
 L'assistant IA est momentanément indisponible : voici les réponses du guide.|The AI assistant is temporarily unavailable: here are the guide's answers.|المساعد الذكي غير متاح مؤقتاً: إليك إجابات الدليل.
 Limite de questions à l'assistant IA atteinte pour le moment : voici les réponses du guide.|AI question limit reached for now: here are the guide's answers.|تم بلوغ حد الأسئلة للمساعد الذكي حالياً: إليك إجابات الدليل.
+Agence incluse dans l'abonnement de|Agency included in the subscription of|وكالة مشمولة في اشتراك
+Agences créées par un propriétaire : facturées sur son abonnement, pas d'abonnement propre.|Agencies created by an owner are billed on the owner's subscription, with no subscription of their own.|الوكالات التي ينشئها المالك تُفوتر ضمن اشتراكه، دون اشتراك خاص بها.
+Aucun abonnement séparé à régler.|No separate subscription to pay.|لا يوجد اشتراك منفصل للدفع.
+Aucun responsable|No manager|لا يوجد مسؤول
+E-mail du responsable (connexion)|Manager's e-mail (login)|البريد الإلكتروني للمسؤول (الدخول)
+Incluse dans votre abonnement (option agences)|Included in your subscription (agency option)|مشمولة في اشتراكك (خيار الوكالات)
+Invitation enregistrée, mais l'e-mail n'a pas pu partir|Invitation saved, but the e-mail could not be sent|تم حفظ الدعوة لكن تعذّر إرسال البريد
+Lien d'activation envoyé à|Activation link sent to|تم إرسال رابط التفعيل إلى
+Option agences|Agency option|خيار الوكالات
+Option agences : prix par agence et par période (MAD)|Agency option: price per agency and per period (MAD)|خيار الوكالات: السعر لكل وكالة ولكل فترة (درهم)
+Option agences de|Agency option of|خيار الوكالات لـ
+Renvoyer le lien d'activation|Resend the activation link|إعادة إرسال رابط التفعيل
+Si vous changez cet e-mail, l'ancien responsable perd l'accès à l'agence et un nouveau lien d'activation est envoyé à la nouvelle adresse.|If you change this e-mail, the former manager loses access to the agency and a new activation link is sent to the new address.|إذا غيّرت هذا البريد، يفقد المسؤول السابق الوصول إلى الوكالة ويُرسل رابط تفعيل جديد إلى العنوان الجديد.
+Total / période|Total / period|المجموع / الفترة
+compte activé|account activated|الحساب مفعّل
+en attente d'activation|awaiting activation|في انتظار التفعيل
+option agences|agency option|خيار الوكالات
+Total par période|Total per period|المجموع لكل فترة
+
+Nom du responsable|Manager's name|اسم المسؤول

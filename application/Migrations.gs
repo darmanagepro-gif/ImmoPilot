@@ -157,6 +157,23 @@ function migSeed_() {
   return r;
 }
 
+/**
+ * Après le collage d'une nouvelle version : ajoute automatiquement les colonnes nouvelles (opération additive, aucune donnée
+ * modifiée) la première fois que l'application est utilisée. Mémorisé dans la propriété IMMO_SCHEMA_SYNCED.
+ */
+function ensureSchemaCurrent_() {
+  try {
+    if (TEST_HOOKS_.mailSink) return; // environnement de test : base temporaire déjà migrée
+    const props = PropertiesService.getScriptProperties();
+    if (!props.getProperty(IMMO_CONFIG.DATABASE_PROPERTY)) return;
+    if (String(props.getProperty("IMMO_SCHEMA_SYNCED") || "") === String(IMMO_CONFIG.SCHEMA_VERSION)) return;
+    withLock_(function () {
+      if (String(props.getProperty("IMMO_SCHEMA_SYNCED") || "") === String(IMMO_CONFIG.SCHEMA_VERSION)) return;
+      migSchemaSync_();
+      props.setProperty("IMMO_SCHEMA_SYNCED", String(IMMO_CONFIG.SCHEMA_VERSION));
+    }, 20000);
+  } catch (e) { console.error("Synchronisation du schéma : " + e.message); }
+}
 /** Exécute les migrations en attente, avec sauvegarde préalable. Doit être appelé sous verrou. */
 function runMigrations_(actor) {
   const ss = dbSpreadsheet_();

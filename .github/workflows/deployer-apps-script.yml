@@ -35,20 +35,26 @@ jobs:
           SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
         run: |
           if [ -z "$CLASPRC_JSON" ] || [ -z "$SCRIPT_ID" ]; then
-            echo "::error::Secrets CLASPRC_JSON et APPS_SCRIPT_ID manquants : suivez application/GITHUB_VERS_APPS_SCRIPT.md"
-            exit 1
+            if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+              echo "::error::Secrets CLASPRC_JSON et APPS_SCRIPT_ID manquants : suivez application/GITHUB_VERS_APPS_SCRIPT.md"; exit 1
+            fi
+            echo "::warning::Connexion à Apps Script non configurée : envoi automatique ignoré (voir application/GITHUB_VERS_APPS_SCRIPT.md)."
+            echo "SKIP=1" >> "$GITHUB_ENV"; exit 0
           fi
           test -f application/dist/ImmoPilot.gs && test -f application/dist/Index.html && test -f application/dist/appsscript.json
           grep -q "FIN DU FICHIER ImmoPilot.gs" application/dist/ImmoPilot.gs || { echo "::error::ImmoPilot.gs incomplet"; exit 1; }
 
       - uses: actions/setup-node@v4
+        if: env.SKIP != '1'
         with:
           node-version: 20
 
       - name: Installer clasp (outil officiel de Google)
+        if: env.SKIP != '1'
         run: npm install -g @google/clasp@3.4.1
 
       - name: Préparer les identifiants (temporaires)
+        if: env.SKIP != '1'
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
           SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
@@ -58,10 +64,12 @@ jobs:
           printf '{"scriptId":"%s","rootDir":"."}' "$SCRIPT_ID" > application/dist/.clasp.json
 
       - name: Envoyer le code dans Apps Script
+        if: env.SKIP != '1'
         working-directory: application/dist
         run: clasp push --force
 
       - name: Mettre à jour le déploiement (même adresse /exec)
+        if: env.SKIP != '1'
         working-directory: application/dist
         run: clasp update-deployment "$DEPLOYMENT_ID" --description "GitHub ${GITHUB_SHA::7}"
 

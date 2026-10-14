@@ -244,6 +244,60 @@ function TEST_GROUPS_() {
         T.fails(fx.tok.ag1, "role.setPermissions", { userRoleId: own.userRoleId, removedCaps: [] }, "FORBIDDEN");
         T.fails(fx.tok.ownerA, "org.create", { name: "Pirate" }, "FORBIDDEN");
       }],
+      ["Mes agences : fiche complète, changement d'e-mail du responsable avec nouveau lien d'activation, renvoi du lien", function (T, fx) {
+        const e1 = fx.mail("resp1"), e2 = fx.mail("resp2"), e3 = fx.mail("resp3");
+        const r = T.call(fx.tok.ownerA, "property.agencyCreate", { propertyId: fx.propA, name: "Agence Fiche " + fx.run, adminEmail: e1, adminName: "Premier", canManageReservations: true });
+        const ag = r.organizationId;
+        // Correction de l'e-mail avant activation : l'invitation part à la bonne adresse, l'ancienne est révoquée.
+        const u1 = T.call(fx.tok.ownerA, "agency.update", { agencyOrganizationId: ag, name: "Agence Fiche " + fx.run, address: "12 rue de la Liberté", phone: "+212600000000", adminName: "Second", adminEmail: e2 });
+        T.ok(u1.responsible.changed && u1.responsible.emailSent, "nouveau lien envoyé");
+        T.eq(dbGet_("Invitations", r.invitationId).status, "REVOKED", "ancienne invitation révoquée");
+        T.fails(null, "invite.accept", { token: T.tokenFrom(T.lastMailTo(e1).body, "accept"), password: "Ancien-Pass1" });
+        const o = dbGet_("Organizations", ag);
+        T.eq([o.address, o.phone, o.contactName, o.billingEmail], ["12 rue de la Liberté", "+212600000000", "Second", e2], "fiche complète enregistrée");
+        // Renvoi du lien : nouveau jeton, l'ancien ne marche plus.
+        const firstToken = T.tokenFrom(T.lastMailTo(e2).body, "accept");
+        T.ok(T.call(fx.tok.ownerA, "agency.resendInvite", { agencyOrganizationId: ag }).emailSent, "lien renvoyé");
+        const secondToken = T.tokenFrom(T.lastMailTo(e2).body, "accept");
+        T.ok(firstToken !== secondToken, "nouveau jeton");
+        T.fails(null, "invite.accept", { token: firstToken, password: "Second-Pass1" });
+        T.pub("invite.accept", { token: secondToken, password: "Second-Pass1" });
+        const tok2 = T.pub("auth.login", { email: e2, password: "Second-Pass1" }).token;
+        T.eq(T.call(tok2, "property.list", {}).items.length, 1, "le responsable activé voit le bien confié");
+        T.fails(fx.tok.ownerA, "agency.resendInvite", { agencyOrganizationId: ag }, "VALIDATION");
+        let mine = T.call(fx.tok.ownerA, "agency.mine", {}).find(function (x) { return x.organizationId === ag; });
+        T.ok(mine.responsible.email === e2 && mine.responsible.activated && mine.address === "12 rue de la Liberté", "« Mes agences » affiche le responsable activé");
+        // Nouveau responsable après activation : l'ancien perd l'accès à l'agence (son compte reste), le nouveau reçoit son lien.
+        T.call(fx.tok.ownerA, "agency.update", { agencyOrganizationId: ag, adminName: "Troisième", adminEmail: e3 });
+        T.fails(tok2, "property.get", { propertyId: fx.propA });
+        T.ok(dbAll_("Users").some(function (u) { return u.email === e2; }) && T.lastMailTo(e3) && /action=accept/.test(T.lastMailTo(e3).body), "ancien compte conservé, nouveau lien envoyé");
+        T.fails(fx.tok.ownerB, "agency.update", { agencyOrganizationId: ag, adminEmail: fx.mail("pirate2") }, "FORBIDDEN");
+        mine = T.call(fx.tok.ownerA, "agency.mine", {}).find(function (x) { return x.organizationId === ag; });
+        T.ok(mine.responsible.email === e3 && !mine.responsible.activated && mine.includedInMySubscription, "en attente d'activation, incluse dans l'abonnement du propriétaire");
+      }],
+      ["Abonnement : les agences créées par un propriétaire sont une option de son abonnement", function (T, fx) {
+        const org = tOrg_("Propriétaire Option " + fx.run, "OWNER_ORG"), owner = tMakeUser_(fx.mail("owner-opt"), "OWNER", org.organizationId, fx.pw);
+        const tok = T.pub("auth.login", { email: owner.email, password: fx.pw }).token;
+        const prop = T.call(tok, "property.create", { organizationId: org.organizationId, name: "Bien Option", city: "Marrakech" }).propertyId;
+        const ag = T.call(tok, "property.agencyCreate", { propertyId: prop, name: "Agence Option " + fx.run, adminEmail: fx.mail("ag-opt"), canManageReservations: true }).organizationId;
+        T.eq(String(dbGet_("Organizations", ag).managedByOrgId), String(org.organizationId), "agence rattachée au propriétaire");
+        T.fails(fx.tok.superA, "sub.assign", { organizationId: ag, planCode: "PRO" }, "VALIDATION");
+        const pro = dbGet_("SubscriptionPlans", "PRO");
+        T.call(fx.tok.superA, "plan.save", Object.assign(planOut_(pro), { agencyOptionPrice: 50 }));
+        const sid = T.call(fx.tok.superA, "sub.assign", { organizationId: org.organizationId, planCode: "PRO" }).subscriptionId;
+        const row = T.call(fx.tok.superA, "sub.list", { organizationId: org.organizationId }).items[0];
+        T.eq([row.agencyOption.count, row.agencyOption.unitPrice, row.agencyOption.totalPrice], [1, 50, num_(pro.price) + 50], "option agences comptée sur l'abonnement du propriétaire");
+        const agMine = (function () { const u = tMakeUser_(fx.mail("ag-admin-opt"), "AGENCY_ADMIN", ag, fx.pw); return T.pub("auth.login", { email: u.email, password: fx.pw }).token; })();
+        const view = T.call(agMine, "sub.mine", {})[0];
+        T.ok(view.includedIn === org.name && !view.subscription && !view.billing.length, "l'agence voit « incluse », sans les montants du propriétaire");
+        T.call(fx.tok.superA, "sub.setStatus", { subscriptionId: sid, action: "SUSPEND" });
+        T.ok(entitlement_(ag).readOnly === true && entitlement_(ag).inheritedFrom === String(org.organizationId), "abonnement du propriétaire suspendu : l'agence passe aussi en lecture seule");
+        T.fails(agMine, "resv.create", { propertyId: prop, checkIn: tDays_(40), checkOut: tDays_(42), guestName: "Test Option" }, "SUBSCRIPTION");
+        T.call(fx.tok.superA, "sub.setStatus", { subscriptionId: sid, action: "REACTIVATE" });
+        const contract = Utilities.newBlob(Utilities.base64Decode(T.call(tok, "sub.contractPdf", { organizationId: org.organizationId }).base64)).getDataAsString();
+        T.ok(contract.indexOf("Option agences") > 0 && contract.indexOf("Agence Option " + fx.run) > 0, "option détaillée dans le contrat");
+        T.call(fx.tok.superA, "plan.save", Object.assign(planOut_(pro), { agencyOptionPrice: num_(pro.agencyOptionPrice) }));
+      }],
       ["Propriétaire : création d'une agence, invitation de son responsable et attribution du bien", function (T, fx) {
         const email = fx.mail("agence-duplex");
         const r = T.call(fx.tok.ownerA, "property.agencyCreate", { propertyId: fx.propA, name: "Agence Duplex Test", adminEmail: email, adminName: "Youssef", canManageReservations: true, commissionRate: 18 });
@@ -380,13 +434,16 @@ function TEST_GROUPS_() {
         T.ok(JSON.stringify(fin).length > 50, "synthèse financière calculée");
         T.ok(T.call(ownerTok, "dash.get", {}), "tableau de bord du propriétaire");
         // Documents PDF avec logo : contrat d'abonnement, ordre de mission et rapport de ménage avec photos avant / après
-        T.eq([h.counts.extras.subscriptions, h.counts.extras.photos], [2, 24], "2 abonnements et 24 photos de démonstration");
+        T.eq([h.counts.extras.subscriptions, h.counts.extras.photos], [1, 24], "abonnement du propriétaire (agence en option) et 24 photos de démonstration");
         T.ok(h.counts.extras.checklists >= 100, "listes de tâches par pièce");
         const text = function (r) { return Utilities.newBlob(Utilities.base64Decode(r.base64)).getDataAsString(); };
         const ownerOrgId = dbAll_("Organizations").find(function (o) { return o.name === S.owner.org; }).organizationId;
+        const dOrgsAg_ = function (id) { return dbAll_("Organizations").some(function (o) { return o.name === S.agency.org && o.organizationId === id; }); };
         const contract = text(T.call(ownerTok, "sub.contractPdf", { organizationId: ownerOrgId }));
         T.ok(/^%PDF/.test(contract) && contract.indexOf("data:image/png;base64," + PDF_LOGO_PNG_B64_.slice(0, 40)) > 0, "contrat avec logo");
         T.ok(contract.indexOf("règlement semestriel") > 0 && contract.indexOf("Historique des règlements") > 0, "historique des règlements dans le contrat");
+        T.ok(contract.indexOf("1 agence(s)") > 0 && contract.indexOf(S.agency.org) > 0, "agence de démo en option sur l'abonnement du propriétaire");
+        T.ok(!dbAll_("Subscriptions").some(function (x) { return x.status !== "CANCELLED" && dOrgsAg_(x.organizationId); }), "l'agence de démo n'a pas d'abonnement propre");
         T.fails(fx.tok.ownerA, "sub.contractPdf", { organizationId: ownerOrgId }, "FORBIDDEN");
         const withPhotos = dbAll_("CleaningPhotos").map(function (x) { return x.missionId; })[0];
         const provTok = T.pub("auth.login", { email: S.provider.email, password: "Demo-Passw0rd!" }).token;
@@ -411,6 +468,7 @@ function TEST_GROUPS_() {
         T.fails(fx.tok.ownerB, "inv.pdf", { invoiceId: inv.invoiceId }, "FORBIDDEN");
         // Démo exclue des statistiques et de la facturation de la plateforme ; pas d'e-mails automatiques ; mise en veille réversible
         const dOrgs = dbAll_("Organizations").filter(function (o) { return o.isDemo === true; });
+        T.ok(String(dOrgs.find(function (o) { return o.name === S.agency.org; }).managedByOrgId) === String(dOrgs.find(function (o) { return o.name === S.owner.org; }).organizationId), "agence de démo rattachée au propriétaire");
         T.eq(dOrgs.length, 2, "2 organisations marquées « démo »");
         const adm = function (inc) { return T.call(fx.tok.superA, "dash.get", { from: from, to: today, includeDemo: inc }).admin; };
         const without = adm(false), withDemo = adm(true);
@@ -419,7 +477,7 @@ function TEST_GROUPS_() {
         T.ok(demoSubPaid > 0 && Math.abs(withDemo.platformRevenue - without.platformRevenue - demoSubPaid) < 0.01, "revenus d'abonnement de la démo exclus");
         T.ok(withDemo.reservations - without.reservations >= 40 && without.demoExcluded === 2, "réservations de démo exclues");
         const subsNo = T.call(fx.tok.superA, "sub.list", {}), subsYes = T.call(fx.tok.superA, "sub.list", { includeDemo: true });
-        T.ok(subsYes.items.length - subsNo.items.length === 2 && subsNo.billing.every(function (b) { return !/^DÉMO/.test(b.organizationName || ""); }), "abonnements de démo masqués par défaut");
+        T.ok(subsYes.items.length - subsNo.items.length === 1 && subsNo.billing.every(function (b) { return !/^DÉMO/.test(b.organizationName || ""); }), "abonnements de démo masqués par défaut");
         const ownerOrgRow = dOrgs.find(function (o) { return o.name === S.owner.org; }), mailsBefore = TEST_HOOKS_.mailSink.length;
         notify_({ eventKey: "demo-test:" + Date.now(), userIds: [dbAll_("Users").find(function (u) { return u.email === S.owner.email; }).userId], type: "TEST", organizationId: ownerOrgRow.organizationId, title: "Test", body: "Test" });
         T.eq(TEST_HOOKS_.mailSink.length, mailsBefore, "aucun e-mail automatique pour la démo");

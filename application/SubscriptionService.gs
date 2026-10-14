@@ -25,13 +25,20 @@ var PAYMENT_PROVIDERS_ = {
 
 function planOut_(pl) {
   return { planCode: pl.planCode, name: pl.name, price: pl.price, currency: pl.currency || "MAD", periodicity: pl.periodicity, maxProperties: pl.maxProperties, maxUsers: pl.maxUsers, storageMb: pl.storageMb,
-    features: parseJson_(pl.featuresJson, []), quotas: parseJson_(pl.quotasJson, {}), trialDays: pl.trialDays, status: pl.status, sortOrder: pl.sortOrder };
+    features: parseJson_(pl.featuresJson, []), quotas: parseJson_(pl.quotasJson, {}), trialDays: pl.trialDays, status: pl.status, sortOrder: pl.sortOrder, agencyOptionPrice: num_(pl.agencyOptionPrice) };
 }
 function subOut_(s, orgs) {
   const today = todayStr_();
   return { subscriptionId: s.subscriptionId, organizationId: s.organizationId, organizationName: ((orgs || {})[String(s.organizationId)] || {}).name || "", planCode: s.planCode, status: s.status,
     startDate: s.startDate, trialEnd: s.trialEnd, periodEnd: s.periodEnd, nextDueDate: s.nextDueDate, paidThrough: s.paidThrough, price: s.price, currency: s.currency || "MAD", periodicity: s.periodicity,
-    cancelAtPeriodEnd: bool_(s.cancelAtPeriodEnd), daysOverdue: s.status === "PAST_DUE" || s.status === "SUSPENDED" ? Math.max(0, diffDays_(s.nextDueDate || today, today)) : 0, createdAt: s.createdAt };
+    cancelAtPeriodEnd: bool_(s.cancelAtPeriodEnd), daysOverdue: s.status === "PAST_DUE" || s.status === "SUSPENDED" ? Math.max(0, diffDays_(s.nextDueDate || today, today)) : 0, createdAt: s.createdAt,
+    agencyOption: subAgencyOption_(s) };
+}
+/** Option agences : agences créées par le propriétaire, facturées sur SON abonnement (prix par agence et par période). */
+function subAgencyOption_(s) {
+  const agencies = managedAgencies_(s.organizationId), unit = num_(s.agencyOptionPrice);
+  return { count: agencies.length, unitPrice: unit, amount: round2_(unit * agencies.length), agencies: agencies.map(function (o) { return o.name; }),
+    totalPrice: round2_(num_(s.price) + unit * agencies.length) };
 }
 function subUsage_(orgId) {
   return { properties: dbAll_("Properties").filter(function (x) { return String(x.organizationId) === String(orgId) && ["ARCHIVED", "DELETED"].indexOf(x.status) < 0; }).length,
@@ -51,7 +58,7 @@ function planSave_(p, a) {
   const data = { name: reqText_(a.name, "Nom", 2, 60), price: money_(a.price, "Prix"), currency: "MAD", periodicity: oneOf_(a.periodicity || "MONTHLY", Object.keys(PERIOD_MONTHS_), "Périodicité"),
     maxProperties: Math.max(0, parseInt(a.maxProperties, 10) || 0), maxUsers: Math.max(0, parseInt(a.maxUsers, 10) || 0), storageMb: Math.max(0, parseInt(a.storageMb, 10) || 0),
     featuresJson: (Array.isArray(a.features) ? a.features : []).filter(function (f) { return PLAN_FEATURES_.indexOf(f) >= 0; }), quotasJson: { exportRows: Math.min(Math.max(parseInt((a.quotas || {}).exportRows, 10) || 1000, 100), IMMO_CONFIG.MAX_EXPORT_ROWS) },
-    trialDays: Math.max(0, parseInt(a.trialDays, 10) || 0), status: oneOf_(a.status || "ACTIVE", ["ACTIVE", "RETIRED"], "Statut"), sortOrder: parseInt(a.sortOrder, 10) || 9, updatedAt: nowIso_(), updatedBy: p.email };
+    trialDays: Math.max(0, parseInt(a.trialDays, 10) || 0), agencyOptionPrice: a.agencyOptionPrice === "" || a.agencyOptionPrice == null ? 0 : money_(a.agencyOptionPrice, "Option agences"), status: oneOf_(a.status || "ACTIVE", ["ACTIVE", "RETIRED"], "Statut"), sortOrder: parseInt(a.sortOrder, 10) || 9, updatedAt: nowIso_(), updatedBy: p.email };
   if (dbGet_("SubscriptionPlans", code)) dbUpdate_("SubscriptionPlans", code, data); else dbInsert_("SubscriptionPlans", Object.assign({ planCode: code }, data));
   audit_("PLAN_SAVED", "SubscriptionPlan", code, "", { price: data.price, features: data.featuresJson.length });
   return { ok: true, planCode: code };
@@ -62,6 +69,8 @@ function subAssign_(p, a) {
   requireSuper_(p);
   const orgId = safeText_(a.organizationId, 120), org = dbGet_("Organizations", orgId);
   assert_(org && org.type !== "PLATFORM", "Organisation cliente introuvable.");
+  const parent = agencyBillingParent_(org);
+  if (parent) throw new AppError("VALIDATION", "Cette agence a été créée par un propriétaire : elle n'a pas d'abonnement propre, elle est facturée en option sur l'abonnement de « " + ((dbGet_("Organizations", parent) || {}).name || parent) + " ».");
   const plan = dbGet_("SubscriptionPlans", safeText_(a.planCode, 30));
   assert_(plan && plan.status === "ACTIVE", "Forfait introuvable ou retiré.");
   const start = a.startDate ? dateOnly_(a.startDate, "Date de début") : todayStr_();
@@ -71,7 +80,7 @@ function subAssign_(p, a) {
       .forEach(function (s) { dbUpdate_("Subscriptions", s.subscriptionId, { status: "CANCELLED", canceledAt: nowIso_(), updatedAt: nowIso_(), updatedBy: p.email }); });
     const trialEnd = trial ? addDaysStr_(start, Number(plan.trialDays)) : "";
     const s = dbInsert_("Subscriptions", { organizationId: orgId, planCode: plan.planCode, status: trial ? "TRIAL" : "PAST_DUE", startDate: start, nextDueDate: trial ? trialEnd : start, periodEnd: trial ? trialEnd : start,
-      trialEnd: trialEnd, price: plan.price, currency: plan.currency || "MAD", periodicity: plan.periodicity, cancelAtPeriodEnd: false, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email });
+      trialEnd: trialEnd, price: plan.price, agencyOptionPrice: num_(plan.agencyOptionPrice), currency: plan.currency || "MAD", periodicity: plan.periodicity, cancelAtPeriodEnd: false, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email });
     dbUpdate_("Organizations", orgId, { planCode: plan.planCode, updatedAt: nowIso_() });
     audit_("SUBSCRIPTION_ASSIGNED", "Subscription", s.subscriptionId, orgId, { planCode: plan.planCode, trial: trial });
     return { ok: true, subscriptionId: s.subscriptionId, status: s.status, note: trial ? "" : "En attente du premier paiement (enregistrez-le pour activer)." };
@@ -137,6 +146,9 @@ function subMine_(p) {
   const orgs = indexBy_(dbAll_("Organizations"), "organizationId");
   return memberOrgIds_(p).filter(function (o) { return hasOrgCap_(p, o, "subscription.view"); }).map(function (orgId) {
     const e = entitlement_(orgId);
+    // Agence créée par un propriétaire : incluse dans l'abonnement de ce propriétaire (ses montants restent privés).
+    if (e.inheritedFrom) return { organizationId: orgId, organizationName: (orgs[orgId] || {}).name, includedIn: (orgs[e.inheritedFrom] || {}).name || "", subscription: null,
+      plan: e.plan ? planOut_(e.plan) : null, usage: subUsage_(orgId), readOnly: e.readOnly, billing: [], paymentProvider: "" };
     return { organizationId: orgId, organizationName: (orgs[orgId] || {}).name, subscription: e.subscription ? subOut_(e.subscription, orgs) : null, plan: e.plan ? planOut_(e.plan) : null, usage: subUsage_(orgId),
       readOnly: e.readOnly, billing: dbAll_("Payments").filter(function (x) { return x.kind === "SUBSCRIPTION" && String(x.organizationId) === orgId && x.status === "RECORDED"; })
         .map(function (x) { return { amount: x.amount, paidAt: x.paidAt, method: x.method, reference: x.reference }; }), paymentProvider: PAYMENT_PROVIDERS_.MANUAL.name };
@@ -164,6 +176,7 @@ function subContractPdf_(p, a) {
   const subs = dbAll_("Subscriptions").filter(function (s) { return String(s.organizationId) === orgId; }).sort(function (x, y) { return String(x.createdAt).localeCompare(String(y.createdAt)); });
   assert_(subs.length, "Aucun abonnement enregistré pour cette organisation.");
   const cur = entitlement_(orgId).subscription || subs[subs.length - 1], plan = dbGet_("SubscriptionPlans", cur.planCode) || {};
+  const opt = subAgencyOption_(cur);
   const platform = dbAll_("Organizations").find(function (o) { return o.type === "PLATFORM"; }) || { name: IMMO_CONFIG.APP_NAME };
   const fmt = function (v) { return (Math.round(num_(v) * 100) / 100).toLocaleString("fr-FR") + " " + (cur.currency || "MAD"); };
   const per = { MONTHLY: "mois", QUARTERLY: "trimestre", YEARLY: "an" }[cur.periodicity] || "période";
@@ -175,7 +188,8 @@ function subContractPdf_(p, a) {
   const ST = { TRIAL: "Essai", ACTIVE: "Actif", PAST_DUE: "Échéance dépassée", SUSPENDED: "Suspendu (lecture seule)", CANCELLED: "Remplacé / annulé", EXPIRED: "Expiré" };
   let html = "<h2>Parties</h2>" + htmlTable_(["", "Organisation", "Contact"], [["Prestataire", platform.name, ""], ["Client", org.name, org.billingEmail || ""]]);
   html += "<h2>Abonnement en cours</h2>" + htmlTable_(["Champ", "Valeur"], [["Référence", cur.subscriptionId], ["Forfait", (plan.name || cur.planCode) + " (" + cur.planCode + ")"],
-    ["Tarif", fmt(cur.price) + " par " + per], ["Statut", ST[cur.status] || cur.status], ["Début", pdfDate_(cur.startDate)], ["Fin d'essai", pdfDate_(cur.trialEnd)],
+    ["Tarif", fmt(cur.price) + " par " + per], ["Option agences", opt.count ? opt.count + " agence(s) × " + fmt(opt.unitPrice) + " = " + fmt(opt.amount) + " par " + per + " (" + opt.agencies.join(", ") + ")" : "Aucune agence créée par le client"],
+    ["Total par " + per, fmt(opt.totalPrice)], ["Statut", ST[cur.status] || cur.status], ["Début", pdfDate_(cur.startDate)], ["Fin d'essai", pdfDate_(cur.trialEnd)],
     ["Payé jusqu'au", pdfDate_(cur.paidThrough)], ["Prochaine échéance", pdfDate_(cur.nextDueDate)], ["Résiliation en fin de période", bool_(cur.cancelAtPeriodEnd) ? "Oui" : "Non"],
     ["Limites", (plan.maxProperties || "—") + " biens, " + (plan.maxUsers || "—") + " utilisateurs, " + (plan.storageMb || "—") + " Mo de stockage"],
     ["Fonctionnalités", feats.map(function (f) { return FEAT[f] || f; }).join(", ") || "—"]]);
@@ -183,6 +197,7 @@ function subContractPdf_(p, a) {
     "L'abonnement donne accès à l'application ImmoPilot pour l'organisation cliente, dans les limites du forfait.",
     "Le tarif est payable d'avance pour chaque " + per + ", par virement, espèces ou chèque ; aucun paiement en ligne n'est effectué par l'application.",
     "En cas d'échéance non réglée, un délai de grâce de " + SUB_GRACE_DAYS_ + " jours s'applique ; au-delà, le compte passe en lecture seule jusqu'au règlement.",
+    "Les agences créées par le client dans ImmoPilot n'ont pas d'abonnement propre : elles sont facturées en option sur cet abonnement, au prix par agence indiqué ci-dessus, et suivent son statut.",
     "La résiliation peut être demandée à tout moment ; elle prend effet à la fin de la période payée. Les données restent conservées et exportables.",
     "Chaque organisation n'accède qu'à ses propres données ; l'équipe ImmoPilot n'y accède qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
     "Le client reste responsable des données qu'il saisit (voyageurs, locataires) et de ses obligations déclaratives, notamment au titre de la loi 09-08."

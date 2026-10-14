@@ -8,7 +8,7 @@
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
   VERSION: "2.0.0",
-  SCHEMA_VERSION: 3,
+  SCHEMA_VERSION: 4,
   TIMEZONE: "Africa/Casablanca",
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -109,7 +109,7 @@ var DEFAULT_PLANS = Object.freeze([
 
 var TABLES_SRC = {
   Organizations: { pk: "organizationId", idp: "org", org: "organizationId", req: "name", enums: { status: ["ACTIVE", "SUSPENDED", "INACTIVE"], type: ["OWNER_ORG", "AGENCY", "PROVIDER", "PLATFORM"] },
-    cols: "organizationId,name,status,createdAt#t,createdBy|type,country,city,timezone,locale,planCode,billingEmail,suspendedAt#t,suspensionReason,updatedAt#t,isDemo#b" },
+    cols: "organizationId,name,status,createdAt#t,createdBy|type,country,city,timezone,locale,planCode,billingEmail,suspendedAt#t,suspensionReason,updatedAt#t,isDemo#b,managedByOrgId,phone,address,contactName" },
   Users: { pk: "userId", idp: "usr", req: "email", enums: { status: ["ACTIVE", "SUSPENDED", "DISABLED", "INVITED"] },
     cols: "userId,email,displayName,status,createdAt#t,createdBy|passwordHash,passwordSalt,passwordIters#n,failedAttempts#n,lockedUntil#t,lastLoginAt#t,locale,phone,notifPrefsJson#j,updatedAt#t,pwChangedAt#t" },
   Invitations: { pk: "invitationId", idp: "inv", org: "organizationId", req: "email,role", enums: { status: ["PENDING", "ACCEPTED", "REVOKED", "EXPIRED", "EMAIL_FAILED"] },
@@ -194,10 +194,10 @@ var TABLES_SRC = {
   ScheduledJobs: { pk: "jobRunId", idp: "job", req: "jobName", cols: "jobRunId,jobName,startedAt#t,finishedAt#t,status,resultJson#j,error" },
   MigrationHistory: { pk: "migrationId", idp: "mig", req: "version", cols: "migrationId,version#n,name,appliedAt#t,appliedBy,status,detailsJson#j" },
   SubscriptionPlans: { pk: "planCode", idp: "pln", req: "planCode,name", enums: { status: ["ACTIVE", "RETIRED"], periodicity: ["MONTHLY", "QUARTERLY", "YEARLY"] },
-    cols: "planCode,name,price#n,currency,periodicity,maxProperties#n,maxUsers#n,storageMb#n,featuresJson#j,quotasJson#j,trialDays#n,status,sortOrder#n,updatedAt#t,updatedBy" },
+    cols: "planCode,name,price#n,currency,periodicity,maxProperties#n,maxUsers#n,storageMb#n,featuresJson#j,quotasJson#j,trialDays#n,status,sortOrder#n,updatedAt#t,updatedBy,agencyOptionPrice#n" },
   Subscriptions: { pk: "subscriptionId", idp: "sub", org: "organizationId", req: "organizationId,planCode",
     enums: { status: ["TRIAL", "ACTIVE", "PAST_DUE", "SUSPENDED", "CANCELLED", "EXPIRED"] },
-    cols: "subscriptionId,organizationId,planCode,status,startDate#d,nextDueDate#d,createdAt#t,createdBy|periodEnd#d,trialEnd#d,cancelAtPeriodEnd#b,price#n,currency,periodicity,canceledAt#t,suspendedAt#t,paidThrough#d,updatedAt#t,updatedBy,lastReminderKey" },
+    cols: "subscriptionId,organizationId,planCode,status,startDate#d,nextDueDate#d,createdAt#t,createdBy|periodEnd#d,trialEnd#d,cancelAtPeriodEnd#b,price#n,currency,periodicity,canceledAt#t,suspendedAt#t,paidThrough#d,updatedAt#t,updatedBy,lastReminderKey,agencyOptionPrice#n" },
   OperationRequests: { pk: "requestKey", idp: "opr", org: "organizationId", cols: "requestKey,organizationId,operation,resourceId,createdAt#t" }
 };
 

@@ -180,10 +180,19 @@ PAGES.agencies = function (el) {
           });
         }, "sm") : null,
         ag.createdByMe && live ? btn(t("Modifier la fiche"), function () {
-          formModal(t("Fiche de l'agence"), [{ k: "name", l: "Nom de l'agence", req: true }, { k: "city", l: "Ville" }, { k: "contactEmail", l: "E-mail de contact", t: "email" },
-            { k: "locale", l: "Langue", t: "select", opts: [["fr", "Français"], ["en", "English"], ["ar", "العربية"]] }], ag, function (v) {
-            v.agencyOrganizationId = ag.organizationId; return api("agency.update", v).then(reload);
+          formModal(t("Fiche de l'agence"), [{ k: "name", l: "Nom de l'agence", req: true }, { k: "address", l: "Adresse" }, { k: "city", l: "Ville" }, { k: "phone", l: "Téléphone" },
+            { k: "contactEmail", l: "E-mail de contact", t: "email" }, { k: "locale", l: "Langue", t: "select", opts: [["fr", "Français"], ["en", "English"], ["ar", "العربية"]] },
+            { k: "adminName", l: "Nom du responsable" }, { k: "adminEmail", l: "E-mail du responsable (connexion)", t: "email", req: true,
+              help: "Si vous changez cet e-mail, l'ancien responsable perd l'accès à l'agence et un nouveau lien d'activation est envoyé à la nouvelle adresse." }], ag, function (v) {
+            v.agencyOrganizationId = ag.organizationId;
+            return api("agency.update", v).then(function (r) {
+              if (r.responsible && r.responsible.changed) toast(r.responsible.emailSent ? t("Lien d'activation envoyé à") + " " + r.responsible.email : t("Invitation enregistrée, mais l'e-mail n'a pas pu partir") + " : " + (r.responsible.emailError || ""), r.responsible.emailSent ? "good" : "bad");
+              reload();
+            });
           }, { success: "Fiche mise à jour." });
+        }, "sm") : null,
+        ag.createdByMe && live && ag.responsible && !ag.responsible.activated ? btn(t("Renvoyer le lien d'activation"), function () {
+          api("agency.resendInvite", { agencyOrganizationId: ag.organizationId }).then(function (r) { toast((r.emailSent ? t("Lien d'activation envoyé à") : t("Invitation enregistrée, mais l'e-mail n'a pas pu partir")) + " " + r.email, r.emailSent ? "good" : "bad"); reload(); }).catch(showErr);
         }, "sm") : null,
         ag.activeProperties ? btn(t("Retirer tous les accès"), function () {
           confirmBox(t("Retirer à cette agence l'accès à TOUS vos biens ? L'accès est coupé immédiatement ; l'historique est conservé."), { danger: true }).then(function (ok) {
@@ -194,8 +203,9 @@ PAGES.agencies = function (el) {
             if (ok) api("agency.delete", { agencyOrganizationId: ag.organizationId }).then(function () { toast(t("Agence supprimée."), "good"); reload(); }).catch(showErr); });
         }, "sm danger") : null
       ].filter(Boolean);
-      const info = h("div", { class: "small muted" }, [ag.city, ag.contactEmail, ag.admins.length ? t("Responsable :") + " " + ag.admins.join(", ") : null, ag.pendingInvitations.length ? t("Invitation en attente :") + " " + ag.pendingInvitations.join(", ") : null].filter(Boolean).join(" · "));
-      box.appendChild(panel(ag.name, h("div", null, h("div", { style: { display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" } }, stTag(ag.status), ag.createdByMe ? tag(t("Créée par vous"), "info") : tag(t("Agence partagée"), "")), info,
+      const resp = ag.responsible ? t("Responsable :") + " " + [ag.responsible.name, ag.responsible.email].filter(Boolean).join(" — ") + " (" + (ag.responsible.activated ? t("compte activé") : t("en attente d'activation")) + ")" : t("Aucun responsable");
+      const info = h("div", { class: "small muted" }, [[ag.address, ag.city].filter(Boolean).join(", "), ag.phone, ag.contactEmail, resp].filter(Boolean).join(" · "));
+      box.appendChild(panel(ag.name, h("div", null, h("div", { style: { display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" } }, stTag(ag.status), ag.createdByMe ? tag(t("Créée par vous"), "info") : tag(t("Agence partagée"), ""), ag.includedInMySubscription ? tag(t("Incluse dans votre abonnement (option agences)"), "good") : null), info,
         table([{ l: "Bien", f: function (x) { return x.propertyName + (x.propertyCity ? " — " + x.propertyCity : ""); } }, { l: "Droits", f: rights }, { l: "Commission", f: function (x) { return isNil(x.commissionRate) || x.commissionRate === "" ? "—" : x.commissionRate + " %"; } },
           { l: "Statut", status: true, k: "status" },
           { l: "", f: function (x) { return !live ? null : h("span", { class: "actions" },

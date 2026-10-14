@@ -189,7 +189,26 @@ function actingOrgForProp_(p, prop) {
 }
 
 /* ---------- Abonnement : droits d'écriture, fonctionnalités et quotas ---------- */
-function entitlement_(orgId) {
+/**
+ * Organisation qui paie l'abonnement d'une agence créée par un propriétaire : l'agence n'a pas d'abonnement propre,
+ * elle est une OPTION de l'abonnement du propriétaire (« option agences »). Retourne "" pour toute autre organisation.
+ * Agences créées avant ce réglage : rattachées au propriétaire qui les a créées.
+ */
+function agencyBillingParent_(org) {
+  if (!org || org.type !== "AGENCY") return "";
+  if (org.managedByOrgId) return String(org.managedByOrgId);
+  const creator = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === normalizeEmail_(org.createdBy); });
+  if (!creator) return "";
+  const own = dbAll_("UserRoles").find(function (r) { return String(r.userId) === String(creator.userId) && r.role === "OWNER" && r.status === "ACTIVE"; });
+  return own ? String(own.organizationId) : "";
+}
+/** Agences actives rattachées à l'abonnement d'un propriétaire (option agences). */
+function managedAgencies_(ownerOrgId) {
+  return dbAll_("Organizations").filter(function (o) { return o.type === "AGENCY" && o.status === "ACTIVE" && agencyBillingParent_(o) === String(ownerOrgId); });
+}
+function entitlement_(orgId, depth) {
+  const org = dbGet_("Organizations", orgId), parent = agencyBillingParent_(org);
+  if (parent && parent !== String(orgId) && !depth) return Object.assign({}, entitlement_(parent, 1), { inheritedFrom: parent });
   const sub = dbAll_("Subscriptions").filter(function (s) { return String(s.organizationId) === String(orgId) && s.status !== "CANCELLED"; })
     .sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); })[0];
   if (!sub) return { planCode: "", status: "NONE", features: null, readOnly: false, plan: null };
