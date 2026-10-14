@@ -26,6 +26,9 @@
   #splash a { color: #e9b341; }
   @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
   .hidden { opacity: 0; pointer-events: none; }
+  #help { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3; background: #13233d; color: #fff; font: 13px -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+          padding: 8px 14px; border-radius: 20px; box-shadow: 0 4px 14px rgba(0,0,0,.25); transition: opacity .4s; white-space: nowrap; }
+  #help a { color: #e9b341; }
 </style>
 </head>
 <body>
@@ -34,6 +37,7 @@
   <div class="bar"><i></i></div>
   <p id="msg">Chargement d'ImmoPilot…</p>
 </div>
+<div id="help" class="hidden">Page « Impossible d'ouvrir le fichier » ? <a id="helpLink" href="#" target="_top">Ouvrir directement</a></div>
 <iframe id="frame" title="ImmoPilot" allow="camera; geolocation; clipboard-write; fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe>
 <script src="config.js"></script>
 <script>
@@ -50,7 +54,15 @@
   var p = new URLSearchParams(location.search), q = new URLSearchParams();
   ["action", "token"].forEach(function (k) { var v = p.get(k); if (v && /^[A-Za-z0-9_-]{1,128}$/.test(v)) q.set(k, v); });
   frame.src = url + (q.toString() ? "?" + q.toString() : "");
-  frame.addEventListener("load", function () { splash.classList.add("hidden"); });
+  // Google affiche « Impossible d'ouvrir le fichier » dans le cadre quand le navigateur est connecté à plusieurs comptes Google :
+  // on propose quelques secondes un lien pour ouvrir l'application directement (même application, mêmes données).
+  var help = document.getElementById("help");
+  document.getElementById("helpLink").href = frame.src;
+  frame.addEventListener("load", function () {
+    splash.classList.add("hidden");
+    help.classList.remove("hidden");
+    setTimeout(function () { help.classList.add("hidden"); }, 12000);
+  });
   // Si Google ne répond pas (réseau lent), on propose d'ouvrir l'application directement.
   setTimeout(function () {
     if (!splash.classList.contains("hidden")) msg.innerHTML = "Le chargement prend du temps… <br><a href=\"" + frame.src + "\" target=\"_top\">Ouvrir l'application directement</a>";
