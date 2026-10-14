@@ -45,5 +45,25 @@
     return trace;
   }
 
-  window.ImmoPay = { cfg: cfg, pay: pay, lienSumUpValide: lienSumUpValide, param: param, texte: texte, aller: aller, enregistrerAcceptation: enregistrerAcceptation };
+  // Taux de commission (en %), 6 et 15 par défaut.
+  function taux() {
+    var c = pay.commissions || {};
+    return { commanditaire: Number(c.commanditaire) >= 0 ? Number(c.commanditaire) : 6, artisan: Number(c.artisan) >= 0 ? Number(c.artisan) : 15 };
+  }
+
+  // Calcul en centimes, arrondi au centime le plus proche. « ttcTexte » = montant TTC de la facture finale ("450.50" ou "450,50").
+  //  commanditaire : commission payée en plus de la facture ; total : ce que paie le commanditaire ;
+  //  artisan : commission retenue ; net : ce que reçoit l'artisan.
+  function commissions(ttcTexte) {
+    var ttc = Math.round(parseFloat(String(ttcTexte).replace(",", ".")) * 100);
+    if (!isFinite(ttc) || ttc <= 0) return null;
+    var t = taux(), cm = Math.round(ttc * t.commanditaire / 100), ca = Math.round(ttc * t.artisan / 100);
+    return { ttc: ttc, commanditaire: cm, total: ttc + cm, artisan: ca, net: ttc - ca, taux: t };
+  }
+
+  function montantTexte(centimes) {
+    return (centimes / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  window.ImmoPay = { cfg: cfg, pay: pay, lienSumUpValide: lienSumUpValide, param: param, texte: texte, aller: aller, enregistrerAcceptation: enregistrerAcceptation, taux: taux, commissions: commissions, montantTexte: montantTexte };
 })();

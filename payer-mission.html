@@ -17,7 +17,9 @@
 <tr><th>Mission</th><td id="ref">—</td></tr>
 <tr><th>Objet</th><td id="objet">—</td></tr>
 <tr><th>Artisan</th><td id="artisan">—</td></tr>
-<tr><th>Montant de la facture</th><td id="montant">—</td></tr>
+<tr><th>Montant de la facture finale TTC</th><td id="montant">—</td></tr>
+<tr id="rowComm" hidden><th>Votre commission ImmoPilot (<span id="tauxComm">6</span> % du TTC)</th><td id="comm">—</td></tr>
+<tr id="rowTotal" hidden><th>Total à payer en ligne (facture + commission)</th><td><b id="total">—</b></td></tr>
 </table>
 </div>
 
@@ -30,16 +32,16 @@
 <div id="ligne" class="card" hidden>
 <h3>Paiement en ligne — avec accès à l'assurance</h3>
 <p>Vous réglez la facture par carte bancaire sur la page sécurisée SumUp. La mission bénéficie de l'assurance prévue au contrat. Le contrat de mission est édité après le paiement.</p>
-<label class="ck"><input type="checkbox" id="cL"><span>J'ai lu et j'accepte le <a id="lienContratL" href="contrat-mission.html?mode=ligne" target="_blank" rel="noopener">contrat de mise en relation moyennant commission, avec accès à l'assurance</a>.</span></label>
+<label class="ck"><input type="checkbox" id="cL"><span>J'ai lu et j'accepte le <a id="lienContratL" href="contrat-mission.html?mode=ligne" target="_blank" rel="noopener">contrat de mise en relation moyennant commissions, avec accès à l'assurance</a>.</span></label>
 <button class="pay" id="payer" type="button" disabled>Payer</button>
 <p id="etatL" class="note" role="status"></p>
-<p class="alerte" style="font-size:13px">Sur la page SumUp, vérifiez que le montant correspond bien à celui de la facture ci-dessus avant de payer.</p>
+<p class="alerte" style="font-size:13px">Sur la page SumUp, vérifiez que le montant est bien égal au « Total à payer en ligne » ci-dessus avant de payer.</p>
 </div>
 
 <div id="direct" class="card" hidden>
 <h3>Paiement direct — sans assurance</h3>
-<p>Vous réglez l'artisan directement, sans passer par ImmoPilot. Aucune assurance ImmoPilot ne couvre cette mission. Le contrat est un simple contrat de mise en relation moyennant commission, et la commission reste due à ImmoPilot.</p>
-<label class="ck"><input type="checkbox" id="cD"><span>J'ai lu et j'accepte le <a id="lienContratD" href="contrat-mission.html?mode=direct" target="_blank" rel="noopener">contrat de mise en relation moyennant commission (sans assurance)</a>.</span></label>
+<p>Vous réglez l'artisan directement, sans passer par ImmoPilot. Aucune assurance ImmoPilot ne couvre cette mission. Le contrat est un simple contrat de mise en relation moyennant commissions, et votre commission (indiquée ci-dessus) reste due à ImmoPilot.</p>
+<label class="ck"><input type="checkbox" id="cD"><span>J'ai lu et j'accepte le <a id="lienContratD" href="contrat-mission.html?mode=direct" target="_blank" rel="noopener">contrat de mise en relation moyennant commissions (sans assurance)</a>.</span></label>
 <button class="pay" id="confirmer" type="button" disabled>Confirmer le paiement direct</button>
 <p id="etatD" class="note" role="status"></p>
 </div>
@@ -76,6 +78,15 @@
     return;
   }
 
+  // Commission du commanditaire (6 % du TTC par défaut) ajoutée au prix de la facture pour le paiement en ligne.
+  var calc = v.montant ? P.commissions(v.montant) : null;
+  if (calc) {
+    $("tauxComm").textContent = String(calc.taux.commanditaire).replace(".", ",");
+    $("comm").textContent = P.montantTexte(calc.commanditaire);
+    $("rowComm").hidden = false;
+    if (mode === "ligne") { $("total").textContent = P.montantTexte(calc.total); $("rowTotal").hidden = false; }
+  }
+
   if (mode === "ligne") {
     $("ligne").hidden = false;
     var lien = P.param("lien", /^https:\/\/[^\s<>"']{1,1500}$/);
@@ -98,7 +109,7 @@
     conf.addEventListener("click", function () {
       P.enregistrerAcceptation("mission-direct", { ref: v.ref, montant: v.montant, artisan: v.artisan, proprio: v.proprio });
       conf.disabled = true;
-      etatD.textContent = "Contrat de mise en relation accepté (paiement direct, sans assurance). Pensez à régler la commission d'ImmoPilot dans le délai prévu au contrat.";
+      etatD.textContent = "Contrat de mise en relation accepté (paiement direct, sans assurance). Pensez à régler votre commission à ImmoPilot dans le délai prévu au contrat.";
     });
   }
 })();

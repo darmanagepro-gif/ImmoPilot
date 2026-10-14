@@ -124,9 +124,24 @@ function abonnementResilier_(email) {
 }
 
 /* ---------- 4. Mission : lien de paiement SumUp créé pour UNE facture validée ---------- */
-function missionCreerLienPaiement_(factureId, montant, description) {
+/**
+ * Commissions d'une mission, calculées sur le montant TTC de la facture finale (en centimes, arrondi au plus proche) :
+ *   - commanditaire (propriétaire ou agence) : 6 %, payée EN PLUS du prix de la facture ;
+ *   - artisan : 15 %, retenue sur ce qui lui est reversé.
+ * Les taux doivent rester identiques à ceux de config.js (paiement.commissions) et du contrat.
+ */
+var TAUX_COMMANDITAIRE = 6, TAUX_ARTISAN = 15;
+function commissionsMission_(ttc) {
+  var c = Math.round(Number(ttc) * 100);
+  if (!(c > 0)) throw new Error("Montant TTC invalide");
+  var cm = Math.round(c * TAUX_COMMANDITAIRE / 100), ca = Math.round(c * TAUX_ARTISAN / 100);
+  return { ttc: c / 100, commissionCommanditaire: cm / 100, totalAPayer: (c + cm) / 100, commissionArtisan: ca / 100, netArtisan: (c - ca) / 100 };
+}
+
+function missionCreerLienPaiement_(factureId, montantTtc, description) {
+  var m = commissionsMission_(montantTtc); // le commanditaire paie la facture TTC + sa commission, en un seul paiement
   var co = sumup_("post", "/checkouts", {
-    checkout_reference: "MISSION-" + factureId, amount: Number(montant), currency: prop_("SUMUP_CURRENCY"),
+    checkout_reference: "MISSION-" + factureId, amount: m.totalAPayer, currency: prop_("SUMUP_CURRENCY"),
     merchant_code: prop_("SUMUP_MERCHANT_CODE"), description: String(description || "Mission ImmoPilot").slice(0, 200),
     redirect_url: prop_("SITE_URL") + "/payer-mission.html?retour=1&ref=" + encodeURIComponent(factureId),
     hosted_checkout: { enabled: true } // à vérifier dans la doc SumUp (page de paiement hébergée)
@@ -142,7 +157,8 @@ function webhookSumUp_(e) {
   // On ne croit pas le contenu reçu : on relit le checkout chez SumUp.
   var co = sumup_("get", "/checkouts/" + encodeURIComponent(id));
   if (co.status === "PAID" && String(co.checkout_reference).indexOf("MISSION-") === 0) {
-    // TODO : marquer la facture « payée », calculer la commission, planifier le reversement à l'artisan,
+    // TODO : marquer la facture « payée » ; retrouver le TTC de la facture (feuille des factures) et appeler commissionsMission_(ttc) :
+    //        reverser m.netArtisan à l'artisan (TTC − 15 %), conserver m.commissionCommanditaire + m.commissionArtisan ;
     //        activer la couverture d'assurance et éditer le contrat (contrat-mission.html?mode=ligne&…).
   }
   return json_({ ok: true });

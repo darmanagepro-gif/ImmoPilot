@@ -22,6 +22,9 @@ window.IMMOPILOT_CONFIG = {
    *  - modeAbonnement: "lien" = lien SumUp fourni (1er mois, renouvellements à relancer) ;
    *                    "widget" = carte enregistrée + prélèvement mensuel automatique (nécessite docs/apps-script-paiement.gs).
    *  - hotesAutorises: seuls ces domaines SumUp sont acceptés comme destination de paiement.
+   *  - commissions   : en % du montant TTC de la facture finale d'une mission.
+   *                    commanditaire = propriétaire ou agence (payée EN PLUS du prix de la facture) ;
+   *                    artisan       = retenue sur ce qui lui est reversé.
    */
   paiement: {
     modeAbonnement: "lien",
@@ -29,6 +32,7 @@ window.IMMOPILOT_CONFIG = {
     missionUrl: "",
     enregistrerAcceptation: false,
     prixMensuel: "",
-    hotesAutorises: ["sumup.com", "sum.up"]
+    hotesAutorises: ["sumup.com", "sum.up"],
+    commissions: { commanditaire: 6, artisan: 15 }
   }
 };
