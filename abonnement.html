@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ImmoPilot — Abonnement</title><link rel="icon" href="icons/favicon-32.png">
+<link rel="stylesheet" href="contrat.css"></head>
+<body><header><img src="icons/icon-192.png" alt=""><b>ImmoPilot</b><a href="index.html">Ouvrir l'application</a></header><main>
+<h1>Abonnement ImmoPilot</h1>
+<p class="sub">Accès à la plateforme pour les propriétaires · sans engagement</p>
+
+<div id="souscription">
+<div class="card">
+<h3>Votre abonnement</h3>
+<ul>
+<li>Prix : <b id="prix">communiqué avant le paiement</b> par mois.</li>
+<li><b>Sans engagement</b> : résiliable à tout moment, effet à la fin du mois payé.</li>
+<li>Prélèvement automatique chaque mois par carte bancaire, après le premier paiement.</li>
+<li>Contrat d'abonnement <b>signé électroniquement dès la confirmation du premier paiement</b>.</li>
+</ul>
+</div>
+
+<div class="card">
+<label for="nom">Nom ou raison sociale</label>
+<input type="text" id="nom" autocomplete="name" maxlength="100">
+<label for="email">E-mail</label>
+<input type="email" id="email" autocomplete="email" maxlength="200">
+
+<label class="ck"><input type="checkbox" id="c1"><span>J'ai lu et j'accepte le <a href="contrat-abonnement.html" target="_blank" rel="noopener">contrat d'abonnement</a>.</span></label>
+<label class="ck"><input type="checkbox" id="c2"><span>J'autorise l'enregistrement de ma carte bancaire et son prélèvement automatique chaque mois, du prix de l'abonnement, jusqu'à ma résiliation.</span></label>
+
+<button class="pay" id="payer" type="button" disabled>Payer le 1er mois et signer le contrat</button>
+<p id="etat" class="note" role="status">Renseignez vos informations et cochez les deux cases.</p>
+<div id="widget"></div>
+<p style="font-size:13px;color:#5b6b7d">Paiement sécurisé par SumUp : vos données de carte ne passent pas par ImmoPilot.</p>
+</div>
+</div>
+
+<div id="retour" class="card" hidden>
+<h3>Merci !</h3>
+<p>Votre paiement est en cours de vérification par SumUp. Dès qu'il est confirmé, votre abonnement est activé et le contrat d'abonnement est signé électroniquement. Une copie vous est envoyée par e-mail.</p>
+<p class="note">Cette page ne vaut pas confirmation de paiement. En cas de question : <a href="mailto:Darmanagepro@gmail.com">Darmanagepro@gmail.com</a>.</p>
+<a class="btn" href="index.html">Ouvrir ImmoPilot</a>
+</div>
+
+<script src="config.js"></script>
+<script src="paiement.js"></script>
+<script>
+(function () {
+  "use strict";
+  var P = window.ImmoPay, cfg = P.cfg, pay = P.pay;
+  var $ = function (id) { return document.getElementById(id); };
+  var btn = $("payer"), etat = $("etat");
+  var modeWidget = pay.modeAbonnement === "widget";
+
+  if (P.param("retour", /^1$/)) { $("souscription").hidden = true; $("retour").hidden = false; return; }
+
+  if (pay.prixMensuel) P.texte("prix", String(pay.prixMensuel));
+  var emailUrl = P.param("email", /^[^\s@<>]{1,64}@[^\s@<>]{1,200}$/);
+  if (emailUrl) $("email").value = emailUrl;
+
+  var lienOk = P.lienSumUpValide(pay.abonnementUrl);
+  var paiementPret = modeWidget ? !!cfg.appUrl : lienOk;
+
+  function emailOk(v) { return /^[^\s@<>]{1,64}@[^\s@<>]{1,200}\.[^\s@<>]{2,}$/.test(v); }
+  function maj() {
+    var pret = $("nom").value.trim().length > 1 && emailOk($("email").value.trim()) && $("c1").checked && $("c2").checked;
+    btn.disabled = !(pret && paiementPret);
+    if (!paiementPret) etat.textContent = "Le paiement en ligne sera disponible très prochainement.";
+    else etat.textContent = pret ? "Vous pouvez payer." : "Renseignez vos informations et cochez les deux cases.";
+  }
+  ["nom", "email"].forEach(function (id) { $(id).addEventListener("input", maj); });
+  ["c1", "c2"].forEach(function (id) { $(id).addEventListener("change", maj); });
+  maj();
+
+  function appel(action, params) {
+    var q = new URLSearchParams(params); q.set("action", action);
+    return fetch(cfg.appUrl + "?" + q.toString()).then(function (r) { return r.json(); });
+  }
+  function erreur(m) { etat.textContent = m; btn.disabled = false; }
+
+  btn.addEventListener("click", function () {
+    var nom = $("nom").value.trim(), email = $("email").value.trim();
+    P.enregistrerAcceptation("abonnement", { nom: nom, email: email });
+    btn.disabled = true;
+
+    if (!modeWidget) {
+      etat.textContent = "Redirection vers le paiement sécurisé SumUp…";
+      if (!P.aller(pay.abonnementUrl)) erreur("Lien de paiement indisponible.");
+      return;
+    }
+
+    // Mode « widget » : carte enregistrée par SumUp, 1er mois débité par l'application, prélèvements mensuels automatiques.
+    etat.textContent = "Préparation du paiement sécurisé…";
+    appel("sumup_checkout_abonnement", { nom: nom, email: email }).then(function (j) {
+      if (!j || !j.checkoutId) throw new Error(j && j.erreur ? j.erreur : "checkout");
+      var s = document.createElement("script");
+      s.src = "https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js";
+      s.onload = function () {
+        etat.textContent = "Saisissez votre carte pour payer le 1er mois.";
+        window.SumUpCard.mount({
+          id: "widget", checkoutId: j.checkoutId,
+          onResponse: function (type) {
+            if (type !== "success") return;
+            etat.textContent = "Carte enregistrée. Paiement du 1er mois en cours…";
+            appel("sumup_finaliser_abonnement", { checkoutId: j.checkoutId }).then(function (r) {
+              if (r && r.ok) location.href = "abonnement.html?retour=1";
+              else erreur("Le paiement n'a pas pu être confirmé. Contactez-nous : Darmanagepro@gmail.com");
+            }).catch(function () { erreur("Erreur réseau. Vérifiez votre connexion puis réessayez."); });
+          }
+        });
+      };
+      s.onerror = function () { erreur("Le module de paiement SumUp n'a pas pu se charger."); };
+      document.head.appendChild(s);
+    }).catch(function () { erreur("Le paiement est momentanément indisponible. Réessayez plus tard."); });
+  });
+})();
+</script>
+</main></body></html>

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ImmoPilot — Contrat de mise en relation (mission artisan)</title><link rel="icon" href="icons/favicon-32.png">
+<link rel="stylesheet" href="contrat.css"></head>
+<body class="m-both"><header><img src="icons/icon-192.png" alt=""><b>ImmoPilot</b><a href="abonnement.html">Abonnement</a></header><main>
+<!-- MODÈLE À COMPLÉTER ET À FAIRE VALIDER PAR UN AVOCAT MAROCAIN (DOC, loi 31-08, loi 53-05, loi 09-08, loi 17-99 assurances, loi 103-12 services de paiement). -->
+<!--
+  Page unique, deux variantes :
+    contrat-mission.html?mode=ligne   → paiement en ligne via ImmoPilot : mise en relation + commission + accès à l'assurance
+    contrat-mission.html?mode=direct  → paiement direct entre les parties : mise en relation + commission, sans assurance
+    sans paramètre                    → les deux variantes (relecture)
+  Pré-remplissage possible : &ref=…&proprio=…&artisan=…&montant=…&date=…&objet=…
+-->
+<h1>Contrat de mise en relation — mission artisan</h1>
+<p class="sub">Contrat type · Version v1.0 du 14/10/2026 · <b id="modeLibelle">les deux variantes (relecture)</b></p>
+<p class="note noprint">Modèle de contrat. Les passages <span class="todo">surlignés</span> sont à compléter. À faire valider par un avocat avant toute mise en service.</p>
+
+<h2>Entre les soussignés</h2>
+<p><b>Darmanagepro</b>, société <span class="todo">[forme juridique]</span> dont le siège est à <b>Marrakech</b> (Maroc), RC <span class="todo">[n°]</span>, ICE <span class="todo">[n°]</span>, éditrice de la plateforme <b>ImmoPilot</b>, contact <a href="mailto:Darmanagepro@gmail.com">Darmanagepro@gmail.com</a> · <a href="tel:+33749980018">+33 7 49 98 00 18</a>. Ci-après « <b>ImmoPilot</b> » ou « <b>la Plateforme</b> » ;</p>
+<p><b data-f="proprio" class="todo">[Nom du commanditaire]</b>, propriétaire du bien concerné ou agence agissant pour son compte, qui commande la mission, ci-après « <b>le Propriétaire</b> » ou « <b>le Commanditaire</b> » ;</p>
+<p>et <b data-f="artisan" class="todo">[Nom de l'artisan ou de l'entreprise]</b>, prestataire inscrit sur la Plateforme, ci-après « <b>l'Artisan</b> ».</p>
+
+<table>
+<tr><th>Référence de la mission</th><td data-f="ref" class="todo">[référence]</td></tr>
+<tr><th>Objet de la mission</th><td data-f="objet" class="todo">[nature des travaux / du service]</td></tr>
+<tr><th>Montant de la facture finale TTC</th><td><span data-f="montant" class="todo">[montant]</span> MAD</td></tr>
+<tr><th>Commission du Commanditaire (<span data-taux="commanditaire">6</span> % du TTC, en plus de la facture)</th><td id="cCommanditaire" class="todo">[calculée sur le montant TTC]</td></tr>
+<tr><th>Commission de l'Artisan (<span data-taux="artisan">15</span> % du TTC)</th><td id="cArtisan" class="todo">[calculée sur le montant TTC]</td></tr>
+<tr><th>Date</th><td data-f="date" class="todo">[jj/mm/aaaa]</td></tr>
+</table>
+
+<h2>Article 1 — Objet : une simple mise en relation</h2>
+<ol>
+<li>ImmoPilot met en relation le Propriétaire et l'Artisan pour la réalisation de la mission désignée ci-dessus, et fournit les outils de suivi (demande, devis, facture, validation).</li>
+<li><b>ImmoPilot n'est pas partie au contrat de prestation</b> conclu entre le Propriétaire et l'Artisan (devis, facture). L'Artisan exécute la mission de manière indépendante et sous sa seule responsabilité ; il n'est ni salarié ni mandataire d'ImmoPilot. Le choix de l'Artisan et l'acceptation du devis appartiennent au Propriétaire.</li>
+<li>ImmoPilot est tenue d'une obligation de moyens dans la mise en relation. Elle ne garantit ni la qualité, ni les délais, ni le prix des travaux, sauf ce qui est prévu à l'article 4A pour la variante en ligne.</li>
+</ol>
+
+<h2>Article 2 — Commissions</h2>
+<ol>
+<li>La mise en relation est rémunérée par <b>deux commissions</b>, calculées sur le <b>montant TTC de la facture finale</b> validée sur la Plateforme :
+<ul>
+<li><b>commission du Commanditaire</b> (propriétaire ou agence) : <b><span data-taux="commanditaire">6</span> %</b> du montant TTC de la facture finale, payée <b>en plus</b> du prix de la facture ;</li>
+<li><b>commission de l'Artisan</b> : <b><span data-taux="artisan">15</span> %</b> du montant TTC de la facture finale, à la charge de l'Artisan.</li>
+</ul></li>
+<li>Les commissions sont arrondies au centime le plus proche. <span class="todo">[TVA applicable sur les commissions : à préciser]</span> Si la facture finale est modifiée (rectification, avoir), les commissions sont recalculées sur le nouveau montant TTC.</li>
+<li>Elles sont dues dès que la facture est validée sur la Plateforme, que le règlement soit effectué en ligne ou directement entre les parties.</li>
+<li>Les commissions sont également dues pour toute mission confiée à l'Artisan par le Commanditaire à la suite d'une mise en relation par ImmoPilot, pendant <span class="todo">[12]</span> mois, même si elle est ensuite conclue ou réglée hors de la Plateforme. Les parties s'interdisent de contourner la Plateforme pour échapper aux commissions.</li>
+<li>ImmoPilot émet une facture de commission à chacune des parties pour chaque mission.</li>
+</ol>
+
+<div class="variante only-ligne"><span class="tag">VARIANTE A — PAIEMENT EN LIGNE (avec assurance)</span>
+<h2>Article 3A — Paiement en ligne via ImmoPilot</h2>
+<ol>
+<li>Quand le Propriétaire valide la facture, il peut cliquer sur <b>« Payer »</b> : il est alors dirigé vers une page de paiement sécurisée du prestataire <b>SumUp</b>, où il règle par carte bancaire, en un seul paiement, le montant TTC de la facture <b>majoré de sa commission</b> (article 2). ImmoPilot ne voit ni ne conserve les numéros de carte.</li>
+<li><b>Mandat d'encaissement.</b> L'Artisan donne mandat à ImmoPilot d'encaisser pour son compte le prix de la facture. Le paiement effectué par le Propriétaire entre les mains d'ImmoPilot a un effet libératoire à l'égard de l'Artisan pour le montant payé.</li>
+<li><b>Reversement.</b> ImmoPilot conserve la commission du Commanditaire, retient la commission de l'Artisan (article 2) et reverse le solde, soit le montant TTC de la facture diminué de la commission de l'Artisan, sous <span class="todo">[X]</span> jours ouvrés après <span class="todo">[paiement confirmé / confirmation de fin de mission par le Propriétaire]</span>, par <span class="todo">[virement bancaire sur le RIB communiqué par l'Artisan]</span>. Les frais de transaction du prestataire de paiement sont <span class="todo">[supportés par ImmoPilot / à répartir : à préciser]</span>.</li>
+<li>Le contrat de mission est <b>édité après le paiement</b> : il est généré avec les informations de la mission et mis à la disposition des parties (cette page, imprimable en PDF) et envoyé par e-mail.</li>
+<li><span class="todo">[À valider par un juriste : l'encaissement de fonds pour le compte de tiers peut relever de la réglementation des services de paiement (loi 103-12, Bank Al-Maghrib). Vérifier le montage ou l'agrément nécessaire avant mise en service.]</span></li>
+</ol>
+
+<h2>Article 4A — Accès à l'assurance</h2>
+<ol>
+<li>Dès lors que la facture est <b>réglée intégralement en ligne via ImmoPilot</b>, la mission bénéficie de l'assurance souscrite par ImmoPilot auprès de <span class="todo">[nom de l'assureur]</span>, police n° <span class="todo">[numéro]</span>, selon les conditions du <b>contrat de couverture</b> annexé : <span class="todo">[annexe à joindre]</span>.</li>
+<li>Garanties : <span class="todo">[nature des garanties : dommages causés pendant la mission, défaut d'exécution, autre]</span>. Plafond : <span class="todo">[___]</span>. Franchise : <span class="todo">[___]</span>. Exclusions : voir le contrat de couverture.</li>
+<li>Conditions pour en bénéficier : facture validée sur la Plateforme, règlement complet en ligne, sinistre déclaré à ImmoPilot par écrit dans un délai de <span class="todo">[__]</span> jours avec les justificatifs (photos, devis, facture).</li>
+<li>Coût de l'assurance : <span class="todo">[inclus dans les commissions / supplément de ___]</span>.</li>
+<li>L'assurance ne couvre pas les missions payées directement entre les parties, ni celles dont le règlement en ligne n'est pas complet. Elle ne remplace pas l'assurance de responsabilité civile professionnelle de l'Artisan.</li>
+</ol>
+</div>
+
+<div class="variante only-direct"><span class="tag">VARIANTE B — PAIEMENT DIRECT (sans assurance)</span>
+<h2>Article 3B — Paiement direct entre les parties</h2>
+<ol>
+<li>Le Propriétaire règle l'Artisan <b>directement</b>, par le moyen de leur choix, sans passer par ImmoPilot. ImmoPilot n'encaisse pas le prix de la prestation et n'en est pas garante.</li>
+<li>Le Commanditaire règle sa commission et l'Artisan règle la sienne (article 2) à ImmoPilot, chacun dans un délai de <span class="todo">[__]</span> jours après la validation de la facture, sur facture de commission émise par ImmoPilot.</li>
+<li>Les parties déclarent à ImmoPilot, sur demande, la date et le montant réels du règlement. En cas de retard de paiement d'une commission, ImmoPilot peut suspendre l'accès de la partie concernée aux missions, après mise en demeure.</li>
+</ol>
+
+<h2>Article 4B — Aucune assurance</h2>
+<p><b>La mission n'est couverte par aucune assurance souscrite par ImmoPilot.</b> Les dommages, malfaçons, retards ou impayés sont réglés entre le Propriétaire et l'Artisan, sous leur seule responsabilité, selon le droit commun. Il est conseillé à l'Artisan de justifier de sa propre assurance de responsabilité civile professionnelle. Le contrat édité pour cette variante est un contrat de mise en relation moyennant commissions, <b>sans assurance</b>.</p>
+</div>
+
+<h2>Article 5 — Validation de la facture</h2>
+<p>La facture est établie par l'Artisan sur la Plateforme et validée par le Propriétaire. La validation vaut acceptation du montant et de la réalisation de la mission, sous réserve des droits du Propriétaire en cas de désaccord signalé avant validation. Après validation, le montant ne peut plus être modifié sur la Plateforme sans l'accord des deux parties.</p>
+
+<h2>Article 6 — Obligations des parties</h2>
+<ul>
+<li><b>Artisan</b> : être en règle (immatriculation, patente/taxe professionnelle, fiscalité, affiliation) ; exécuter la mission selon les règles de l'art ; respecter le devis ; délivrer des factures conformes à la loi.</li>
+<li><b>Propriétaire</b> : donner accès au bien et les informations utiles ; valider ou contester la facture dans les délais ; payer selon le mode choisi.</li>
+<li><b>Les deux parties</b> : fournir des informations exactes, ne pas détourner la Plateforme et respecter la confidentialité.</li>
+</ul>
+
+<h2>Article 7 — Signature électronique et preuve</h2>
+<p>Le contrat est accepté en ligne. Pour la variante A, il est conclu à la confirmation du paiement par SumUp ; pour la variante B, à la validation de la facture. Conformément à la loi n° 53-05, les enregistrements horodatés conservés par ImmoPilot (identité, version du contrat, date et heure, référence de la mission et du paiement) font foi, sauf preuve contraire.</p>
+
+<h2>Article 8 — Responsabilité</h2>
+<p>ImmoPilot répond des fautes prouvées dans l'exécution de ses propres obligations (mise en relation, encaissement et reversement pour la variante A), dans la limite des commissions perçues sur la mission concernée, sauf faute lourde ou dolosive. Elle n'est pas responsable de la qualité des travaux ni des dommages causés par l'Artisan, sauf prise en charge par l'assurance dans les conditions de l'article 4A.</p>
+
+<h2>Article 9 — Données personnelles</h2>
+<p>Les données nécessaires à la mission (identité, coordonnées, adresse du bien, échanges, factures) sont partagées entre les parties et traitées conformément à la loi n° 09-08 et à la <a href="politique-confidentialite.html">politique de confidentialité</a>.</p>
+
+<h2>Article 10 — Durée et fin</h2>
+<p>Le contrat prend fin à l'exécution complète de la mission, au paiement des commissions et, pour la variante A, au reversement à l'Artisan. L'obligation de commission de l'article 2.4 subsiste pendant la durée qui y est indiquée.</p>
+
+<h2>Article 11 — Droit applicable et litiges</h2>
+<p>Le contrat est soumis au <b>droit marocain</b>. Les parties cherchent d'abord une solution amiable par écrit à <a href="mailto:Darmanagepro@gmail.com">Darmanagepro@gmail.com</a>. À défaut, les <b>tribunaux compétents de Marrakech</b> sont seuls compétents, sous réserve des règles protectrices applicables au consommateur.</p>
+
+<p style="margin-top:34px"><a class="btn sec noprint" href="javascript:window.print()">Imprimer / enregistrer en PDF</a></p>
+
+<script src="config.js"></script>
+<script src="paiement.js"></script>
+<script>
+(function () {
+  "use strict";
+  var P = window.ImmoPay;
+  var mode = P.param("mode", /^(ligne|direct)$/);
+  if (mode) {
+    document.body.className = "m-" + mode;
+    P.texte("modeLibelle", mode === "ligne"
+      ? "Paiement en ligne — avec accès à l'assurance"
+      : "Paiement direct — mise en relation moyennant commission, sans assurance");
+  }
+  // Pré-remplissage : le texte est inséré avec textContent (jamais en HTML).
+  var champs = { ref: /^[A-Za-z0-9_.\-\/ ]{1,40}$/, proprio: /^[^<>]{1,100}$/, artisan: /^[^<>]{1,100}$/, objet: /^[^<>]{1,200}$/, montant: /^[0-9]{1,9}([.,][0-9]{1,2})?$/, date: /^[0-9]{2}\/[0-9]{2}\/[0-9]{4}$/ };
+  Object.keys(champs).forEach(function (k) {
+    var v = P.param(k, champs[k]);
+    if (!v) return;
+    document.querySelectorAll('[data-f="' + k + '"]').forEach(function (e) { e.textContent = v; e.classList.remove("todo"); });
+  });
+
+  // Taux lus dans config.js (6 % et 15 % par défaut) et commissions calculées sur le TTC de la facture finale.
+  var t = P.taux();
+  document.querySelectorAll("[data-taux]").forEach(function (e) { e.textContent = String(t[e.getAttribute("data-taux")]).replace(".", ","); });
+  var mt = P.param("montant", champs.montant), c = mt ? P.commissions(mt) : null;
+  if (c) {
+    var a = document.getElementById("cCommanditaire"), b = document.getElementById("cArtisan");
+    var d = P.devise();
+    a.textContent = P.montantTexte(c.commanditaire) + d + " (total payé par le Commanditaire : " + P.montantTexte(c.total) + d + ")";
+    b.textContent = P.montantTexte(c.artisan) + d + " (montant reversé à l'Artisan : " + P.montantTexte(c.net) + d + ")";
+    a.classList.remove("todo"); b.classList.remove("todo");
+  }
+})();
+</script>
+</main></body></html>

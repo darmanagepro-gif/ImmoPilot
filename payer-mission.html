@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ImmoPilot — Régler une mission</title><link rel="icon" href="icons/favicon-32.png">
+<link rel="stylesheet" href="contrat.css"></head>
+<body><header><img src="icons/icon-192.png" alt=""><b>ImmoPilot</b><a href="index.html">Ouvrir l'application</a></header><main>
+<!--
+  Page appelée par l'application quand le propriétaire a validé la facture d'une mission et clique sur « Payer » :
+    payer-mission.html?ref=FAC-123&montant=450&artisan=Nom&proprio=Nom&objet=Plomberie&mode=ligne&lien=<URL SumUp encodée>
+  - « lien » : lien de paiement SumUp créé pour CETTE facture par l'application (recommandé). À défaut, paiement.missionUrl de config.js.
+  - « mode » : ligne (paiement en ligne + assurance) ou direct (sans assurance). Sans paramètre, la page propose le choix.
+-->
+<h1>Régler une mission</h1>
+<p class="sub">Facture validée · paiement sécurisé par SumUp</p>
+
+<div class="card">
+<table>
+<tr><th>Mission</th><td id="ref">—</td></tr>
+<tr><th>Objet</th><td id="objet">—</td></tr>
+<tr><th>Artisan</th><td id="artisan">—</td></tr>
+<tr><th>Montant de la facture finale TTC</th><td id="montant">—</td></tr>
+<tr id="rowComm" hidden><th>Votre commission ImmoPilot (<span id="tauxComm">6</span> % du TTC)</th><td id="comm">—</td></tr>
+<tr id="rowTotal" hidden><th>Total à payer en ligne (facture + commission)</th><td><b id="total">—</b></td></tr>
+</table>
+</div>
+
+<div id="choix" class="card" hidden>
+<h3>Comment réglez-vous cette mission ?</h3>
+<p><a class="btn" id="choixLigne" href="#">Payer en ligne (avec assurance)</a></p>
+<p><a class="btn sec" id="choixDirect" href="#">Payer directement l'artisan (sans assurance)</a></p>
+</div>
+
+<div id="ligne" class="card" hidden>
+<h3>Paiement en ligne — avec accès à l'assurance</h3>
+<p>Vous réglez la facture par carte bancaire sur la page sécurisée SumUp. La mission bénéficie de l'assurance prévue au contrat. Le contrat de mission est édité après le paiement.</p>
+<label class="ck"><input type="checkbox" id="cL"><span>J'ai lu et j'accepte le <a id="lienContratL" href="contrat-mission.html?mode=ligne" target="_blank" rel="noopener">contrat de mise en relation moyennant commissions, avec accès à l'assurance</a>.</span></label>
+<button class="pay" id="payer" type="button" disabled>Payer</button>
+<p id="etatL" class="note" role="status"></p>
+<p class="alerte" id="alerteMontant" style="font-size:13px">Sur la page SumUp, vérifiez que le montant est bien égal au « Total à payer en ligne » ci-dessus avant de payer.</p>
+</div>
+
+<div id="direct" class="card" hidden>
+<h3>Paiement direct — sans assurance</h3>
+<p>Vous réglez l'artisan directement, sans passer par ImmoPilot. Aucune assurance ImmoPilot ne couvre cette mission. Le contrat est un simple contrat de mise en relation moyennant commissions, et votre commission (indiquée ci-dessus) reste due à ImmoPilot.</p>
+<label class="ck"><input type="checkbox" id="cD"><span>J'ai lu et j'accepte le <a id="lienContratD" href="contrat-mission.html?mode=direct" target="_blank" rel="noopener">contrat de mise en relation moyennant commissions (sans assurance)</a>.</span></label>
+<button class="pay" id="confirmer" type="button" disabled>Confirmer le paiement direct</button>
+<p id="etatD" class="note" role="status"></p>
+</div>
+
+<script src="config.js"></script>
+<script src="paiement.js"></script>
+<script>
+(function () {
+  "use strict";
+  var P = window.ImmoPay, pay = P.pay;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var champs = { ref: /^[A-Za-z0-9_.\-\/ ]{1,40}$/, proprio: /^[^<>]{1,100}$/, artisan: /^[^<>]{1,100}$/, objet: /^[^<>]{1,200}$/, montant: /^[0-9]{1,9}([.,][0-9]{1,2})?$/ };
+  var v = {};
+  Object.keys(champs).forEach(function (k) { v[k] = P.param(k, champs[k]); });
+  P.texte("ref", v.ref); P.texte("objet", v.objet); P.texte("artisan", v.artisan); P.texte("montant", v.montant ? v.montant + P.devise() : "");
+
+  // Paramètres transmis au contrat (le lien de paiement n'y figure pas).
+  function paramsContrat(mode) {
+    var q = new URLSearchParams({ mode: mode });
+    ["ref", "proprio", "artisan", "objet", "montant"].forEach(function (k) { if (v[k]) q.set(k, v[k]); });
+    q.set("date", new Date().toLocaleDateString("fr-FR"));
+    return q.toString();
+  }
+  $("lienContratL").href = "contrat-mission.html?" + paramsContrat("ligne");
+  $("lienContratD").href = "contrat-mission.html?" + paramsContrat("direct");
+
+  var mode = P.param("mode", /^(ligne|direct)$/);
+  if (!mode) {
+    var base = new URLSearchParams(location.search);
+    base.set("mode", "ligne"); $("choixLigne").href = "payer-mission.html?" + base.toString();
+    base.set("mode", "direct"); $("choixDirect").href = "payer-mission.html?" + base.toString();
+    $("choix").hidden = false;
+    return;
+  }
+
+  // Commission du commanditaire (6 % du TTC par défaut) ajoutée au prix de la facture pour le paiement en ligne.
+  var calc = v.montant ? P.commissions(v.montant) : null;
+  if (calc) {
+    $("tauxComm").textContent = String(calc.taux.commanditaire).replace(".", ",");
+    $("comm").textContent = P.montantTexte(calc.commanditaire) + P.devise();
+    $("rowComm").hidden = false;
+    if (mode === "ligne") { $("total").textContent = P.montantTexte(calc.total) + P.devise(); $("rowTotal").hidden = false; }
+  }
+  // Compte SumUp dans une autre devise que les prix : le montant débité est la conversion du total.
+  if (P.conversionNecessaire()) {
+    $("alerteMontant").textContent = "Le paiement est débité en " + String(pay.devisePaiement).toUpperCase() + " : le montant affiché sur la page SumUp est la conversion du « Total à payer en ligne » ci-dessus, au taux indiqué dans le contrat.";
+  }
+
+  if (mode === "ligne") {
+    $("ligne").hidden = false;
+    var lien = P.param("lien", /^https:\/\/[^\s<>"']{1,1500}$/);
+    var cible = P.lienSumUpValide(lien) ? lien : (P.lienSumUpValide(pay.missionUrl) ? pay.missionUrl : "");
+    var cL = $("cL"), btn = $("payer"), etat = $("etatL");
+    function maj() {
+      btn.disabled = !(cL.checked && cible);
+      etat.textContent = !cible ? "Le paiement en ligne de cette mission n'est pas encore disponible." : (cL.checked ? "Vous pouvez payer." : "Cochez la case pour accepter le contrat.");
+    }
+    cL.addEventListener("change", maj); maj();
+    btn.addEventListener("click", function () {
+      P.enregistrerAcceptation("mission-ligne", { ref: v.ref, montant: v.montant, artisan: v.artisan, proprio: v.proprio });
+      btn.disabled = true; etat.textContent = "Redirection vers le paiement sécurisé SumUp…";
+      if (!P.aller(cible)) { btn.disabled = false; etat.textContent = "Lien de paiement indisponible."; }
+    });
+  } else {
+    $("direct").hidden = false;
+    var cD = $("cD"), conf = $("confirmer"), etatD = $("etatD");
+    cD.addEventListener("change", function () { conf.disabled = !cD.checked; });
+    conf.addEventListener("click", function () {
+      P.enregistrerAcceptation("mission-direct", { ref: v.ref, montant: v.montant, artisan: v.artisan, proprio: v.proprio });
+      conf.disabled = true;
+      etatD.textContent = "Contrat de mise en relation accepté (paiement direct, sans assurance). Pensez à régler votre commission à ImmoPilot dans le délai prévu au contrat.";
+    });
+  }
+})();
+</script>
+</main></body></html>
