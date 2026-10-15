@@ -62,6 +62,8 @@ jobs:
           umask 077
           # Copie depuis un terminal : retours à la ligne ajoutés au milieu de la clé → on les retire ; une version base64 est aussi acceptée.
           printf '%s' "$CLASPRC_JSON" | tr -d '\r\n' > "$HOME/.clasprc.json"
+          # Réparation sûre : accolades fermantes manquantes en fin de texte (dernières lignes non copiées).
+          node -e 'const fs=require("fs"),f=process.argv[1];let t=fs.readFileSync(f,"utf8").trim();try{JSON.parse(t)}catch(e){const o=(t.match(/[{]/g)||[]).length,c=(t.match(/[}]/g)||[]).length;if(o>c&&/"\s*[}]?\s*$/.test(t)){const r=t+"}".repeat(o-c);try{const j=JSON.parse(r);const s=JSON.stringify(j);if(/refresh_token/.test(s)){fs.writeFileSync(f,r);console.log("Clé réparée : "+(o-c)+" accolade(s) fermante(s) ajoutée(s).")}}catch(e2){}}}' "$HOME/.clasprc.json"
           first=$(node -e 'try{JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))}catch(e){console.log(e.message.replace(/[^ -~]/g,"").slice(0,120))}' "$HOME/.clasprc.json")
           if [ -n "$first" ]; then
             printf '%s' "$CLASPRC_JSON" | tr -d ' \r\n' | base64 -d > "$HOME/.clasprc.b64" 2>/dev/null && node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$HOME/.clasprc.b64" 2>/dev/null && mv "$HOME/.clasprc.b64" "$HOME/.clasprc.json"
