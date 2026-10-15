@@ -40,7 +40,7 @@ var DEMO_SPEC_ = {
 function creerEnvironnementDemo() {
   const editor = assertEditor_();
   ctxReset_(); dbReset_();
-  const r = demoBuild_(editor);
+  const r = withDbBatch_(function () { return demoBuild_(editor); });
   Logger.log(demoSummaryText_(r));
   return r;
 }
@@ -148,8 +148,8 @@ function demoMarkOrgs_(orgs, actorEmail) {
  * Met la démonstration en veille (organisations suspendues : plus aucune connexion aux comptes de démo, données conservées)
  * ou la réactive. À n'utiliser qu'après la vérification Google Play : Google se connecte avec le compte de démonstration.
  */
-function mettreDemoEnVeille() { const ed = assertEditor_(); ctxReset_(); dbReset_(); const r = demoSetSleep_(ed, true); Logger.log(JSON.stringify(r)); return r; }
-function reveillerDemo() { const ed = assertEditor_(); ctxReset_(); dbReset_(); const r = demoSetSleep_(ed, false); Logger.log(JSON.stringify(r)); return r; }
+function mettreDemoEnVeille() { const ed = assertEditor_(); ctxReset_(); dbReset_(); const r = withDbBatch_(function () { return demoSetSleep_(ed, true); }); Logger.log(JSON.stringify(r)); return r; }
+function reveillerDemo() { const ed = assertEditor_(); ctxReset_(); dbReset_(); const r = withDbBatch_(function () { return demoSetSleep_(ed, false); }); Logger.log(JSON.stringify(r)); return r; }
 function demoSetSleep_(actorEmail, sleep) {
   const actor = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === normalizeEmail_(actorEmail); });
   assert_(actor, "Compte super administrateur introuvable.", "CONFIG");
@@ -224,7 +224,7 @@ function demoSummaryText_(r) {
 function creerHistoriqueDemo() {
   const editor = assertEditor_();
   ctxReset_(); dbReset_();
-  const r = demoHistory_(editor, {});
+  const r = withDbBatch_(function () { return demoHistory_(editor, {}); });
   Logger.log(JSON.stringify(r, null, 2));
   return r;
 }

@@ -12,6 +12,11 @@
 
 Les nouvelles colonnes de la base s'ajoutent toutes seules à la première ouverture (aucune donnée modifiée).
 
+### A bis. Vitesse (une seule fois après la version du 15 octobre 2026)
+1. Exécutez **installTriggers** : ajoute le déclencheur « surModificationBase » (si vous modifiez le classeur à la main, le cache se vide seul).
+2. Facultatif : **mesurerPerformance** compare la lecture d'une table dans le classeur et depuis le cache.
+3. Après une modification manuelle importante du classeur, vous pouvez aussi exécuter **viderCache**.
+
 ## B. Installation à partir de rien (première fois seulement)
 1. Nouveau projet Apps Script, fichiers `ImmoPilot.gs` et `Index.html` collés comme en A.
 2. Exécutez **setupProject** et acceptez les autorisations : base Google Sheet privée, dossier Drive privé, vous devenez super administrateur.

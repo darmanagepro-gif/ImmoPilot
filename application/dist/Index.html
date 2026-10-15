@@ -219,8 +219,6 @@ html[data-theme="dark"] img{opacity:.95}
 <div id="app" aria-live="polite"><div class="loading">Chargement…</div></div>
 <div class="toasts" id="toasts" role="status"></div>
 <script>window.BOOT = <?!= boot.replace(/</g, "\\u003c") ?>;</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <!-- ===== Components.html ===== -->
 <script>
 "use strict";
@@ -336,13 +334,42 @@ function run(fn, args) {
     r[fn].apply(r, args);
   });
 }
-function api(route, args) {
-  return run("api", [S.token, route, args || {}]).then(function (r) {
-    if (r && r.ok) return r.data;
+/* Mémoire des lectures : une page déjà vue s'affiche instantanément pendant 60 s ; toute action (création,
+   modification, suppression…) vide cette mémoire, et un nouveau clic sur la page en cours force l'actualisation.
+   Uniquement en mémoire de l'onglet (rien n'est écrit sur l'appareil) ; jamais pour les documents (accès journalisés). */
+const API_READ_RE = /\.(list|get|choices|orgChoices|calendar|today|history|summary|mine|kb|caps|availability|accounts|run)$/;
+const API_NO_MEMO = { "doc.get": true };
+const API_FRESH_MS = 60000;
+const APIC = { token: null, data: {}, flight: {}, gen: 0 };
+function apiCacheClear() { APIC.data = {}; APIC.flight = {}; APIC.gen++; }
+function api(route, args, opts) {
+  args = args || {};
+  if (APIC.token !== S.token) { apiCacheClear(); APIC.token = S.token; }
+  const memo = API_READ_RE.test(route) && !API_NO_MEMO[route];
+  const key = memo ? route + "|" + JSON.stringify(args) : null, tok = S.token;
+  let gen;
+  if (memo && !(opts && opts.fresh)) {
+    const c = APIC.data[key];
+    if (c && Date.now() - c.at < API_FRESH_MS) return Promise.resolve(JSON.parse(c.json));
+    if (APIC.flight[key]) return APIC.flight[key].then(function (j) { return JSON.parse(j); });
+  }
+  if (!memo) apiCacheClear();
+  gen = APIC.gen;
+  const p = run("api", [tok, route, args]).then(function (r) {
+    if (!memo) apiCacheClear(); // lectures parties pendant l'écriture : oubliées aussi
+    if (r && r.ok) {
+      if (memo) { const j = JSON.stringify(r.data === undefined ? null : r.data); if (APIC.token === tok && APIC.gen === gen) APIC.data[key] = { at: Date.now(), json: j }; return j; }
+      return r.data;
+    }
     const e = (r && r.error) || { code: "INTERNAL", message: t("Réponse invalide.") };
     if (e.code === "AUTH" && route !== "me.logout") { localLogout(e.message); }
     throw e;
-  });
+  }, function (e) { if (!memo) apiCacheClear(); throw e; });
+  if (!memo) return p;
+  APIC.flight[key] = p;
+  const done = function () { if (APIC.flight[key] === p) delete APIC.flight[key]; };
+  p.then(done, done);
+  return p.then(function (j) { return JSON.parse(j); });
 }
 function apiP(route, args) { return run("apiPublic", [route, args || {}]).then(function (r) { if (r && r.ok) return r.data; throw (r && r.error) || { message: t("Réponse invalide.") }; }); }
 IP.api = api;
@@ -360,7 +387,7 @@ function restoreSuperSession(route) {
   }).catch(function () { localLogout(); });
   return true;
 }
-function localLogout(msg) { if (S.me && S.me.impersonator && restoreSuperSession("accounts")) return; S.token = null; S.me = null; S.meta = null; store("ip_token", null); if (window.App) App.renderLogin(msg); }
+function localLogout(msg) { apiCacheClear(); if (S.me && S.me.impersonator && restoreSuperSession("accounts")) return; S.token = null; S.me = null; S.meta = null; store("ip_token", null); if (window.App) App.renderLogin(msg); }
 
 /* ------------------------------ retours ------------------------------ */
 function toast(msg, tone) {
@@ -585,8 +612,35 @@ function themeButtonSync(b) {
 function themeButton() { const b = h("button", { type: "button", class: "theme-btn", onclick: themeToggle }); themeButtonSync(b); return b; }
 themeApply(themeCurrent());
 try { window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () { if (!lstore("ip_theme")) { themeApply(themeCurrent()); document.querySelectorAll(".theme-btn").forEach(themeButtonSync); } }); } catch (e) { /* navigateur ancien */ }
+/* Bibliothèques externes chargées sans bloquer l'affichage : graphiques dès le démarrage (en arrière-plan),
+   carte seulement quand on l'ouvre. */
+const LIBS = {
+  chart: { js: "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js", ready: function () { return !!window.Chart; }, after: function () { themeApply(themeCurrent()); } },
+  leaflet: { js: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js", css: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css", ready: function () { return !!window.L; } }
+};
+const LIB_P = {};
+function loadLib(name) {
+  const L0 = LIBS[name];
+  if (L0.ready()) return Promise.resolve();
+  if (LIB_P[name]) return LIB_P[name];
+  LIB_P[name] = new Promise(function (res, rej) {
+    if (L0.css) document.head.appendChild(h("link", { rel: "stylesheet", href: L0.css }));
+    const s = h("script", { src: L0.js, async: true });
+    s.onload = function () { if (!L0.ready()) { rej(new Error(name)); return; } if (L0.after) L0.after(); res(); };
+    s.onerror = function () { delete LIB_P[name]; rej(new Error(name)); };
+    document.head.appendChild(s);
+  });
+  return LIB_P[name];
+}
+try { loadLib("chart").catch(function () { /* hors ligne : message à l'affichage du graphique */ }); } catch (e) { /* sans DOM */ }
 function chart(canvasParent, config) {
-  if (!window.Chart) { canvasParent.appendChild(h("div", { class: "muted small" }, t("Graphique indisponible (bibliothèque Chart.js non chargée)."))); return null; }
+  if (!window.Chart) {
+    const wait = h("div", { class: "muted small chart-wait" }, t("Chargement…"));
+    canvasParent.appendChild(wait);
+    loadLib("chart").then(function () { if (window.Chart && document.body.contains(wait)) { wait.remove(); chart(canvasParent, config); } })
+      .catch(function () { wait.textContent = t("Graphique indisponible (bibliothèque Chart.js non chargée)."); });
+    return null;
+  }
   const c = h("canvas"); clear(canvasParent).appendChild(h("div", { class: "chart-box" }, c));
   config.options = Object.assign({ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom", rtl: S.lang === "ar" } } }, config.options || {});
   const ch = new Chart(c.getContext("2d"), config); S.charts.push(ch); return ch;
@@ -1150,13 +1204,13 @@ PAGES.properties = function (el) {
 };
 function propertyMap(items) {
   const box = h("div", { class: "map" }), pts = items.filter(function (p) { return p.latitude && p.longitude; });
-  if (!window.L) return h("div", { class: "alert warn" }, t("Carte indisponible (bibliothèque Leaflet non chargée)."));
-  setTimeout(function () {
+  const draw = function () {
     const m = L.map(box).setView(pts.length ? [pts[0].latitude, pts[0].longitude] : [31.6295, -7.9811], 12);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(m);
     pts.forEach(function (p) { const mk = L.marker([p.latitude, p.longitude]).addTo(m); const a = h("a", { href: "#property/" + p.propertyId }, p.name); mk.bindPopup(a); });
     if (pts.length > 1) m.fitBounds(pts.map(function (p) { return [p.latitude, p.longitude]; }), { padding: [30, 30] });
-  }, 50);
+  };
+  loadLib("leaflet").then(function () { setTimeout(draw, 50); }).catch(function () { clear(box).appendChild(h("div", { class: "alert warn" }, t("Carte indisponible (bibliothèque Leaflet non chargée)."))); });
   return h("div", null, pts.length < items.length ? h("p", { class: "small muted" }, (items.length - pts.length) + " " + t("bien(s) sans coordonnées géographiques.")) : null, box);
 }
 function importProperties() {
@@ -1981,7 +2035,7 @@ const App = window.App = {
       nav.appendChild(h("div", { class: "nav-group" }, t(g.g)));
       items.forEach(function (i) {
         const badge = i.badge ? i.badge() : 0;
-        nav.appendChild(h("a", { href: "#" + i.r, "data-r": i.r, onclick: function () { document.querySelector(".sidebar").classList.remove("open"); const s = document.querySelector(".scrim"); if (s) s.remove(); } },
+        nav.appendChild(h("a", { href: "#" + i.r, "data-r": i.r, onclick: function () { if ((S.route || "").split("/")[0] === i.r) { apiCacheClear(); setTimeout(function () { App.go(i.r); }, 0); } document.querySelector(".sidebar").classList.remove("open"); const s = document.querySelector(".scrim"); if (s) s.remove(); } },
           h("span", { class: "ico", "aria-hidden": "true" }, i.i), t(i.l), badge ? h("span", { class: "badge" }, String(badge)) : null));
       });
     });
@@ -2014,7 +2068,7 @@ const App = window.App = {
     catch (e) { el.appendChild(h("div", { class: "alert bad" }, errMsg(e))); console.error(e); }
     window.scrollTo(0, 0);
   },
-  refreshMe: function () { return api("me.get").then(function (me) { S.me = me; }); }
+  refreshMe: function () { return api("me.get", {}, { fresh: true }).then(function (me) { S.me = me; }); }
 };
 window.addEventListener("hashchange", function () { if (S.me) App.go(location.hash.replace(/^#/, "")); });
 // Bouton Retour / Suivant du navigateur dans Apps Script.

@@ -84,7 +84,7 @@ const App = window.App = {
       nav.appendChild(h("div", { class: "nav-group" }, t(g.g)));
       items.forEach(function (i) {
         const badge = i.badge ? i.badge() : 0;
-        nav.appendChild(h("a", { href: "#" + i.r, "data-r": i.r, onclick: function () { document.querySelector(".sidebar").classList.remove("open"); const s = document.querySelector(".scrim"); if (s) s.remove(); } },
+        nav.appendChild(h("a", { href: "#" + i.r, "data-r": i.r, onclick: function () { if ((S.route || "").split("/")[0] === i.r) { apiCacheClear(); setTimeout(function () { App.go(i.r); }, 0); } document.querySelector(".sidebar").classList.remove("open"); const s = document.querySelector(".scrim"); if (s) s.remove(); } },
           h("span", { class: "ico", "aria-hidden": "true" }, i.i), t(i.l), badge ? h("span", { class: "badge" }, String(badge)) : null));
       });
     });
@@ -117,7 +117,7 @@ const App = window.App = {
     catch (e) { el.appendChild(h("div", { class: "alert bad" }, errMsg(e))); console.error(e); }
     window.scrollTo(0, 0);
   },
-  refreshMe: function () { return api("me.get").then(function (me) { S.me = me; }); }
+  refreshMe: function () { return api("me.get", {}, { fresh: true }).then(function (me) { S.me = me; }); }
 };
 window.addEventListener("hashchange", function () { if (S.me) App.go(location.hash.replace(/^#/, "")); });
 // Bouton Retour / Suivant du navigateur dans Apps Script.

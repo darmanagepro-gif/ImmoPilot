@@ -11,7 +11,7 @@ function toSigned(buf) { return Array.from(buf, function (b) { return b > 127 ? 
 function toBuf(v) { if (typeof v === "string") return Buffer.from(v, "utf8"); return Buffer.from(v.map(function (b) { return (b + 256) % 256; })); }
 
 function createMock() {
-  const M = { session: { active: "owner@example.test", effective: "owner@example.test" }, onInsert: null, failWrites: null, outbox: [], logs: [], held: false, triggers: [], props: {}, cache: {} };
+  const M = { session: { active: "owner@example.test", effective: "owner@example.test" }, onInsert: null, failWrites: null, outbox: [], logs: [], held: false, triggers: [], props: {}, cache: {}, stats: { sheetReads: 0, sheetWrites: 0, opens: 0, cacheCalls: 0 } };
   M.lockHeld = function () { return M.held; };
   const files = {}, folders = {}, sheetsById = {};
   let seq = 0;
@@ -63,7 +63,7 @@ function createMock() {
     if (row < 1 || col < 1 || nr < 1 || nc < 1) throw new Error("Plage invalide (" + row + "," + col + "," + nr + "," + nc + ")");
     const sh = this;
     return {
-      getValues: function () { const out = []; for (let r = 0; r < nr; r++) { const line = []; for (let c = 0; c < nc; c++) { const v = sh.cell(row + r, col + c); line.push(v instanceof Date ? new Date(v.getTime()) : v); } out.push(line); } return out; },
+      getValues: function () { M.stats.sheetReads++; const out = []; for (let r = 0; r < nr; r++) { const line = []; for (let c = 0; c < nc; c++) { const v = sh.cell(row + r, col + c); line.push(v instanceof Date ? new Date(v.getTime()) : v); } out.push(line); } return out; },
       getValue: function () { return sh.cell(row, col); },
       setValues: function (vals) {
         sh.checkWrite();
@@ -102,7 +102,8 @@ function createMock() {
   const SpreadsheetApp = {
     // Comme dans Google : un classeur neuf contient une feuille vide par défaut, à la racine du Drive.
     create: function (n) { const ss = new Spreadsheet(n); ss.sheets.push(new Sheet("Feuille 1")); return ss; },
-    openById: function (id) { const s = sheetsById[id]; if (!s || files[id].trashed) throw new Error("Document introuvable : " + id); return s; }
+    flush: function () { M.stats.flushes = (M.stats.flushes || 0) + 1; },
+    openById: function (id) { M.stats.opens++; const s = sheetsById[id]; if (!s || files[id].trashed) throw new Error("Document introuvable : " + id); return s; }
   };
 
   /* ---------------- Drive ---------------- */
@@ -182,16 +183,31 @@ function createMock() {
     computeHmacSignature: function (alg, value, key) { return toSigned(crypto.createHmac(alg, toBuf(key)).update(toBuf(value)).digest()); },
     base64Encode: function (d) { return toBuf(d).toString("base64"); },
     base64Decode: function (s) { return toSigned(Buffer.from(String(s), "base64")); },
+    gzip: function (blob) { return newBlob(toSigned(require("zlib").gzipSync(toBuf(blob.getBytes()))), "application/x-gzip", "data.gz"); },
+    ungzip: function (blob) { return newBlob(toSigned(require("zlib").gunzipSync(toBuf(blob.getBytes()))), "application/octet-stream", "data"); },
     newBlob: newBlob, formatDate: formatDate, parseDate: parseDate, sleep: function () {}
   };
 
   /* ---------------- Services divers ---------------- */
   const PropertiesService = { getScriptProperties: function () { return { getProperty: function (k) { return M.props[k] === undefined ? null : M.props[k]; }, setProperty: function (k, v) { M.props[k] = String(v); return this; }, deleteProperty: function (k) { delete M.props[k]; } }; } };
-  const CacheService = { getScriptCache: function () { return { get: function (k) { const e = M.cache[k]; return e && e.exp > Date.now() ? e.v : null; }, put: function (k, v, s) { M.cache[k] = { v: String(v), exp: Date.now() + (s || 600) * 1000 }; }, remove: function (k) { delete M.cache[k]; } }; } };
+  // Cache de script : mêmes limites que Google (clé 250 caractères, valeur 100 Ko, durée 6 h au plus).
+  const cacheGet = function (k) { const e = M.cache[k]; return e && e.exp > Date.now() ? e.v : null; };
+  const cachePut = function (k, v, s) {
+    if (String(k).length > 250) throw new Error("Clé de cache trop longue");
+    v = String(v); if (Buffer.byteLength(v, "utf8") > 100 * 1024) throw new Error("Argument too large: value");
+    M.cache[k] = { v: v, exp: Date.now() + Math.min(s || 600, 21600) * 1000 };
+  };
+  const CacheService = { getScriptCache: function () { return {
+    get: function (k) { M.stats.cacheCalls++; return cacheGet(k); },
+    getAll: function (ks) { M.stats.cacheCalls++; const o = {}; ks.forEach(function (k) { const v = cacheGet(k); if (v !== null) o[k] = v; }); return o; },
+    put: function (k, v, s) { M.stats.cacheCalls++; cachePut(k, v, s); },
+    putAll: function (o, s) { M.stats.cacheCalls++; Object.keys(o).forEach(function (k) { cachePut(k, o[k], s); }); },
+    remove: function (k) { M.stats.cacheCalls++; delete M.cache[k]; },
+    removeAll: function (ks) { M.stats.cacheCalls++; ks.forEach(function (k) { delete M.cache[k]; }); } }; } };
   const LockService = { getScriptLock: function () { return { tryLock: function () { if (M.held) return false; M.held = true; return true; }, waitLock: function () { if (M.held) throw new Error("Verrou indisponible"); M.held = true; }, releaseLock: function () { M.held = false; }, hasLock: function () { return M.held; } }; } };
   const Session = { getActiveUser: function () { return { getEmail: function () { return M.session.active; } }; }, getEffectiveUser: function () { return { getEmail: function () { return M.session.effective; } }; } };
   const MailApp = { sendEmail: function (o) { M.outbox.push(o); }, getRemainingDailyQuota: function () { return 100; } };
-  function trig(fn) { const t = { fn: fn, getHandlerFunction: function () { return fn; } }; const b = { timeBased: function () { return b; }, everyMinutes: function () { return b; }, everyDays: function () { return b; }, atHour: function () { return b; }, inTimezone: function () { return b; }, create: function () { M.triggers.push(t); return t; } }; return b; }
+  function trig(fn) { const t = { fn: fn, getHandlerFunction: function () { return fn; } }; const b = { timeBased: function () { return b; }, everyMinutes: function () { return b; }, everyDays: function () { return b; }, atHour: function () { return b; }, inTimezone: function () { return b; }, forSpreadsheet: function () { return b; }, onEdit: function () { return b; }, create: function () { M.triggers.push(t); return t; } }; return b; }
   const ScriptApp = { getService: function () { return { getUrl: function () { return null; } }; }, getProjectTriggers: function () { return M.triggers.slice(); }, newTrigger: trig, deleteTrigger: function (t) { M.triggers = M.triggers.filter(function (x) { return x !== t; }); } };
   const DocumentApp = { create: function (n) { const id = nid("doc_"); registerFile(id, n, "application/vnd.google-apps.document", [], null); return { getId: function () { return id; } }; }, openById: function () { return { getBody: function () { return { replaceText: function () {} }; }, saveAndClose: function () {} }; } };
   const Logger = { log: function (m) { M.logs.push(String(m)); } };

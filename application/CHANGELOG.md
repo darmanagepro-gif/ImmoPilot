@@ -1,5 +1,13 @@
 # Journal des modifications
 
+## 2.0.3 — 15 octobre 2026 — vitesse
+
+- Cache partagé côté serveur (CacheService) : les tables sont gardées compressées en mémoire Google ; un écran lit en moyenne 0,5 feuille au lieu de 11 (mesuré sur le parcours complet de l'interface, 223 appels). Invalidation immédiate à chaque écriture, lectures sous verrou toujours faites sur la feuille, validation (flush) avant de rendre le verrou.
+- Session : vérification du jeton servie par le cache (10 min, effacée dès déconnexion ou révocation).
+- Navigateur : une page déjà vue se réaffiche instantanément pendant 60 s, requêtes identiques regroupées, mémoire vidée à chaque action ; un nouveau clic sur la page en cours force l'actualisation.
+- Graphiques et carte chargés sans bloquer l'affichage (carte seulement à l'ouverture) ; contrôle d'installation mémorisé à l'ouverture de l'application.
+- Nouvelles fonctions d'éditeur : viderCache() ; installTriggers ajoute surModificationBase (cache vidé après une saisie manuelle dans le classeur). mesurerPerformance() compare lecture feuille / cache.
+
 ## 2.0.2 — 15 octobre 2026
 
 - Super administrateur : page « Comptes clients » (Propriétaires, Agences, Prestataires, Gardiens, Locataires) avec bouton « Entrer » qui ouvre l'espace de la personne tel qu'elle le voit. Tout y est possible ; chaque action est journalisée au nom du super administrateur (avec le compte concerné), bandeau rouge permanent, session limitée à 2 heures, retour en un clic. Mot de passe, déconnexion des appareils et demande de suppression restent réservés au titulaire.

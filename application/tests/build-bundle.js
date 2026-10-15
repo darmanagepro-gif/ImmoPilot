@@ -14,6 +14,8 @@ let server = "/**\n * ImmoPilot " + version + " — CODE SERVEUR COMPLET EN UN S
   " * Contient les " + gs.length + " fichiers : " + gs.join(", ") + ".\n" +
   " * À coller seul dans le projet Apps Script (aucun autre fichier .gs ne doit rester dans le projet).\n */\n";
 gs.forEach(function (f) { server += "\n/* ======================================================================\n * " + f + "\n * ====================================================================== */\n" + fs.readFileSync(path.join(ROOT, f), "utf8").replace(/\s+$/, "") + "\n"; });
+const build = require("crypto").createHash("sha1").update(server).update(fs.readFileSync(path.join(ROOT, "Index.html"))).digest("hex").slice(0, 12);
+server = server.replace('var IMMO_BUILD_ = "dev";', 'var IMMO_BUILD_ = "' + build + '";');
 server += "\n/* FIN DU FICHIER ImmoPilot.gs — si cette ligne manque, le copier-coller est incomplet. */\n";
 fs.writeFileSync(path.join(OUT, "ImmoPilot.gs"), server);
 let html = fs.readFileSync(path.join(ROOT, "Index.html"), "utf8");

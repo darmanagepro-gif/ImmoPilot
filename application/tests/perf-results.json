@@ -1,0 +1,268 @@
+{
+ "me.boot": {
+  "n": 10,
+  "reads": 10,
+  "opens": 0,
+  "cache": 15,
+  "ms": 49
+ },
+ "property.choices": {
+  "n": 24,
+  "reads": 0,
+  "opens": 0,
+  "cache": 24,
+  "ms": 78
+ },
+ "dash.get": {
+  "n": 9,
+  "reads": 20,
+  "opens": 0,
+  "cache": 47,
+  "ms": 79
+ },
+ "fin.summary": {
+  "n": 3,
+  "reads": 0,
+  "opens": 0,
+  "cache": 3,
+  "ms": 14
+ },
+ "report.run": {
+  "n": 5,
+  "reads": 0,
+  "opens": 0,
+  "cache": 5,
+  "ms": 30
+ },
+ "pareto.run": {
+  "n": 4,
+  "reads": 0,
+  "opens": 0,
+  "cache": 8,
+  "ms": 17
+ },
+ "property.list": {
+  "n": 4,
+  "reads": 0,
+  "opens": 0,
+  "cache": 4,
+  "ms": 14
+ },
+ "resv.calendar": {
+  "n": 5,
+  "reads": 0,
+  "opens": 0,
+  "cache": 5,
+  "ms": 20
+ },
+ "lease.list": {
+  "n": 4,
+  "reads": 0,
+  "opens": 0,
+  "cache": 4,
+  "ms": 25
+ },
+ "tenant.list": {
+  "n": 4,
+  "reads": 0,
+  "opens": 0,
+  "cache": 4,
+  "ms": 16
+ },
+ "agency.mine": {
+  "n": 2,
+  "reads": 0,
+  "opens": 0,
+  "cache": 4,
+  "ms": 7
+ },
+ "resv.list": {
+  "n": 4,
+  "reads": 0,
+  "opens": 0,
+  "cache": 4,
+  "ms": 14
+ },
+ "guest.list": {
+  "n": 4,
+  "reads": 1,
+  "opens": 0,
+  "cache": 9,
+  "ms": 11
+ },
+ "ops.today": {
+  "n": 5,
+  "reads": 0,
+  "opens": 0,
+  "cache": 15,
+  "ms": 20
+ },
+ "ops.history": {
+  "n": 5,
+  "reads": 0,
+  "opens": 0,
+  "cache": 15,
+  "ms": 17
+ },
+ "clean.list": {
+  "n": 5,
+  "reads": 0,
+  "opens": 0,
+  "cache": 5,
+  "ms": 17
+ },
+ "inc.list": {
+  "n": 7,
+  "reads": 0,
+  "opens": 0,
+  "cache": 14,
+  "ms": 23
+ },
+ "ctr.list": {
+  "n": 6,
+  "reads": 1,
+  "opens": 0,
+  "cache": 7,
+  "ms": 20
+ },
+ "quote.list": {
+  "n": 5,
+  "reads": 0,
+  "opens": 0,
+  "cache": 5,
+  "ms": 17
+ },
+ "wo.list": {
+  "n": 5,
+  "reads": 0,
+  "opens": 0,
+  "cache": 5,
+  "ms": 16
+ },
+ "inv.list": {
+  "n": 4,
+  "reads": 0,
+  "opens": 0,
+  "cache": 4,
+  "ms": 16
+ },
+ "notif.list": {
+  "n": 9,
+  "reads": 0,
+  "opens": 0,
+  "cache": 9,
+  "ms": 25
+ },
+ "user.list": {
+  "n": 4,
+  "reads": 0,
+  "opens": 0,
+  "cache": 4,
+  "ms": 8
+ },
+ "sub.mine": {
+  "n": 3,
+  "reads": 1,
+  "opens": 0,
+  "cache": 7,
+  "ms": 9
+ },
+ "audit.list": {
+  "n": 4,
+  "reads": 4,
+  "opens": 0,
+  "cache": 4,
+  "ms": 18
+ },
+ "property.get": {
+  "n": 9,
+  "reads": 4,
+  "opens": 0,
+  "cache": 20,
+  "ms": 50
+ },
+ "resv.get": {
+  "n": 9,
+  "reads": 9,
+  "opens": 0,
+  "cache": 33,
+  "ms": 42
+ },
+ "inc.get": {
+  "n": 9,
+  "reads": 9,
+  "opens": 0,
+  "cache": 29,
+  "ms": 44
+ },
+ "clean.get": {
+  "n": 9,
+  "reads": 12,
+  "opens": 0,
+  "cache": 27,
+  "ms": 37
+ },
+ "wo.get": {
+  "n": 9,
+  "reads": 9,
+  "opens": 0,
+  "cache": 14,
+  "ms": 39
+ },
+ "inv.get": {
+  "n": 9,
+  "reads": 9,
+  "opens": 0,
+  "cache": 9,
+  "ms": 30
+ },
+ "lease.get": {
+  "n": 9,
+  "reads": 8,
+  "opens": 0,
+  "cache": 12,
+  "ms": 50
+ },
+ "ctr.get": {
+  "n": 9,
+  "reads": 4,
+  "opens": 0,
+  "cache": 10,
+  "ms": 33
+ },
+ "lease.mine": {
+  "n": 1,
+  "reads": 0,
+  "opens": 0,
+  "cache": 2,
+  "ms": 8
+ },
+ "org.list": {
+  "n": 2,
+  "reads": 0,
+  "opens": 0,
+  "cache": 2,
+  "ms": 6
+ },
+ "sub.list": {
+  "n": 1,
+  "reads": 0,
+  "opens": 0,
+  "cache": 2,
+  "ms": 3
+ },
+ "admin.accounts": {
+  "n": 2,
+  "reads": 0,
+  "opens": 0,
+  "cache": 2,
+  "ms": 6
+ },
+ "me.endImpersonation": {
+  "n": 1,
+  "reads": 4,
+  "opens": 0,
+  "cache": 3,
+  "ms": 2
+ }
+}

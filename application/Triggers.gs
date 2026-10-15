@@ -14,6 +14,8 @@ function installTriggers() {
   const created = [];
   if (!has("jobFrequent")) { ScriptApp.newTrigger("jobFrequent").timeBased().everyMinutes(15).create(); created.push("jobFrequent"); }
   if (!has("jobDaily")) { ScriptApp.newTrigger("jobDaily").timeBased().everyDays(1).atHour(6).inTimezone(tz_()).create(); created.push("jobDaily"); }
+  // Saisie manuelle dans le classeur de données : le cache des tables est vidé automatiquement.
+  if (!has("surModificationBase")) { ScriptApp.newTrigger("surModificationBase").forSpreadsheet(dbSpreadsheet_().getId()).onEdit().create(); created.push("surModificationBase"); }
   // L'ancien déclencheur de la phase 4 (p4ExpireCleaningMissions) est remplacé par jobFrequent.
   existing.filter(function (t) { return t.getHandlerFunction() === "p4ExpireCleaningMissions"; }).forEach(function (t) { ScriptApp.deleteTrigger(t); created.push("(supprimé) p4ExpireCleaningMissions"); });
   return { ok: true, changes: created, triggers: ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); }) };
@@ -26,7 +28,7 @@ function uninstallTriggers() {
 }
 
 function runJob_(name, tasks) {
-  ctxReset_(); dbReset_();
+  ctxReset_(); dbReset_(); dbcBegin_("request");
   const cache = CacheService.getScriptCache(), key = "jobrun_" + name;
   if (cache.get(key)) return { skipped: true, reason: "Exécution récente." };
   cache.put(key, "1", 290);
@@ -45,7 +47,7 @@ function runJob_(name, tasks) {
   } catch (e) {
     if (jobRow) try { dbUpdate_("ScheduledJobs", jobRow.jobRunId, { finishedAt: nowIso_(), status: "FAILED", error: String(e.message).slice(0, 2000) }); } catch (e2) { console.error(e2.message); }
     throw e;
-  } finally { LOCK_DEPTH_--; lock.releaseLock(); }
+  } finally { LOCK_DEPTH_--; try { dbcCommit_(); } finally { lock.releaseLock(); } }
   return { ok: !errors.length, result: result, errors: errors };
 }
 

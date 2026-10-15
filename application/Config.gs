@@ -5,6 +5,8 @@
  * en fin de feuille par la migration (non destructif).
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
+/** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
+var IMMO_BUILD_ = "dev";
 /** Langues de l'interface : français, anglais, arabe, espagnol, italien, néerlandais. */
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({

@@ -118,7 +118,8 @@ function principalFromToken_(token) {
   token = String(token || "");
   if (!/^[a-f0-9]{64}$/.test(token)) throw new AppError("AUTH", "Session invalide. Veuillez vous reconnecter.");
   const h = sha256Hex_(token);
-  const s = dbFindFast_("Sessions", "tokenHash", h);
+  let s = dbcSessionGet_(h);
+  if (!s) { s = dbFindFast_("Sessions", "tokenHash", h); if (s && !s.revokedAt) dbcSessionPut_(h, s); }
   if (!s || s.revokedAt || !parseTs_(s.expiresAt) || parseTs_(s.expiresAt).getTime() < Date.now()) throw new AppError("AUTH", "Session expirée. Veuillez vous reconnecter.");
   const user = dbGet_("Users", s.userId);
   if (!user || user.status !== "ACTIVE") throw new AppError("AUTH", "Compte inactif ou suspendu.");

@@ -132,8 +132,17 @@ function embedOrigins_() {
     .filter(Boolean).slice(0, 10);
 }
 
+/** Contrôle d'installation mémorisé 6 h par version installée : l'ouverture de l'application ne relit pas tous les fichiers à chaque fois. */
+function installCheckCached_() {
+  if (IMMO_BUILD_ === "dev") return installCheck_();
+  const k = "installok_" + IMMO_BUILD_;
+  try { if (CacheService.getScriptCache().get(k)) return { ok: true }; } catch (e) { /* contrôle complet */ }
+  const r = installCheck_();
+  if (r.ok) { try { CacheService.getScriptCache().put(k, "1", 21600); } catch (e) { /* facultatif */ } }
+  return r;
+}
 function doGet(e) {
-  const check = installCheck_();
+  const check = installCheckCached_();
   if (!check.ok) return installErrorPage_(check);
   const prm = (e && e.parameter) || {};
   const action = ["accept", "reset", "guest"].indexOf(String(prm.action || "")) >= 0 ? String(prm.action) : "app";
@@ -167,7 +176,10 @@ function errorResponse_(e, route) {
 
 /** Appel authentifié. Le jeton est vérifié côté serveur à chaque appel ; aucune donnée d'identité fournie par le navigateur n'est crue. */
 function api(token, route, args) {
-  ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0;
+  ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0; dbcBegin_("request");
+  try { return apiRun_(token, route, args); } finally { dbcCommit_(); }
+}
+function apiRun_(token, route, args) {
   ensureSchemaCurrent_();
   route = String(route || "");
   try {
@@ -182,7 +194,10 @@ function api(token, route, args) {
 }
 /** Appel public : uniquement les routes dont la sécurité repose sur un secret à usage unique ou un mot de passe. */
 function apiPublic(route, args) {
-  ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0;
+  ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0; dbcBegin_("request");
+  try { return apiPublicRun_(route, args); } finally { dbcCommit_(); }
+}
+function apiPublicRun_(route, args) {
   ensureSchemaCurrent_();
   route = String(route || "");
   try {

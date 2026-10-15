@@ -171,6 +171,7 @@ function ensureSchemaCurrent_() {
       if (String(props.getProperty("IMMO_SCHEMA_SYNCED") || "") === String(IMMO_CONFIG.SCHEMA_VERSION)) return;
       migSchemaSync_();
       props.setProperty("IMMO_SCHEMA_SYNCED", String(IMMO_CONFIG.SCHEMA_VERSION));
+      dbcBumpEpoch_();
     }, 20000);
   } catch (e) { console.error("Synchronisation du schéma : " + e.message); }
 }
@@ -195,6 +196,7 @@ function runMigrations_(actor) {
       throw new AppError("MIGRATION", "Migration v" + m.version + " échouée : " + e.message + (backup ? " — sauvegarde disponible : " + backup.name : ""));
     }
   });
+  dbcBumpEpoch_(); // colonnes ou données modifiées hors couche d'accès : tout le cache est invalidé
   return { backup: backup, applied: results, schemaVersion: IMMO_CONFIG.SCHEMA_VERSION };
 }
 

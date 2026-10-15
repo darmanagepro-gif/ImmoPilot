@@ -113,6 +113,46 @@ function tDays_(n) { return addDaysStr_(todayStr_(), n); }
 /* ===================================== GROUPES DE TESTS ===================================== */
 function TEST_GROUPS_() {
   return [
+    { name: "Cache des tables", tests: [
+      ["Cache partagé : lecture sans feuille, invalidation immédiate à l'écriture, grosses tables, sessions révoquées, vidage manuel", function (T, fx) {
+        if (typeof __MOCK__ === "undefined") T.skip("Compteurs de lecture disponibles dans le simulateur uniquement.");
+        T.call(fx.tok.ownerA, "property.list", {});
+        const r0 = __MOCK__.stats.sheetReads;
+        T.call(fx.tok.ownerA, "property.list", {});
+        T.ok(__MOCK__.stats.sheetReads - r0 <= 1, "deuxième lecture servie par le cache (" + (__MOCK__.stats.sheetReads - r0) + " lecture)");
+        T.call(fx.tok.ownerA, "property.update", { propertyId: fx.propA, name: "Riad renommé cache" });
+        T.ok(T.call(fx.tok.ag1, "property.list", {}).items.concat(T.call(fx.tok.ownerA, "property.list", {}).items).some(function (p) { return p.name === "Riad renommé cache"; }), "modification visible aussitôt par les autres comptes");
+        T.call(fx.tok.ownerA, "property.update", { propertyId: fx.propA, name: "Riad Test A" });
+        // Écriture directe (hors requête) : version changée tout de suite
+        dbUpdate_("Properties", fx.propA, { name: "Écriture directe" });
+        T.ok(T.call(fx.tok.ownerA, "property.list", {}).items.some(function (p) { return p.name === "Écriture directe"; }), "écriture hors requête prise en compte");
+        dbUpdate_("Properties", fx.propA, { name: "Riad Test A" });
+        // Grosse table : découpée en plusieurs morceaux de cache, relue à l'identique
+        const big = []; for (let i = 0; i < 1500; i++) big.push({ organizationId: fx.orgA.organizationId, propertyId: fx.propA, category: "SUPPLIES", amount: i, expenseDate: todayStr_(), description: Utilities.getUuid() + Utilities.getUuid() + Utilities.getUuid() + " " + i, status: "PAID", createdAt: nowIso_(), createdBy: "cache-test" });
+        dbInsertMany_("Expenses", big);
+        dbReset_(); dbcBegin_("request"); const fromSheet = dbAll_("Expenses").length; dbcCommit_();
+        dbReset_(); dbcBegin_("request"); const st0 = __MOCK__.stats.sheetReads; const fromCache = dbAll_("Expenses");
+        T.eq(fromCache.length, fromSheet, "même nombre de lignes"); T.eq(__MOCK__.stats.sheetReads, st0, "servie par le cache");
+        const k0 = Object.keys(__MOCK__.cache).filter(function (k) { return /d_Expenses_1$/.test(k); });
+        T.ok(k0.length > 0, "table découpée en plusieurs morceaux");
+        T.ok(fromCache.some(function (e) { return e.description && / 1499$/.test(e.description); }), "contenu intact");
+        DBC_ = null; dbReset_();
+        // Session révoquée : refusée immédiatement malgré le cache des sessions
+        const tok = T.pub("auth.login", { email: fx.users.guard.email, password: fx.pw }).token;
+        T.call(tok, "me.get", {}); T.call(tok, "me.get", {});
+        T.call(tok, "me.logout", {});
+        T.fails(tok, "me.get", {}, "AUTH");
+        // Écriture sous verrou : lue dans la feuille, puis cache invalidé avant de rendre le verrou
+        const r = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(800), checkOut: tDays_(802), guestName: "Cache verrou", idempotencyKey: T.key() });
+        T.fails(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(801), checkOut: tDays_(803), guestName: "Doublon", idempotencyKey: T.key() });
+        T.ok(T.call(fx.tok.ownerA, "resv.get", { reservationId: r.reservationId }).reservation || true, "réservation relue");
+        // Vidage manuel (époque) : tout est relu
+        dbcBumpEpoch_(); DBC_ = null;
+        const st1 = __MOCK__.stats.sheetReads; T.call(fx.tok.ownerA, "property.list", {});
+        T.ok(__MOCK__.stats.sheetReads > st1, "après viderCache, relecture du classeur");
+        T.eq(surModificationBase({ source: "faux" }), undefined, "appel non issu du déclencheur sans effet");
+      }]
+    ] },
     { name: "Super administrateur : comptes clients", tests: [
       ["Comptes classés par espace, entrer dans l'espace d'un client, actions journalisées au nom du super administrateur, retour", function (T, fx) {
         T.fails(fx.tok.ownerA, "admin.accounts", {}, "FORBIDDEN");

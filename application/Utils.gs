@@ -132,7 +132,11 @@ function withLock_(fn, waitMs) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(waitMs || 15000)) throw new AppError("BUSY", "Le système est occupé. Réessayez dans quelques secondes.");
   LOCK_DEPTH_++;
-  try { dbReset_(); return fn(); } finally { LOCK_DEPTH_--; lock.releaseLock(); }
+  try { dbReset_(); return fn(); } finally {
+    LOCK_DEPTH_--;
+    // Écritures validées (flush) et cache invalidé AVANT de rendre le verrou : l'exécution suivante voit les données à jour.
+    try { dbcCommit_(); } finally { lock.releaseLock(); }
+  }
 }
 /** Vrai pour un objet Date, y compris issu d'un autre contexte d'exécution (valeurs renvoyées par Sheets). */
 function isDateObj_(v) { return Object.prototype.toString.call(v) === "[object Date]" && !isNaN(v.getTime()); }

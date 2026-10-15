@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-10-15T00:46:17.444Z",
-  "durationMs": 3287,
+  "ranAt": "2026-10-15T10:10:18.595Z",
+  "durationMs": 12512,
   "node": "v22.22.0",
   "filesLoaded": [
     "Code.gs",
@@ -38,13 +38,19 @@
     "WorkOrderService.gs"
   ],
   "summary": {
-    "total": 66,
-    "passed": 66,
+    "total": 67,
+    "passed": 67,
     "failed": 0,
     "skipped": 0,
-    "ranAt": "2026-10-15T00:46:15.736Z"
+    "ranAt": "2026-10-15T10:10:12.414Z"
   },
   "results": [
+    {
+      "group": "Cache des tables",
+      "name": "Cache partagé : lecture sans feuille, invalidation immédiate à l'écriture, grosses tables, sessions révoquées, vidage manuel",
+      "status": "PASS",
+      "detail": ""
+    },
     {
       "group": "Super administrateur : comptes clients",
       "name": "Comptes classés par espace, entrer dans l'espace d'un client, actions journalisées au nom du super administrateur, retour",
@@ -596,7 +602,7 @@
       {
         "name": "setupProject() crée la base, le dossier privé et le schéma",
         "status": "PASS",
-        "detail": "base ss_71813096f6d9b0fe39868db12, 3 migrations"
+        "detail": "base ss_888caa56c11fbe98eef2237b2, 3 migrations"
       },
       {
         "name": "Avant déploiement : pas de lien envoyé, message explicite",
@@ -686,7 +692,7 @@
       {
         "name": "Suite complète de tests sur la version 2 fichiers",
         "status": "PASS",
-        "detail": "66/66"
+        "detail": "67/67"
       },
       {
         "name": "La page contient toute l'interface (aucune inclusion restante)",

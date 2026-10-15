@@ -128,7 +128,7 @@ function restoreFromBackup(backupFileId) {
     restored.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
     const old = PropertiesService.getScriptProperties().getProperty(IMMO_CONFIG.DATABASE_PROPERTY);
     PropertiesService.getScriptProperties().setProperty(IMMO_CONFIG.DATABASE_PROPERTY, restored.getId());
-    DB_SS_ = null; dbReset_();
+    DB_SS_ = null; dbReset_(); dbcBumpEpoch_();
     auditAs_(owner, "", "DATABASE_RESTORED", "System", restored.getId(), "", { from: backupFileId, previousDatabase: old, safetyBackup: before.fileId });
     return { ok: true, activeDatabaseId: restored.getId(), previousDatabaseId: old, safetyBackup: before, note: "Pour annuler : remettre previousDatabaseId dans IMMO_DATABASE_SPREADSHEET_ID." };
   }, 30000);
@@ -146,6 +146,13 @@ function mesurerPerformance() {
   ["Users", "UserRoles", "Organizations", "Sessions", "Notifications", "Reservations", "Payments", "Expenses", "ActivityLogs", "Documents"].forEach(function (t) {
     const n = time("Lecture " + t, function () { return dbAll_(t).length; }); out["Lignes " + t] = n;
   });
+  // Même lecture servie par le cache partagé (ce que vit un utilisateur après la première ouverture).
+  const core = ["Users", "UserRoles", "Organizations", "Reservations", "Payments", "Expenses"];
+  dbReset_(); dbcBegin_("request"); core.forEach(function (t) { dbAll_(t); }); // remplissage du cache
+  dbReset_(); dbcBegin_("request");
+  time("Les 6 mêmes tables depuis le cache", function () { core.forEach(function (t) { dbAll_(t); }); });
+  out["Tables servies par le cache"] = DBC_.hits + " / " + core.length;
+  DBC_ = null;
   dbReset_();
   const s = dbAll_("Sessions").slice(-1)[0]; dbReset_();
   if (s) time("Recherche ciblée d'une session", function () { return dbFindFast_("Sessions", "tokenHash", s.tokenHash); });
@@ -637,7 +644,8 @@ function principalFromToken_(token) {
   token = String(token || "");
   if (!/^[a-f0-9]{64}$/.test(token)) throw new AppError("AUTH", "Session invalide. Veuillez vous reconnecter.");
   const h = sha256Hex_(token);
-  const s = dbFindFast_("Sessions", "tokenHash", h);
+  let s = dbcSessionGet_(h);
+  if (!s) { s = dbFindFast_("Sessions", "tokenHash", h); if (s && !s.revokedAt) dbcSessionPut_(h, s); }
   if (!s || s.revokedAt || !parseTs_(s.expiresAt) || parseTs_(s.expiresAt).getTime() < Date.now()) throw new AppError("AUTH", "Session expirée. Veuillez vous reconnecter.");
   const user = dbGet_("Users", s.userId);
   if (!user || user.status !== "ACTIVE") throw new AppError("AUTH", "Compte inactif ou suspendu.");
@@ -1470,8 +1478,17 @@ function embedOrigins_() {
     .filter(Boolean).slice(0, 10);
 }
 
+/** Contrôle d'installation mémorisé 6 h par version installée : l'ouverture de l'application ne relit pas tous les fichiers à chaque fois. */
+function installCheckCached_() {
+  if (IMMO_BUILD_ === "dev") return installCheck_();
+  const k = "installok_" + IMMO_BUILD_;
+  try { if (CacheService.getScriptCache().get(k)) return { ok: true }; } catch (e) { /* contrôle complet */ }
+  const r = installCheck_();
+  if (r.ok) { try { CacheService.getScriptCache().put(k, "1", 21600); } catch (e) { /* facultatif */ } }
+  return r;
+}
 function doGet(e) {
-  const check = installCheck_();
+  const check = installCheckCached_();
   if (!check.ok) return installErrorPage_(check);
   const prm = (e && e.parameter) || {};
   const action = ["accept", "reset", "guest"].indexOf(String(prm.action || "")) >= 0 ? String(prm.action) : "app";
@@ -1505,7 +1522,10 @@ function errorResponse_(e, route) {
 
 /** Appel authentifié. Le jeton est vérifié côté serveur à chaque appel ; aucune donnée d'identité fournie par le navigateur n'est crue. */
 function api(token, route, args) {
-  ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0;
+  ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0; dbcBegin_("request");
+  try { return apiRun_(token, route, args); } finally { dbcCommit_(); }
+}
+function apiRun_(token, route, args) {
   ensureSchemaCurrent_();
   route = String(route || "");
   try {
@@ -1520,7 +1540,10 @@ function api(token, route, args) {
 }
 /** Appel public : uniquement les routes dont la sécurité repose sur un secret à usage unique ou un mot de passe. */
 function apiPublic(route, args) {
-  ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0;
+  ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0; dbcBegin_("request");
+  try { return apiPublicRun_(route, args); } finally { dbcCommit_(); }
+}
+function apiPublicRun_(route, args) {
   ensureSchemaCurrent_();
   route = String(route || "");
   try {
@@ -1568,6 +1591,8 @@ function installPhase4Triggers() { return installTriggers(); }
  * en fin de feuille par la migration (non destructif).
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
+/** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
+var IMMO_BUILD_ = "4ba8a3787f15";
 /** Langues de l'interface : français, anglais, arabe, espagnol, italien, néerlandais. */
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
@@ -2150,7 +2175,7 @@ var DB_SS_ = null;
 var SCHEMA_ = null;
 
 function dbReset_() { DB_MEMO_ = {}; DB_HEADERS_ = {}; }
-function dbSetSpreadsheet_(ss) { DB_SS_ = ss; dbReset_(); }
+function dbSetSpreadsheet_(ss) { DB_SS_ = ss; dbReset_(); DBC_ = null; }
 
 function schema_() {
   if (SCHEMA_) return SCHEMA_;
@@ -2214,6 +2239,11 @@ function reencodeRaw_(v) { return typeof v === "string" && v !== "" ? "'" + v : 
 
 function dbAll_(name) {
   if (DB_MEMO_[name]) return DB_MEMO_[name];
+  const useCache = dbcUsable_(name);
+  if (useCache) {
+    const hit = dbcRead_(name);
+    if (hit) { DB_MEMO_[name] = hit; return hit; }
+  }
   // Une seule lecture (getDataRange) au lieu de trois appels au service Sheets.
   const S = tableDef_(name), sh = dbSheet_(name), rows = [];
   const vals = sh.getDataRange().getValues();
@@ -2229,6 +2259,7 @@ function dbAll_(name) {
     }
   }
   DB_MEMO_[name] = rows;
+  if (useCache && dbcUsable_(name)) dbcWrite_(name, rows);
   return rows;
 }
 /**
@@ -2292,7 +2323,7 @@ function dbInsert_(name, obj) {
   validateRow_(S, row, true);
   const headers = dbHeaders_(name);
   dbSheet_(name).appendRow(headers.map(function (h) { return row[h] === undefined ? "" : toCell_(S, h, row[h]); }));
-  delete DB_MEMO_[name];
+  delete DB_MEMO_[name]; dbcTouch_(name);
   return row;
 }
 function dbInsertMany_(name, objs) {
@@ -2304,7 +2335,7 @@ function dbInsertMany_(name, objs) {
     return headers.map(function (h) { return row[h] === undefined ? "" : toCell_(S, h, row[h]); });
   });
   sh.getRange(sh.getLastRow() + 1, 1, values.length, headers.length).setValues(values);
-  delete DB_MEMO_[name];
+  delete DB_MEMO_[name]; dbcTouch_(name);
   return out;
 }
 /** Met à jour une ligne par identifiant (retrouvé à chaque appel). Retourne false si introuvable. */
@@ -2328,14 +2359,17 @@ function dbUpdate_(name, id, patch) {
     return toCell_(S, h, normOut_(S, h, cur[i]));
   });
   sh.getRange(rowNo, 1, 1, headers.length).setValues([out]);
-  delete DB_MEMO_[name];
+  delete DB_MEMO_[name]; dbcTouch_(name);
+  if (name === "Sessions") { const th = headers.indexOf("tokenHash"); if (th >= 0 && cur[th]) dbcForgetToken_(String(cur[th])); }
   return true;
 }
 function dbDelete_(name, id) {
   const S = tableDef_(name), sh = dbSheet_(name), lr = sh.getLastRow();
   if (lr < 2) return false;
   const pkIdx = dbHeaders_(name).indexOf(S.pk), ids = sh.getRange(2, pkIdx + 1, lr - 1, 1).getValues();
-  for (let i = 0; i < ids.length; i++) if (String(ids[i][0]) === String(id)) { sh.deleteRow(i + 2); delete DB_MEMO_[name]; return true; }
+  for (let i = 0; i < ids.length; i++) if (String(ids[i][0]) === String(id)) {
+    if (name === "Sessions") { const th = dbHeaders_(name).indexOf("tokenHash"); if (th >= 0) dbcForgetToken_(String(sh.getRange(i + 2, th + 1).getValue())); }
+    sh.deleteRow(i + 2); delete DB_MEMO_[name]; dbcTouch_(name); return true; }
   return false;
 }
 /** Insertion unique : retourne {row, created}. À appeler sous verrou. */
@@ -2368,6 +2402,152 @@ function setSetting_(key, value, orgId, actor) {
     else dbInsert_("PlatformSettings", { settingKey: key, settingValue: json, updatedAt: nowIso_(), updatedBy: actor || "" });
   }
 }
+
+/* ============================== Cache partagé des tables ==============================
+ * Chaque lecture de feuille coûte 0,1 à 0,5 s dans Google. Les tables sont donc gardées, compressées, dans le cache
+ * de script (CacheService, mémoire partagée par toutes les exécutions) : un écran n'ouvre plus le classeur.
+ * Cohérence :
+ *  - chaque table a une « version » dans le cache ; une donnée en cache n'est utilisée que si elle porte la version
+ *    courante et l'époque courante (viderCache() change l'époque, donc tout le cache) ;
+ *  - toute écriture change aussitôt la version de la table (les autres exécutions cessent d'utiliser l'ancienne copie),
+ *    puis la change encore après SpreadsheetApp.flush() en fin de requête ou de verrou : une copie lue pendant
+ *    l'écriture ne peut jamais devenir « la » version courante ;
+ *  - sous verrou (withLock_), les lectures vont toujours à la feuille : les contrôles critiques (double réservation,
+ *    paiements…) restent faits sur les données réelles ;
+ *  - une table modifiée dans l'exécution en cours est relue depuis la feuille jusqu'à la fin de l'exécution.
+ * Les journaux (ActivityLogs, NotificationLogs…) ne sont pas mis en cache. En cas de panne du cache, tout est lu
+ * dans la feuille comme avant. Modifications faites à la main dans le classeur : déclencheur surModificationBase
+ * (installTriggers) ou fonction viderCache(), sinon prises en compte au plus tard après 30 minutes.
+ */
+var DBC_ = null;
+var DBC_SKIP_ = { ActivityLogs: true, NotificationLogs: true, PasswordResets: true, MigrationHistory: true, Sessions: true, ScheduledJobs: true };
+var DBC_CORE_ = ["Users", "Organizations", "UserRoles", "SupportGrants", "PlatformSettings", "Settings", "Subscriptions", "SubscriptionPlans", "Properties", "AgencyPropertyPermissions", "PropertyAssignments",
+  "Reservations", "CleaningMissions", "Incidents", "Quotes", "WorkOrders", "Invoices", "Payments", "Expenses", "Leases", "RentSchedules", "Artisans", "Tenants", "Notifications", "AvailabilityBlocks", "RevenueRecords"];
+var DBC_DATA_TTL_ = 1800, DBC_VER_TTL_ = 21600, DBC_TOKEN_TTL_ = 600, DBC_CHUNK_ = 95000, DBC_MAX_CHUNKS_ = 40;
+
+/** Début d'exécution : « request » (api, tâches planifiées, lot) = validation groupée en fin ; « script » = validation à chaque écriture. */
+function dbcBegin_(mode) { DBC_ = { mode: mode || "script", loaded: false, off: false, base: "", epoch: "", vers: {}, got: {}, dirty: {}, bumped: {}, tokens: {}, hits: 0, misses: 0 }; return DBC_; }
+function dbcState_() { return DBC_ || dbcBegin_("script"); }
+function dbcCache_() { return CacheService.getScriptCache(); }
+function dbcNewTag_() { return Utilities.getUuid().replace(/-/g, "").slice(0, 12); }
+function dbcUsable_(name) { const st = dbcState_(); return !TEST_HOOKS_.noDbCache && !DBC_SKIP_[name] && !LOCK_DEPTH_ && !st.off && !st.dirty[name]; }
+function dbcBase_() {
+  const st = dbcState_();
+  if (!st.base) {
+    const id = DB_SS_ ? DB_SS_.getId() : (PropertiesService.getScriptProperties().getProperty(IMMO_CONFIG.DATABASE_PROPERTY) || "");
+    st.base = "ipdb" + sha256Hex_(String(id)).slice(0, 10) + "_";
+  }
+  return st.base;
+}
+/** Une seule lecture du cache par exécution : époque, versions de toutes les tables, tables les plus utilisées, clés demandées. */
+function dbcLoad_(extraKeys) {
+  const st = dbcState_();
+  if (st.loaded || st.off) return st;
+  st.loaded = true;
+  try {
+    const b = dbcBase_(), names = Object.keys(schema_()).filter(function (n) { return !DBC_SKIP_[n]; });
+    const keys = [b + "epoch"].concat(names.map(function (n) { return b + "v_" + n; }), DBC_CORE_.map(function (n) { return b + "d_" + n + "_0"; }), extraKeys || []);
+    st.got = dbcCache_().getAll(keys) || {};
+    st.epoch = st.got[b + "epoch"] || "";
+    if (!st.epoch) { st.epoch = dbcNewTag_(); dbcCache_().put(b + "epoch", st.epoch, DBC_VER_TTL_); }
+    names.forEach(function (n) { if (st.got[b + "v_" + n]) st.vers[n] = st.got[b + "v_" + n]; });
+  } catch (e) { st.off = true; console.error("Cache indisponible : " + e.message); }
+  return st;
+}
+/** Version courante d'une table ; créée AVANT toute lecture de la feuille si elle n'existe pas encore. */
+function dbcVersion_(name) {
+  const st = dbcLoad_();
+  if (!st.vers[name]) { st.vers[name] = dbcNewTag_(); try { dbcCache_().put(dbcBase_() + "v_" + name, st.vers[name], DBC_VER_TTL_); } catch (e) { st.off = true; } }
+  return st.vers[name];
+}
+function dbcRead_(name) {
+  const st = dbcLoad_(); if (st.off) return null;
+  const known = !!st.vers[name], v = dbcVersion_(name);
+  if (!known || st.off) { st.misses++; return null; }
+  try {
+    const b = dbcBase_(), k0 = b + "d_" + name + "_0", c = dbcCache_();
+    const c0 = Object.prototype.hasOwnProperty.call(st.got, k0) ? st.got[k0] : c.get(k0);
+    const head = function (x) { const m = /^([^~]*)~([^~]*)~(\d+)~/.exec(x || ""); return m ? { v: m[1], e: m[2], n: Number(m[3]), d: x.slice(m[0].length) } : null; };
+    const h0 = head(c0);
+    if (!h0 || h0.v !== v || h0.e !== st.epoch) { st.misses++; return null; }
+    const parts = [h0.d];
+    if (h0.n > 1) {
+      const ks = []; for (let i = 1; i < h0.n; i++) ks.push(b + "d_" + name + "_" + i);
+      const more = c.getAll(ks);
+      for (let i = 0; i < ks.length; i++) { const hi = head(more[ks[i]]); if (!hi || hi.v !== v || hi.e !== st.epoch) { st.misses++; return null; } parts.push(hi.d); }
+    }
+    const json = Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(parts.join("")), "application/x-gzip")).getDataAsString("UTF-8");
+    st.hits++;
+    return JSON.parse(json);
+  } catch (e) { st.misses++; return null; }
+}
+function dbcWrite_(name, rows) {
+  const st = dbcState_(); if (st.off || !st.vers[name]) return;
+  try {
+    const packed = Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(JSON.stringify(rows), "application/json")).getBytes());
+    const n = Math.max(1, Math.ceil(packed.length / DBC_CHUNK_));
+    if (n > DBC_MAX_CHUNKS_) return; // table trop grande pour le cache : lue dans la feuille
+    const b = dbcBase_(), out = {}, pre = st.vers[name] + "~" + st.epoch + "~" + n + "~";
+    for (let i = 0; i < n; i++) out[b + "d_" + name + "_" + i] = pre + packed.slice(i * DBC_CHUNK_, (i + 1) * DBC_CHUNK_);
+    dbcCache_().putAll(out, DBC_DATA_TTL_);
+  } catch (e) { console.error("Mise en cache impossible (" + name + ") : " + e.message); }
+}
+/** Écriture dans une table : la copie en cache cesse immédiatement d'être utilisée par toutes les exécutions. */
+function dbcTouch_(name) {
+  if (TEST_HOOKS_.noDbCache || DBC_SKIP_[name]) return;
+  const st = dbcState_();
+  st.dirty[name] = true;
+  if (st.mode === "script") { try { SpreadsheetApp.flush(); } catch (e) { /* rien à valider */ } dbcBumpNow_([name]); return; }
+  if (!st.bumped[name]) { st.bumped[name] = true; dbcBumpNow_([name]); }
+}
+function dbcBumpNow_(names) {
+  const st = dbcState_(), b = dbcBase_(), puts = {};
+  names.forEach(function (n) { st.vers[n] = dbcNewTag_(); puts[b + "v_" + n] = st.vers[n]; });
+  try { if (names.length) dbcCache_().putAll(puts, DBC_VER_TTL_); } catch (e) { console.error("Cache : " + e.message); }
+}
+function dbcForgetToken_(hash) {
+  if (TEST_HOOKS_.noDbCache || !hash) return;
+  const st = dbcState_(); st.tokens[hash] = true;
+  try { dbcCache_().remove(dbcBase_() + "t_" + hash); } catch (e) { /* expirera seul */ }
+}
+/** Fin de requête ou de verrou : les écritures sont validées dans la feuille, puis les versions changent une dernière fois. */
+function dbcCommit_() {
+  const st = DBC_; if (!st) return;
+  const names = Object.keys(st.dirty), toks = Object.keys(st.tokens);
+  if (!names.length && !toks.length) return;
+  try { SpreadsheetApp.flush(); } catch (e) { /* rien à valider */ }
+  if (names.length) dbcBumpNow_(names);
+  if (toks.length) { try { dbcCache_().removeAll(toks.map(function (h) { return dbcBase_() + "t_" + h; })); } catch (e) { /* expirera seul */ } }
+  st.dirty = {}; st.bumped = {}; st.tokens = {};
+}
+/** Exécute un traitement par lot (beaucoup d'écritures) avec une seule validation finale. */
+function withDbBatch_(fn) {
+  const prev = DBC_; dbcBegin_("request");
+  try { return fn(); } finally { dbcCommit_(); DBC_ = prev; }
+}
+/** Session (par empreinte du jeton) en cache 10 minutes ; effacée dès que la session change. */
+function dbcSessionGet_(hash) {
+  if (TEST_HOOKS_.noDbCache) return null;
+  const st = dbcLoad_([dbcBase_() + "t_" + hash]);
+  const raw = st.got[dbcBase_() + "t_" + hash];
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+function dbcSessionPut_(hash, row) {
+  if (TEST_HOOKS_.noDbCache || !row) return;
+  const st = dbcState_(); if (st.off || st.tokens[hash]) return;
+  try { dbcCache_().put(dbcBase_() + "t_" + hash, JSON.stringify(row), DBC_TOKEN_TTL_); } catch (e) { /* facultatif */ }
+}
+/** Invalide tout le cache des tables (après une modification manuelle du classeur, une restauration, une migration). */
+function dbcBumpEpoch_() {
+  const mode = DBC_ ? DBC_.mode : "script";
+  try { const b = dbcBase_(); dbcCache_().put(b + "epoch", dbcNewTag_(), DBC_VER_TTL_); } catch (e) { console.error("Cache : " + e.message); }
+  dbcBegin_(mode);
+}
+/** Éditeur Apps Script : à exécuter après avoir modifié le classeur à la main (le déclencheur surModificationBase le fait seul). */
+function viderCache() { assertEditor_(); dbcBumpEpoch_(); return { ok: true, message: "Cache vidé : toutes les données seront relues dans le classeur." }; }
+/** Déclencheur installable « à la modification » du classeur (installTriggers) : toute saisie manuelle vide le cache. */
+function surModificationBase(e) { if (e && e.source && typeof e.source.getId === "function") dbcBumpEpoch_(); }
 
 /* ======================================================================
  * Demo.gs
@@ -2414,7 +2594,7 @@ var DEMO_SPEC_ = {
 function creerEnvironnementDemo() {
   const editor = assertEditor_();
   ctxReset_(); dbReset_();
-  const r = demoBuild_(editor);
+  const r = withDbBatch_(function () { return demoBuild_(editor); });
   Logger.log(demoSummaryText_(r));
   return r;
 }
@@ -2522,8 +2702,8 @@ function demoMarkOrgs_(orgs, actorEmail) {
  * Met la démonstration en veille (organisations suspendues : plus aucune connexion aux comptes de démo, données conservées)
  * ou la réactive. À n'utiliser qu'après la vérification Google Play : Google se connecte avec le compte de démonstration.
  */
-function mettreDemoEnVeille() { const ed = assertEditor_(); ctxReset_(); dbReset_(); const r = demoSetSleep_(ed, true); Logger.log(JSON.stringify(r)); return r; }
-function reveillerDemo() { const ed = assertEditor_(); ctxReset_(); dbReset_(); const r = demoSetSleep_(ed, false); Logger.log(JSON.stringify(r)); return r; }
+function mettreDemoEnVeille() { const ed = assertEditor_(); ctxReset_(); dbReset_(); const r = withDbBatch_(function () { return demoSetSleep_(ed, true); }); Logger.log(JSON.stringify(r)); return r; }
+function reveillerDemo() { const ed = assertEditor_(); ctxReset_(); dbReset_(); const r = withDbBatch_(function () { return demoSetSleep_(ed, false); }); Logger.log(JSON.stringify(r)); return r; }
 function demoSetSleep_(actorEmail, sleep) {
   const actor = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === normalizeEmail_(actorEmail); });
   assert_(actor, "Compte super administrateur introuvable.", "CONFIG");
@@ -2598,7 +2778,7 @@ function demoSummaryText_(r) {
 function creerHistoriqueDemo() {
   const editor = assertEditor_();
   ctxReset_(); dbReset_();
-  const r = demoHistory_(editor, {});
+  const r = withDbBatch_(function () { return demoHistory_(editor, {}); });
   Logger.log(JSON.stringify(r, null, 2));
   return r;
 }
@@ -4650,6 +4830,7 @@ function ensureSchemaCurrent_() {
       if (String(props.getProperty("IMMO_SCHEMA_SYNCED") || "") === String(IMMO_CONFIG.SCHEMA_VERSION)) return;
       migSchemaSync_();
       props.setProperty("IMMO_SCHEMA_SYNCED", String(IMMO_CONFIG.SCHEMA_VERSION));
+      dbcBumpEpoch_();
     }, 20000);
   } catch (e) { console.error("Synchronisation du schéma : " + e.message); }
 }
@@ -4674,6 +4855,7 @@ function runMigrations_(actor) {
       throw new AppError("MIGRATION", "Migration v" + m.version + " échouée : " + e.message + (backup ? " — sauvegarde disponible : " + backup.name : ""));
     }
   });
+  dbcBumpEpoch_(); // colonnes ou données modifiées hors couche d'accès : tout le cache est invalidé
   return { backup: backup, applied: results, schemaVersion: IMMO_CONFIG.SCHEMA_VERSION };
 }
 
@@ -6720,6 +6902,46 @@ function tDays_(n) { return addDaysStr_(todayStr_(), n); }
 /* ===================================== GROUPES DE TESTS ===================================== */
 function TEST_GROUPS_() {
   return [
+    { name: "Cache des tables", tests: [
+      ["Cache partagé : lecture sans feuille, invalidation immédiate à l'écriture, grosses tables, sessions révoquées, vidage manuel", function (T, fx) {
+        if (typeof __MOCK__ === "undefined") T.skip("Compteurs de lecture disponibles dans le simulateur uniquement.");
+        T.call(fx.tok.ownerA, "property.list", {});
+        const r0 = __MOCK__.stats.sheetReads;
+        T.call(fx.tok.ownerA, "property.list", {});
+        T.ok(__MOCK__.stats.sheetReads - r0 <= 1, "deuxième lecture servie par le cache (" + (__MOCK__.stats.sheetReads - r0) + " lecture)");
+        T.call(fx.tok.ownerA, "property.update", { propertyId: fx.propA, name: "Riad renommé cache" });
+        T.ok(T.call(fx.tok.ag1, "property.list", {}).items.concat(T.call(fx.tok.ownerA, "property.list", {}).items).some(function (p) { return p.name === "Riad renommé cache"; }), "modification visible aussitôt par les autres comptes");
+        T.call(fx.tok.ownerA, "property.update", { propertyId: fx.propA, name: "Riad Test A" });
+        // Écriture directe (hors requête) : version changée tout de suite
+        dbUpdate_("Properties", fx.propA, { name: "Écriture directe" });
+        T.ok(T.call(fx.tok.ownerA, "property.list", {}).items.some(function (p) { return p.name === "Écriture directe"; }), "écriture hors requête prise en compte");
+        dbUpdate_("Properties", fx.propA, { name: "Riad Test A" });
+        // Grosse table : découpée en plusieurs morceaux de cache, relue à l'identique
+        const big = []; for (let i = 0; i < 1500; i++) big.push({ organizationId: fx.orgA.organizationId, propertyId: fx.propA, category: "SUPPLIES", amount: i, expenseDate: todayStr_(), description: Utilities.getUuid() + Utilities.getUuid() + Utilities.getUuid() + " " + i, status: "PAID", createdAt: nowIso_(), createdBy: "cache-test" });
+        dbInsertMany_("Expenses", big);
+        dbReset_(); dbcBegin_("request"); const fromSheet = dbAll_("Expenses").length; dbcCommit_();
+        dbReset_(); dbcBegin_("request"); const st0 = __MOCK__.stats.sheetReads; const fromCache = dbAll_("Expenses");
+        T.eq(fromCache.length, fromSheet, "même nombre de lignes"); T.eq(__MOCK__.stats.sheetReads, st0, "servie par le cache");
+        const k0 = Object.keys(__MOCK__.cache).filter(function (k) { return /d_Expenses_1$/.test(k); });
+        T.ok(k0.length > 0, "table découpée en plusieurs morceaux");
+        T.ok(fromCache.some(function (e) { return e.description && / 1499$/.test(e.description); }), "contenu intact");
+        DBC_ = null; dbReset_();
+        // Session révoquée : refusée immédiatement malgré le cache des sessions
+        const tok = T.pub("auth.login", { email: fx.users.guard.email, password: fx.pw }).token;
+        T.call(tok, "me.get", {}); T.call(tok, "me.get", {});
+        T.call(tok, "me.logout", {});
+        T.fails(tok, "me.get", {}, "AUTH");
+        // Écriture sous verrou : lue dans la feuille, puis cache invalidé avant de rendre le verrou
+        const r = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(800), checkOut: tDays_(802), guestName: "Cache verrou", idempotencyKey: T.key() });
+        T.fails(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(801), checkOut: tDays_(803), guestName: "Doublon", idempotencyKey: T.key() });
+        T.ok(T.call(fx.tok.ownerA, "resv.get", { reservationId: r.reservationId }).reservation || true, "réservation relue");
+        // Vidage manuel (époque) : tout est relu
+        dbcBumpEpoch_(); DBC_ = null;
+        const st1 = __MOCK__.stats.sheetReads; T.call(fx.tok.ownerA, "property.list", {});
+        T.ok(__MOCK__.stats.sheetReads > st1, "après viderCache, relecture du classeur");
+        T.eq(surModificationBase({ source: "faux" }), undefined, "appel non issu du déclencheur sans effet");
+      }]
+    ] },
     { name: "Super administrateur : comptes clients", tests: [
       ["Comptes classés par espace, entrer dans l'espace d'un client, actions journalisées au nom du super administrateur, retour", function (T, fx) {
         T.fails(fx.tok.ownerA, "admin.accounts", {}, "FORBIDDEN");
@@ -7728,6 +7950,8 @@ function installTriggers() {
   const created = [];
   if (!has("jobFrequent")) { ScriptApp.newTrigger("jobFrequent").timeBased().everyMinutes(15).create(); created.push("jobFrequent"); }
   if (!has("jobDaily")) { ScriptApp.newTrigger("jobDaily").timeBased().everyDays(1).atHour(6).inTimezone(tz_()).create(); created.push("jobDaily"); }
+  // Saisie manuelle dans le classeur de données : le cache des tables est vidé automatiquement.
+  if (!has("surModificationBase")) { ScriptApp.newTrigger("surModificationBase").forSpreadsheet(dbSpreadsheet_().getId()).onEdit().create(); created.push("surModificationBase"); }
   // L'ancien déclencheur de la phase 4 (p4ExpireCleaningMissions) est remplacé par jobFrequent.
   existing.filter(function (t) { return t.getHandlerFunction() === "p4ExpireCleaningMissions"; }).forEach(function (t) { ScriptApp.deleteTrigger(t); created.push("(supprimé) p4ExpireCleaningMissions"); });
   return { ok: true, changes: created, triggers: ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); }) };
@@ -7740,7 +7964,7 @@ function uninstallTriggers() {
 }
 
 function runJob_(name, tasks) {
-  ctxReset_(); dbReset_();
+  ctxReset_(); dbReset_(); dbcBegin_("request");
   const cache = CacheService.getScriptCache(), key = "jobrun_" + name;
   if (cache.get(key)) return { skipped: true, reason: "Exécution récente." };
   cache.put(key, "1", 290);
@@ -7759,7 +7983,7 @@ function runJob_(name, tasks) {
   } catch (e) {
     if (jobRow) try { dbUpdate_("ScheduledJobs", jobRow.jobRunId, { finishedAt: nowIso_(), status: "FAILED", error: String(e.message).slice(0, 2000) }); } catch (e2) { console.error(e2.message); }
     throw e;
-  } finally { LOCK_DEPTH_--; lock.releaseLock(); }
+  } finally { LOCK_DEPTH_--; try { dbcCommit_(); } finally { lock.releaseLock(); } }
   return { ok: !errors.length, result: result, errors: errors };
 }
 
@@ -8257,7 +8481,11 @@ function withLock_(fn, waitMs) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(waitMs || 15000)) throw new AppError("BUSY", "Le système est occupé. Réessayez dans quelques secondes.");
   LOCK_DEPTH_++;
-  try { dbReset_(); return fn(); } finally { LOCK_DEPTH_--; lock.releaseLock(); }
+  try { dbReset_(); return fn(); } finally {
+    LOCK_DEPTH_--;
+    // Écritures validées (flush) et cache invalidé AVANT de rendre le verrou : l'exécution suivante voit les données à jour.
+    try { dbcCommit_(); } finally { lock.releaseLock(); }
+  }
 }
 /** Vrai pour un objet Date, y compris issu d'un autre contexte d'exécution (valeurs renvoyées par Sheets). */
 function isDateObj_(v) { return Object.prototype.toString.call(v) === "[object Date]" && !isNaN(v.getTime()); }

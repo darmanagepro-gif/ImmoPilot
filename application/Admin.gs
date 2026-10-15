@@ -119,7 +119,7 @@ function restoreFromBackup(backupFileId) {
     restored.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
     const old = PropertiesService.getScriptProperties().getProperty(IMMO_CONFIG.DATABASE_PROPERTY);
     PropertiesService.getScriptProperties().setProperty(IMMO_CONFIG.DATABASE_PROPERTY, restored.getId());
-    DB_SS_ = null; dbReset_();
+    DB_SS_ = null; dbReset_(); dbcBumpEpoch_();
     auditAs_(owner, "", "DATABASE_RESTORED", "System", restored.getId(), "", { from: backupFileId, previousDatabase: old, safetyBackup: before.fileId });
     return { ok: true, activeDatabaseId: restored.getId(), previousDatabaseId: old, safetyBackup: before, note: "Pour annuler : remettre previousDatabaseId dans IMMO_DATABASE_SPREADSHEET_ID." };
   }, 30000);
@@ -137,6 +137,13 @@ function mesurerPerformance() {
   ["Users", "UserRoles", "Organizations", "Sessions", "Notifications", "Reservations", "Payments", "Expenses", "ActivityLogs", "Documents"].forEach(function (t) {
     const n = time("Lecture " + t, function () { return dbAll_(t).length; }); out["Lignes " + t] = n;
   });
+  // Même lecture servie par le cache partagé (ce que vit un utilisateur après la première ouverture).
+  const core = ["Users", "UserRoles", "Organizations", "Reservations", "Payments", "Expenses"];
+  dbReset_(); dbcBegin_("request"); core.forEach(function (t) { dbAll_(t); }); // remplissage du cache
+  dbReset_(); dbcBegin_("request");
+  time("Les 6 mêmes tables depuis le cache", function () { core.forEach(function (t) { dbAll_(t); }); });
+  out["Tables servies par le cache"] = DBC_.hits + " / " + core.length;
+  DBC_ = null;
   dbReset_();
   const s = dbAll_("Sessions").slice(-1)[0]; dbReset_();
   if (s) time("Recherche ciblée d'une session", function () { return dbFindFast_("Sessions", "tokenHash", s.tokenHash); });

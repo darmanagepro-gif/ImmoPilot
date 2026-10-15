@@ -51,13 +51,13 @@ PAGES.properties = function (el) {
 };
 function propertyMap(items) {
   const box = h("div", { class: "map" }), pts = items.filter(function (p) { return p.latitude && p.longitude; });
-  if (!window.L) return h("div", { class: "alert warn" }, t("Carte indisponible (bibliothèque Leaflet non chargée)."));
-  setTimeout(function () {
+  const draw = function () {
     const m = L.map(box).setView(pts.length ? [pts[0].latitude, pts[0].longitude] : [31.6295, -7.9811], 12);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(m);
     pts.forEach(function (p) { const mk = L.marker([p.latitude, p.longitude]).addTo(m); const a = h("a", { href: "#property/" + p.propertyId }, p.name); mk.bindPopup(a); });
     if (pts.length > 1) m.fitBounds(pts.map(function (p) { return [p.latitude, p.longitude]; }), { padding: [30, 30] });
-  }, 50);
+  };
+  loadLib("leaflet").then(function () { setTimeout(draw, 50); }).catch(function () { clear(box).appendChild(h("div", { class: "alert warn" }, t("Carte indisponible (bibliothèque Leaflet non chargée)."))); });
   return h("div", null, pts.length < items.length ? h("p", { class: "small muted" }, (items.length - pts.length) + " " + t("bien(s) sans coordonnées géographiques.")) : null, box);
 }
 function importProperties() {

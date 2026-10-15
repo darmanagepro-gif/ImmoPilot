@@ -19,7 +19,8 @@ function renderIndex(boot) {
 }
 
 async function main() {
-  const { ctx } = loadProject();
+  const { ctx, mock } = loadProject();
+  const perf = {}; // PERF=1 : lectures de feuilles et ouvertures du classeur par appel serveur (après la mise en place des données)
   vm.runInContext("var __env = testEnvSetup_(); var __T = testKit_([]); var __fx = testFixtures_(__T);", ctx);
   // Jeu de données : réservation, incident avec devis/intervention/facture, mission de ménage, bail.
   const ids = vm.runInContext(`(function(){ var T=__T, fx=__fx, o={};
@@ -78,7 +79,10 @@ async function main() {
               setTimeout(function () {
                 try {
                   ctx.__args = args;
+                  const st0 = Object.assign({}, mock.M.stats), t0 = Date.now();
                   const res = JSON.parse(JSON.stringify(vm.runInContext(fn + ".apply(null, __args)", ctx)));
+                  const rn = args[fn === "api" ? 1 : 0], pr = perf[rn] = perf[rn] || { n: 0, reads: 0, opens: 0, cache: 0, ms: 0 };
+                  pr.n++; pr.reads += mock.M.stats.sheetReads - st0.sheetReads; pr.opens += mock.M.stats.opens - st0.opens; pr.cache += mock.M.stats.cacheCalls - st0.cacheCalls; pr.ms += Date.now() - t0;
                   if (res && res.ok === false) calls.fail.push(args[fn === "api" ? 1 : 0] + " → " + res.error.code + " " + res.error.message); else calls.ok++;
                   r._s && r._s(res);
                 } catch (e) { errors.push("serveur: " + e.message); r._f && r._f(e); }
@@ -152,6 +156,13 @@ async function main() {
   });
   console.log("\n## Écrans publics");
   pub.forEach(function (p) { problems += p.errors.length; console.log("  " + (p.errors.length ? "✘" : "✔") + " " + p.mode + " : « " + p.heading + " » " + (p.errors.length ? p.errors.join(" | ") : "")); });
+  if (process.env.PERF) {
+    const rows = Object.keys(perf).map(function (k) { const p = perf[k]; return [k, p.n, +(p.reads / p.n).toFixed(1), +(p.opens / p.n).toFixed(1), +(p.cache / p.n).toFixed(1)]; }).sort(function (a, b) { return b[2] - a[2]; });
+    const tot = Object.keys(perf).reduce(function (a, k) { a.n += perf[k].n; a.r += perf[k].reads; a.o += perf[k].opens; return a; }, { n: 0, r: 0, o: 0 });
+    console.log("\n## Performance (lectures de feuille / appel)\n  appels : " + tot.n + " · lectures moyennes : " + (tot.r / tot.n).toFixed(1) + " · ouvertures du classeur : " + (tot.o / tot.n).toFixed(2));
+    rows.slice(0, 25).forEach(function (r) { console.log("  " + r[0] + " ×" + r[1] + " : " + r[2] + " lectures, " + r[3] + " ouvertures, " + r[4] + " appels cache"); });
+    fs.writeFileSync(path.join(__dirname, "perf-results.json"), JSON.stringify(perf, null, 1));
+  }
   console.log("\nProblèmes détectés : " + problems);
   process.exitCode = problems ? 1 : 0;
 }
