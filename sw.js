@@ -3,7 +3,7 @@
  * Les données (réservations, finances…) ne sont jamais mises en cache : elles restent chez Google, toujours à jour,
  * identiques sur le web, Android et iPhone.
  */
-var CACHE = "immopilot-shell-v1";
+var CACHE = "immopilot-shell-v2";
 var SHELL = ["./", "index.html", "config.js", "offline.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 self.addEventListener("install", function (e) { e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); })); self.skipWaiting(); });
 self.addEventListener("activate", function (e) {
@@ -13,6 +13,8 @@ self.addEventListener("activate", function (e) {
 self.addEventListener("fetch", function (e) {
   var u = new URL(e.request.url);
   if (u.origin !== self.location.origin || e.request.method !== "GET") return; // Google (données) : jamais intercepté
+  // Vidéo d'introduction : jamais interceptée. Safari exige une gestion exacte des requêtes « Range » ; le navigateur la gère très bien seul.
+  if (e.request.headers.has("range") || /\.(mp4|webm|mov)$/i.test(u.pathname)) return;
   e.respondWith(fetch(e.request).then(function (r) {
     var copy = r.clone(); caches.open(CACHE).then(function (c) { c.put(e.request, copy); }); return r;
   }).catch(function () {

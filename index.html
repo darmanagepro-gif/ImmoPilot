@@ -14,52 +14,141 @@
 <link rel="preconnect" href="https://script.googleusercontent.com">
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<!-- « ?v=2 » force iPhone et Android à recharger la nouvelle icône (à changer si l'icône est remplacée un jour). -->
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png?v=2">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2">
+<link rel="preload" as="image" href="media/intro-poster.jpg">
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; background: #13233d; overflow: hidden; }
+  /* Gris de fond de la vidéo d'introduction : évite tout éclair de couleur avant l'affichage de l'écran de démarrage. */
+  html, body { margin: 0; padding: 0; height: 100%; background: #e9eaee; overflow: hidden; }
   #frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #f3f5f8;
            padding-top: env(safe-area-inset-top); box-sizing: border-box; }
-  #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-            color: #fff; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: #13233d; transition: opacity .3s; z-index: 2; text-align: center; padding: 24px; }
-  #splash img { width: 96px; height: 96px; border-radius: 22px; }
-  #splash .bar { width: 160px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.15); overflow: hidden; }
+
+  /* ---------- Écran de démarrage : vidéo plein écran, puis fondu vers l'application ---------- */
+  #splash { position: fixed; inset: 0; z-index: 2; overflow: hidden; background: #e9eaee; color: #13233d;
+            font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+            transition: opacity .9s ease, transform .9s ease; -webkit-tap-highlight-color: transparent; }
+  #splash.hidden { opacity: 0; transform: scale(1.04); visibility: hidden; pointer-events: none;
+                   transition: opacity .9s ease, transform .9s ease, visibility 0s linear .9s; }
+
+  /* Sur un téléphone en hauteur, la vidéo (16/9) occupe toute la largeur, centrée. Le reste de l'écran reprend
+     exactement les couleurs des bords de la vidéo (haut et bas), et un dégradé adoucit la jonction. */
+  #splash .bg { position: absolute; left: 0; right: 0; }
+  #splash .bg.top { top: 0; bottom: 50%; background: linear-gradient(90deg, rgb(244,244,244), rgb(233,236,238) 50%, rgb(223,227,231)); }
+  #splash .bg.bot { top: 50%; bottom: 0; background: linear-gradient(90deg, rgb(229,230,233), rgb(226,227,232) 50%, rgb(217,221,225)); }
+  #splash .stage { position: absolute; left: 0; right: 0; top: 50%; height: 56.25vw; transform: translateY(-50%); }
+  #splash video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; background: transparent; }
+  #splash video::-webkit-media-controls,
+  #splash video::-webkit-media-controls-start-playback-button { display: none !important; -webkit-appearance: none; }
+  #splash .fade { position: absolute; left: 0; right: 0; height: calc(14% + 2px); pointer-events: none; }
+  #splash .fade.t { top: -2px; background: linear-gradient(90deg, rgb(244,244,244), rgb(233,236,238) 50%, rgb(223,227,231));
+                    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 15%, transparent 100%);
+                            mask-image: linear-gradient(to bottom, #000 0, #000 15%, transparent 100%); }
+  #splash .fade.b { bottom: -2px; background: linear-gradient(90deg, rgb(229,230,233), rgb(226,227,232) 50%, rgb(217,221,225));
+                    -webkit-mask-image: linear-gradient(to top, #000 0, #000 15%, transparent 100%);
+                            mask-image: linear-gradient(to top, #000 0, #000 15%, transparent 100%); }
+  /* Écran large (ordinateur) : la vidéo remplit tout l'écran. */
+  @media (min-aspect-ratio: 16/9) {
+    #splash .stage { top: 0; bottom: 0; height: auto; transform: none; }
+    #splash .bg, #splash .fade { display: none; }
+  }
+
+  /* Barre d'attente et messages : visibles seulement si le chargement dépasse la durée de la vidéo, ou en cas de problème. */
+  #splash .info { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 28px); z-index: 1;
+                  display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 0 24px; text-align: center; }
+  #splash .bar { width: 160px; height: 4px; border-radius: 4px; background: rgba(19,35,61,.12); overflow: hidden; opacity: 0; transition: opacity .4s; }
+  #splash.waiting .bar { opacity: 1; }
   #splash .bar i { display: block; width: 40%; height: 100%; background: #e9b341; animation: slide 1.2s infinite ease-in-out; }
-  #splash p { margin: 0; opacity: .85; font-size: 14px; max-width: 420px; line-height: 1.5; }
-  #splash a { color: #e9b341; }
+  #splash p { margin: 0; font-size: 14px; max-width: 420px; line-height: 1.5; color: #13233d; }
+  #splash p:empty { display: none; }
+  #splash a { color: #13233d; font-weight: 600; }
   @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
-  .hidden { opacity: 0; pointer-events: none; }
 </style>
 </head>
 <body>
-<div id="splash">
-  <img src="icons/icon-192.png" alt="">
-  <div class="bar"><i></i></div>
-  <p id="msg">Chargement d'ImmoPilot…</p>
+<div id="splash" role="status" aria-live="polite">
+  <div class="bg top"></div>
+  <div class="bg bot"></div>
+  <div class="stage">
+    <!-- Lecture automatique : la vidéo doit rester muette (règle d'Apple et de Chrome) et en ligne (« playsinline »). -->
+    <video id="intro" src="media/intro.mp4" poster="media/intro-poster.jpg" muted playsinline webkit-playsinline autoplay preload="auto"
+           disablepictureinpicture disableremoteplayback aria-hidden="true" tabindex="-1"></video>
+    <div class="fade t"></div>
+    <div class="fade b"></div>
+  </div>
+  <div class="info">
+    <div class="bar"><i></i></div>
+    <p id="msg"></p>
+  </div>
 </div>
 <iframe id="frame" title="ImmoPilot" allow="camera; geolocation; clipboard-write; fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe>
 <script src="config.js"></script>
 <script>
 (function () {
   "use strict";
-  var cfg = window.IMMOPILOT_CONFIG || {}, splash = document.getElementById("splash"), msg = document.getElementById("msg"), frame = document.getElementById("frame");
+  var cfg = window.IMMOPILOT_CONFIG || {}, splash = document.getElementById("splash"), msg = document.getElementById("msg"),
+      frame = document.getElementById("frame"), intro = document.getElementById("intro");
   var url = String(cfg.appUrl || "");
   if (!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url)) {
     msg.innerHTML = "Configuration manquante : renseignez l'URL <b>/exec</b> de l'application dans <code>config.js</code>.";
     splash.querySelector(".bar").style.display = "none";
     return;
   }
+
+  // L'application se charge en arrière-plan pendant la vidéo ; on ne passe à l'écran de connexion que lorsque
+  // les deux sont prêts : application chargée ET vidéo terminée (ou impossible à lire).
+  var appReady = false, introDone = false, revealed = false, started = false;
+
+  function reveal() {
+    if (revealed || !appReady || !introDone) return;
+    revealed = true;
+    splash.classList.remove("waiting");
+    splash.classList.add("hidden"); // fondu en douceur (voir CSS) vers l'écran de connexion
+    setTimeout(function () { try { intro.pause(); } catch (e) { /* sans importance */ } }, 1100);
+  }
+  function introFinished() {
+    if (introDone) return;
+    introDone = true;
+    if (!appReady && !revealed) splash.classList.add("waiting"); // la vidéo est finie mais l'application charge encore
+    reveal();
+  }
+
+  // Après une coupure Internet, la page se recharge : on ne rejoue pas la vidéo à ce moment-là.
+  var skipIntro = false;
+  try { if (sessionStorage.getItem("ip_skip_intro") === "1") { skipIntro = true; sessionStorage.removeItem("ip_skip_intro"); } } catch (e) { /* stockage indisponible */ }
+
+  if (skipIntro || !intro) {
+    introFinished();
+  } else {
+    intro.muted = true; // indispensable pour la lecture automatique sur iPhone
+    intro.addEventListener("playing", function () { started = true; });
+    intro.addEventListener("ended", introFinished);
+    intro.addEventListener("error", introFinished); // fichier introuvable ou format non lu : on passe directement à l'application
+    var p = intro.play();
+    if (p && p.catch) p.catch(introFinished); // lecture automatique refusée (ex. mode économie d'énergie de l'iPhone)
+    // Sécurités : la vidéo ne démarre pas (réseau très lent) ou se fige en cours de route.
+    setTimeout(function () { if (!started) introFinished(); }, 6000);
+    setTimeout(introFinished, 20000);
+    // Un appui sur l'écran permet de passer la vidéo (l'application s'affiche dès qu'elle est prête).
+    splash.addEventListener("click", introFinished);
+  }
+
   // Les liens reçus par e-mail (invitation, activation, mot de passe, portail voyageur) sont transmis tels quels à l'application.
-  var p = new URLSearchParams(location.search), q = new URLSearchParams();
-  ["action", "token"].forEach(function (k) { var v = p.get(k); if (v && /^[A-Za-z0-9_-]{1,128}$/.test(v)) q.set(k, v); });
+  var params = new URLSearchParams(location.search), q = new URLSearchParams();
+  ["action", "token"].forEach(function (k) { var v = params.get(k); if (v && /^[A-Za-z0-9_-]{1,128}$/.test(v)) q.set(k, v); });
+  frame.addEventListener("load", function () { appReady = true; reveal(); });
   frame.src = url + (q.toString() ? "?" + q.toString() : "");
-  frame.addEventListener("load", function () { splash.classList.add("hidden"); });
+
   // Si Google ne répond pas (réseau lent), on propose d'ouvrir l'application directement.
   setTimeout(function () {
-    if (!splash.classList.contains("hidden")) msg.innerHTML = "Le chargement prend du temps… <br><a href=\"" + frame.src + "\" target=\"_top\">Ouvrir l'application directement</a>";
+    if (!appReady) msg.innerHTML = "Le chargement prend du temps… <br><a href=\"" + frame.src + "\" target=\"_top\">Ouvrir l'application directement</a>";
   }, 15000);
   window.addEventListener("offline", function () { splash.classList.remove("hidden"); msg.textContent = "Pas de connexion Internet. ImmoPilot a besoin d'Internet pour fonctionner ; reconnectez-vous puis patientez."; });
-  window.addEventListener("online", function () { msg.textContent = "Connexion rétablie, rechargement…"; location.reload(); });
+  window.addEventListener("online", function () {
+    msg.textContent = "Connexion rétablie, rechargement…";
+    try { sessionStorage.setItem("ip_skip_intro", "1"); } catch (e) { /* stockage indisponible */ }
+    location.reload();
+  });
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () { /* facultatif */ });
 })();
 </script>
