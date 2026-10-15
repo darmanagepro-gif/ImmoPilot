@@ -62,11 +62,13 @@ jobs:
           umask 077
           # Copie depuis un terminal : retours à la ligne ajoutés au milieu de la clé → on les retire ; une version base64 est aussi acceptée.
           printf '%s' "$CLASPRC_JSON" | tr -d '\r\n' > "$HOME/.clasprc.json"
-          if ! node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$HOME/.clasprc.json" 2>/dev/null; then
-            printf '%s' "$CLASPRC_JSON" | tr -d ' \r\n' | base64 -d > "$HOME/.clasprc.json" 2>/dev/null || true
+          first=$(node -e 'try{JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))}catch(e){console.log(e.message.replace(/[^ -~]/g,"").slice(0,120))}' "$HOME/.clasprc.json")
+          if [ -n "$first" ]; then
+            printf '%s' "$CLASPRC_JSON" | tr -d ' \r\n' | base64 -d > "$HOME/.clasprc.b64" 2>/dev/null && node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$HOME/.clasprc.b64" 2>/dev/null && mv "$HOME/.clasprc.b64" "$HOME/.clasprc.json"
+            rm -f "$HOME/.clasprc.b64"
           fi
           if ! node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$HOME/.clasprc.json" 2>/dev/null; then
-            pos=$(node -e 'try{JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))}catch(e){console.log(e.message.replace(/[^ -~]/g,"").slice(0,120))}' "$HOME/.clasprc.json")
+            pos="$first (longueur reçue : $(printf '%s' "$CLASPRC_JSON" | wc -c) caractères)"
             echo "::error title=Secret CLASPRC_JSON mal copié::Le texte n'est pas complet (souvent coupé ou avec des caractères en trop). Dans le Codespace, tapez « code ~/.clasprc.json », puis dans l'onglet qui s'ouvre Ctrl+A, Ctrl+C, et collez dans le secret (Update). Détail : $pos"
             exit 1
           fi
