@@ -1,5 +1,10 @@
 # Journal des modifications
 
+## 2.0.2 — 15 octobre 2026
+
+- Super administrateur : page « Comptes clients » (Propriétaires, Agences, Prestataires, Gardiens, Locataires) avec bouton « Entrer » qui ouvre l'espace de la personne tel qu'elle le voit. Tout y est possible ; chaque action est journalisée au nom du super administrateur (avec le compte concerné), bandeau rouge permanent, session limitée à 2 heures, retour en un clic. Mot de passe, déconnexion des appareils et demande de suppression restent réservés au titulaire.
+- Trois nouvelles langues d'interface : espagnol, italien, néerlandais (1 169 textes et 367 libellés traduits). Les e-mails et PDF restent en français.
+
 ## 2.0.1 — 15 octobre 2026
 
 - Bouton jour / nuit (☀️ / 🌙) dans la barre du haut et sur l'écran de connexion : thème clair ou sombre, mémorisé par appareil, réglage de l'appareil suivi par défaut. Graphiques, assistant Rubban et calendrier adaptés.

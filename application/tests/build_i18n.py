@@ -13,16 +13,20 @@ def rows(path, n):
         out.append(parts)
     return out
 
-strings = rows("tests/i18n_strings.txt", 3)
-codes = rows("tests/i18n_codes.txt", 4)
+LANGS = ["en", "ar", "es", "it", "nl"]  # le français est la clé
+strings = rows("tests/i18n_strings.txt", 1 + len(LANGS))
+codes = rows("tests/i18n_codes.txt", 2 + len(LANGS))
+empty = [(r[0], LANGS[j]) for r in strings for j, v in enumerate(r[1:]) if not v.strip()] + [(c[0], LANGS[j]) for c in codes for j, v in enumerate(c[2:]) if not v.strip()]
+if empty: sys.exit("Traductions vides : " + repr(empty[:20]))
 dup = [k for k in {r[0] for r in strings} if sum(1 for r in strings if r[0] == k) > 1]
 if dup: print("Doublons (dernière valeur conservée) :", dup)
 
 js = ("<script>\n\"use strict\";\n/* Fichier généré par tests/build_i18n.py — ne pas modifier à la main.\n   Clés = texte français ; codes de statut préfixés « st. ». */\n(function () {\n"
       "  const R = " + json.dumps(strings, ensure_ascii=False) + ";\n"
-      "  R.forEach(function (r) { I18N.en[r[0]] = r[1]; I18N.ar[r[0]] = r[2]; });\n"
+      "  const L = " + json.dumps(LANGS) + ";\n"
+      "  R.forEach(function (r) { L.forEach(function (l, i) { I18N[l][r[0]] = r[i + 1]; }); });\n"
       "  const C = " + json.dumps(codes, ensure_ascii=False) + ";\n"
-      "  C.forEach(function (c) { const k = \"st.\" + c[0]; I18N.fr[k] = c[1]; I18N.en[k] = c[2]; I18N.ar[k] = c[3]; });\n"
+      "  C.forEach(function (c) { const k = \"st.\" + c[0]; I18N.fr[k] = c[1]; L.forEach(function (l, i) { I18N[l][k] = c[i + 2]; }); });\n"
       "})();\n</script>\n")
 open(os.path.join(ROOT, "I18n.html"), "w", encoding="utf8").write(js)
 

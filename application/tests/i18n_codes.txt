@@ -1,368 +1,368 @@
-# Libellés des codes (statuts, catégories, rôles…). Format : CODE|français|anglais|arabe. Préfixe facultatif (role., feat., sub., rep., par., ntf., via., set., cap., kpi.).
-ACTIVE|Actif|Active|نشط
-INACTIVE|Inactif|Inactive|غير نشط
-SUSPENDED|Suspendu|Suspended|موقوف
-DISABLED|Désactivé|Disabled|معطل
-INVITED|Invité|Invited|مدعو
-PENDING|En attente|Pending|قيد الانتظار
-ACCEPTED|Acceptée|Accepted|مقبول
-REVOKED|Révoquée|Revoked|ملغى
-EXPIRED|Expirée|Expired|منتهٍ
-EMAIL_FAILED|E-mail non envoyé|Email failed|فشل البريد
-REQUESTED|Demandé|Requested|مطلوب
-DENIED|Refusé|Denied|مرفوض
-MAINTENANCE|Maintenance|Maintenance|صيانة
-ARCHIVED|Archivé|Archived|مؤرشف
-DELETED|Supprimé|Deleted|محذوف
-DRAFT|Brouillon|Draft|مسودة
-CONFIRMED|Confirmée|Confirmed|مؤكد
-IN_PROGRESS|En cours|In progress|جارٍ
-COMPLETED|Terminée|Completed|منتهٍ
-CANCELLED|Annulée|Cancelled|ملغى
-NO_SHOW|No-show|No-show|لم يحضر
-UNPAID|Impayé|Unpaid|غير مؤدى
-PARTIAL|Partiel|Partial|جزئي
-PAID|Payé|Paid|مؤدى
-REFUNDED|Remboursé|Refunded|مسترجع
-OVERPAID|Trop-perçu|Overpaid|مؤدى بزيادة
-PURGED|Effacé|Erased|ممحو
-CREATED|À attribuer|To assign|للإسناد
-OFFERED|Proposée|Offered|معروضة
-DECLINED|Refusée|Declined|مرفوضة
-VALIDATED|Validée|Validated|مصادق عليها
-OPEN|Ouvert|Open|مفتوح
-QUALIFIED|Qualifié|Qualified|مؤهل
-ASSIGNED|Affecté|Assigned|مسند
-QUOTE_PENDING|Devis demandé|Quote requested|عرض مطلوب
-AWAITING_OWNER|Validation propriétaire|Awaiting owner|في انتظار المالك
-APPROVED|Approuvé|Approved|مقبول
-RESOLVED|Résolu|Resolved|محلول
-CLOSED|Clos|Closed|مغلق
-REJECTED|Refusé|Rejected|مرفوض
-SCHEDULED|Planifiée|Scheduled|مجدول
-VERIFIED|Contrôlée|Inspected|مراقب
-SUBMITTED|Transmise|Submitted|مرسلة
-NOTICE|Préavis|Notice|إشعار
-ENDED|Terminé|Ended|منتهٍ
-RENEWED|Renouvelé|Renewed|مجدد
-TRIAL|Essai|Trial|تجربة
-PAST_DUE|Paiement attendu|Past due|متأخر الأداء
-PLANNED|Prévue|Planned|متوقعة
-INVOICED|Facturée|Invoiced|مفوترة
-EXPECTED|Attendu|Expected|متوقع
-RECEIVED|Reçu|Received|مستلم
-RECORDED|Enregistré|Recorded|مسجل
-VOID|Annulé|Void|ملغى
-RETIRED|Retiré|Retired|متوقف
-LATE|En retard|Late|متأخر
-DUE|Exigible|Due|مستحق
-UPCOMING|À venir|Upcoming|قادم
-HELD|Détenue|Held|محتفظ بها
-RETURNED|Restituée|Returned|مسترجعة
-TO_RETURN|À restituer|To return|للإرجاع
-PARTIALLY_RETURNED|Restituée en partie|Partly returned|مسترجعة جزئيًا
-NONE|Aucune|None|لا شيء
-BLOCKED|Bloqué|Blocked|محظور
-OK|OK|OK|سليم
-FAIL|Échec|Failed|فشل
-FAILED|Échec|Failed|فشل
-PARTIAL_OK|Partiel|Partial|جزئي
-RUNNING|En cours|Running|جارٍ
-ERROR|Erreur|Error|خطأ
-SENT|Envoyé|Sent|مرسل
-LOW|Faible|Low|منخفضة
-MEDIUM|Moyenne|Medium|متوسطة
-HIGH|Élevée|High|مرتفعة
-CRITICAL|Critique|Critical|حرجة
-NORMAL|Normale|Normal|عادية
-URGENT|Urgente|Urgent|مستعجلة
-SHORT_TERM|Courte durée|Short term|قصير المدة
-LONG_TERM|Longue durée|Long term|طويل المدة
-BOTH|Mixte|Mixed|مختلط
-APARTMENT|Appartement|Apartment|شقة
-STUDIO|Studio|Studio|استوديو
-HOUSE|Maison|House|منزل
-VILLA|Villa|Villa|فيلا
-RIAD|Riad|Riad|رياض
-COMMERCIAL|Local commercial|Commercial unit|محل تجاري
-OTHER|Autre|Other|أخرى
-OWNER_ORG|Propriétaire|Owner|مالك
-AGENCY|Agence|Agency|وكالة
-PROVIDER|Prestataires|Contractors|مقدمو خدمات
-PLATFORM|Plateforme|Platform|المنصة
-PLUMBING|Plomberie|Plumbing|السباكة
-ELECTRICITY|Électricité|Electricity|الكهرباء
-AC|Climatisation|Air conditioning|التكييف
-HUMIDITY|Humidité|Damp|الرطوبة
-LOCKSMITH|Serrurerie|Locks|الأقفال
-FURNITURE|Mobilier|Furniture|الأثاث
-APPLIANCE|Électroménager|Appliances|الأجهزة المنزلية
-CLEANING|Nettoyage|Cleaning|التنظيف
-DAMAGE|Dégradation|Damage|ضرر
-SECURITY|Sécurité|Security|الأمن
-NON_CLASSE|Non classé|Unclassified|غير مصنف
-SAISIE_MANUELLE|Saisie manuelle|Manual entry|إدخال يدوي
-NON_RENSEIGNE|Non renseigné|Not specified|غير محدد
-UTILITIES|Eau / électricité / internet|Utilities|الماء والكهرباء والإنترنت
-TAXES|Impôts et taxes|Taxes|الضرائب والرسوم
-INSURANCE|Assurance|Insurance|التأمين
-AGENCY_FEES|Frais d'agence|Agency fees|مصاريف الوكالة
-SUPPLIES|Fournitures|Supplies|اللوازم
-GUEST_REQUEST|Demande du voyageur|Guest request|طلب المسافر
-NO_PAYMENT|Défaut de paiement|No payment|عدم الأداء
-OVERBOOKING|Surréservation|Overbooking|حجز زائد
-OWNER_REQUEST|Demande du propriétaire|Owner request|طلب المالك
-FORCE_MAJEURE|Force majeure|Force majeure|قوة قاهرة
-MISSING_ITEM|Objet manquant|Missing item|غرض مفقود
-DIRT|Saleté|Dirt|اتساخ
-BREAKAGE|Casse|Breakage|كسر
-PAINTING|Peinture|Painting|الصباغة
-CARPENTRY|Menuiserie|Carpentry|النجارة
-DIRECT|Direct|Direct|مباشر
-AIRBNB|Airbnb|Airbnb|Airbnb
-BOOKING|Booking.com|Booking.com|Booking.com
-EXPEDIA|Expedia|Expedia|Expedia
-PHONE|Téléphone|Phone|الهاتف
-WEBSITE|Site web|Website|الموقع
-CIN|CIN|National ID card|البطاقة الوطنية
-PASSPORT|Passeport|Passport|جواز السفر
-RESIDENCE_PERMIT|Titre de séjour|Residence permit|بطاقة الإقامة
-DRIVING_LICENSE|Permis de conduire|Driving licence|رخصة السياقة
-RESERVATION|Réservation|Reservation|حجز
-DEPOSIT|Caution|Deposit|ضمانة
-REFUND|Remboursement|Refund|استرجاع
-RENT|Loyer|Rent|كراء
-INVOICE|Facture|Invoice|فاتورة
-SUBSCRIPTION|Abonnement|Subscription|اشتراك
-DEPOSIT_REFUND|Restitution de caution|Deposit return|إرجاع الضمانة
-CASH|Espèces|Cash|نقدًا
-TRANSFER|Virement|Bank transfer|تحويل
-CARD|Carte|Card|بطاقة
-CHEQUE|Chèque|Cheque|شيك
-MONTHLY|Mensuelle|Monthly|شهرية
-QUARTERLY|Trimestrielle|Quarterly|فصلية
-YEARLY|Annuelle|Yearly|سنوية
-PHOTO|Photo|Photo|صورة
-CONTRACT|Contrat|Contract|عقد
-TITLE_DEED|Titre foncier|Title deed|الرسم العقاري
-CERTIFICATE|Attestation|Certificate|شهادة
-GENERAL|Général|General|عام
-CHECKIN|Arrivée|Check-in|الوصول
-CHECKOUT|Départ|Check-out|المغادرة
-SIGNATURE|Signature|Signature|توقيع
-PHOTO_BEFORE|Photo avant|Photo before|صورة قبل
-PHOTO_AFTER|Photo après|Photo after|صورة بعد
-ID_DOCUMENT|Pièce d'identité|ID document|وثيقة هوية
-EXPENSE_PROOF|Justificatif de dépense|Expense proof|مستند مصروف
-PAYMENT_PROOF|Justificatif de paiement|Payment proof|مستند أداء
-RECEIPT|Quittance|Receipt|وصل
-SHEET|Fiche|Sheet|بطاقة
-REPORT|Rapport|Report|تقرير
-ORDER|Bon d'intervention|Work order|سند تدخل
-ADMIN|Administratif|Administrative|إداري
-PARETO|Pareto|Pareto|باريتو
-BEFORE|Avant|Before|قبل
-AFTER|Après|After|بعد
-OWNER|Propriétaire|Owner|المالك
-CHECKIN_LATE|Arrivée en retard|Late arrival|وصول متأخر
-CHECKOUT_LATE|Départ en retard|Late departure|مغادرة متأخرة
-CLEANING_LATE|Ménage en retard|Late cleaning|تنظيف متأخر
-CLEANING_NOT_ACCEPTED|Ménage non accepté à temps|Cleaning not accepted in time|تنظيف لم يُقبل في الوقت
-CLEANING_REJECTED|Ménage à reprendre|Cleaning rework|تنظيف للإعادة
-WORKORDER_LATE|Intervention en retard|Late work order|تدخل متأخر
-RENT_LATE|Loyer en retard|Late rent|كراء متأخر
-TENANT|Locataire|Tenant|المكتري
-LANDLORD|Bailleur|Landlord|المكري
-MANUAL|Manuel|Manual|يدوي
-GUEST|Voyageur|Guest|مسافر
-LEGACY|Historique|Legacy|سابق
-SHARED|Partagé|Shared|مشترك
-INTERNAL|Interne|Internal|داخلي
-IN|Entrée|In|دخول
-OUT|Sortie|Out|خروج
-EXPENSE|Dépense|Expense|مصروف
-role.SUPER_ADMIN|Super administrateur|Super administrator|المسؤول العام
-role.OWNER|Propriétaire|Owner|مالك
-role.AGENCY_ADMIN|Administrateur d'agence|Agency administrator|مسؤول الوكالة
-role.AGENCY_USER|Collaborateur d'agence|Agency staff|موظف الوكالة
-role.GUARD|Gardien / accueil|Caretaker / greeter|حارس / استقبال
-role.CLEANER|Équipe de ménage|Cleaning team|فريق التنظيف
-role.ARTISAN|Artisan / prestataire|Contractor|حرفي / مقدم خدمة
-role.TENANT|Locataire|Tenant|مكترٍ
-via.OWNER|Propriétaire|Owner|مالك
-via.AGENCY|Agence|Agency|وكالة
-via.STAFF|Affectation|Assignment|تعيين
-via.GUARD_RESV|Gardien (réservation)|Caretaker (reservation)|حارس (حجز)
-via.MISSION|Mission de ménage|Cleaning job|مهمة تنظيف
-via.ARTISAN|Intervention|Work order|تدخل
-via.TENANT|Bail|Lease|عقد
-via.SUPPORT|Assistance|Support|دعم
-feat.properties|Biens|Properties|العقارات
-feat.reservations|Réservations|Reservations|الحجوزات
-feat.checkin|Arrivées / départs|Check-in / out|الوصول / المغادرة
-feat.cleaning|Ménage|Cleaning|التنظيف
-feat.incidents|Incidents|Incidents|الحوادث
-feat.finance_basic|Finances de base|Basic finance|المالية الأساسية
-feat.finance_advanced|Finances avancées|Advanced finance|المالية المتقدمة
-feat.leases|Longue durée|Long-term leases|الكراء طويل المدة
-feat.contractors|Prestataires|Contractors|مقدمو الخدمات
-feat.pareto|Pareto|Pareto|باريتو
-feat.reports|Rapports|Reports|التقارير
-feat.automations|Automatisations|Automations|الأتمتة
-feat.guest_portal|Portail voyageur|Guest portal|بوابة المسافر
-feat.multi_agency|Multi-agences|Multi-agency|متعدد الوكالات
-feat.exports_unlimited|Exports illimités|Unlimited exports|تصدير غير محدود
-feat.invoices|Factures|Invoices|الفواتير
-feat.guestPortal|Portail voyageur|Guest portal|بوابة المسافر
-sub.SUSPEND|Suspendre|Suspend|توقيف
-sub.REACTIVATE|Réactiver|Reactivate|إعادة التفعيل
-sub.CANCEL_AT_END|Résilier en fin de période|Cancel at period end|الفسخ في نهاية الفترة
-sub.UNDO_CANCEL|Annuler la résiliation|Undo cancellation|التراجع عن الفسخ
-sub.CANCEL_NOW|Clore immédiatement|Close now|الإغلاق فورًا
-rep.OWNER_MONTHLY|Rapport mensuel propriétaire|Owner monthly report|التقرير الشهري للمالك
-rep.AGENCY_PERFORMANCE|Performance d'agence|Agency performance|أداء الوكالة
-rep.REVENUE_EXPENSES|Revenus et dépenses|Revenue and expenses|المداخيل والمصاريف
-rep.PROPERTY_PROFITABILITY|Rentabilité par bien|Profitability by property|المردودية حسب العقار
-rep.RESERVATIONS|Réservations|Reservations|الحجوزات
-rep.UNPAID|Impayés|Unpaid|المتأخرات
-rep.MAINTENANCE|Maintenance|Maintenance|الصيانة
-rep.CONTRACTORS|Prestataires|Contractors|مقدمو الخدمات
-rep.CLEANING|Ménage|Cleaning|التنظيف
-rep.INCIDENTS|Incidents|Incidents|الحوادث
-rep.PARETO|Analyse de Pareto|Pareto analysis|تحليل باريتو
-rep.SUBSCRIPTIONS|Abonnements|Subscriptions|الاشتراكات
-rep.AUDIT|Journal d'audit|Audit log|سجل التدقيق
-rep.CHECKINOUT|Arrivées et départs|Arrivals and departures|الوصول والمغادرة
-par.INCIDENTS_BY_CATEGORY|Incidents par catégorie|Incidents by category|الحوادث حسب الفئة
-par.INCIDENT_COST_BY_CATEGORY|Coût des incidents|Incident cost|تكلفة الحوادث
-par.MAINTENANCE_BY_CATEGORY|Dépenses de maintenance|Maintenance spend|مصاريف الصيانة
-par.COST_BY_CONTRACTOR|Coûts par prestataire|Cost by contractor|التكلفة حسب مقدم الخدمة
-par.COST_BY_PROPERTY|Biens les plus coûteux|Costliest properties|العقارات الأكثر تكلفة
-par.CANCEL_REASONS|Motifs d'annulation|Cancellation reasons|أسباب الإلغاء
-par.CLEANING_ANOMALIES|Anomalies de ménage|Cleaning issues|ملاحظات التنظيف
-par.DELAYS_NONCONFORMITIES|Retards et non-conformités|Delays and non-compliance|التأخيرات وعدم المطابقة
-par.EXPENSES_BY_CATEGORY|Dépenses par catégorie|Expenses by category|المصاريف حسب الفئة
-par.UNPAID|Impayés|Unpaid amounts|المتأخرات
-ntf.RESERVATION_CONFIRMED|Réservation confirmée|Reservation confirmed|حجز مؤكد
-ntf.ARRIVAL_SOON|Arrivée imminente|Arrival soon|وصول قريب
-ntf.ARRIVAL_LATE|Arrivée non enregistrée|Arrival not recorded|وصول غير مسجل
-ntf.DEPARTURE_LATE|Départ non enregistré|Departure not recorded|مغادرة غير مسجلة
-ntf.CHECK_IN|Arrivée|Check-in|الوصول
-ntf.CHECK_OUT|Départ|Check-out|المغادرة
-ntf.CLEANING_OFFER|Mission de ménage proposée|Cleaning job offered|مهمة تنظيف معروضة
-ntf.CLEANING_EXPIRED|Mission non acceptée|Job not accepted|مهمة غير مقبولة
-ntf.CLEANING_DONE|Ménage terminé|Cleaning done|انتهى التنظيف
-ntf.INCIDENT|Nouvel incident|New incident|حادث جديد
-ntf.INCIDENT_SEVERE|Incident grave|Severe incident|حادث خطير
-ntf.QUOTE_TO_VALIDATE|Devis à valider|Quote to approve|عرض للمصادقة
-ntf.WORK_ORDER|Intervention|Work order|تدخل
-ntf.WORK_ORDER_SCHEDULED|Intervention planifiée|Work scheduled|تدخل مجدول
-ntf.INVOICE_PENDING|Facture en attente|Invoice pending|فاتورة قيد الانتظار
-ntf.RENT_DUE|Échéance de loyer|Rent due|استحقاق الكراء
-ntf.RENT_LATE|Loyer en retard|Late rent|كراء متأخر
-ntf.LEASE_ENDING|Fin de bail proche|Lease ending|قرب نهاية العقد
-ntf.SUBSCRIPTION|Abonnement|Subscription|الاشتراك
-cap.platform.admin|Administration plateforme|Platform administration|إدارة المنصة
-cap.property.create|Créer des biens|Create properties|إنشاء العقارات
-cap.property.edit|Modifier les biens|Edit properties|تعديل العقارات
-cap.property.archive|Archiver les biens|Archive properties|أرشفة العقارات
-cap.property.assign|Attribuer agences et équipes|Assign agencies and teams|إسناد الوكالات والفرق
-cap.reservation.view|Voir les réservations|View reservations|عرض الحجوزات
-cap.reservation.edit|Gérer les réservations|Manage reservations|تسيير الحجوزات
-cap.reservation.cancel|Annuler des réservations|Cancel reservations|إلغاء الحجوزات
-cap.guest.view|Voir les voyageurs|View guests|عرض المسافرين
-cap.guestdoc.view|Voir les pièces d'identité|View ID documents|عرض وثائق الهوية
-cap.checkin.operate|Check-in / check-out|Check-in / check-out|الوصول / المغادرة
-cap.cleaning.manage|Gérer le ménage|Manage cleaning|تسيير التنظيف
-cap.incident.view|Voir les incidents|View incidents|عرض الحوادث
-cap.incident.manage|Gérer les incidents|Manage incidents|تسيير الحوادث
-cap.incident.report|Signaler des incidents|Report incidents|الإبلاغ عن الحوادث
-cap.quote.decide|Valider les devis|Approve quotes|المصادقة على العروض
-cap.contractor.manage|Gérer les prestataires|Manage contractors|تسيير مقدمي الخدمات
-cap.workorder.manage|Gérer les interventions|Manage work orders|تسيير التدخلات
-cap.invoice.view|Voir les factures|View invoices|عرض الفواتير
-cap.invoice.manage|Approuver et payer les factures|Approve and pay invoices|المصادقة على الفواتير وأداؤها
-cap.finance.view|Voir les finances|View finance|عرض المالية
-cap.finance.manage|Gérer les finances|Manage finance|تسيير المالية
-cap.lease.view|Voir les baux|View leases|عرض العقود
-cap.lease.manage|Gérer les baux|Manage leases|تسيير العقود
-cap.report.view|Voir les rapports|View reports|عرض التقارير
-cap.report.export|Exporter|Export|التصدير
-cap.user.invite|Inviter des utilisateurs|Invite users|دعوة المستخدمين
-cap.user.manage|Gérer les utilisateurs|Manage users|تسيير المستخدمين
-cap.settings.manage|Gérer les paramètres|Manage settings|تسيير الإعدادات
-cap.subscription.view|Voir l'abonnement|View subscription|عرض الاشتراك
-cap.audit.view.org|Voir le journal d'audit|View audit log|عرض سجل التدقيق
-cap.support.approve|Accorder l'assistance|Grant support access|منح وصول الدعم
-cap.document.view|Voir les documents|View documents|عرض الوثائق
-set.currency|Devise|Currency|العملة
-set.locale|Langue par défaut|Default language|اللغة الافتراضية
-set.reservation.defaultCheckIn|Heure d'arrivée par défaut|Default check-in time|ساعة الوصول الافتراضية
-set.reservation.defaultCheckOut|Heure de départ par défaut|Default check-out time|ساعة المغادرة الافتراضية
-set.reservation.minTurnaroundMinutes|Battement entre séjours (min)|Turnaround between stays (min)|الفاصل بين الإقامات (دقيقة)
-set.reservation.cancellationPolicy|Politique d'annulation|Cancellation policy|سياسة الإلغاء
-set.checkin.graceMinutes|Tolérance avant alerte de retard (min)|Grace before late alert (min)|مهلة قبل تنبيه التأخير (دقيقة)
-set.cleaning.acceptanceMinutes|Délai d'acceptation ménage (min)|Cleaning acceptance deadline (min)|أجل قبول التنظيف (دقيقة)
-set.cleaning.requirePhotos|Photos avant/après obligatoires|Before/after photos required|صور قبل/بعد إلزامية
-set.commission.contractorRate|Commission artisan par défaut (%)|Default contractor commission (%)|عمولة الحرفي الافتراضية (%)
-set.commission.vatRate|TVA sur commission (%)|VAT on commission (%)|الضريبة على العمولة (%)
-set.finance.vatRate|TVA par défaut (%)|Default VAT (%)|الضريبة الافتراضية (%)
-set.quote.agencyApprovalLimit|Plafond de validation des devis par l'agence (MAD)|Agency quote approval limit (MAD)|سقف مصادقة الوكالة على العروض (درهم)
-set.workorder.requireQuote|Devis obligatoire avant intervention|Quote required before work|العرض إلزامي قبل التدخل
-set.invoice.tolerancePercent|Écart toléré facture / devis (%)|Invoice / quote tolerance (%)|الفرق المسموح بين الفاتورة والعرض (%)
-set.rent.graceDays|Délai de grâce loyer (jours)|Rent grace period (days)|مهلة أداء الكراء (أيام)
-set.alerts.rentDueDays|Rappel avant échéance (jours)|Reminder before due date (days)|تذكير قبل الاستحقاق (أيام)
-set.alerts.leaseEndDays|Alertes de fin de bail (jours)|Lease end alerts (days)|تنبيهات نهاية العقد (أيام)
-set.alerts.incidentAgeDays|Alerte incident ouvert après (jours)|Open incident alert after (days)|تنبيه حادث مفتوح بعد (أيام)
-set.alerts.incidentCost|Alerte coût d'incident (MAD)|Incident cost alert (MAD)|تنبيه تكلفة الحادث (درهم)
-set.alerts.quotaPercent|Alerte quota (%)|Quota alert (%)|تنبيه الحصة (%)
-set.retention.sensitiveDocDays|Conservation des pièces d'identité (jours après départ)|ID document retention (days after departure)|مدة الاحتفاظ بوثائق الهوية (أيام بعد المغادرة)
-set.retention.logDays|Conservation des journaux (jours)|Log retention (days)|مدة الاحتفاظ بالسجلات (أيام)
-set.guests.storeIdReference|Conserver le numéro complet des pièces (obligation légale)|Store full ID numbers (legal obligation)|الاحتفاظ بالرقم الكامل للوثائق (التزام قانوني)
-set.session.hours|Durée de session (heures)|Session length (hours)|مدة الجلسة (ساعات)
-set.backup.keep|Nombre de sauvegardes conservées|Backups kept|عدد النسخ المحتفظ بها
-set.billing.enforce|Appliquer les forfaits et quotas|Enforce plans and quotas|تطبيق الباقات والحصص
-set.notify.emailEnabled|Notifications par e-mail|Email notifications|الإشعارات عبر البريد
-set.template.leaseDocId|Modèle Google Docs : bail|Google Docs template: lease|نموذج Google Docs: العقد
-set.template.receiptDocId|Modèle Google Docs : quittance|Google Docs template: receipt|نموذج Google Docs: الوصل
-set.template.reservationDocId|Modèle Google Docs : fiche de réservation|Google Docs template: reservation sheet|نموذج Google Docs: بطاقة الحجز
-set.list.incidentCategories|Catégories d'incidents|Incident categories|فئات الحوادث
-set.list.expenseCategories|Catégories de dépenses|Expense categories|فئات المصاريف
-set.list.cancelReasons|Motifs d'annulation|Cancellation reasons|أسباب الإلغاء
-set.list.cleaningAnomalies|Types d'anomalies de ménage|Cleaning issue types|أنواع ملاحظات التنظيف
-set.list.specialties|Spécialités des prestataires|Contractor specialties|تخصصات مقدمي الخدمات
-kpi.expected|Prévu|Expected|المتوقع
-kpi.accommodation|Hébergement|Accommodation|الإيواء
-kpi.rentExpected|Loyers prévus|Expected rents|الأكرية المتوقعة
-kpi.taxes|Taxes de séjour|Tourist taxes|رسوم الإقامة
-kpi.billed|Facturé|Billed|المفوتر
-kpi.collected|Encaissé|Collected|المحصل
-kpi.paidOut|Payé|Paid out|المصروف
-kpi.outstanding|Restant dû|Outstanding|المتبقي
-kpi.expenses|Dépenses|Expenses|المصاريف
-kpi.managementCommissions|Commissions de gestion|Management fees|عمولات التسيير
-kpi.result|Résultat|Result|النتيجة
-kpi.bookedNights|Nuits réservées|Booked nights|الليالي المحجوزة
-kpi.availableNights|Nuits disponibles|Available nights|الليالي المتاحة
-kpi.reservations|Réservations|Reservations|الحجوزات
-kpi.cancellations|Annulations|Cancellations|الإلغاءات
-kpi.cancellationRetained|Pénalités conservées|Penalties retained|الغرامات المحتفظ بها
-kpi.occupancyRate|Taux d'occupation (%)|Occupancy rate (%)|نسبة الإشغال (%)
-kpi.adr|Prix moyen par nuit|Average daily rate|متوسط ثمن الليلة
-kpi.revpar|Revenu par nuit disponible|RevPAR|الدخل لكل ليلة متاحة
-kpi.netCashFlow|Flux de trésorerie net|Net cash flow|صافي التدفق النقدي
-kpi.contractorCommissions|Commissions prestataires|Contractor commissions|عمولات مقدمي الخدمات
-kpi.cancellationRate|Taux d'annulation (%)|Cancellation rate (%)|نسبة الإلغاء (%)
-kpi.totalOutstanding|Total restant dû|Total outstanding|مجموع المتبقي
-kpi.completed|Missions terminées|Jobs completed|المهام المنتهية
-kpi.avgMinutes|Durée moyenne (min)|Average duration (min)|متوسط المدة (دقيقة)
-kpi.acceptanceRate|Taux d'acceptation (%)|Acceptance rate (%)|نسبة القبول (%)
-kpi.onTimeRate|Réalisées à l'heure (%)|On time (%)|في الوقت (%)
-kpi.anomalies|Anomalies|Issues|الملاحظات
-kpi.analyse|Analyse|Analysis|التحليل
-kpi.total|Total|Total|المجموع
-kpi.prioritaires|Éléments prioritaires|Priority items|العناصر ذات الأولوية
-kpi.periodePrecedente|Période précédente|Previous period|الفترة السابقة
-GARDENING|Jardinage|Gardening|البستنة
-POOL|Piscine|Pool maintenance|صيانة المسبح
-set.contractors.platformOnly|Prestataires intégrés uniquement par l'administrateur|Providers added by the administrator only|مقدمو الخدمات يضيفهم المسؤول فقط
+# Libellés des codes (statuts, catégories, rôles…). Format : CODE|français|anglais|arabe|espagnol|italien|néerlandais. Préfixe facultatif (role., feat., sub., rep., par., ntf., via., set., cap., kpi.).
+ACTIVE|Actif|Active|نشط|Activo|Attivo|Actief
+INACTIVE|Inactif|Inactive|غير نشط|Inactivo|Inattivo|Inactief
+SUSPENDED|Suspendu|Suspended|موقوف|Suspendido|Sospeso|Opgeschort
+DISABLED|Désactivé|Disabled|معطل|Desactivado|Disattivato|Uitgeschakeld
+INVITED|Invité|Invited|مدعو|Invitado|Invitato|Uitgenodigd
+PENDING|En attente|Pending|قيد الانتظار|Pendiente|In attesa|In afwachting
+ACCEPTED|Acceptée|Accepted|مقبول|Aceptada|Accettata|Geaccepteerd
+REVOKED|Révoquée|Revoked|ملغى|Revocada|Revocata|Ingetrokken
+EXPIRED|Expirée|Expired|منتهٍ|Caducada|Scaduta|Verlopen
+EMAIL_FAILED|E-mail non envoyé|Email failed|فشل البريد|Correo no enviado|E-mail non inviata|E-mail niet verzonden
+REQUESTED|Demandé|Requested|مطلوب|Solicitado|Richiesto|Aangevraagd
+DENIED|Refusé|Denied|مرفوض|Rechazado|Rifiutato|Geweigerd
+MAINTENANCE|Maintenance|Maintenance|صيانة|Mantenimiento|Manutenzione|Onderhoud
+ARCHIVED|Archivé|Archived|مؤرشف|Archivado|Archiviato|Gearchiveerd
+DELETED|Supprimé|Deleted|محذوف|Eliminado|Eliminato|Verwijderd
+DRAFT|Brouillon|Draft|مسودة|Borrador|Bozza|Concept
+CONFIRMED|Confirmée|Confirmed|مؤكد|Confirmada|Confermata|Bevestigd
+IN_PROGRESS|En cours|In progress|جارٍ|En curso|In corso|Bezig
+COMPLETED|Terminée|Completed|منتهٍ|Terminada|Completata|Afgerond
+CANCELLED|Annulée|Cancelled|ملغى|Cancelada|Annullata|Geannuleerd
+NO_SHOW|No-show|No-show|لم يحضر|No presentado|No-show|No-show
+UNPAID|Impayé|Unpaid|غير مؤدى|Impagado|Non pagato|Onbetaald
+PARTIAL|Partiel|Partial|جزئي|Parcial|Parziale|Gedeeltelijk
+PAID|Payé|Paid|مؤدى|Pagado|Pagato|Betaald
+REFUNDED|Remboursé|Refunded|مسترجع|Reembolsado|Rimborsato|Terugbetaald
+OVERPAID|Trop-perçu|Overpaid|مؤدى بزيادة|Cobro excesivo|Eccedenza|Te veel ontvangen
+PURGED|Effacé|Erased|ممحو|Borrado|Cancellato|Gewist
+CREATED|À attribuer|To assign|للإسناد|Por asignar|Da assegnare|Toe te wijzen
+OFFERED|Proposée|Offered|معروضة|Propuesta|Proposta|Aangeboden
+DECLINED|Refusée|Declined|مرفوضة|Rechazada|Rifiutata|Geweigerd
+VALIDATED|Validée|Validated|مصادق عليها|Validada|Convalidata|Gevalideerd
+OPEN|Ouvert|Open|مفتوح|Abierta|Aperta|Open
+QUALIFIED|Qualifié|Qualified|مؤهل|Calificada|Qualificata|Gekwalificeerd
+ASSIGNED|Affecté|Assigned|مسند|Asignada|Assegnata|Toegewezen
+QUOTE_PENDING|Devis demandé|Quote requested|عرض مطلوب|Presupuesto solicitado|Preventivo richiesto|Offerte aangevraagd
+AWAITING_OWNER|Validation propriétaire|Awaiting owner|في انتظار المالك|Validación del propietario|Convalida del proprietario|Wacht op eigenaar
+APPROVED|Approuvé|Approved|مقبول|Aprobado|Approvato|Goedgekeurd
+RESOLVED|Résolu|Resolved|محلول|Resuelta|Risolta|Opgelost
+CLOSED|Clos|Closed|مغلق|Cerrada|Chiusa|Gesloten
+REJECTED|Refusé|Rejected|مرفوض|Rechazado|Rifiutato|Afgewezen
+SCHEDULED|Planifiée|Scheduled|مجدول|Planificada|Pianificata|Gepland
+VERIFIED|Contrôlée|Inspected|مراقب|Controlada|Controllata|Gecontroleerd
+SUBMITTED|Transmise|Submitted|مرسلة|Enviada|Inviata|Ingediend
+NOTICE|Préavis|Notice|إشعار|Preaviso|Preavviso|Opgezegd
+ENDED|Terminé|Ended|منتهٍ|Finalizado|Terminato|Beëindigd
+RENEWED|Renouvelé|Renewed|مجدد|Renovado|Rinnovato|Verlengd
+TRIAL|Essai|Trial|تجربة|Prueba|Prova|Proef
+PAST_DUE|Paiement attendu|Past due|متأخر الأداء|Pago pendiente|Pagamento atteso|Betaling verwacht
+PLANNED|Prévue|Planned|متوقعة|Prevista|Prevista|Gepland
+INVOICED|Facturée|Invoiced|مفوترة|Facturada|Fatturata|Gefactureerd
+EXPECTED|Attendu|Expected|متوقع|Previsto|Atteso|Verwacht
+RECEIVED|Reçu|Received|مستلم|Recibido|Ricevuto|Ontvangen
+RECORDED|Enregistré|Recorded|مسجل|Registrado|Registrato|Geregistreerd
+VOID|Annulé|Void|ملغى|Anulado|Annullato|Ongeldig
+RETIRED|Retiré|Retired|متوقف|Retirado|Ritirato|Ingetrokken
+LATE|En retard|Late|متأخر|Con retraso|In ritardo|Te laat
+DUE|Exigible|Due|مستحق|Exigible|Esigibile|Opeisbaar
+UPCOMING|À venir|Upcoming|قادم|Próximo|In arrivo|Komend
+HELD|Détenue|Held|محتفظ بها|Retenida|Trattenuta|Ingehouden
+RETURNED|Restituée|Returned|مسترجعة|Devuelta|Restituita|Terugbetaald
+TO_RETURN|À restituer|To return|للإرجاع|Por devolver|Da restituire|Terug te betalen
+PARTIALLY_RETURNED|Restituée en partie|Partly returned|مسترجعة جزئيًا|Devuelta en parte|Restituita in parte|Gedeeltelijk terugbetaald
+NONE|Aucune|None|لا شيء|Ninguna|Nessuna|Geen
+BLOCKED|Bloqué|Blocked|محظور|Bloqueado|Bloccato|Geblokkeerd
+OK|OK|OK|سليم|OK|OK|OK
+FAIL|Échec|Failed|فشل|Fallo|Errore|Mislukt
+FAILED|Échec|Failed|فشل|Fallo|Errore|Mislukt
+PARTIAL_OK|Partiel|Partial|جزئي|Parcial|Parziale|Gedeeltelijk
+RUNNING|En cours|Running|جارٍ|En curso|In corso|Bezig
+ERROR|Erreur|Error|خطأ|Error|Errore|Fout
+SENT|Envoyé|Sent|مرسل|Enviado|Inviato|Verzonden
+LOW|Faible|Low|منخفضة|Baja|Bassa|Laag
+MEDIUM|Moyenne|Medium|متوسطة|Media|Media|Gemiddeld
+HIGH|Élevée|High|مرتفعة|Alta|Alta|Hoog
+CRITICAL|Critique|Critical|حرجة|Crítica|Critica|Kritiek
+NORMAL|Normale|Normal|عادية|Normal|Normale|Normaal
+URGENT|Urgente|Urgent|مستعجلة|Urgente|Urgente|Dringend
+SHORT_TERM|Courte durée|Short term|قصير المدة|Corta duración|Breve termine|Korte termijn
+LONG_TERM|Longue durée|Long term|طويل المدة|Larga duración|Lungo termine|Lange termijn
+BOTH|Mixte|Mixed|مختلط|Mixto|Misto|Gemengd
+APARTMENT|Appartement|Apartment|شقة|Apartamento|Appartamento|Appartement
+STUDIO|Studio|Studio|استوديو|Estudio|Monolocale|Studio
+HOUSE|Maison|House|منزل|Casa|Casa|Huis
+VILLA|Villa|Villa|فيلا|Villa|Villa|Villa
+RIAD|Riad|Riad|رياض|Riad|Riad|Riad
+COMMERCIAL|Local commercial|Commercial unit|محل تجاري|Local comercial|Locale commerciale|Handelspand
+OTHER|Autre|Other|أخرى|Otro|Altro|Overig
+OWNER_ORG|Propriétaire|Owner|مالك|Propietario|Proprietario|Eigenaar
+AGENCY|Agence|Agency|وكالة|Agencia|Agenzia|Bureau
+PROVIDER|Prestataires|Contractors|مقدمو خدمات|Proveedores|Fornitori|Dienstverleners
+PLATFORM|Plateforme|Platform|المنصة|Plataforma|Piattaforma|Platform
+PLUMBING|Plomberie|Plumbing|السباكة|Fontanería|Idraulica|Loodgieterij
+ELECTRICITY|Électricité|Electricity|الكهرباء|Electricidad|Elettricità|Elektriciteit
+AC|Climatisation|Air conditioning|التكييف|Climatización|Climatizzazione|Airconditioning
+HUMIDITY|Humidité|Damp|الرطوبة|Humedad|Umidità|Vocht
+LOCKSMITH|Serrurerie|Locks|الأقفال|Cerrajería|Serrature|Sloten
+FURNITURE|Mobilier|Furniture|الأثاث|Mobiliario|Arredamento|Meubilair
+APPLIANCE|Électroménager|Appliances|الأجهزة المنزلية|Electrodomésticos|Elettrodomestici|Huishoudtoestellen
+CLEANING|Nettoyage|Cleaning|التنظيف|Limpieza|Pulizia|Schoonmaak
+DAMAGE|Dégradation|Damage|ضرر|Desperfecto|Danno|Schade
+SECURITY|Sécurité|Security|الأمن|Seguridad|Sicurezza|Veiligheid
+NON_CLASSE|Non classé|Unclassified|غير مصنف|Sin clasificar|Non classificato|Niet ingedeeld
+SAISIE_MANUELLE|Saisie manuelle|Manual entry|إدخال يدوي|Entrada manual|Inserimento manuale|Handmatige invoer
+NON_RENSEIGNE|Non renseigné|Not specified|غير محدد|Sin especificar|Non indicato|Niet ingevuld
+UTILITIES|Eau / électricité / internet|Utilities|الماء والكهرباء والإنترنت|Agua / electricidad / internet|Acqua / luce / internet|Water / elektriciteit / internet
+TAXES|Impôts et taxes|Taxes|الضرائب والرسوم|Impuestos y tasas|Imposte e tasse|Belastingen en heffingen
+INSURANCE|Assurance|Insurance|التأمين|Seguro|Assicurazione|Verzekering
+AGENCY_FEES|Frais d'agence|Agency fees|مصاريف الوكالة|Honorarios de agencia|Spese di agenzia|Bureaukosten
+SUPPLIES|Fournitures|Supplies|اللوازم|Suministros|Forniture|Benodigdheden
+GUEST_REQUEST|Demande du voyageur|Guest request|طلب المسافر|Solicitud del huésped|Richiesta dell'ospite|Verzoek van de gast
+NO_PAYMENT|Défaut de paiement|No payment|عدم الأداء|Impago|Mancato pagamento|Wanbetaling
+OVERBOOKING|Surréservation|Overbooking|حجز زائد|Sobreventa|Overbooking|Overboeking
+OWNER_REQUEST|Demande du propriétaire|Owner request|طلب المالك|Solicitud del propietario|Richiesta del proprietario|Verzoek van de eigenaar
+FORCE_MAJEURE|Force majeure|Force majeure|قوة قاهرة|Fuerza mayor|Forza maggiore|Overmacht
+MISSING_ITEM|Objet manquant|Missing item|غرض مفقود|Objeto faltante|Oggetto mancante|Ontbrekend voorwerp
+DIRT|Saleté|Dirt|اتساخ|Suciedad|Sporcizia|Vuil
+BREAKAGE|Casse|Breakage|كسر|Rotura|Rottura|Breuk
+PAINTING|Peinture|Painting|الصباغة|Pintura|Pittura|Schilderwerk
+CARPENTRY|Menuiserie|Carpentry|النجارة|Carpintería|Falegnameria|Schrijnwerk
+DIRECT|Direct|Direct|مباشر|Directo|Diretto|Direct
+AIRBNB|Airbnb|Airbnb|Airbnb|Airbnb|Airbnb|Airbnb
+BOOKING|Booking.com|Booking.com|Booking.com|Booking.com|Booking.com|Booking.com
+EXPEDIA|Expedia|Expedia|Expedia|Expedia|Expedia|Expedia
+PHONE|Téléphone|Phone|الهاتف|Teléfono|Telefono|Telefoon
+WEBSITE|Site web|Website|الموقع|Sitio web|Sito web|Website
+CIN|CIN|National ID card|البطاقة الوطنية|CIN (DNI marroquí)|CIN (carta d'identità marocchina)|CIN (Marokkaanse identiteitskaart)
+PASSPORT|Passeport|Passport|جواز السفر|Pasaporte|Passaporto|Paspoort
+RESIDENCE_PERMIT|Titre de séjour|Residence permit|بطاقة الإقامة|Permiso de residencia|Permesso di soggiorno|Verblijfsvergunning
+DRIVING_LICENSE|Permis de conduire|Driving licence|رخصة السياقة|Permiso de conducir|Patente di guida|Rijbewijs
+RESERVATION|Réservation|Reservation|حجز|Reserva|Prenotazione|Reservering
+DEPOSIT|Caution|Deposit|ضمانة|Fianza|Cauzione|Borg
+REFUND|Remboursement|Refund|استرجاع|Reembolso|Rimborso|Terugbetaling
+RENT|Loyer|Rent|كراء|Alquiler|Canone|Huur
+INVOICE|Facture|Invoice|فاتورة|Factura|Fattura|Factuur
+SUBSCRIPTION|Abonnement|Subscription|اشتراك|Suscripción|Abbonamento|Abonnement
+DEPOSIT_REFUND|Restitution de caution|Deposit return|إرجاع الضمانة|Devolución de la fianza|Restituzione della cauzione|Terugbetaling van de borg
+CASH|Espèces|Cash|نقدًا|Efectivo|Contanti|Contant
+TRANSFER|Virement|Bank transfer|تحويل|Transferencia|Bonifico|Overschrijving
+CARD|Carte|Card|بطاقة|Tarjeta|Carta|Kaart
+CHEQUE|Chèque|Cheque|شيك|Cheque|Assegno|Cheque
+MONTHLY|Mensuelle|Monthly|شهرية|Mensual|Mensile|Maandelijks
+QUARTERLY|Trimestrielle|Quarterly|فصلية|Trimestral|Trimestrale|Driemaandelijks
+YEARLY|Annuelle|Yearly|سنوية|Anual|Annuale|Jaarlijks
+PHOTO|Photo|Photo|صورة|Foto|Foto|Foto
+CONTRACT|Contrat|Contract|عقد|Contrato|Contratto|Contract
+TITLE_DEED|Titre foncier|Title deed|الرسم العقاري|Título de propiedad|Titolo di proprietà|Eigendomsakte
+CERTIFICATE|Attestation|Certificate|شهادة|Certificado|Attestato|Attest
+GENERAL|Général|General|عام|General|Generale|Algemeen
+CHECKIN|Arrivée|Check-in|الوصول|Llegada|Arrivo|Aankomst
+CHECKOUT|Départ|Check-out|المغادرة|Salida|Partenza|Vertrek
+SIGNATURE|Signature|Signature|توقيع|Firma|Firma|Handtekening
+PHOTO_BEFORE|Photo avant|Photo before|صورة قبل|Foto antes|Foto prima|Foto vooraf
+PHOTO_AFTER|Photo après|Photo after|صورة بعد|Foto después|Foto dopo|Foto achteraf
+ID_DOCUMENT|Pièce d'identité|ID document|وثيقة هوية|Documento de identidad|Documento d'identità|Identiteitsdocument
+EXPENSE_PROOF|Justificatif de dépense|Expense proof|مستند مصروف|Justificante de gasto|Giustificativo di spesa|Bewijs van uitgave
+PAYMENT_PROOF|Justificatif de paiement|Payment proof|مستند أداء|Justificante de pago|Ricevuta di pagamento|Betalingsbewijs
+RECEIPT|Quittance|Receipt|وصل|Recibo|Quietanza|Kwitantie
+SHEET|Fiche|Sheet|بطاقة|Ficha|Scheda|Fiche
+REPORT|Rapport|Report|تقرير|Informe|Report|Rapport
+ORDER|Bon d'intervention|Work order|سند تدخل|Orden de trabajo|Ordine di intervento|Werkbon
+ADMIN|Administratif|Administrative|إداري|Administrativo|Amministrativo|Administratief
+PARETO|Pareto|Pareto|باريتو|Pareto|Pareto|Pareto
+BEFORE|Avant|Before|قبل|Antes|Prima|Voor
+AFTER|Après|After|بعد|Después|Dopo|Na
+OWNER|Propriétaire|Owner|المالك|Propietario|Proprietario|Eigenaar
+CHECKIN_LATE|Arrivée en retard|Late arrival|وصول متأخر|Llegada con retraso|Arrivo in ritardo|Late aankomst
+CHECKOUT_LATE|Départ en retard|Late departure|مغادرة متأخرة|Salida con retraso|Partenza in ritardo|Laat vertrek
+CLEANING_LATE|Ménage en retard|Late cleaning|تنظيف متأخر|Limpieza con retraso|Pulizia in ritardo|Schoonmaak te laat
+CLEANING_NOT_ACCEPTED|Ménage non accepté à temps|Cleaning not accepted in time|تنظيف لم يُقبل في الوقت|Limpieza no aceptada a tiempo|Pulizia non accettata in tempo|Schoonmaak niet op tijd geaccepteerd
+CLEANING_REJECTED|Ménage à reprendre|Cleaning rework|تنظيف للإعادة|Limpieza por repasar|Pulizia da rifare|Schoonmaak over te doen
+WORKORDER_LATE|Intervention en retard|Late work order|تدخل متأخر|Intervención con retraso|Intervento in ritardo|Werkopdracht te laat
+RENT_LATE|Loyer en retard|Late rent|كراء متأخر|Alquiler atrasado|Canone in ritardo|Huur te laat
+TENANT|Locataire|Tenant|المكتري|Inquilino|Inquilino|Huurder
+LANDLORD|Bailleur|Landlord|المكري|Arrendador|Locatore|Verhuurder
+MANUAL|Manuel|Manual|يدوي|Manual|Manuale|Handmatig
+GUEST|Voyageur|Guest|مسافر|Huésped|Ospite|Gast
+LEGACY|Historique|Legacy|سابق|Histórico|Storico|Historisch
+SHARED|Partagé|Shared|مشترك|Compartido|Condiviso|Gedeeld
+INTERNAL|Interne|Internal|داخلي|Interno|Interno|Intern
+IN|Entrée|In|دخول|Entrada|Entrata|Inkomend
+OUT|Sortie|Out|خروج|Salida|Uscita|Uitgaand
+EXPENSE|Dépense|Expense|مصروف|Gasto|Spesa|Uitgave
+role.SUPER_ADMIN|Super administrateur|Super administrator|المسؤول العام|Superadministrador|Super amministratore|Hoofdbeheerder
+role.OWNER|Propriétaire|Owner|مالك|Propietario|Proprietario|Eigenaar
+role.AGENCY_ADMIN|Administrateur d'agence|Agency administrator|مسؤول الوكالة|Administrador de agencia|Amministratore di agenzia|Bureaubeheerder
+role.AGENCY_USER|Collaborateur d'agence|Agency staff|موظف الوكالة|Colaborador de agencia|Collaboratore di agenzia|Bureaumedewerker
+role.GUARD|Gardien / accueil|Caretaker / greeter|حارس / استقبال|Guarda / recepción|Custode / accoglienza|Conciërge / onthaal
+role.CLEANER|Équipe de ménage|Cleaning team|فريق التنظيف|Equipo de limpieza|Squadra di pulizia|Schoonmaakteam
+role.ARTISAN|Artisan / prestataire|Contractor|حرفي / مقدم خدمة|Profesional / proveedor|Artigiano / fornitore|Vakman / dienstverlener
+role.TENANT|Locataire|Tenant|مكترٍ|Inquilino|Inquilino|Huurder
+via.OWNER|Propriétaire|Owner|مالك|Propietario|Proprietario|Eigenaar
+via.AGENCY|Agence|Agency|وكالة|Agencia|Agenzia|Bureau
+via.STAFF|Affectation|Assignment|تعيين|Asignación|Assegnazione|Toewijzing
+via.GUARD_RESV|Gardien (réservation)|Caretaker (reservation)|حارس (حجز)|Guarda (reserva)|Custode (prenotazione)|Conciërge (reservering)
+via.MISSION|Mission de ménage|Cleaning job|مهمة تنظيف|Misión de limpieza|Incarico di pulizia|Schoonmaakopdracht
+via.ARTISAN|Intervention|Work order|تدخل|Intervención|Intervento|Werkopdracht
+via.TENANT|Bail|Lease|عقد|Contrato|Contratto|Huurcontract
+via.SUPPORT|Assistance|Support|دعم|Asistencia|Assistenza|Ondersteuning
+feat.properties|Biens|Properties|العقارات|Inmuebles|Immobili|Panden
+feat.reservations|Réservations|Reservations|الحجوزات|Reservas|Prenotazioni|Reserveringen
+feat.checkin|Arrivées / départs|Check-in / out|الوصول / المغادرة|Llegadas / salidas|Arrivi / partenze|In- / uitchecken
+feat.cleaning|Ménage|Cleaning|التنظيف|Limpieza|Pulizie|Schoonmaak
+feat.incidents|Incidents|Incidents|الحوادث|Incidencias|Anomalie|Incidenten
+feat.finance_basic|Finances de base|Basic finance|المالية الأساسية|Finanzas básicas|Finanze di base|Basisfinanciën
+feat.finance_advanced|Finances avancées|Advanced finance|المالية المتقدمة|Finanzas avanzadas|Finanze avanzate|Geavanceerde financiën
+feat.leases|Longue durée|Long-term leases|الكراء طويل المدة|Larga duración|Lungo termine|Langetermijnverhuur
+feat.contractors|Prestataires|Contractors|مقدمو الخدمات|Proveedores|Fornitori|Dienstverleners
+feat.pareto|Pareto|Pareto|باريتو|Pareto|Pareto|Pareto
+feat.reports|Rapports|Reports|التقارير|Informes|Report|Rapporten
+feat.automations|Automatisations|Automations|الأتمتة|Automatizaciones|Automazioni|Automatiseringen
+feat.guest_portal|Portail voyageur|Guest portal|بوابة المسافر|Portal del huésped|Portale ospiti|Gastenportaal
+feat.multi_agency|Multi-agences|Multi-agency|متعدد الوكالات|Multiagencia|Multi-agenzia|Meerdere bureaus
+feat.exports_unlimited|Exports illimités|Unlimited exports|تصدير غير محدود|Exportaciones ilimitadas|Esportazioni illimitate|Onbeperkte exports
+feat.invoices|Factures|Invoices|الفواتير|Facturas|Fatture|Facturen
+feat.guestPortal|Portail voyageur|Guest portal|بوابة المسافر|Portal del huésped|Portale ospiti|Gastenportaal
+sub.SUSPEND|Suspendre|Suspend|توقيف|Suspender|Sospendi|Opschorten
+sub.REACTIVATE|Réactiver|Reactivate|إعادة التفعيل|Reactivar|Riattiva|Opnieuw activeren
+sub.CANCEL_AT_END|Résilier en fin de période|Cancel at period end|الفسخ في نهاية الفترة|Rescindir al final del periodo|Disdici a fine periodo|Opzeggen aan het einde van de periode
+sub.UNDO_CANCEL|Annuler la résiliation|Undo cancellation|التراجع عن الفسخ|Anular la rescisión|Annulla la disdetta|Opzegging ongedaan maken
+sub.CANCEL_NOW|Clore immédiatement|Close now|الإغلاق فورًا|Cerrar inmediatamente|Chiudi subito|Meteen afsluiten
+rep.OWNER_MONTHLY|Rapport mensuel propriétaire|Owner monthly report|التقرير الشهري للمالك|Informe mensual del propietario|Report mensile del proprietario|Maandrapport eigenaar
+rep.AGENCY_PERFORMANCE|Performance d'agence|Agency performance|أداء الوكالة|Rendimiento de la agencia|Prestazioni dell'agenzia|Prestaties van het bureau
+rep.REVENUE_EXPENSES|Revenus et dépenses|Revenue and expenses|المداخيل والمصاريف|Ingresos y gastos|Ricavi e spese|Inkomsten en uitgaven
+rep.PROPERTY_PROFITABILITY|Rentabilité par bien|Profitability by property|المردودية حسب العقار|Rentabilidad por inmueble|Redditività per immobile|Rendement per pand
+rep.RESERVATIONS|Réservations|Reservations|الحجوزات|Reservas|Prenotazioni|Reserveringen
+rep.UNPAID|Impayés|Unpaid|المتأخرات|Impagos|Insoluti|Onbetaald
+rep.MAINTENANCE|Maintenance|Maintenance|الصيانة|Mantenimiento|Manutenzione|Onderhoud
+rep.CONTRACTORS|Prestataires|Contractors|مقدمو الخدمات|Proveedores|Fornitori|Dienstverleners
+rep.CLEANING|Ménage|Cleaning|التنظيف|Limpieza|Pulizie|Schoonmaak
+rep.INCIDENTS|Incidents|Incidents|الحوادث|Incidencias|Anomalie|Incidenten
+rep.PARETO|Analyse de Pareto|Pareto analysis|تحليل باريتو|Análisis de Pareto|Analisi di Pareto|Pareto-analyse
+rep.SUBSCRIPTIONS|Abonnements|Subscriptions|الاشتراكات|Suscripciones|Abbonamenti|Abonnementen
+rep.AUDIT|Journal d'audit|Audit log|سجل التدقيق|Registro de auditoría|Registro di audit|Auditlogboek
+rep.CHECKINOUT|Arrivées et départs|Arrivals and departures|الوصول والمغادرة|Llegadas y salidas|Arrivi e partenze|Aankomsten en vertrekken
+par.INCIDENTS_BY_CATEGORY|Incidents par catégorie|Incidents by category|الحوادث حسب الفئة|Incidencias por categoría|Anomalie per categoria|Incidenten per categorie
+par.INCIDENT_COST_BY_CATEGORY|Coût des incidents|Incident cost|تكلفة الحوادث|Coste de las incidencias|Costo delle anomalie|Kosten van incidenten
+par.MAINTENANCE_BY_CATEGORY|Dépenses de maintenance|Maintenance spend|مصاريف الصيانة|Gastos de mantenimiento|Spese di manutenzione|Onderhoudsuitgaven
+par.COST_BY_CONTRACTOR|Coûts par prestataire|Cost by contractor|التكلفة حسب مقدم الخدمة|Costes por proveedor|Costi per fornitore|Kosten per dienstverlener
+par.COST_BY_PROPERTY|Biens les plus coûteux|Costliest properties|العقارات الأكثر تكلفة|Inmuebles más costosos|Immobili più costosi|Duurste panden
+par.CANCEL_REASONS|Motifs d'annulation|Cancellation reasons|أسباب الإلغاء|Motivos de cancelación|Motivi di annullamento|Redenen van annulering
+par.CLEANING_ANOMALIES|Anomalies de ménage|Cleaning issues|ملاحظات التنظيف|Anomalías de limpieza|Anomalie di pulizia|Schoonmaakafwijkingen
+par.DELAYS_NONCONFORMITIES|Retards et non-conformités|Delays and non-compliance|التأخيرات وعدم المطابقة|Retrasos y no conformidades|Ritardi e non conformità|Vertragingen en non-conformiteiten
+par.EXPENSES_BY_CATEGORY|Dépenses par catégorie|Expenses by category|المصاريف حسب الفئة|Gastos por categoría|Spese per categoria|Uitgaven per categorie
+par.UNPAID|Impayés|Unpaid amounts|المتأخرات|Impagos|Insoluti|Onbetaalde bedragen
+ntf.RESERVATION_CONFIRMED|Réservation confirmée|Reservation confirmed|حجز مؤكد|Reserva confirmada|Prenotazione confermata|Reservering bevestigd
+ntf.ARRIVAL_SOON|Arrivée imminente|Arrival soon|وصول قريب|Llegada inminente|Arrivo imminente|Aankomst nadert
+ntf.ARRIVAL_LATE|Arrivée non enregistrée|Arrival not recorded|وصول غير مسجل|Llegada no registrada|Arrivo non registrato|Aankomst niet geregistreerd
+ntf.DEPARTURE_LATE|Départ non enregistré|Departure not recorded|مغادرة غير مسجلة|Salida no registrada|Partenza non registrata|Vertrek niet geregistreerd
+ntf.CHECK_IN|Arrivée|Check-in|الوصول|Llegada|Arrivo|Aankomst
+ntf.CHECK_OUT|Départ|Check-out|المغادرة|Salida|Partenza|Vertrek
+ntf.CLEANING_OFFER|Mission de ménage proposée|Cleaning job offered|مهمة تنظيف معروضة|Misión de limpieza propuesta|Incarico di pulizia proposto|Schoonmaakopdracht aangeboden
+ntf.CLEANING_EXPIRED|Mission non acceptée|Job not accepted|مهمة غير مقبولة|Misión no aceptada|Incarico non accettato|Opdracht niet geaccepteerd
+ntf.CLEANING_DONE|Ménage terminé|Cleaning done|انتهى التنظيف|Limpieza terminada|Pulizia completata|Schoonmaak afgerond
+ntf.INCIDENT|Nouvel incident|New incident|حادث جديد|Nueva incidencia|Nuova anomalia|Nieuw incident
+ntf.INCIDENT_SEVERE|Incident grave|Severe incident|حادث خطير|Incidencia grave|Anomalia grave|Ernstig incident
+ntf.QUOTE_TO_VALIDATE|Devis à valider|Quote to approve|عرض للمصادقة|Presupuesto por validar|Preventivo da approvare|Offerte goed te keuren
+ntf.WORK_ORDER|Intervention|Work order|تدخل|Intervención|Intervento|Werkopdracht
+ntf.WORK_ORDER_SCHEDULED|Intervention planifiée|Work scheduled|تدخل مجدول|Intervención planificada|Intervento pianificato|Werkopdracht gepland
+ntf.INVOICE_PENDING|Facture en attente|Invoice pending|فاتورة قيد الانتظار|Factura pendiente|Fattura in attesa|Factuur in afwachting
+ntf.RENT_DUE|Échéance de loyer|Rent due|استحقاق الكراء|Vencimiento del alquiler|Scadenza del canone|Huurvervaldag
+ntf.RENT_LATE|Loyer en retard|Late rent|كراء متأخر|Alquiler atrasado|Canone in ritardo|Huur te laat
+ntf.LEASE_ENDING|Fin de bail proche|Lease ending|قرب نهاية العقد|Fin de contrato próximo|Fine contratto vicina|Einde huurcontract nadert
+ntf.SUBSCRIPTION|Abonnement|Subscription|الاشتراك|Suscripción|Abbonamento|Abonnement
+cap.platform.admin|Administration plateforme|Platform administration|إدارة المنصة|Administración de la plataforma|Amministrazione della piattaforma|Platformbeheer
+cap.property.create|Créer des biens|Create properties|إنشاء العقارات|Crear inmuebles|Creare immobili|Panden aanmaken
+cap.property.edit|Modifier les biens|Edit properties|تعديل العقارات|Modificar inmuebles|Modificare immobili|Panden bewerken
+cap.property.archive|Archiver les biens|Archive properties|أرشفة العقارات|Archivar inmuebles|Archiviare immobili|Panden archiveren
+cap.property.assign|Attribuer agences et équipes|Assign agencies and teams|إسناد الوكالات والفرق|Asignar agencias y equipos|Assegnare agenzie e squadre|Bureaus en teams toewijzen
+cap.reservation.view|Voir les réservations|View reservations|عرض الحجوزات|Ver las reservas|Vedere le prenotazioni|Reserveringen bekijken
+cap.reservation.edit|Gérer les réservations|Manage reservations|تسيير الحجوزات|Gestionar las reservas|Gestire le prenotazioni|Reserveringen beheren
+cap.reservation.cancel|Annuler des réservations|Cancel reservations|إلغاء الحجوزات|Cancelar reservas|Annullare prenotazioni|Reserveringen annuleren
+cap.guest.view|Voir les voyageurs|View guests|عرض المسافرين|Ver los huéspedes|Vedere gli ospiti|Gasten bekijken
+cap.guestdoc.view|Voir les pièces d'identité|View ID documents|عرض وثائق الهوية|Ver los documentos de identidad|Vedere i documenti d'identità|Identiteitsdocumenten bekijken
+cap.checkin.operate|Check-in / check-out|Check-in / check-out|الوصول / المغادرة|Check-in / check-out|Check-in / check-out|In- / uitchecken
+cap.cleaning.manage|Gérer le ménage|Manage cleaning|تسيير التنظيف|Gestionar la limpieza|Gestire le pulizie|Schoonmaak beheren
+cap.incident.view|Voir les incidents|View incidents|عرض الحوادث|Ver las incidencias|Vedere le anomalie|Incidenten bekijken
+cap.incident.manage|Gérer les incidents|Manage incidents|تسيير الحوادث|Gestionar las incidencias|Gestire le anomalie|Incidenten beheren
+cap.incident.report|Signaler des incidents|Report incidents|الإبلاغ عن الحوادث|Señalar incidencias|Segnalare anomalie|Incidenten melden
+cap.quote.decide|Valider les devis|Approve quotes|المصادقة على العروض|Validar los presupuestos|Approvare i preventivi|Offertes goedkeuren
+cap.contractor.manage|Gérer les prestataires|Manage contractors|تسيير مقدمي الخدمات|Gestionar los proveedores|Gestire i fornitori|Dienstverleners beheren
+cap.workorder.manage|Gérer les interventions|Manage work orders|تسيير التدخلات|Gestionar las intervenciones|Gestire gli interventi|Werkopdrachten beheren
+cap.invoice.view|Voir les factures|View invoices|عرض الفواتير|Ver las facturas|Vedere le fatture|Facturen bekijken
+cap.invoice.manage|Approuver et payer les factures|Approve and pay invoices|المصادقة على الفواتير وأداؤها|Aprobar y pagar las facturas|Approvare e pagare le fatture|Facturen goedkeuren en betalen
+cap.finance.view|Voir les finances|View finance|عرض المالية|Ver las finanzas|Vedere le finanze|Financiën bekijken
+cap.finance.manage|Gérer les finances|Manage finance|تسيير المالية|Gestionar las finanzas|Gestire le finanze|Financiën beheren
+cap.lease.view|Voir les baux|View leases|عرض العقود|Ver los contratos|Vedere i contratti|Huurcontracten bekijken
+cap.lease.manage|Gérer les baux|Manage leases|تسيير العقود|Gestionar los contratos|Gestire i contratti|Huurcontracten beheren
+cap.report.view|Voir les rapports|View reports|عرض التقارير|Ver los informes|Vedere i report|Rapporten bekijken
+cap.report.export|Exporter|Export|التصدير|Exportar|Esportare|Exporteren
+cap.user.invite|Inviter des utilisateurs|Invite users|دعوة المستخدمين|Invitar a usuarios|Invitare utenti|Gebruikers uitnodigen
+cap.user.manage|Gérer les utilisateurs|Manage users|تسيير المستخدمين|Gestionar los usuarios|Gestire gli utenti|Gebruikers beheren
+cap.settings.manage|Gérer les paramètres|Manage settings|تسيير الإعدادات|Gestionar los ajustes|Gestire le impostazioni|Instellingen beheren
+cap.subscription.view|Voir l'abonnement|View subscription|عرض الاشتراك|Ver la suscripción|Vedere l'abbonamento|Abonnement bekijken
+cap.audit.view.org|Voir le journal d'audit|View audit log|عرض سجل التدقيق|Ver el registro de auditoría|Vedere il registro di audit|Auditlogboek bekijken
+cap.support.approve|Accorder l'assistance|Grant support access|منح وصول الدعم|Conceder la asistencia|Concedere l'assistenza|Ondersteuning toekennen
+cap.document.view|Voir les documents|View documents|عرض الوثائق|Ver los documentos|Vedere i documenti|Documenten bekijken
+set.currency|Devise|Currency|العملة|Moneda|Valuta|Munteenheid
+set.locale|Langue par défaut|Default language|اللغة الافتراضية|Idioma por defecto|Lingua predefinita|Standaardtaal
+set.reservation.defaultCheckIn|Heure d'arrivée par défaut|Default check-in time|ساعة الوصول الافتراضية|Hora de llegada por defecto|Ora di arrivo predefinita|Standaard aankomsttijd
+set.reservation.defaultCheckOut|Heure de départ par défaut|Default check-out time|ساعة المغادرة الافتراضية|Hora de salida por defecto|Ora di partenza predefinita|Standaard vertrektijd
+set.reservation.minTurnaroundMinutes|Battement entre séjours (min)|Turnaround between stays (min)|الفاصل بين الإقامات (دقيقة)|Margen entre estancias (min)|Intervallo tra soggiorni (min)|Tussentijd tussen verblijven (min)
+set.reservation.cancellationPolicy|Politique d'annulation|Cancellation policy|سياسة الإلغاء|Política de cancelación|Politica di cancellazione|Annuleringsbeleid
+set.checkin.graceMinutes|Tolérance avant alerte de retard (min)|Grace before late alert (min)|مهلة قبل تنبيه التأخير (دقيقة)|Tolerancia antes de la alerta de retraso (min)|Tolleranza prima dell'avviso di ritardo (min)|Marge vóór vertragingsmelding (min)
+set.cleaning.acceptanceMinutes|Délai d'acceptation ménage (min)|Cleaning acceptance deadline (min)|أجل قبول التنظيف (دقيقة)|Plazo de aceptación de la limpieza (min)|Termine di accettazione pulizie (min)|Acceptatietermijn schoonmaak (min)
+set.cleaning.requirePhotos|Photos avant/après obligatoires|Before/after photos required|صور قبل/بعد إلزامية|Fotos antes/después obligatorias|Foto prima/dopo obbligatorie|Foto's voor/na verplicht
+set.commission.contractorRate|Commission artisan par défaut (%)|Default contractor commission (%)|عمولة الحرفي الافتراضية (%)|Comisión de profesional por defecto (%)|Commissione artigiano predefinita (%)|Standaardcommissie vakman (%)
+set.commission.vatRate|TVA sur commission (%)|VAT on commission (%)|الضريبة على العمولة (%)|IVA sobre la comisión (%)|IVA sulla commissione (%)|Btw op commissie (%)
+set.finance.vatRate|TVA par défaut (%)|Default VAT (%)|الضريبة الافتراضية (%)|IVA por defecto (%)|IVA predefinita (%)|Standaard btw (%)
+set.quote.agencyApprovalLimit|Plafond de validation des devis par l'agence (MAD)|Agency quote approval limit (MAD)|سقف مصادقة الوكالة على العروض (درهم)|Límite de validación de presupuestos por la agencia (MAD)|Limite di approvazione dei preventivi da parte dell'agenzia (MAD)|Goedkeuringsplafond offertes door het bureau (MAD)
+set.workorder.requireQuote|Devis obligatoire avant intervention|Quote required before work|العرض إلزامي قبل التدخل|Presupuesto obligatorio antes de la intervención|Preventivo obbligatorio prima dell'intervento|Offerte verplicht vóór werkzaamheden
+set.invoice.tolerancePercent|Écart toléré facture / devis (%)|Invoice / quote tolerance (%)|الفرق المسموح بين الفاتورة والعرض (%)|Desviación tolerada factura / presupuesto (%)|Scostamento tollerato fattura / preventivo (%)|Toegestane afwijking factuur / offerte (%)
+set.rent.graceDays|Délai de grâce loyer (jours)|Rent grace period (days)|مهلة أداء الكراء (أيام)|Periodo de gracia del alquiler (días)|Periodo di tolleranza del canone (giorni)|Respijttermijn huur (dagen)
+set.alerts.rentDueDays|Rappel avant échéance (jours)|Reminder before due date (days)|تذكير قبل الاستحقاق (أيام)|Recordatorio antes del vencimiento (días)|Promemoria prima della scadenza (giorni)|Herinnering vóór vervaldag (dagen)
+set.alerts.leaseEndDays|Alertes de fin de bail (jours)|Lease end alerts (days)|تنبيهات نهاية العقد (أيام)|Alertas de fin de contrato (días)|Avvisi di fine contratto (giorni)|Meldingen einde huurcontract (dagen)
+set.alerts.incidentAgeDays|Alerte incident ouvert après (jours)|Open incident alert after (days)|تنبيه حادث مفتوح بعد (أيام)|Alerta de incidencia abierta tras (días)|Avviso anomalia aperta dopo (giorni)|Melding open incident na (dagen)
+set.alerts.incidentCost|Alerte coût d'incident (MAD)|Incident cost alert (MAD)|تنبيه تكلفة الحادث (درهم)|Alerta de coste de incidencia (MAD)|Avviso costo anomalia (MAD)|Melding incidentkosten (MAD)
+set.alerts.quotaPercent|Alerte quota (%)|Quota alert (%)|تنبيه الحصة (%)|Alerta de cuota (%)|Avviso quota (%)|Quotummelding (%)
+set.retention.sensitiveDocDays|Conservation des pièces d'identité (jours après départ)|ID document retention (days after departure)|مدة الاحتفاظ بوثائق الهوية (أيام بعد المغادرة)|Conservación de los documentos de identidad (días tras la salida)|Conservazione dei documenti d'identità (giorni dopo la partenza)|Bewaring identiteitsdocumenten (dagen na vertrek)
+set.retention.logDays|Conservation des journaux (jours)|Log retention (days)|مدة الاحتفاظ بالسجلات (أيام)|Conservación de los registros (días)|Conservazione dei registri (giorni)|Bewaring logboeken (dagen)
+set.guests.storeIdReference|Conserver le numéro complet des pièces (obligation légale)|Store full ID numbers (legal obligation)|الاحتفاظ بالرقم الكامل للوثائق (التزام قانوني)|Conservar el número completo de los documentos (obligación legal)|Conservare il numero completo dei documenti (obbligo di legge)|Volledig documentnummer bewaren (wettelijke verplichting)
+set.session.hours|Durée de session (heures)|Session length (hours)|مدة الجلسة (ساعات)|Duración de la sesión (horas)|Durata della sessione (ore)|Sessieduur (uren)
+set.backup.keep|Nombre de sauvegardes conservées|Backups kept|عدد النسخ المحتفظ بها|Número de copias de seguridad conservadas|Numero di backup conservati|Aantal bewaarde back-ups
+set.billing.enforce|Appliquer les forfaits et quotas|Enforce plans and quotas|تطبيق الباقات والحصص|Aplicar planes y cuotas|Applicare piani e quote|Abonnementen en quota toepassen
+set.notify.emailEnabled|Notifications par e-mail|Email notifications|الإشعارات عبر البريد|Notificaciones por correo|Notifiche via e-mail|Meldingen per e-mail
+set.template.leaseDocId|Modèle Google Docs : bail|Google Docs template: lease|نموذج Google Docs: العقد|Plantilla de Google Docs: contrato de alquiler|Modello Google Docs: contratto di locazione|Google Docs-sjabloon: huurcontract
+set.template.receiptDocId|Modèle Google Docs : quittance|Google Docs template: receipt|نموذج Google Docs: الوصل|Plantilla de Google Docs: recibo|Modello Google Docs: quietanza|Google Docs-sjabloon: kwitantie
+set.template.reservationDocId|Modèle Google Docs : fiche de réservation|Google Docs template: reservation sheet|نموذج Google Docs: بطاقة الحجز|Plantilla de Google Docs: ficha de reserva|Modello Google Docs: scheda di prenotazione|Google Docs-sjabloon: reserveringsfiche
+set.list.incidentCategories|Catégories d'incidents|Incident categories|فئات الحوادث|Categorías de incidencias|Categorie di anomalie|Incidentcategorieën
+set.list.expenseCategories|Catégories de dépenses|Expense categories|فئات المصاريف|Categorías de gastos|Categorie di spesa|Uitgavencategorieën
+set.list.cancelReasons|Motifs d'annulation|Cancellation reasons|أسباب الإلغاء|Motivos de cancelación|Motivi di annullamento|Redenen van annulering
+set.list.cleaningAnomalies|Types d'anomalies de ménage|Cleaning issue types|أنواع ملاحظات التنظيف|Tipos de anomalías de limpieza|Tipi di anomalie di pulizia|Soorten schoonmaakafwijkingen
+set.list.specialties|Spécialités des prestataires|Contractor specialties|تخصصات مقدمي الخدمات|Especialidades de los proveedores|Specialità dei fornitori|Specialiteiten van dienstverleners
+kpi.expected|Prévu|Expected|المتوقع|Previsto|Previsto|Verwacht
+kpi.accommodation|Hébergement|Accommodation|الإيواء|Alojamiento|Alloggio|Verblijf
+kpi.rentExpected|Loyers prévus|Expected rents|الأكرية المتوقعة|Alquileres previstos|Canoni previsti|Verwachte huren
+kpi.taxes|Taxes de séjour|Tourist taxes|رسوم الإقامة|Tasas turísticas|Tasse di soggiorno|Toeristenbelastingen
+kpi.billed|Facturé|Billed|المفوتر|Facturado|Fatturato|Gefactureerd
+kpi.collected|Encaissé|Collected|المحصل|Cobrado|Incassato|Ontvangen
+kpi.paidOut|Payé|Paid out|المصروف|Pagado|Pagato|Betaald
+kpi.outstanding|Restant dû|Outstanding|المتبقي|Pendiente de pago|Residuo dovuto|Openstaand
+kpi.expenses|Dépenses|Expenses|المصاريف|Gastos|Spese|Uitgaven
+kpi.managementCommissions|Commissions de gestion|Management fees|عمولات التسيير|Comisiones de gestión|Commissioni di gestione|Beheervergoedingen
+kpi.result|Résultat|Result|النتيجة|Resultado|Risultato|Resultaat
+kpi.bookedNights|Nuits réservées|Booked nights|الليالي المحجوزة|Noches reservadas|Notti prenotate|Geboekte nachten
+kpi.availableNights|Nuits disponibles|Available nights|الليالي المتاحة|Noches disponibles|Notti disponibili|Beschikbare nachten
+kpi.reservations|Réservations|Reservations|الحجوزات|Reservas|Prenotazioni|Reserveringen
+kpi.cancellations|Annulations|Cancellations|الإلغاءات|Cancelaciones|Cancellazioni|Annuleringen
+kpi.cancellationRetained|Pénalités conservées|Penalties retained|الغرامات المحتفظ بها|Penalizaciones conservadas|Penali trattenute|Ingehouden boetes
+kpi.occupancyRate|Taux d'occupation (%)|Occupancy rate (%)|نسبة الإشغال (%)|Tasa de ocupación (%)|Tasso di occupazione (%)|Bezettingsgraad (%)
+kpi.adr|Prix moyen par nuit|Average daily rate|متوسط ثمن الليلة|Precio medio por noche|Prezzo medio per notte|Gemiddelde prijs per nacht
+kpi.revpar|Revenu par nuit disponible|RevPAR|الدخل لكل ليلة متاحة|Ingreso por noche disponible|Ricavo per notte disponibile|Opbrengst per beschikbare nacht
+kpi.netCashFlow|Flux de trésorerie net|Net cash flow|صافي التدفق النقدي|Flujo de caja neto|Flusso di cassa netto|Netto kasstroom
+kpi.contractorCommissions|Commissions prestataires|Contractor commissions|عمولات مقدمي الخدمات|Comisiones de proveedores|Commissioni dei fornitori|Commissies van dienstverleners
+kpi.cancellationRate|Taux d'annulation (%)|Cancellation rate (%)|نسبة الإلغاء (%)|Tasa de cancelación (%)|Tasso di cancellazione (%)|Annuleringsgraad (%)
+kpi.totalOutstanding|Total restant dû|Total outstanding|مجموع المتبقي|Total pendiente de pago|Totale residuo dovuto|Totaal openstaand
+kpi.completed|Missions terminées|Jobs completed|المهام المنتهية|Misiones terminadas|Incarichi completati|Afgeronde opdrachten
+kpi.avgMinutes|Durée moyenne (min)|Average duration (min)|متوسط المدة (دقيقة)|Duración media (min)|Durata media (min)|Gemiddelde duur (min)
+kpi.acceptanceRate|Taux d'acceptation (%)|Acceptance rate (%)|نسبة القبول (%)|Tasa de aceptación (%)|Tasso di accettazione (%)|Acceptatiegraad (%)
+kpi.onTimeRate|Réalisées à l'heure (%)|On time (%)|في الوقت (%)|Realizadas a tiempo (%)|Eseguite in orario (%)|Op tijd uitgevoerd (%)
+kpi.anomalies|Anomalies|Issues|الملاحظات|Anomalías|Anomalie|Afwijkingen
+kpi.analyse|Analyse|Analysis|التحليل|Análisis|Analisi|Analyse
+kpi.total|Total|Total|المجموع|Total|Totale|Totaal
+kpi.prioritaires|Éléments prioritaires|Priority items|العناصر ذات الأولوية|Elementos prioritarios|Elementi prioritari|Prioritaire items
+kpi.periodePrecedente|Période précédente|Previous period|الفترة السابقة|Periodo anterior|Periodo precedente|Vorige periode
+GARDENING|Jardinage|Gardening|البستنة|Jardinería|Giardinaggio|Tuinonderhoud
+POOL|Piscine|Pool maintenance|صيانة المسبح|Piscina|Piscina|Zwembadonderhoud
+set.contractors.platformOnly|Prestataires intégrés uniquement par l'administrateur|Providers added by the administrator only|مقدمو الخدمات يضيفهم المسؤول فقط|Proveedores incorporados solo por el administrador|Fornitori inseriti solo dall'amministratore|Dienstverleners alleen toegevoegd door de beheerder

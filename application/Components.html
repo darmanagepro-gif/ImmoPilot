@@ -40,16 +40,19 @@ function store(k, v) {
 function lstore(k, v) { try { if (v === undefined) return window.localStorage.getItem(k); window.localStorage.setItem(k, v); } catch (e) { return null; } return null; }
 
 /* ------------------------------- i18n ------------------------------- */
-const I18N = { fr: {}, en: {}, ar: {} };
+const I18N = { fr: {}, en: {}, ar: {}, es: {}, it: {}, nl: {} };
+/** Langues proposées : code, abréviation (barre du haut), nom dans la langue, format régional des dates et nombres. */
+const LANGS = [["fr", "FR", "Français", "fr-FR"], ["en", "EN", "English", "en-GB"], ["ar", "ع", "العربية", "ar-MA"], ["es", "ES", "Español", "es-ES"], ["it", "IT", "Italiano", "it-IT"], ["nl", "NL", "Nederlands", "nl-NL"]];
+function langOpts() { return LANGS.map(function (l) { return [l[0], l[2]]; }); }
 function t(s) { const d = I18N[S.lang]; return (d && d[s]) || s; }
 function st(code) { if (code === null || code === undefined || code === "") return "—"; const k = "st." + code; const v = (I18N[S.lang] || {})[k] || I18N.fr[k]; return v || String(code); }
 function setLang(l) {
-  S.lang = ["fr", "en", "ar"].indexOf(l) >= 0 ? l : "fr";
+  S.lang = LANGS.some(function (x) { return x[0] === l; }) ? l : "fr";
   lstore("ip_lang", S.lang);
   document.documentElement.lang = S.lang;
   document.documentElement.dir = S.lang === "ar" ? "rtl" : "ltr";
 }
-function locale() { return S.lang === "ar" ? "ar-MA" : (S.lang === "en" ? "en-GB" : "fr-FR"); }
+function locale() { const l = LANGS.find(function (x) { return x[0] === S.lang; }); return l ? l[3] : "fr-FR"; }
 
 /* ----------------------------- formatage ----------------------------- */
 function isNil(v) { return v === null || v === undefined || v === ""; }
@@ -119,7 +122,21 @@ function api(route, args) {
 }
 function apiP(route, args) { return run("apiPublic", [route, args || {}]).then(function (r) { if (r && r.ok) return r.data; throw (r && r.error) || { message: t("Réponse invalide.") }; }); }
 IP.api = api;
-function localLogout(msg) { S.token = null; S.me = null; S.meta = null; store("ip_token", null); if (window.App) App.renderLogin(msg); }
+/** Jeton du super administrateur gardé pendant qu'il est dans l'espace d'un client (onglet courant uniquement). */
+const SUPER_TOKEN_KEY = "ip_token_super";
+function restoreSuperSession(route) {
+  const back = store(SUPER_TOKEN_KEY);
+  store(SUPER_TOKEN_KEY, null);
+  if (!back || back === S.token) return false;
+  S.token = back; store("ip_token", back); S.me = null; S.meta = null;
+  clear($("app")).appendChild(h("div", { class: "loading" }, t("Retour à votre espace…")));
+  run("api", [back, "me.boot", {}]).then(function (r) {
+    if (!r || !r.ok) { localLogout(); return; }
+    S.me = r.data.me; S.meta = r.data.meta; App.shell(); navTo(route || "accounts");
+  }).catch(function () { localLogout(); });
+  return true;
+}
+function localLogout(msg) { if (S.me && S.me.impersonator && restoreSuperSession("accounts")) return; S.token = null; S.me = null; S.meta = null; store("ip_token", null); if (window.App) App.renderLogin(msg); }
 
 /* ------------------------------ retours ------------------------------ */
 function toast(msg, tone) {

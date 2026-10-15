@@ -224,7 +224,7 @@ function validateSettingValue_(key, v) {
   }
   if (/^template\./.test(key)) { const s = safeText_(v, 100); assert_(!s || /^[\w-]{20,}$/.test(s), "Identifiant de document Google invalide."); if (s) assertTemplateAllowed_(s); return s; }
   if (/Check(In|Out)$/.test(key)) { const s = safeText_(v, 5); assert_(/^([01]\d|2[0-3]):[0-5]\d$/.test(s), "Heure au format HH:MM attendue."); return s; }
-  if (key === "locale") return oneOf_(v, ["fr", "en", "ar"], "Langue");
+  if (key === "locale") return oneOf_(v, IMMO_LANGS_, "Langue");
   if (key === "currency") return oneOf_(String(v).toUpperCase(), ["MAD", "EUR", "USD"], "Devise");
   return safeText_(v, 500);
 }
@@ -286,7 +286,7 @@ var ASSISTANT_KB_ = [
     s: ["Ouvrez l'e-mail « Invitation à rejoindre ImmoPilot » ou « Activez votre compte ImmoPilot ».", "Cliquez sur le bouton « Ouvrir ImmoPilot » (lien personnel, à usage unique).", "Choisissez votre mot de passe (10 caractères minimum, avec lettres et chiffres) puis validez.", "Le lien d'invitation est valable 7 jours, le lien d'activation 72 h. Expiré ? Demandez à votre administrateur de le renvoyer."] },
   { id: "forgot", t: "Mot de passe oublié", r: ["*"], go: "", k: "oublié oublie reset réinitialiser mot de passe mdp password forgot نسيت كلمة السر",
     s: ["Sur l'écran de connexion, cliquez sur « Mot de passe oublié ».", "Saisissez votre e-mail : vous recevez un lien valable 1 heure.", "Ouvrez le lien et choisissez un nouveau mot de passe. Vos autres sessions sont déconnectées."] },
-  { id: "password", t: "Changer mon mot de passe ou ma langue", r: ["*"], go: "settings", k: "changer mot de passe profil langue nom téléphone préférences notifications email arabe anglais",
+  { id: "password", t: "Changer mon mot de passe ou ma langue", r: ["*"], go: "settings", k: "changer mot de passe profil langue nom téléphone préférences notifications email arabe anglais espagnol italien néerlandais hollandais español italiano nederlands",
     s: ["Ouvrez « Paramètres » › « Mon profil ».", "Modifiez votre nom, téléphone, langue (FR, EN, ع) ou vos préférences de notifications.", "« Changer le mot de passe » demande l'ancien mot de passe. « Déconnecter mes autres appareils » ferme les sessions ouvertes ailleurs."] },
   { id: "delete-account", t: "Supprimer mon compte", r: ["*"], go: "settings", k: "supprimer compte suppression rgpd données personnelles delete account حذف الحساب",
     s: ["Ouvrez « Paramètres » › « Mon profil » › « Supprimer mon compte ».", "Indiquez le motif : la demande est transmise à l'administrateur ImmoPilot.", "Votre identité est effacée ; les données comptables obligatoires sont conservées sans votre nom."] },
@@ -372,6 +372,8 @@ var ASSISTANT_KB_ = [
   { id: "audit", t: "Journal d'audit (qui a fait quoi)", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "audit", k: "journal audit historique traçabilité qui a modifié sécurité",
     s: ["« Journal d'audit » liste les actions sensibles : connexions, paiements, annulations, droits, documents…"] },
   // ---------- Super administrateur ----------
+  { id: "admin-accounts", t: "Voir tous les comptes et entrer dans l'espace d'un client (super administrateur)", r: ["SUPER"], go: "accounts", k: "comptes clients voir comme entrer espace se connecter en tant que impersonation propriétaire agence prestataire gardien locataire support",
+    s: ["Ouvrez « Comptes clients » (menu Administration) : les comptes sont classés en Propriétaires, Agences, Prestataires, Gardiens et Locataires.", "Cherchez la personne (nom, e-mail, organisation), puis cliquez sur « Entrer » et confirmez.", "Vous voyez l'application exactement comme elle : vous pouvez tout faire à sa place. Un bandeau rouge rappelle que vous êtes dans son espace ; chaque action est enregistrée à votre nom dans le journal d'audit.", "Mot de passe, déconnexion de ses appareils et demande de suppression restent réservés au titulaire. La session dure 2 heures au plus.", "Cliquez sur « Revenir à mon espace » dans le bandeau pour retrouver votre compte."] },
   { id: "admin-org", t: "Créer une organisation cliente (super administrateur)", r: ["SUPER"], go: "admin", k: "créer organisation client super admin propriétaire agence onboarding",
     s: ["« Administration globale » › « Organisations » › « + Organisation » : nom, type (propriétaire, agence, prestataire), ville, forfait d'essai.", "Sur la ligne : « Inviter » son responsable, « Forfait », « Suspendre » ou « Assistance »."] },
   { id: "admin-sub", t: "Attribuer un forfait et enregistrer un paiement d'abonnement", r: ["SUPER"], go: "subscriptions", k: "forfait abonnement paiement client facturation plateforme super admin",
@@ -402,7 +404,7 @@ function assistantKb_(p) { return { name: ASSISTANT_NAME_, articles: ASSISTANT_K
 
 function assistantSystemPrompt_(p, lang, page) {
   const kb = ASSISTANT_KB_.map(function (a) { return "## " + a.t + " [page: " + (a.go || "connexion") + " ; rôles: " + a.r.join(",") + "]\n" + a.s.map(function (x, i) { return (i + 1) + ". " + x; }).join("\n"); }).join("\n\n");
-  const L = { fr: "français", en: "English", ar: "العربية" }[lang] || "français";
+  const L = { fr: "français", en: "English", ar: "العربية", es: "español", it: "italiano", nl: "Nederlands" }[lang] || "français";
   return "Tu es " + ASSISTANT_NAME_ + " (رُبّان, « le pilote »), l'assistant d'aide intégré au logiciel de gestion immobilière ImmoPilot (Maroc : propriétaires, agences, gardiens, ménage, artisans, locataires).\n" +
     "Règles :\n- Réponds en " + L + ", de façon courte et concrète : étapes numérotées avec les noms exacts des menus et boutons.\n" +
     "- Appuie-toi UNIQUEMENT sur la documentation ci-dessous. Si une fonction n'y figure pas, dis franchement qu'ImmoPilot ne la propose pas ou que tu n'es pas sûr, et propose de contacter l'administrateur ImmoPilot.\n" +
@@ -443,7 +445,7 @@ function assistantAsk_(p, a) {
   if (!cfg) return { mode: "guide" };
   try { rateLimit_("ai-user:" + p.userId, AI_LIMITS_.perUserHour, 3600); rateLimit_("ai-platform", AI_LIMITS_.platformDay, 86400); }
   catch (e) { return { mode: "guide", notice: "Limite de questions à l'assistant IA atteinte pour le moment : voici les réponses du guide." }; }
-  const lang = ["fr", "en", "ar"].indexOf(a.lang) >= 0 ? a.lang : "fr", page = safeText_(a.page || "", 60);
+  const lang = IMMO_LANGS_.indexOf(a.lang) >= 0 ? a.lang : "fr", page = safeText_(a.page || "", 60);
   const history = (Array.isArray(a.history) ? a.history : []).slice(-AI_LIMITS_.maxHistory).map(function (m) {
     return { role: m && m.role === "assistant" ? "assistant" : "user", content: safeText_(m && m.content, 1200) };
   }).filter(function (m) { return m.content; });
@@ -487,7 +489,10 @@ function auditRedact_(v, depth) {
 function audit_(action, entityType, entityId, organizationId, details, result) {
   try {
     const p = (typeof CTX_ !== "undefined" && CTX_ && CTX_.principal) || null;
-    dbInsert_("ActivityLogs", { timestamp: nowIso_(), actorEmail: p ? p.email : "", actorUserId: p ? p.userId : "", organizationId: String(organizationId || ""),
+    // Dans l'espace d'un client, l'auteur réel (le super administrateur) est enregistré, avec le compte concerné.
+    const imp = p && p.impersonator;
+    if (imp) details = Object.assign({}, details || {}, { asUser: p.email });
+    dbInsert_("ActivityLogs", { timestamp: nowIso_(), actorEmail: imp ? imp.email : (p ? p.email : ""), actorUserId: imp ? imp.userId : (p ? p.userId : ""), organizationId: String(organizationId || ""),
       action: safeText_(action, 100), entityType: safeText_(entityType || "", 80), entityId: safeText_(entityId || "", 120),
       detailsJson: jsonSafe_(auditRedact_(details || {})), result: result || "OK" });
   } catch (err) { console.error("Audit échoué : " + err.message); }
@@ -639,6 +644,12 @@ function principalFromToken_(token) {
   const p = buildPrincipal_(user);
   if (!p.roles.length) throw new AppError("AUTH", "Aucun rôle actif n'est attribué à ce compte, ou votre organisation est suspendue.");
   p.sessionId = s.sessionId;
+  if (s.impersonatorUserId) {
+    // Session « entrer dans l'espace » ouverte par un super administrateur : elle n'est valable que tant qu'il l'est encore.
+    const su = dbGet_("Users", s.impersonatorUserId), sp = su && su.status === "ACTIVE" ? buildPrincipal_(su) : null;
+    if (!sp || !sp.isSuper) { dbUpdate_("Sessions", s.sessionId, { revokedAt: nowIso_() }); throw new AppError("AUTH", "Accès d'administration expiré. Veuillez vous reconnecter."); }
+    p.impersonator = { userId: sp.userId, email: sp.email, displayName: sp.displayName };
+  }
   const last = parseTs_(s.lastSeenAt);
   if (!last || Date.now() - last.getTime() > 10 * 60000) dbUpdate_("Sessions", s.sessionId, { lastSeenAt: nowIso_() });
   return p;
@@ -727,8 +738,9 @@ function revokeAllSessions_(userId) {
 
 /* ---------------------- Routes authentifiées ---------------------- */
 function meLogout_(p) { dbUpdate_("Sessions", p.sessionId, { revokedAt: nowIso_() }); audit_("LOGOUT", "User", p.userId, ""); return { ok: true }; }
-function meLogoutAll_(p) { revokeAllSessions_(p.userId); audit_("LOGOUT_ALL", "User", p.userId, ""); return { ok: true }; }
+function meLogoutAll_(p) { notWhileImpersonating_(p); revokeAllSessions_(p.userId); audit_("LOGOUT_ALL", "User", p.userId, ""); return { ok: true }; }
 function meChangePassword_(p, a) {
+  notWhileImpersonating_(p);
   const user = dbGet_("Users", p.userId);
   rateLimit_("chpw:" + p.userId, 5, 900);
   if (!verifyPassword_(user, a.currentPassword)) { audit_("PASSWORD_CHANGE_FAILED", "User", p.userId, "", {}, "FAIL"); throw new AppError("AUTH", "Mot de passe actuel incorrect."); }
@@ -741,7 +753,7 @@ function meChangePassword_(p, a) {
 function meUpdateProfile_(p, a) {
   const patch = { updatedAt: nowIso_() };
   if (a.displayName !== undefined) patch.displayName = reqText_(a.displayName, "Nom", 2, 100);
-  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, ["fr", "en", "ar"], "Langue");
+  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, IMMO_LANGS_, "Langue");
   if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
   if (a.notifPrefs !== undefined) {
     const np = a.notifPrefs || {};
@@ -752,13 +764,80 @@ function meUpdateProfile_(p, a) {
   return { ok: true };
 }
 
+/* ---------------------- Super administrateur : entrer dans l'espace d'un compte ---------------------- */
+var IMPERSONATION_HOURS_ = 2;
+/** Actions personnelles réservées au vrai titulaire du compte (mot de passe, sessions, suppression). */
+function notWhileImpersonating_(p) { if (p.impersonator) forbid_("Action réservée au titulaire du compte : indisponible quand le super administrateur est dans son espace."); }
+/** Ouvre une session au nom d'un compte client. Tout y est possible ; chaque action est journalisée au nom du super administrateur. */
+function impersonateStart_(p, a) {
+  requireSuper_(p);
+  assert_(!p.impersonator, "Revenez d'abord à votre espace.", "FORBIDDEN");
+  rateLimit_("imp:" + p.userId, 60, 3600);
+  const user = dbGet_("Users", safeText_(a.userId, 120));
+  if (!user) notFound_("Compte");
+  assert_(String(user.userId) !== p.userId, "C'est déjà votre compte.");
+  assert_(user.status === "ACTIVE", "Ce compte est bloqué ou supprimé : débloquez-le avant d'y entrer.");
+  const tp = buildPrincipal_(user);
+  assert_(!tp.isSuper, "Impossible d'entrer dans l'espace d'un autre super administrateur.", "FORBIDDEN");
+  assert_(tp.roles.length, "Ce compte n'a aucun rôle actif (rôle suspendu ou organisation suspendue).");
+  const token = randomToken_();
+  dbInsert_("Sessions", { userId: user.userId, tokenHash: sha256Hex_(token), createdAt: nowIso_(), expiresAt: new Date(Date.now() + IMPERSONATION_HOURS_ * 3600000).toISOString(),
+    lastSeenAt: nowIso_(), userAgent: "Super administrateur : " + p.email, impersonatorUserId: p.userId });
+  audit_("IMPERSONATION_START", "User", user.userId, (tp.roles[0] || {}).organizationId || "", { target: normalizeEmail_(user.email), reason: safeText_(a.reason || "", 300) });
+  tp.impersonator = { userId: p.userId, email: p.email, displayName: p.displayName };
+  CTX_.principal = tp; CTX_.propMemo = {};
+  return { token: token, me: meBootstrap_(tp), meta: metaGet_(tp) };
+}
+/** Ferme la session ouverte dans l'espace du client (le jeton du super administrateur, gardé par le navigateur, reste valable). */
+function impersonateEnd_(p) {
+  assert_(p.impersonator, "Vous n'êtes pas dans l'espace d'un autre compte.");
+  dbUpdate_("Sessions", p.sessionId, { revokedAt: nowIso_() });
+  audit_("IMPERSONATION_END", "User", p.userId, "", { target: p.email });
+  return { ok: true };
+}
+/** Tous les comptes clients classés par type d'espace (propriétaires, agences, prestataires, gardiens, locataires). */
+var ACCOUNT_CATEGORIES_ = { OWNER: ["OWNER"], AGENCY: ["AGENCY_ADMIN", "AGENCY_USER"], PROVIDER: ["CLEANER", "ARTISAN"], GUARD: ["GUARD"], TENANT: ["TENANT"] };
+function adminAccounts_(p, a) {
+  requireSuper_(p);
+  a = a || {};
+  const cat = ACCOUNT_CATEGORIES_[a.category] ? a.category : "";
+  const orgs = indexBy_(dbAll_("Organizations"), "organizationId"), byUser = {};
+  dbAll_("UserRoles").forEach(function (r) {
+    if (r.role === "SUPER_ADMIN") return;
+    (byUser[r.userId] = byUser[r.userId] || []).push(r);
+  });
+  const supers = {};
+  dbAll_("UserRoles").forEach(function (r) { if (r.role === "SUPER_ADMIN" && r.status === "ACTIVE") supers[r.userId] = true; });
+  const counts = { OWNER: 0, AGENCY: 0, PROVIDER: 0, GUARD: 0, TENANT: 0 };
+  const rows = [];
+  dbAll_("Users").forEach(function (u) {
+    const rs = byUser[u.userId];
+    if (!rs || supers[u.userId] || u.status === "DISABLED") return;
+    const cats = Object.keys(ACCOUNT_CATEGORIES_).filter(function (c) { return rs.some(function (r) { return ACCOUNT_CATEGORIES_[c].indexOf(r.role) >= 0; }); });
+    const inCat = cat ? rs.filter(function (r) { return ACCOUNT_CATEGORIES_[cat].indexOf(r.role) >= 0; }) : rs;
+    const row = { userId: u.userId, displayName: u.displayName || "", email: u.email || "", phone: u.phone || "", userStatus: u.status || "", activated: !!u.passwordHash,
+      lastLoginAt: u.lastLoginAt || "", categories: cats,
+      roles: inCat.map(function (r) { const o = orgs[r.organizationId] || {}; return { role: r.role, status: r.status, organizationId: r.organizationId, organizationName: o.name || "", orgStatus: o.status || "", isDemo: bool_(o.isDemo) }; }) };
+    row.isDemo = row.roles.length > 0 && row.roles.every(function (r) { return r.isDemo; });
+    row.canEnter = row.userStatus === "ACTIVE" && rs.some(function (r) { const o = orgs[r.organizationId] || {}; return r.status === "ACTIVE" && o.status === "ACTIVE"; });
+    cats.forEach(function (c) { counts[c]++; });
+    if (cat && !inCat.length) return;
+    if (a.hideDemo && row.isDemo) return;
+    if (!matchesQuery_(a.q, [row.displayName, row.email, row.phone].concat(row.roles.map(function (r) { return r.organizationName; })))) return;
+    rows.push(row);
+  });
+  rows.sort(function (x, y) { return String((x.roles[0] || {}).organizationName + x.displayName).localeCompare(String((y.roles[0] || {}).organizationName + y.displayName)); });
+  const out = pageOf_(rows, a); out.counts = counts;
+  return out;
+}
+
 /** Données d'amorçage de l'interface : identité, rôles, organisations, capacités d'affichage. */
 function meBootstrap_(p) {
   const orgs = indexBy_(dbAll_("Organizations"), "organizationId");
   const user = dbGet_("Users", p.userId);
   const unread = dbAll_("Notifications").filter(function (n) { return String(n.userId) === p.userId && !n.readAt; }).length;
   return {
-    userId: p.userId, email: p.email, displayName: p.displayName, locale: (user && user.locale) || "fr", isSuper: p.isSuper,
+    userId: p.userId, email: p.email, displayName: p.displayName, locale: (user && user.locale) || "fr", isSuper: p.isSuper, impersonator: p.impersonator || null,
     roles: p.roles.map(function (r) { return { role: r.role, organizationId: r.organizationId, organizationName: (orgs[r.organizationId] || {}).name || "" }; }),
     caps: uiCaps_(p).concat(p.isSuper ? ["platform.admin"] : []),
     notifPrefs: parseJson_(user && user.notifPrefsJson, { email: true, mutedTypes: [] }),
@@ -1281,6 +1360,7 @@ function resolveHandler_(name) {
 function routes_() { return {
   "me.get": function (p) { return meBootstrap_(p); }, "me.logout": "meLogout_", "me.logoutAll": "meLogoutAll_", "me.changePassword": "meChangePassword_", "me.updateProfile": "meUpdateProfile_", "me.requestDeletion": "meRequestDeletion_",
   "meta.get": function (p) { return metaGet_(p); }, "me.boot": function (p) { return { me: meBootstrap_(p), meta: metaGet_(p) }; },
+  "admin.accounts": "adminAccounts_", "admin.impersonate": "impersonateStart_", "me.endImpersonation": "impersonateEnd_",
   "org.list": "orgList_", "org.create": "orgCreate_", "org.update": "orgUpdate_", "org.setStatus": "orgSetStatus_",
   "support.request": "supportRequest_", "support.decide": "supportDecide_", "support.revoke": "supportRevoke_", "support.list": "supportList_",
   "invite.create": "inviteCreate_", "invite.resend": "inviteResend_", "invite.revoke": "inviteRevoke_", "invite.list": "inviteList_",
@@ -1488,10 +1568,12 @@ function installPhase4Triggers() { return installTriggers(); }
  * en fin de feuille par la migration (non destructif).
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
+/** Langues de l'interface : français, anglais, arabe, espagnol, italien, néerlandais. */
+var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
   VERSION: "2.0.0",
-  SCHEMA_VERSION: 4,
+  SCHEMA_VERSION: 5,
   TIMEZONE: "Africa/Casablanca",
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -1603,7 +1685,7 @@ var TABLES_SRC = {
     cols: "logId,timestamp#t,actorEmail,organizationId,action,entityType,entityId,detailsJson#j|actorUserId,result,errorId" },
   PlatformSettings: { pk: "settingKey", idp: "set", req: "settingKey", cols: "settingKey,settingValue,updatedAt#t,updatedBy" },
   Settings: { pk: "settingId", idp: "stg", org: "organizationId", req: "organizationId,settingKey", cols: "settingId,organizationId,settingKey,settingValue,updatedAt#t,updatedBy" },
-  Sessions: { pk: "sessionId", idp: "ses", req: "userId,tokenHash", cols: "sessionId,userId,tokenHash,createdAt#t,expiresAt#t,lastSeenAt#t,revokedAt#t,userAgent" },
+  Sessions: { pk: "sessionId", idp: "ses", req: "userId,tokenHash", cols: "sessionId,userId,tokenHash,createdAt#t,expiresAt#t,lastSeenAt#t,revokedAt#t,userAgent,impersonatorUserId" },
   PasswordResets: { pk: "resetId", idp: "rst", req: "userId,tokenHash", cols: "resetId,userId,tokenHash,createdAt#t,expiresAt#t,usedAt#t,purpose" },
   SupportGrants: { pk: "grantId", idp: "sgr", org: "organizationId", req: "superAdminUserId,organizationId,justification",
     enums: { status: ["REQUESTED", "ACTIVE", "DENIED", "REVOKED", "EXPIRED"] },
@@ -4810,7 +4892,7 @@ function orgCreate_(p, a) {
   return withLock_(function () {
     assert_(!dbAll_("Organizations").some(function (o) { return String(o.name).toLowerCase() === name.toLowerCase() && o.status !== "INACTIVE"; }), "Une organisation porte déjà ce nom.");
     const o = dbInsert_("Organizations", { name: name, status: "ACTIVE", type: type, city: safeText_(a.city || "Marrakech", 80), country: safeText_(a.country || "MA", 2),
-      timezone: tz_(), locale: oneOf_(a.locale || "fr", ["fr", "en", "ar"], "Langue"), billingEmail: a.billingEmail ? validateEmail_(a.billingEmail) : "",
+      timezone: tz_(), locale: oneOf_(a.locale || "fr", IMMO_LANGS_, "Langue"), billingEmail: a.billingEmail ? validateEmail_(a.billingEmail) : "",
       createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
     audit_("ORGANIZATION_CREATED", "Organization", o.organizationId, o.organizationId, { name: name, type: type });
     if (a.planCode) subAssign_(p, { organizationId: o.organizationId, planCode: a.planCode, trial: true });
@@ -4826,7 +4908,7 @@ function orgUpdate_(p, a) {
   if (a.name !== undefined) patch.name = reqText_(a.name, "Nom", 2, 120);
   if (a.city !== undefined) patch.city = safeText_(a.city, 80);
   if (a.billingEmail !== undefined) patch.billingEmail = a.billingEmail ? validateEmail_(a.billingEmail) : "";
-  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, ["fr", "en", "ar"], "Langue");
+  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, IMMO_LANGS_, "Langue");
   if (a.type !== undefined) { requireSuper_(p); patch.type = oneOf_(a.type, ORG_TYPES_, "Type"); }
   dbUpdate_("Organizations", id, patch);
   audit_("ORGANIZATION_UPDATED", "Organization", id, id, diff_(o, patch, Object.keys(patch)));
@@ -4917,7 +4999,7 @@ function ownerAgencyCreate_(p, a) {
     const same = dbAll_("Organizations").find(function (o) { return String(o.name).toLowerCase() === name.toLowerCase() && o.status !== "INACTIVE"; });
     if (same) throw new AppError("VALIDATION", "Une organisation porte déjà ce nom. S'il s'agit de la même agence, utilisez « Attribuer une agence » ; sinon, choisissez un autre nom.");
     const o = dbInsert_("Organizations", { name: name, status: "ACTIVE", type: "AGENCY", city: safeText_(a.city || "Marrakech", 80), country: "MA", timezone: tz_(),
-      locale: oneOf_(a.locale || "fr", ["fr", "en", "ar"], "Langue"), billingEmail: adminEmail, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(),
+      locale: oneOf_(a.locale || "fr", IMMO_LANGS_, "Langue"), billingEmail: adminEmail, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(),
       managedByOrgId: prop.organizationId, contactName: safeText_(a.adminName || "", 100), phone: safeText_(a.phone || "", 30), address: safeText_(a.address || "", 240) });
     audit_("AGENCY_CREATED_BY_OWNER", "Organization", o.organizationId, prop.organizationId, { name: name, propertyId: prop.propertyId, adminEmail: adminEmail });
     return o;
@@ -4984,7 +5066,7 @@ function ownerAgencyUpdate_(p, a) {
   }
   if (a.city !== undefined) patch.city = safeText_(a.city, 80);
   if (a.contactEmail !== undefined) patch.billingEmail = a.contactEmail ? validateEmail_(a.contactEmail) : "";
-  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, ["fr", "en", "ar"], "Langue");
+  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, IMMO_LANGS_, "Langue");
   if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
   if (a.address !== undefined) patch.address = safeText_(a.address, 240);
   if (a.adminName !== undefined) patch.contactName = safeText_(a.adminName, 100);
@@ -5260,8 +5342,9 @@ function paretoExport_(p, a) {
  *  - Agence : attribution active AgencyPropertyPermissions → intersection(capacités du rôle agence, capacités des drapeaux) ;
  *  - Personnel affecté (PropertyAssignments) : gardien, ménage, artisan, locataire ;
  *  - Mission de ménage, ordre de travail/devis, bail : accès minimal lié à la mission ;
- *  - Super administrateur : AUCUN accès aux données privées, sauf autorisation d'assistance (SupportGrant)
- *    approuvée par l'organisation, limitée dans le temps, en lecture seule et journalisée.
+ *  - Super administrateur : par lui-même, accès aux données privées seulement via une autorisation d'assistance
+ *    (SupportGrant) approuvée par l'organisation, en lecture seule. Il peut aussi « entrer dans l'espace » d'un compte
+ *    (Auth.gs, impersonateStart_) : il agit alors avec les droits exacts de ce compte, chaque action étant journalisée à son nom.
  */
 var CTX_ = { principal: null, propMemo: {}, grantId: "" };
 
@@ -6637,12 +6720,49 @@ function tDays_(n) { return addDaysStr_(todayStr_(), n); }
 /* ===================================== GROUPES DE TESTS ===================================== */
 function TEST_GROUPS_() {
   return [
+    { name: "Super administrateur : comptes clients", tests: [
+      ["Comptes classés par espace, entrer dans l'espace d'un client, actions journalisées au nom du super administrateur, retour", function (T, fx) {
+        T.fails(fx.tok.ownerA, "admin.accounts", {}, "FORBIDDEN");
+        T.fails(fx.tok.ownerA, "admin.impersonate", { userId: fx.users.ownerB.userId }, "FORBIDDEN");
+        const own = T.call(fx.tok.superA, "admin.accounts", { category: "OWNER", q: fx.run, pageSize: 100 });
+        T.ok(own.items.some(function (r) { return r.userId === fx.users.ownerA.userId; }) && !own.items.some(function (r) { return r.userId === fx.users.ag1.userId; }), "propriétaires seulement");
+        T.ok(T.call(fx.tok.superA, "admin.accounts", { category: "AGENCY", q: fx.run, pageSize: 100 }).items.some(function (r) { return r.userId === fx.users.ag1u.userId; }), "agences");
+        const prov = T.call(fx.tok.superA, "admin.accounts", { category: "PROVIDER", q: fx.run, pageSize: 100 }).items.map(function (r) { return r.userId; });
+        T.ok(prov.indexOf(fx.users.cleaner.userId) >= 0 && prov.indexOf(fx.users.artisan.userId) >= 0 && prov.indexOf(fx.users.ownerA.userId) < 0, "prestataires (ménage et artisans)");
+        T.ok(!T.call(fx.tok.superA, "admin.accounts", { pageSize: 500 }).items.some(function (r) { return r.userId === fx.users.superA.userId; }), "super administrateurs exclus");
+        T.fails(fx.tok.superA, "admin.impersonate", { userId: fx.users.superA.userId });
+        const s = T.call(fx.tok.superA, "admin.impersonate", { userId: fx.users.ownerA.userId });
+        T.ok(s.token && s.token !== fx.tok.superA && s.me.userId === fx.users.ownerA.userId && s.me.impersonator.email === fx.users.superA.email && !s.me.isSuper, "vue du propriétaire");
+        T.ok(s.meta && s.meta.enums, "métadonnées fournies");
+        const me = T.call(s.token, "me.get", {});
+        T.ok(me.impersonator && me.roles[0].role === "OWNER", "session au nom du propriétaire");
+        T.ok(T.call(s.token, "property.list", {}).items.some(function (x) { return x.propertyId === fx.propA; }), "voit ses biens");
+        T.ok(!T.call(s.token, "property.list", {}).items.some(function (x) { return x.propertyId === fx.propB; }), "ne voit que ce que voit le propriétaire");
+        T.fails(s.token, "property.get", { propertyId: fx.propB }, "FORBIDDEN");
+        const r = T.call(s.token, "resv.create", { propertyId: fx.propA, checkIn: tDays_(500), checkOut: tDays_(502), guestName: "Saisi par le support", idempotencyKey: T.key() });
+        const log = dbAll_("ActivityLogs").filter(function (l) { return String(l.entityId) === String(r.reservationId); })[0];
+        T.ok(log && log.actorEmail === fx.users.superA.email && parseJson_(log.detailsJson, {}).asUser === fx.users.ownerA.email, "action journalisée au nom du super administrateur");
+        T.fails(s.token, "me.changePassword", { currentPassword: fx.pw, newPassword: "Autre-Passw0rd!" }, "FORBIDDEN");
+        T.fails(s.token, "me.logoutAll", {}, "FORBIDDEN");
+        T.fails(s.token, "admin.impersonate", { userId: fx.users.ownerB.userId }, "FORBIDDEN");
+        T.ok(dbAll_("ActivityLogs").some(function (l) { return l.action === "IMPERSONATION_START" && String(l.entityId) === String(fx.users.ownerA.userId) && l.actorEmail === fx.users.superA.email; }), "entrée journalisée");
+        T.call(s.token, "me.endImpersonation", {});
+        T.fails(s.token, "me.get", {}, "AUTH");
+        T.ok(T.call(fx.tok.superA, "me.get", {}).isSuper, "le super administrateur garde sa session");
+        T.ok(T.call(fx.tok.ownerA, "me.get", {}).impersonator === null, "la session du propriétaire n'est pas touchée");
+        const s2 = T.call(fx.tok.superA, "admin.impersonate", { userId: fx.users.cleaner.userId });
+        T.ok(s2.me.roles.some(function (x) { return x.role === "CLEANER"; }), "espace prestataire");
+        const sr = dbAll_("UserRoles").find(function (x) { return String(x.userId) === String(fx.users.superA.userId) && x.role === "SUPER_ADMIN"; });
+        dbUpdate_("UserRoles", sr.userRoleId, { status: "SUSPENDED" });
+        try { T.fails(s2.token, "me.get", {}, "AUTH"); } finally { dbUpdate_("UserRoles", sr.userRoleId, { status: "ACTIVE" }); }
+      }]
+    ] },
     { name: "Assistant Rubban", tests: [
       ["Assistant : guide sans clé, IA côté serveur uniquement, aucune donnée client transmise, repli automatique", function (T, fx) {
         const pub = T.pub("assistant.kb", {});
         T.ok(pub.name === "Rubban" && pub.articles.length >= 40 && pub.aiEnabled === false, "base de connaissances publique");
         const routes = ["", "settings", "notifications", "properties", "agencies", "reservations", "calendar", "checkin", "cleaning", "incidents", "quotes", "workorders", "invoices", "contractors",
-          "leases", "mylease", "finance", "pareto", "reports", "dashboard", "users", "subscriptions", "audit", "admin"];
+          "leases", "mylease", "finance", "pareto", "reports", "dashboard", "users", "subscriptions", "audit", "admin", "accounts"];
         T.ok(pub.articles.every(function (a) { return routes.indexOf(a.go) >= 0 && a.s.length && a.r.length; }), "chaque article pointe vers une page existante");
         T.ok(JSON.stringify(pub).indexOf("IMMO_AI_API_KEY") < 0 || JSON.stringify(pub).indexOf("sk-") < 0, "aucune clé dans la réponse");
         const kb = T.call(fx.tok.ownerA, "assistant.kb", {});
@@ -7957,6 +8077,7 @@ function userSendActivation_(p, a) {
  * La demande est journalisée et transmise aux super administrateurs, qui la traitent avec user.erase.
  */
 function meRequestDeletion_(p, a) {
+  notWhileImpersonating_(p);
   rateLimit_("delete-request:" + p.userId, 3, 86400);
   if (p.isSuper) {
     const others = superAdminIds_().filter(function (id) { return String(id) !== p.userId; });

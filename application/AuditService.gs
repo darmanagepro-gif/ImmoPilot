@@ -13,7 +13,10 @@ function auditRedact_(v, depth) {
 function audit_(action, entityType, entityId, organizationId, details, result) {
   try {
     const p = (typeof CTX_ !== "undefined" && CTX_ && CTX_.principal) || null;
-    dbInsert_("ActivityLogs", { timestamp: nowIso_(), actorEmail: p ? p.email : "", actorUserId: p ? p.userId : "", organizationId: String(organizationId || ""),
+    // Dans l'espace d'un client, l'auteur réel (le super administrateur) est enregistré, avec le compte concerné.
+    const imp = p && p.impersonator;
+    if (imp) details = Object.assign({}, details || {}, { asUser: p.email });
+    dbInsert_("ActivityLogs", { timestamp: nowIso_(), actorEmail: imp ? imp.email : (p ? p.email : ""), actorUserId: imp ? imp.userId : (p ? p.userId : ""), organizationId: String(organizationId || ""),
       action: safeText_(action, 100), entityType: safeText_(entityType || "", 80), entityId: safeText_(entityId || "", 120),
       detailsJson: jsonSafe_(auditRedact_(details || {})), result: result || "OK" });
   } catch (err) { console.error("Audit échoué : " + err.message); }

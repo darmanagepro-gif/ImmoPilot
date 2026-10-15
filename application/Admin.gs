@@ -215,7 +215,7 @@ function validateSettingValue_(key, v) {
   }
   if (/^template\./.test(key)) { const s = safeText_(v, 100); assert_(!s || /^[\w-]{20,}$/.test(s), "Identifiant de document Google invalide."); if (s) assertTemplateAllowed_(s); return s; }
   if (/Check(In|Out)$/.test(key)) { const s = safeText_(v, 5); assert_(/^([01]\d|2[0-3]):[0-5]\d$/.test(s), "Heure au format HH:MM attendue."); return s; }
-  if (key === "locale") return oneOf_(v, ["fr", "en", "ar"], "Langue");
+  if (key === "locale") return oneOf_(v, IMMO_LANGS_, "Langue");
   if (key === "currency") return oneOf_(String(v).toUpperCase(), ["MAD", "EUR", "USD"], "Devise");
   return safeText_(v, 500);
 }

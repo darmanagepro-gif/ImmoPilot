@@ -4,7 +4,7 @@
 const Public = {
   frame: function (title, sub, body) {
     const app = clear($("app"));
-    const langSel = h("select", { class: "lang", "aria-label": t("Langue"), onchange: function (e) { setLang(e.target.value); App.start(); } }, [["fr", "Français"], ["en", "English"], ["ar", "العربية"]].map(function (l) { return h("option", { value: l[0] }, l[1]); }));
+    const langSel = h("select", { class: "lang", "aria-label": t("Langue"), onchange: function (e) { setLang(e.target.value); App.start(); } }, langOpts().map(function (l) { return h("option", { value: l[0] }, l[1]); }));
     langSel.value = S.lang;
     app.appendChild(h("div", { class: "auth" },
       h("aside", { class: "auth-side" }, h("div", { class: "brand", style: { padding: 0 } }, h("div", { class: "brand-mark" }, "IP"), h("div", null, h("b", null, "ImmoPilot"), h("small", null, "Marrakech · Maroc"))),
@@ -73,7 +73,7 @@ const Public = {
     const load = function () {
       apiP("guest.portal.get", { token: token }).then(function (g) {
         clear(wrap);
-        const langSel = h("select", { class: "lang", onchange: function (e) { setLang(e.target.value); load(); } }, [["fr", "Français"], ["en", "English"], ["ar", "العربية"]].map(function (l) { return h("option", { value: l[0] }, l[1]); })); langSel.value = S.lang;
+        const langSel = h("select", { class: "lang", onchange: function (e) { setLang(e.target.value); load(); } }, langOpts().map(function (l) { return h("option", { value: l[0] }, l[1]); })); langSel.value = S.lang;
         wrap.appendChild(h("div", { class: "page-head" }, h("div", null, h("h2", null, g.propertyName), h("p", null, g.city + (g.address ? " — " + g.address : ""))), langSel));
         wrap.appendChild(panel("Votre séjour", kv([["Arrivée", fmtDate(g.checkIn) + " · " + t("à partir de") + " " + g.checkInTime], ["Départ", fmtDate(g.checkOut) + " · " + t("avant") + " " + g.checkOutTime], ["Voyageurs", g.guestCount], ["Réservation au nom de", g.guestName]])));
         wrap.appendChild(panel("Consignes d'arrivée", h("div", null, h("p", { style: { whiteSpace: "pre-wrap" } }, g.arrivalInstructions || t("Les consignes vous seront communiquées par votre hôte.")),

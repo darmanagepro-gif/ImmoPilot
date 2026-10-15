@@ -45,12 +45,14 @@ async function main() {
     T.call(fx.tok.superA,"sub.assign",{organizationId:fx.orgB.organizationId,planCode:"PRO",trial:true});
     o.futureResv=T.call(fx.tok.ownerA,"resv.create",{propertyId:fx.propA,checkIn:addDaysStr_(todayStr_(),20),checkOut:addDaysStr_(todayStr_(),23),guestName:"Portail Voyageur",guestCount:2}).reservationId;
     return o; })()`, ctx);
+  // Super administrateur entré dans l'espace du propriétaire A (session « voir comme »).
+  vm.runInContext(`__fx.tok.impOwner = api(__fx.tok.superA, "admin.impersonate", { userId: __fx.users.ownerA.userId }).data.token;`, ctx);
   const fx = vm.runInContext("({ tok: __fx.tok, propA: __fx.propA })", ctx);
 
   const report = [];
-  const roles = [["ownerA", "Propriétaire"], ["ag1", "Agence (admin)"], ["ag1u", "Agence (collaborateur)"], ["guard", "Gardien"], ["cleaner", "Ménage"], ["artisan", "Artisan"], ["tenant", "Locataire"], ["superA", "Super administrateur"]];
+  const roles = [["ownerA", "Propriétaire"], ["ag1", "Agence (admin)"], ["ag1u", "Agence (collaborateur)"], ["guard", "Gardien"], ["cleaner", "Ménage"], ["artisan", "Artisan"], ["tenant", "Locataire"], ["superA", "Super administrateur"], ["impOwner", "Super administrateur dans l'espace du propriétaire"]];
   // Matrice d'accès attendue aux fiches de détail (P=bien, R=réservation, I=incident, C=ménage, W=intervention, F=facture, B=bail, A=prestataire).
-  const EXPECT = { ownerA: "PRICWFBA", ag1: "PRICWFA", ag1u: "PRICWA", guard: "PR", cleaner: "PC", artisan: "PIWFA", tenant: "B", superA: "" };
+  const EXPECT = { ownerA: "PRICWFBA", ag1: "PRICWFA", ag1u: "PRICWA", guard: "PR", cleaner: "PC", artisan: "PIWFA", tenant: "B", superA: "", impOwner: "PRICWFBA" };
   const LETTERS = "PRICWFBA";
   const details = ["property/" + fx.propA, "reservation/" + ids.resv, "incident/" + ids.incident, "cleaning/" + ids.mission, "workorder/" + ids.wo, "invoice/" + ids.invoice, "lease/" + ids.lease, "contractors/" + ids.artisan];
 
@@ -62,7 +64,8 @@ async function main() {
     const dom = new JSDOM(renderIndex({ mode: "app", token: "", appName: "ImmoPilot", version: "2.0.0" }), { runScripts: "dangerously", url: "https://example.test/exec", virtualConsole: vc, pretendToBeVisual: true,
       beforeParse: function (w) {
         w.sessionStorage.setItem("ip_token", fx.tok[key]);
-        w.localStorage.setItem("ip_lang", key === "tenant" ? "ar" : (key === "ag1u" ? "en" : "fr"));
+        w.localStorage.setItem("ip_lang", { tenant: "ar", ag1u: "en", guard: "es", cleaner: "it", artisan: "nl" }[key] || "fr");
+        if (key === "impOwner") w.sessionStorage.setItem("ip_token_super", fx.tok.superA);
         w.HTMLCanvasElement.prototype.getContext = function () { return null; };
         w.scrollTo = function () {};
         const mk = function () {
@@ -102,6 +105,19 @@ async function main() {
     if (!w.document.querySelector(".nav")) { report.push({ role: label, fatal: "Coque non affichée", errors: errors, html: w.document.getElementById("app").textContent.slice(0, 300) }); continue; }
     for (const r of navRoutes) await visit(r);
     for (let di = 0; di < details.length; di++) { await visit(details[di]); const v = visited[visited.length - 1]; v.expected = EXPECT[key].indexOf(LETTERS[di]) >= 0; v.denied = v.alerts.some(function (a) { return /refusé|denied|مرفوض|introuvable/i.test(a); }); v.detail = true; }
+    if (key === "impOwner") {
+      const ban = w.document.querySelector(".imp-banner");
+      if (!ban || !/propriétaire|ownera/i.test(ban.textContent)) errors.push("bandeau « espace du client » absent");
+      if (navRoutes.indexOf("accounts") >= 0 || navRoutes.indexOf("admin") >= 0) errors.push("menu super administrateur visible dans l'espace du client");
+      ban.querySelector("button").click(); for (let i = 0; i < 12; i++) await settle();
+      if (w.document.querySelector(".imp-banner") || !w.document.querySelector('.nav a[data-r="accounts"]')) errors.push("retour à l'espace super administrateur impossible");
+      if (w.sessionStorage.getItem("ip_token") !== fx.tok.superA) errors.push("jeton super administrateur non restauré");
+    }
+    if (key === "superA") {
+      w.location.hash = "accounts"; for (let i = 0; i < 10; i++) await settle();
+      const rows = w.document.querySelectorAll("#content table tbody tr").length;
+      if (!rows) errors.push("page Comptes clients vide");
+    }
     report.push({ role: label, lang: w.document.documentElement.lang, dir: w.document.documentElement.dir, menu: navRoutes, visited: visited, errors: errors, callsOk: calls.ok, callsFailed: calls.fail });
     w.close();
   }

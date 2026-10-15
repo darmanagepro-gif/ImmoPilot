@@ -8,8 +8,9 @@
  *  - Agence : attribution active AgencyPropertyPermissions → intersection(capacités du rôle agence, capacités des drapeaux) ;
  *  - Personnel affecté (PropertyAssignments) : gardien, ménage, artisan, locataire ;
  *  - Mission de ménage, ordre de travail/devis, bail : accès minimal lié à la mission ;
- *  - Super administrateur : AUCUN accès aux données privées, sauf autorisation d'assistance (SupportGrant)
- *    approuvée par l'organisation, limitée dans le temps, en lecture seule et journalisée.
+ *  - Super administrateur : par lui-même, accès aux données privées seulement via une autorisation d'assistance
+ *    (SupportGrant) approuvée par l'organisation, en lecture seule. Il peut aussi « entrer dans l'espace » d'un compte
+ *    (Auth.gs, impersonateStart_) : il agit alors avec les droits exacts de ce compte, chaque action étant journalisée à son nom.
  */
 var CTX_ = { principal: null, propMemo: {}, grantId: "" };
 

@@ -125,6 +125,12 @@ function principalFromToken_(token) {
   const p = buildPrincipal_(user);
   if (!p.roles.length) throw new AppError("AUTH", "Aucun rôle actif n'est attribué à ce compte, ou votre organisation est suspendue.");
   p.sessionId = s.sessionId;
+  if (s.impersonatorUserId) {
+    // Session « entrer dans l'espace » ouverte par un super administrateur : elle n'est valable que tant qu'il l'est encore.
+    const su = dbGet_("Users", s.impersonatorUserId), sp = su && su.status === "ACTIVE" ? buildPrincipal_(su) : null;
+    if (!sp || !sp.isSuper) { dbUpdate_("Sessions", s.sessionId, { revokedAt: nowIso_() }); throw new AppError("AUTH", "Accès d'administration expiré. Veuillez vous reconnecter."); }
+    p.impersonator = { userId: sp.userId, email: sp.email, displayName: sp.displayName };
+  }
   const last = parseTs_(s.lastSeenAt);
   if (!last || Date.now() - last.getTime() > 10 * 60000) dbUpdate_("Sessions", s.sessionId, { lastSeenAt: nowIso_() });
   return p;
@@ -213,8 +219,9 @@ function revokeAllSessions_(userId) {
 
 /* ---------------------- Routes authentifiées ---------------------- */
 function meLogout_(p) { dbUpdate_("Sessions", p.sessionId, { revokedAt: nowIso_() }); audit_("LOGOUT", "User", p.userId, ""); return { ok: true }; }
-function meLogoutAll_(p) { revokeAllSessions_(p.userId); audit_("LOGOUT_ALL", "User", p.userId, ""); return { ok: true }; }
+function meLogoutAll_(p) { notWhileImpersonating_(p); revokeAllSessions_(p.userId); audit_("LOGOUT_ALL", "User", p.userId, ""); return { ok: true }; }
 function meChangePassword_(p, a) {
+  notWhileImpersonating_(p);
   const user = dbGet_("Users", p.userId);
   rateLimit_("chpw:" + p.userId, 5, 900);
   if (!verifyPassword_(user, a.currentPassword)) { audit_("PASSWORD_CHANGE_FAILED", "User", p.userId, "", {}, "FAIL"); throw new AppError("AUTH", "Mot de passe actuel incorrect."); }
@@ -227,7 +234,7 @@ function meChangePassword_(p, a) {
 function meUpdateProfile_(p, a) {
   const patch = { updatedAt: nowIso_() };
   if (a.displayName !== undefined) patch.displayName = reqText_(a.displayName, "Nom", 2, 100);
-  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, ["fr", "en", "ar"], "Langue");
+  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, IMMO_LANGS_, "Langue");
   if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
   if (a.notifPrefs !== undefined) {
     const np = a.notifPrefs || {};
@@ -238,13 +245,80 @@ function meUpdateProfile_(p, a) {
   return { ok: true };
 }
 
+/* ---------------------- Super administrateur : entrer dans l'espace d'un compte ---------------------- */
+var IMPERSONATION_HOURS_ = 2;
+/** Actions personnelles réservées au vrai titulaire du compte (mot de passe, sessions, suppression). */
+function notWhileImpersonating_(p) { if (p.impersonator) forbid_("Action réservée au titulaire du compte : indisponible quand le super administrateur est dans son espace."); }
+/** Ouvre une session au nom d'un compte client. Tout y est possible ; chaque action est journalisée au nom du super administrateur. */
+function impersonateStart_(p, a) {
+  requireSuper_(p);
+  assert_(!p.impersonator, "Revenez d'abord à votre espace.", "FORBIDDEN");
+  rateLimit_("imp:" + p.userId, 60, 3600);
+  const user = dbGet_("Users", safeText_(a.userId, 120));
+  if (!user) notFound_("Compte");
+  assert_(String(user.userId) !== p.userId, "C'est déjà votre compte.");
+  assert_(user.status === "ACTIVE", "Ce compte est bloqué ou supprimé : débloquez-le avant d'y entrer.");
+  const tp = buildPrincipal_(user);
+  assert_(!tp.isSuper, "Impossible d'entrer dans l'espace d'un autre super administrateur.", "FORBIDDEN");
+  assert_(tp.roles.length, "Ce compte n'a aucun rôle actif (rôle suspendu ou organisation suspendue).");
+  const token = randomToken_();
+  dbInsert_("Sessions", { userId: user.userId, tokenHash: sha256Hex_(token), createdAt: nowIso_(), expiresAt: new Date(Date.now() + IMPERSONATION_HOURS_ * 3600000).toISOString(),
+    lastSeenAt: nowIso_(), userAgent: "Super administrateur : " + p.email, impersonatorUserId: p.userId });
+  audit_("IMPERSONATION_START", "User", user.userId, (tp.roles[0] || {}).organizationId || "", { target: normalizeEmail_(user.email), reason: safeText_(a.reason || "", 300) });
+  tp.impersonator = { userId: p.userId, email: p.email, displayName: p.displayName };
+  CTX_.principal = tp; CTX_.propMemo = {};
+  return { token: token, me: meBootstrap_(tp), meta: metaGet_(tp) };
+}
+/** Ferme la session ouverte dans l'espace du client (le jeton du super administrateur, gardé par le navigateur, reste valable). */
+function impersonateEnd_(p) {
+  assert_(p.impersonator, "Vous n'êtes pas dans l'espace d'un autre compte.");
+  dbUpdate_("Sessions", p.sessionId, { revokedAt: nowIso_() });
+  audit_("IMPERSONATION_END", "User", p.userId, "", { target: p.email });
+  return { ok: true };
+}
+/** Tous les comptes clients classés par type d'espace (propriétaires, agences, prestataires, gardiens, locataires). */
+var ACCOUNT_CATEGORIES_ = { OWNER: ["OWNER"], AGENCY: ["AGENCY_ADMIN", "AGENCY_USER"], PROVIDER: ["CLEANER", "ARTISAN"], GUARD: ["GUARD"], TENANT: ["TENANT"] };
+function adminAccounts_(p, a) {
+  requireSuper_(p);
+  a = a || {};
+  const cat = ACCOUNT_CATEGORIES_[a.category] ? a.category : "";
+  const orgs = indexBy_(dbAll_("Organizations"), "organizationId"), byUser = {};
+  dbAll_("UserRoles").forEach(function (r) {
+    if (r.role === "SUPER_ADMIN") return;
+    (byUser[r.userId] = byUser[r.userId] || []).push(r);
+  });
+  const supers = {};
+  dbAll_("UserRoles").forEach(function (r) { if (r.role === "SUPER_ADMIN" && r.status === "ACTIVE") supers[r.userId] = true; });
+  const counts = { OWNER: 0, AGENCY: 0, PROVIDER: 0, GUARD: 0, TENANT: 0 };
+  const rows = [];
+  dbAll_("Users").forEach(function (u) {
+    const rs = byUser[u.userId];
+    if (!rs || supers[u.userId] || u.status === "DISABLED") return;
+    const cats = Object.keys(ACCOUNT_CATEGORIES_).filter(function (c) { return rs.some(function (r) { return ACCOUNT_CATEGORIES_[c].indexOf(r.role) >= 0; }); });
+    const inCat = cat ? rs.filter(function (r) { return ACCOUNT_CATEGORIES_[cat].indexOf(r.role) >= 0; }) : rs;
+    const row = { userId: u.userId, displayName: u.displayName || "", email: u.email || "", phone: u.phone || "", userStatus: u.status || "", activated: !!u.passwordHash,
+      lastLoginAt: u.lastLoginAt || "", categories: cats,
+      roles: inCat.map(function (r) { const o = orgs[r.organizationId] || {}; return { role: r.role, status: r.status, organizationId: r.organizationId, organizationName: o.name || "", orgStatus: o.status || "", isDemo: bool_(o.isDemo) }; }) };
+    row.isDemo = row.roles.length > 0 && row.roles.every(function (r) { return r.isDemo; });
+    row.canEnter = row.userStatus === "ACTIVE" && rs.some(function (r) { const o = orgs[r.organizationId] || {}; return r.status === "ACTIVE" && o.status === "ACTIVE"; });
+    cats.forEach(function (c) { counts[c]++; });
+    if (cat && !inCat.length) return;
+    if (a.hideDemo && row.isDemo) return;
+    if (!matchesQuery_(a.q, [row.displayName, row.email, row.phone].concat(row.roles.map(function (r) { return r.organizationName; })))) return;
+    rows.push(row);
+  });
+  rows.sort(function (x, y) { return String((x.roles[0] || {}).organizationName + x.displayName).localeCompare(String((y.roles[0] || {}).organizationName + y.displayName)); });
+  const out = pageOf_(rows, a); out.counts = counts;
+  return out;
+}
+
 /** Données d'amorçage de l'interface : identité, rôles, organisations, capacités d'affichage. */
 function meBootstrap_(p) {
   const orgs = indexBy_(dbAll_("Organizations"), "organizationId");
   const user = dbGet_("Users", p.userId);
   const unread = dbAll_("Notifications").filter(function (n) { return String(n.userId) === p.userId && !n.readAt; }).length;
   return {
-    userId: p.userId, email: p.email, displayName: p.displayName, locale: (user && user.locale) || "fr", isSuper: p.isSuper,
+    userId: p.userId, email: p.email, displayName: p.displayName, locale: (user && user.locale) || "fr", isSuper: p.isSuper, impersonator: p.impersonator || null,
     roles: p.roles.map(function (r) { return { role: r.role, organizationId: r.organizationId, organizationName: (orgs[r.organizationId] || {}).name || "" }; }),
     caps: uiCaps_(p).concat(p.isSuper ? ["platform.admin"] : []),
     notifPrefs: parseJson_(user && user.notifPrefsJson, { email: true, mutedTypes: [] }),

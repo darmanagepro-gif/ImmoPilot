@@ -29,7 +29,7 @@ var ASSISTANT_KB_ = [
     s: ["Ouvrez l'e-mail « Invitation à rejoindre ImmoPilot » ou « Activez votre compte ImmoPilot ».", "Cliquez sur le bouton « Ouvrir ImmoPilot » (lien personnel, à usage unique).", "Choisissez votre mot de passe (10 caractères minimum, avec lettres et chiffres) puis validez.", "Le lien d'invitation est valable 7 jours, le lien d'activation 72 h. Expiré ? Demandez à votre administrateur de le renvoyer."] },
   { id: "forgot", t: "Mot de passe oublié", r: ["*"], go: "", k: "oublié oublie reset réinitialiser mot de passe mdp password forgot نسيت كلمة السر",
     s: ["Sur l'écran de connexion, cliquez sur « Mot de passe oublié ».", "Saisissez votre e-mail : vous recevez un lien valable 1 heure.", "Ouvrez le lien et choisissez un nouveau mot de passe. Vos autres sessions sont déconnectées."] },
-  { id: "password", t: "Changer mon mot de passe ou ma langue", r: ["*"], go: "settings", k: "changer mot de passe profil langue nom téléphone préférences notifications email arabe anglais",
+  { id: "password", t: "Changer mon mot de passe ou ma langue", r: ["*"], go: "settings", k: "changer mot de passe profil langue nom téléphone préférences notifications email arabe anglais espagnol italien néerlandais hollandais español italiano nederlands",
     s: ["Ouvrez « Paramètres » › « Mon profil ».", "Modifiez votre nom, téléphone, langue (FR, EN, ع) ou vos préférences de notifications.", "« Changer le mot de passe » demande l'ancien mot de passe. « Déconnecter mes autres appareils » ferme les sessions ouvertes ailleurs."] },
   { id: "delete-account", t: "Supprimer mon compte", r: ["*"], go: "settings", k: "supprimer compte suppression rgpd données personnelles delete account حذف الحساب",
     s: ["Ouvrez « Paramètres » › « Mon profil » › « Supprimer mon compte ».", "Indiquez le motif : la demande est transmise à l'administrateur ImmoPilot.", "Votre identité est effacée ; les données comptables obligatoires sont conservées sans votre nom."] },
@@ -115,6 +115,8 @@ var ASSISTANT_KB_ = [
   { id: "audit", t: "Journal d'audit (qui a fait quoi)", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "audit", k: "journal audit historique traçabilité qui a modifié sécurité",
     s: ["« Journal d'audit » liste les actions sensibles : connexions, paiements, annulations, droits, documents…"] },
   // ---------- Super administrateur ----------
+  { id: "admin-accounts", t: "Voir tous les comptes et entrer dans l'espace d'un client (super administrateur)", r: ["SUPER"], go: "accounts", k: "comptes clients voir comme entrer espace se connecter en tant que impersonation propriétaire agence prestataire gardien locataire support",
+    s: ["Ouvrez « Comptes clients » (menu Administration) : les comptes sont classés en Propriétaires, Agences, Prestataires, Gardiens et Locataires.", "Cherchez la personne (nom, e-mail, organisation), puis cliquez sur « Entrer » et confirmez.", "Vous voyez l'application exactement comme elle : vous pouvez tout faire à sa place. Un bandeau rouge rappelle que vous êtes dans son espace ; chaque action est enregistrée à votre nom dans le journal d'audit.", "Mot de passe, déconnexion de ses appareils et demande de suppression restent réservés au titulaire. La session dure 2 heures au plus.", "Cliquez sur « Revenir à mon espace » dans le bandeau pour retrouver votre compte."] },
   { id: "admin-org", t: "Créer une organisation cliente (super administrateur)", r: ["SUPER"], go: "admin", k: "créer organisation client super admin propriétaire agence onboarding",
     s: ["« Administration globale » › « Organisations » › « + Organisation » : nom, type (propriétaire, agence, prestataire), ville, forfait d'essai.", "Sur la ligne : « Inviter » son responsable, « Forfait », « Suspendre » ou « Assistance »."] },
   { id: "admin-sub", t: "Attribuer un forfait et enregistrer un paiement d'abonnement", r: ["SUPER"], go: "subscriptions", k: "forfait abonnement paiement client facturation plateforme super admin",
@@ -145,7 +147,7 @@ function assistantKb_(p) { return { name: ASSISTANT_NAME_, articles: ASSISTANT_K
 
 function assistantSystemPrompt_(p, lang, page) {
   const kb = ASSISTANT_KB_.map(function (a) { return "## " + a.t + " [page: " + (a.go || "connexion") + " ; rôles: " + a.r.join(",") + "]\n" + a.s.map(function (x, i) { return (i + 1) + ". " + x; }).join("\n"); }).join("\n\n");
-  const L = { fr: "français", en: "English", ar: "العربية" }[lang] || "français";
+  const L = { fr: "français", en: "English", ar: "العربية", es: "español", it: "italiano", nl: "Nederlands" }[lang] || "français";
   return "Tu es " + ASSISTANT_NAME_ + " (رُبّان, « le pilote »), l'assistant d'aide intégré au logiciel de gestion immobilière ImmoPilot (Maroc : propriétaires, agences, gardiens, ménage, artisans, locataires).\n" +
     "Règles :\n- Réponds en " + L + ", de façon courte et concrète : étapes numérotées avec les noms exacts des menus et boutons.\n" +
     "- Appuie-toi UNIQUEMENT sur la documentation ci-dessous. Si une fonction n'y figure pas, dis franchement qu'ImmoPilot ne la propose pas ou que tu n'es pas sûr, et propose de contacter l'administrateur ImmoPilot.\n" +
@@ -186,7 +188,7 @@ function assistantAsk_(p, a) {
   if (!cfg) return { mode: "guide" };
   try { rateLimit_("ai-user:" + p.userId, AI_LIMITS_.perUserHour, 3600); rateLimit_("ai-platform", AI_LIMITS_.platformDay, 86400); }
   catch (e) { return { mode: "guide", notice: "Limite de questions à l'assistant IA atteinte pour le moment : voici les réponses du guide." }; }
-  const lang = ["fr", "en", "ar"].indexOf(a.lang) >= 0 ? a.lang : "fr", page = safeText_(a.page || "", 60);
+  const lang = IMMO_LANGS_.indexOf(a.lang) >= 0 ? a.lang : "fr", page = safeText_(a.page || "", 60);
   const history = (Array.isArray(a.history) ? a.history : []).slice(-AI_LIMITS_.maxHistory).map(function (m) {
     return { role: m && m.role === "assistant" ? "assistant" : "user", content: safeText_(m && m.content, 1200) };
   }).filter(function (m) { return m.content; });

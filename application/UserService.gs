@@ -260,6 +260,7 @@ function userSendActivation_(p, a) {
  * La demande est journalisée et transmise aux super administrateurs, qui la traitent avec user.erase.
  */
 function meRequestDeletion_(p, a) {
+  notWhileImpersonating_(p);
   rateLimit_("delete-request:" + p.userId, 3, 86400);
   if (p.isSuper) {
     const others = superAdminIds_().filter(function (id) { return String(id) !== p.userId; });

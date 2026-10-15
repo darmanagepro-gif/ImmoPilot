@@ -113,12 +113,49 @@ function tDays_(n) { return addDaysStr_(todayStr_(), n); }
 /* ===================================== GROUPES DE TESTS ===================================== */
 function TEST_GROUPS_() {
   return [
+    { name: "Super administrateur : comptes clients", tests: [
+      ["Comptes classés par espace, entrer dans l'espace d'un client, actions journalisées au nom du super administrateur, retour", function (T, fx) {
+        T.fails(fx.tok.ownerA, "admin.accounts", {}, "FORBIDDEN");
+        T.fails(fx.tok.ownerA, "admin.impersonate", { userId: fx.users.ownerB.userId }, "FORBIDDEN");
+        const own = T.call(fx.tok.superA, "admin.accounts", { category: "OWNER", q: fx.run, pageSize: 100 });
+        T.ok(own.items.some(function (r) { return r.userId === fx.users.ownerA.userId; }) && !own.items.some(function (r) { return r.userId === fx.users.ag1.userId; }), "propriétaires seulement");
+        T.ok(T.call(fx.tok.superA, "admin.accounts", { category: "AGENCY", q: fx.run, pageSize: 100 }).items.some(function (r) { return r.userId === fx.users.ag1u.userId; }), "agences");
+        const prov = T.call(fx.tok.superA, "admin.accounts", { category: "PROVIDER", q: fx.run, pageSize: 100 }).items.map(function (r) { return r.userId; });
+        T.ok(prov.indexOf(fx.users.cleaner.userId) >= 0 && prov.indexOf(fx.users.artisan.userId) >= 0 && prov.indexOf(fx.users.ownerA.userId) < 0, "prestataires (ménage et artisans)");
+        T.ok(!T.call(fx.tok.superA, "admin.accounts", { pageSize: 500 }).items.some(function (r) { return r.userId === fx.users.superA.userId; }), "super administrateurs exclus");
+        T.fails(fx.tok.superA, "admin.impersonate", { userId: fx.users.superA.userId });
+        const s = T.call(fx.tok.superA, "admin.impersonate", { userId: fx.users.ownerA.userId });
+        T.ok(s.token && s.token !== fx.tok.superA && s.me.userId === fx.users.ownerA.userId && s.me.impersonator.email === fx.users.superA.email && !s.me.isSuper, "vue du propriétaire");
+        T.ok(s.meta && s.meta.enums, "métadonnées fournies");
+        const me = T.call(s.token, "me.get", {});
+        T.ok(me.impersonator && me.roles[0].role === "OWNER", "session au nom du propriétaire");
+        T.ok(T.call(s.token, "property.list", {}).items.some(function (x) { return x.propertyId === fx.propA; }), "voit ses biens");
+        T.ok(!T.call(s.token, "property.list", {}).items.some(function (x) { return x.propertyId === fx.propB; }), "ne voit que ce que voit le propriétaire");
+        T.fails(s.token, "property.get", { propertyId: fx.propB }, "FORBIDDEN");
+        const r = T.call(s.token, "resv.create", { propertyId: fx.propA, checkIn: tDays_(500), checkOut: tDays_(502), guestName: "Saisi par le support", idempotencyKey: T.key() });
+        const log = dbAll_("ActivityLogs").filter(function (l) { return String(l.entityId) === String(r.reservationId); })[0];
+        T.ok(log && log.actorEmail === fx.users.superA.email && parseJson_(log.detailsJson, {}).asUser === fx.users.ownerA.email, "action journalisée au nom du super administrateur");
+        T.fails(s.token, "me.changePassword", { currentPassword: fx.pw, newPassword: "Autre-Passw0rd!" }, "FORBIDDEN");
+        T.fails(s.token, "me.logoutAll", {}, "FORBIDDEN");
+        T.fails(s.token, "admin.impersonate", { userId: fx.users.ownerB.userId }, "FORBIDDEN");
+        T.ok(dbAll_("ActivityLogs").some(function (l) { return l.action === "IMPERSONATION_START" && String(l.entityId) === String(fx.users.ownerA.userId) && l.actorEmail === fx.users.superA.email; }), "entrée journalisée");
+        T.call(s.token, "me.endImpersonation", {});
+        T.fails(s.token, "me.get", {}, "AUTH");
+        T.ok(T.call(fx.tok.superA, "me.get", {}).isSuper, "le super administrateur garde sa session");
+        T.ok(T.call(fx.tok.ownerA, "me.get", {}).impersonator === null, "la session du propriétaire n'est pas touchée");
+        const s2 = T.call(fx.tok.superA, "admin.impersonate", { userId: fx.users.cleaner.userId });
+        T.ok(s2.me.roles.some(function (x) { return x.role === "CLEANER"; }), "espace prestataire");
+        const sr = dbAll_("UserRoles").find(function (x) { return String(x.userId) === String(fx.users.superA.userId) && x.role === "SUPER_ADMIN"; });
+        dbUpdate_("UserRoles", sr.userRoleId, { status: "SUSPENDED" });
+        try { T.fails(s2.token, "me.get", {}, "AUTH"); } finally { dbUpdate_("UserRoles", sr.userRoleId, { status: "ACTIVE" }); }
+      }]
+    ] },
     { name: "Assistant Rubban", tests: [
       ["Assistant : guide sans clé, IA côté serveur uniquement, aucune donnée client transmise, repli automatique", function (T, fx) {
         const pub = T.pub("assistant.kb", {});
         T.ok(pub.name === "Rubban" && pub.articles.length >= 40 && pub.aiEnabled === false, "base de connaissances publique");
         const routes = ["", "settings", "notifications", "properties", "agencies", "reservations", "calendar", "checkin", "cleaning", "incidents", "quotes", "workorders", "invoices", "contractors",
-          "leases", "mylease", "finance", "pareto", "reports", "dashboard", "users", "subscriptions", "audit", "admin"];
+          "leases", "mylease", "finance", "pareto", "reports", "dashboard", "users", "subscriptions", "audit", "admin", "accounts"];
         T.ok(pub.articles.every(function (a) { return routes.indexOf(a.go) >= 0 && a.s.length && a.r.length; }), "chaque article pointe vers une page existante");
         T.ok(JSON.stringify(pub).indexOf("IMMO_AI_API_KEY") < 0 || JSON.stringify(pub).indexOf("sk-") < 0, "aucune clé dans la réponse");
         const kb = T.call(fx.tok.ownerA, "assistant.kb", {});

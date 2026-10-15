@@ -38,7 +38,7 @@ function orgCreate_(p, a) {
   return withLock_(function () {
     assert_(!dbAll_("Organizations").some(function (o) { return String(o.name).toLowerCase() === name.toLowerCase() && o.status !== "INACTIVE"; }), "Une organisation porte déjà ce nom.");
     const o = dbInsert_("Organizations", { name: name, status: "ACTIVE", type: type, city: safeText_(a.city || "Marrakech", 80), country: safeText_(a.country || "MA", 2),
-      timezone: tz_(), locale: oneOf_(a.locale || "fr", ["fr", "en", "ar"], "Langue"), billingEmail: a.billingEmail ? validateEmail_(a.billingEmail) : "",
+      timezone: tz_(), locale: oneOf_(a.locale || "fr", IMMO_LANGS_, "Langue"), billingEmail: a.billingEmail ? validateEmail_(a.billingEmail) : "",
       createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
     audit_("ORGANIZATION_CREATED", "Organization", o.organizationId, o.organizationId, { name: name, type: type });
     if (a.planCode) subAssign_(p, { organizationId: o.organizationId, planCode: a.planCode, trial: true });
@@ -54,7 +54,7 @@ function orgUpdate_(p, a) {
   if (a.name !== undefined) patch.name = reqText_(a.name, "Nom", 2, 120);
   if (a.city !== undefined) patch.city = safeText_(a.city, 80);
   if (a.billingEmail !== undefined) patch.billingEmail = a.billingEmail ? validateEmail_(a.billingEmail) : "";
-  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, ["fr", "en", "ar"], "Langue");
+  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, IMMO_LANGS_, "Langue");
   if (a.type !== undefined) { requireSuper_(p); patch.type = oneOf_(a.type, ORG_TYPES_, "Type"); }
   dbUpdate_("Organizations", id, patch);
   audit_("ORGANIZATION_UPDATED", "Organization", id, id, diff_(o, patch, Object.keys(patch)));
@@ -145,7 +145,7 @@ function ownerAgencyCreate_(p, a) {
     const same = dbAll_("Organizations").find(function (o) { return String(o.name).toLowerCase() === name.toLowerCase() && o.status !== "INACTIVE"; });
     if (same) throw new AppError("VALIDATION", "Une organisation porte déjà ce nom. S'il s'agit de la même agence, utilisez « Attribuer une agence » ; sinon, choisissez un autre nom.");
     const o = dbInsert_("Organizations", { name: name, status: "ACTIVE", type: "AGENCY", city: safeText_(a.city || "Marrakech", 80), country: "MA", timezone: tz_(),
-      locale: oneOf_(a.locale || "fr", ["fr", "en", "ar"], "Langue"), billingEmail: adminEmail, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(),
+      locale: oneOf_(a.locale || "fr", IMMO_LANGS_, "Langue"), billingEmail: adminEmail, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(),
       managedByOrgId: prop.organizationId, contactName: safeText_(a.adminName || "", 100), phone: safeText_(a.phone || "", 30), address: safeText_(a.address || "", 240) });
     audit_("AGENCY_CREATED_BY_OWNER", "Organization", o.organizationId, prop.organizationId, { name: name, propertyId: prop.propertyId, adminEmail: adminEmail });
     return o;
@@ -212,7 +212,7 @@ function ownerAgencyUpdate_(p, a) {
   }
   if (a.city !== undefined) patch.city = safeText_(a.city, 80);
   if (a.contactEmail !== undefined) patch.billingEmail = a.contactEmail ? validateEmail_(a.contactEmail) : "";
-  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, ["fr", "en", "ar"], "Langue");
+  if (a.locale !== undefined) patch.locale = oneOf_(a.locale, IMMO_LANGS_, "Langue");
   if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
   if (a.address !== undefined) patch.address = safeText_(a.address, 240);
   if (a.adminName !== undefined) patch.contactName = safeText_(a.adminName, 100);

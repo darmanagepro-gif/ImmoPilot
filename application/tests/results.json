@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-10-15T00:24:49.570Z",
-  "durationMs": 3140,
+  "ranAt": "2026-10-15T00:46:17.444Z",
+  "durationMs": 3287,
   "node": "v22.22.0",
   "filesLoaded": [
     "Code.gs",
@@ -38,13 +38,19 @@
     "WorkOrderService.gs"
   ],
   "summary": {
-    "total": 65,
-    "passed": 65,
+    "total": 66,
+    "passed": 66,
     "failed": 0,
     "skipped": 0,
-    "ranAt": "2026-10-15T00:24:47.886Z"
+    "ranAt": "2026-10-15T00:46:15.736Z"
   },
   "results": [
+    {
+      "group": "Super administrateur : comptes clients",
+      "name": "Comptes classés par espace, entrer dans l'espace d'un client, actions journalisées au nom du super administrateur, retour",
+      "status": "PASS",
+      "detail": ""
+    },
     {
       "group": "Assistant Rubban",
       "name": "Assistant : guide sans clé, IA côté serveur uniquement, aucune donnée client transmise, repli automatique",
@@ -437,11 +443,12 @@
     }
   ],
   "routes": {
-    "serverRoutes": 173,
+    "serverRoutes": 176,
     "publicRoutes": 10,
-    "clientCalls": 41,
+    "clientCalls": 43,
     "missingOnServer": [],
     "notReferencedByUi": [
+      "admin.accounts",
       "org.update",
       "support.list",
       "invite.list",
@@ -589,7 +596,7 @@
       {
         "name": "setupProject() crée la base, le dossier privé et le schéma",
         "status": "PASS",
-        "detail": "base ss_9b2b4622ffd9bc99a4cd30cb2, 3 migrations"
+        "detail": "base ss_71813096f6d9b0fe39868db12, 3 migrations"
       },
       {
         "name": "Avant déploiement : pas de lien envoyé, message explicite",
@@ -679,7 +686,7 @@
       {
         "name": "Suite complète de tests sur la version 2 fichiers",
         "status": "PASS",
-        "detail": "65/65"
+        "detail": "66/66"
       },
       {
         "name": "La page contient toute l'interface (aucune inclusion restante)",

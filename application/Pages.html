@@ -181,7 +181,7 @@ PAGES.agencies = function (el) {
         }, "sm") : null,
         ag.createdByMe && live ? btn(t("Modifier la fiche"), function () {
           formModal(t("Fiche de l'agence"), [{ k: "name", l: "Nom de l'agence", req: true }, { k: "address", l: "Adresse" }, { k: "city", l: "Ville" }, { k: "phone", l: "Téléphone" },
-            { k: "contactEmail", l: "E-mail de contact", t: "email" }, { k: "locale", l: "Langue", t: "select", opts: [["fr", "Français"], ["en", "English"], ["ar", "العربية"]] },
+            { k: "contactEmail", l: "E-mail de contact", t: "email" }, { k: "locale", l: "Langue", t: "select", opts: langOpts() },
             { k: "adminName", l: "Nom du responsable" }, { k: "adminEmail", l: "E-mail du responsable (connexion)", t: "email", req: true,
               help: "Si vous changez cet e-mail, l'ancien responsable perd l'accès à l'agence et un nouveau lien d'activation est envoyé à la nouvelle adresse." }], ag, function (v) {
             v.agencyOrganizationId = ag.organizationId;
