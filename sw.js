@@ -3,8 +3,8 @@
  * Les données (réservations, finances…) ne sont jamais mises en cache : elles restent chez Google, toujours à jour,
  * identiques sur le web, Android et iPhone.
  */
-var CACHE = "immopilot-shell-v2";
-var SHELL = ["./", "index.html", "config.js", "offline.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
+var CACHE = "immopilot-shell-v3";
+var SHELL = ["./", "index.html", "config.js", "offline.html", "manifest.webmanifest", "icons/immopilot-192.png", "icons/immopilot-512.png", "icons/immopilot-180.png"];
 self.addEventListener("install", function (e) { e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); })); self.skipWaiting(); });
 self.addEventListener("activate", function (e) {
   e.waitUntil(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); })); }));
