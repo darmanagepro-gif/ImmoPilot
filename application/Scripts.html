@@ -96,7 +96,7 @@ const App = window.App = {
     const bell = h("button", { class: "bell", type: "button", "aria-label": t("Notifications"), onclick: function () { NAV_HASH.v = "notifications"; } }, "🔔", S.me.unreadNotifications ? h("span", { class: "dot" }, String(S.me.unreadNotifications)) : null);
     const top = h("header", { class: "topbar" }, h("button", { class: "menu-btn", type: "button", "aria-label": t("Menu"), onclick: function () {
       sidebar.classList.add("open"); document.body.appendChild(h("div", { class: "scrim", onclick: function (e) { sidebar.classList.remove("open"); e.target.remove(); } }));
-    } }, "☰"), h("h1", { id: "page-title" }, ""), h("div", { class: "spacer" }), langSel, bell,
+    } }, "☰"), h("h1", { id: "page-title" }, ""), h("div", { class: "spacer" }), themeButton(), langSel, bell,
       h("button", { class: "user-chip", type: "button", onclick: function () { NAV_HASH.v = "settings"; } }, h("div", { class: "avatar" }, (S.me.displayName || "?").slice(0, 1).toUpperCase()), h("div", null, h("span", { class: "uname" }, S.me.displayName), h("small", null, roleTxt))));
     app.appendChild(h("div", { class: "shell" }, sidebar, h("div", { class: "main" }, top, h("main", { class: "content", id: "content" }))));
   },

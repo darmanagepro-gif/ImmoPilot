@@ -1,0 +1,701 @@
+{
+  "ranAt": "2026-10-15T00:24:49.570Z",
+  "durationMs": 3140,
+  "node": "v22.22.0",
+  "filesLoaded": [
+    "Code.gs",
+    "Admin.gs",
+    "Assistant.gs",
+    "AuditService.gs",
+    "Auth.gs",
+    "CheckInOutService.gs",
+    "CleaningService.gs",
+    "Compat.gs",
+    "Config.gs",
+    "ContractorService.gs",
+    "DashboardService.gs",
+    "Database.gs",
+    "Demo.gs",
+    "DriveService.gs",
+    "FinanceService.gs",
+    "GuestService.gs",
+    "IncidentService.gs",
+    "InvoiceService.gs",
+    "LeaseService.gs",
+    "Migrations.gs",
+    "NotificationService.gs",
+    "OrganizationService.gs",
+    "ParetoService.gs",
+    "Permissions.gs",
+    "PropertyService.gs",
+    "ReportsService.gs",
+    "ReservationService.gs",
+    "SubscriptionService.gs",
+    "Tests.gs",
+    "Triggers.gs",
+    "UserService.gs",
+    "Utils.gs",
+    "WorkOrderService.gs"
+  ],
+  "summary": {
+    "total": 65,
+    "passed": 65,
+    "failed": 0,
+    "skipped": 0,
+    "ranAt": "2026-10-15T00:24:47.886Z"
+  },
+  "results": [
+    {
+      "group": "Assistant Rubban",
+      "name": "Assistant : guide sans clé, IA côté serveur uniquement, aucune donnée client transmise, repli automatique",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Mot de passe haché (PBKDF2 vecteurs RFC) et jamais stocké en clair",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Connexion rapide : PBKDF2 en JavaScript (RFC), re-hachage transparent, un seul aller-retour, lectures ciblées",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Invitation valide → compte activé → connexion",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Invitation expirée refusée",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Invitation déjà utilisée refusée",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Invitation révoquée inutilisable",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "E-mail non autorisé / identifiants invalides / jeton forgé",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Verrouillage après 5 échecs de connexion",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Utilisateur suspendu : sessions révoquées et connexion refusée",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Organisation suspendue : accès coupé, données conservées",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Accès au bien d'un autre propriétaire refusé (IDOR)",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Super administrateur sans accès aux données privées sauf assistance approuvée",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Élévation de privilèges impossible",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Mes agences : fiche complète, changement d'e-mail du responsable avec nouveau lien d'activation, renvoi du lien",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Abonnement : les agences créées par un propriétaire sont une option de son abonnement",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Propriétaire : création d'une agence, invitation de son responsable et attribution du bien",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Propriétaire : « Mes agences » — droits, fiche, retrait de tous les accès, suppression",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Attribution d'agence, cloisonnement entre agences et révocation",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Agence en consultation seule ne peut pas réserver",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Environnement de démonstration : création complète, droits cloisonnés, relance sans doublon",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Historique de démonstration (6 mois) : données cohérentes, analyses alimentées, une seule exécution",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Suppression de compte : demande depuis l'application puis anonymisation par le super administrateur",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Document privé : téléchargement refusé sans droit",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Modèle de document : seul un Google Docs du dossier « Modeles » est accepté",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Fichier refusé si le contenu ne correspond pas au type annoncé",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Injection de formule neutralisée (Sheets et CSV)",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Comptes et sécurité",
+      "name": "Fonctions d'installation refusées hors éditeur",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Réservations",
+      "name": "Réservation valide, montants calculés côté serveur",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Réservations",
+      "name": "Double réservation refusée (chevauchement)",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Réservations",
+      "name": "Double réservation refusée même via une autre agence",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Réservations",
+      "name": "Départ 11:00 et arrivée 15:00 le même jour autorisés ; arrivée 12:00 refusée (battement 120 min)",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Réservations",
+      "name": "Double soumission (même clé) : un seul enregistrement",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Réservations",
+      "name": "Requêtes concurrentes : contrôle de chevauchement sous verrou",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Réservations",
+      "name": "Modification avec contrôle de version",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Réservations",
+      "name": "Paiement partiel, solde restant, remboursement plafonné",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Réservations",
+      "name": "Annulation selon la politique (pénalité) et remboursement dû",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Réservations",
+      "name": "Blocage de calendrier respecté",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Check-in / check-out et ménage",
+      "name": "Gardien affecté à une réservation : accès limité à celle-ci",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Check-in / check-out et ménage",
+      "name": "Check-in avec photo et checklist, puis check-out → mission de ménage auto",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Check-in / check-out et ménage",
+      "name": "Expiration après 2 h (tâche planifiée) puis réattribution",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Check-in / check-out et ménage",
+      "name": "Acceptation, photos avant/après obligatoires, fin, validation et dépense unique",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Check-in / check-out et ménage",
+      "name": "Refus de mission → retour à attribuer + alerte",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Maintenance (incident → devis → intervention → facture)",
+      "name": "Annuaire des prestataires géré par le super administrateur, choix par type de prestation",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Maintenance (incident → devis → intervention → facture)",
+      "name": "Chaîne complète et commission de 15 % calculée une seule fois",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Maintenance (incident → devis → intervention → facture)",
+      "name": "Taux de commission configurable (prestataire et intervention)",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Maintenance (incident → devis → intervention → facture)",
+      "name": "Intervention sans devis refusée (sauf urgence critique)",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Locations longue durée",
+      "name": "Bail : échéancier, paiement partiel, retard, quittance, fin",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Locations longue durée",
+      "name": "Échéancier : proratisation et indexation (calcul pur)",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "KPI et Pareto",
+      "name": "Pareto : classement, parts, cumul, seuil 80 %",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "KPI et Pareto",
+      "name": "Pareto : données vides, valeurs nulles, négatives, catégories inconnues, égalités",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "KPI et Pareto",
+      "name": "Pareto serveur, filtre de période et cohérence tableau / export CSV",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "KPI et Pareto",
+      "name": "KPI : revenus proratisés, dépenses, occupation, annulations",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "KPI et Pareto",
+      "name": "Tableaux de bord par rôle sur données réelles",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "KPI et Pareto",
+      "name": "Rapports : export respectant les permissions",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Abonnements",
+      "name": "Essai, échéance impayée, suspension en lecture seule, paiement manuel",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Abonnements",
+      "name": "Quota de biens du forfait appliqué",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Données, migration et robustesse",
+      "name": "Installation à partir de rien : base, dossier privé, schéma, forfaits, premier super administrateur",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Données, migration et robustesse",
+      "name": "Migration non destructive d'une base de la phase 4",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Données, migration et robustesse",
+      "name": "Détection des doublons d'identifiants",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Données, migration et robustesse",
+      "name": "Sauvegarde et restauration non destructive",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Données, migration et robustesse",
+      "name": "Erreur d'écriture : réponse propre avec référence, sans fuite technique",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Données, migration et robustesse",
+      "name": "Quota e-mail épuisé : invitation enregistrée, statut EMAIL_FAILED",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Données, migration et robustesse",
+      "name": "Lien WhatsApp encodé (sans envoi automatique)",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Données, migration et robustesse",
+      "name": "Notifications sans doublon (clé d'événement)",
+      "status": "PASS",
+      "detail": ""
+    }
+  ],
+  "routes": {
+    "serverRoutes": 173,
+    "publicRoutes": 10,
+    "clientCalls": 41,
+    "missingOnServer": [],
+    "notReferencedByUi": [
+      "org.update",
+      "support.list",
+      "invite.list",
+      "user.list",
+      "notif.list",
+      "notif.whatsapp",
+      "notif.email",
+      "doc.list",
+      "doc.archive",
+      "admin.errors",
+      "admin.jobs",
+      "audit.list",
+      "property.list",
+      "property.get",
+      "property.orgChoices",
+      "property.create",
+      "property.update",
+      "property.archive",
+      "property.import",
+      "property.export",
+      "residence.list",
+      "residence.create",
+      "property.agencyChoices",
+      "property.agencySet",
+      "property.agencyCreate",
+      "agency.mine",
+      "agency.update",
+      "agency.resendInvite",
+      "agency.revokeAll",
+      "agency.delete",
+      "property.access",
+      "property.staffAssign",
+      "property.staffRevoke",
+      "resv.list",
+      "resv.get",
+      "resv.availability",
+      "resv.create",
+      "resv.update",
+      "resv.setStatus",
+      "resv.cancel",
+      "resv.calendar",
+      "resv.sendConfirmation",
+      "resv.sheet",
+      "block.create",
+      "block.cancel",
+      "guest.list",
+      "guest.save",
+      "guest.purge",
+      "guest.tokenCreate",
+      "guest.tokenRevoke",
+      "ops.today",
+      "ops.checkIn",
+      "ops.checkOut",
+      "ops.history",
+      "ops.report",
+      "clean.list",
+      "clean.get",
+      "clean.create",
+      "clean.assign",
+      "clean.respond",
+      "clean.start",
+      "clean.room",
+      "clean.anomaly",
+      "clean.complete",
+      "clean.validate",
+      "clean.cancel",
+      "clean.orderPdf",
+      "clean.reportPdf",
+      "inc.list",
+      "inc.get",
+      "inc.create",
+      "inc.update",
+      "inc.comment",
+      "ctr.list",
+      "ctr.choices",
+      "ctr.get",
+      "ctr.create",
+      "ctr.update",
+      "quote.request",
+      "quote.submit",
+      "quote.create",
+      "quote.decline",
+      "quote.decide",
+      "quote.list",
+      "quote.pdf",
+      "wo.create",
+      "wo.respond",
+      "wo.schedule",
+      "wo.start",
+      "wo.complete",
+      "wo.verify",
+      "wo.cancel",
+      "wo.list",
+      "wo.get",
+      "wo.pdf",
+      "inv.submit",
+      "inv.approve",
+      "inv.reject",
+      "inv.list",
+      "inv.get",
+      "inv.pdf",
+      "fin.summary",
+      "pay.record",
+      "pay.void",
+      "pay.reconcile",
+      "pay.list",
+      "exp.create",
+      "exp.cancel",
+      "exp.list",
+      "rev.create",
+      "tenant.list",
+      "tenant.create",
+      "tenant.update",
+      "lease.list",
+      "lease.get",
+      "lease.create",
+      "lease.update",
+      "lease.activate",
+      "lease.notice",
+      "lease.end",
+      "lease.renew",
+      "lease.depositReturn",
+      "lease.receipt",
+      "lease.document",
+      "lease.mine",
+      "sub.list",
+      "assistant.kb",
+      "assistant.ask",
+      "dash.get",
+      "pareto.run",
+      "pareto.export",
+      "report.run"
+    ],
+    "undefinedHandlers": []
+  },
+  "doGetRenders": true,
+  "freshInstall": {
+    "ok": true,
+    "steps": [
+      {
+        "name": "Propriétés du script vides au départ",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "setupProject() crée la base, le dossier privé et le schéma",
+        "status": "PASS",
+        "detail": "base ss_9b2b4622ffd9bc99a4cd30cb2, 3 migrations"
+      },
+      {
+        "name": "Avant déploiement : pas de lien envoyé, message explicite",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "setupProject() relancé : même base, rien de recréé",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "Déploiement simulé, IMMO_APP_URL renseignée, createFirstSuperAdmin() envoie un lien cliquable",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "installTriggers() et healthCheck()",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "Activation du compte par le lien puis connexion",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "Le lien d'activation ne peut pas être réutilisé",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "Super administrateur : création de la première organisation cliente et invitation du propriétaire",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "Le propriétaire accepte l'invitation, se connecte et crée son premier bien",
+        "status": "PASS",
+        "detail": ""
+      }
+    ]
+  },
+  "installDiagnostic": {
+    "ok": true,
+    "steps": [
+      {
+        "name": "Projet complet : l'application s'affiche normalement",
+        "status": "PASS"
+      },
+      {
+        "name": "Fichier HTML « Components » absent et fichier « Pareto » manquant : page explicative",
+        "status": "PASS"
+      },
+      {
+        "name": "Fichier collé incomplètement (ContractorService sans sa fin) : seules ses routes échouent, avec un message clair",
+        "status": "PASS"
+      },
+      {
+        "name": "UserService collé deux fois (dont à la place de ContractorService) : le projet se charge et verifierInstallation désigne ContractorService",
+        "status": "PASS"
+      },
+      {
+        "name": "IMMO_APP_URL mal saisie (identifiant seul, guillemets, URL /dev) : lien complet et cliquable quand même",
+        "status": "PASS"
+      }
+    ]
+  },
+  "bundle": {
+    "ok": true,
+    "steps": [
+      {
+        "name": "dist/ contient exactement ImmoPilot.gs, Index.html et appsscript.json",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "Un seul fichier serveur chargé",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "verifierInstallation() : installation complète avec 2 fichiers",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "Suite complète de tests sur la version 2 fichiers",
+        "status": "PASS",
+        "detail": "65/65"
+      },
+      {
+        "name": "La page contient toute l'interface (aucune inclusion restante)",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "Index court (ancienne version) avec le serveur en un fichier : message « remplacez Index » (et non la liste des 8 fichiers)",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "Ligne de fin présente dans ImmoPilot.gs (repère pour vérifier un collage complet)",
+        "status": "PASS",
+        "detail": ""
+      }
+    ]
+  }
+}

@@ -317,6 +317,33 @@ function tabs(container, list, active) {
 
 /* ------------------------------ graphiques ------------------------------ */
 const PALETTE = { primary: "#3D4FD1", palm: "#1E7A55", saffron: "#D9A21B", clay: "#B4432F", grey: "#9AA7B8", navy: "#10233C" };
+/* ---------- Thème clair / sombre : choix mémorisé sur l'appareil ; par défaut, réglage du système ---------- */
+function themeCurrent() {
+  const saved = lstore("ip_theme");
+  if (saved === "dark" || saved === "light") return saved;
+  try { return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"; } catch (e) { return "light"; }
+}
+function themeApply(mode) {
+  document.documentElement.setAttribute("data-theme", mode);
+  // Couleurs des graphiques adaptées au fond.
+  PALETTE.navy = mode === "dark" ? "#C9D3E1" : "#10233C"; PALETTE.primary = mode === "dark" ? "#8291FF" : "#3D4FD1"; PALETTE.palm = mode === "dark" ? "#4CC38A" : "#1E7A55";
+  if (window.Chart && window.Chart.defaults) { Chart.defaults.color = mode === "dark" ? "#C9D3E1" : "#5E6B7D"; Chart.defaults.borderColor = mode === "dark" ? "rgba(255,255,255,.08)" : "rgba(0,0,0,.08)"; }
+}
+function themeToggle() {
+  const next = themeCurrent() === "dark" ? "light" : "dark";
+  lstore("ip_theme", next); themeApply(next);
+  document.querySelectorAll(".theme-btn").forEach(function (b) { themeButtonSync(b); });
+  if (S.me && window.App && S.route) App.go(S.route); // redessine les graphiques
+}
+function themeButtonSync(b) {
+  const dark = themeCurrent() === "dark";
+  b.textContent = dark ? "☀️" : "🌙";
+  b.setAttribute("aria-label", dark ? t("Passer en mode clair") : t("Passer en mode sombre"));
+  b.title = b.getAttribute("aria-label");
+}
+function themeButton() { const b = h("button", { type: "button", class: "theme-btn", onclick: themeToggle }); themeButtonSync(b); return b; }
+themeApply(themeCurrent());
+try { window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () { if (!lstore("ip_theme")) { themeApply(themeCurrent()); document.querySelectorAll(".theme-btn").forEach(themeButtonSync); } }); } catch (e) { /* navigateur ancien */ }
 function chart(canvasParent, config) {
   if (!window.Chart) { canvasParent.appendChild(h("div", { class: "muted small" }, t("Graphique indisponible (bibliothèque Chart.js non chargée)."))); return null; }
   const c = h("canvas"); clear(canvasParent).appendChild(h("div", { class: "chart-box" }, c));

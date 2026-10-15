@@ -23,6 +23,8 @@ var ASSISTANT_KB_ = [
   // ---------- Compte et connexion ----------
   { id: "login", t: "Se connecter à ImmoPilot", r: ["*"], go: "", k: "connexion login connecter identifiant se connecter sign in دخول",
     s: ["Ouvrez l'adresse d'ImmoPilot (site ou application).", "Saisissez votre e-mail et votre mot de passe, puis « Se connecter ».", "Après 5 essais erronés, le compte est bloqué 15 minutes : attendez puis réessayez, ou utilisez « Mot de passe oublié »."] },
+  { id: "theme", t: "Passer en mode sombre ou clair (jour / nuit)", r: ["*"], go: "", k: "thème theme sombre clair nuit jour dark light mode nocturne couleur écran الوضع الليلي داكن فاتح",
+    s: ["Cliquez sur le bouton 🌙 en haut de l'écran (à gauche du choix de langue), ou sur l'écran de connexion.", "L'application passe en mode sombre ; le bouton devient ☀️ pour revenir en mode clair.", "Votre choix est mémorisé sur cet appareil. Sans choix, ImmoPilot suit le réglage clair/sombre de votre appareil."] },
   { id: "activate", t: "Activer mon compte (lien reçu par e-mail)", r: ["*"], go: "", k: "activation activer invitation lien email premier mot de passe accepter invitation تفعيل",
     s: ["Ouvrez l'e-mail « Invitation à rejoindre ImmoPilot » ou « Activez votre compte ImmoPilot ».", "Cliquez sur le bouton « Ouvrir ImmoPilot » (lien personnel, à usage unique).", "Choisissez votre mot de passe (10 caractères minimum, avec lettres et chiffres) puis validez.", "Le lien d'invitation est valable 7 jours, le lien d'activation 72 h. Expiré ? Demandez à votre administrateur de le renvoyer."] },
   { id: "forgot", t: "Mot de passe oublié", r: ["*"], go: "", k: "oublié oublie reset réinitialiser mot de passe mdp password forgot نسيت كلمة السر",

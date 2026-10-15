@@ -1,0 +1,1467 @@
+{
+  "ranAt": "2026-10-15T00:23:29.207Z",
+  "roles": [
+    {
+      "role": "Propriétaire",
+      "lang": "fr",
+      "dir": "ltr",
+      "menu": [
+        "dashboard",
+        "finance",
+        "reports",
+        "pareto",
+        "properties",
+        "calendar",
+        "leases",
+        "tenants",
+        "agencies",
+        "reservations",
+        "guests",
+        "checkin",
+        "cleaning",
+        "incidents",
+        "contractors",
+        "quotes",
+        "workorders",
+        "invoices",
+        "notifications",
+        "users",
+        "subscriptions",
+        "settings",
+        "audit"
+      ],
+      "visited": [
+        {
+          "route": "dashboard",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "finance",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "reports",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "pareto",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "properties",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "calendar",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "leases",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "tenants",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "agencies",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "reservations",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "guests",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "checkin",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "cleaning",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "incidents",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "contractors",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "quotes",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "workorders",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "invoices",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "notifications",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "users",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "subscriptions",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "settings",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "audit",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "property/prop_9ea6af409f6f465f9c9d123a24cd23cb",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "reservation/resv_674ef125a9b24135969925d66e9fd1df",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "incident/inc_ce3c9ae8442844fbbb8630fe499a38da",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "cleaning/cln_cb61779aaf914a3ab3ae1b38e1535f45",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "workorder/wo_666496b522e543a0bd21dcfccd26c50c",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "invoice/ivc_fb3c6fdf951a4071a4406164bbbced14",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "lease/lea_379a835837dc4e2d8f923971035ad5ac",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "contractors/art_1f27f875c5bd491b8a10c4b5399f8038",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        }
+      ],
+      "errors": [],
+      "callsOk": 38,
+      "callsFailed": []
+    },
+    {
+      "role": "Agence (admin)",
+      "lang": "fr",
+      "dir": "ltr",
+      "menu": [
+        "dashboard",
+        "finance",
+        "reports",
+        "pareto",
+        "properties",
+        "calendar",
+        "leases",
+        "tenants",
+        "reservations",
+        "guests",
+        "checkin",
+        "cleaning",
+        "incidents",
+        "contractors",
+        "quotes",
+        "workorders",
+        "invoices",
+        "notifications",
+        "users",
+        "subscriptions",
+        "settings",
+        "audit"
+      ],
+      "visited": [
+        {
+          "route": "dashboard",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "finance",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "reports",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "pareto",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "properties",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "calendar",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "leases",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "tenants",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "reservations",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "guests",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "checkin",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "cleaning",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "incidents",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "contractors",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "quotes",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "workorders",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "invoices",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "notifications",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "users",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "subscriptions",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "settings",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "audit",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "property/prop_9ea6af409f6f465f9c9d123a24cd23cb",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "reservation/resv_674ef125a9b24135969925d66e9fd1df",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "incident/inc_ce3c9ae8442844fbbb8630fe499a38da",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "cleaning/cln_cb61779aaf914a3ab3ae1b38e1535f45",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "workorder/wo_666496b522e543a0bd21dcfccd26c50c",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "invoice/ivc_fb3c6fdf951a4071a4406164bbbced14",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "lease/lea_379a835837dc4e2d8f923971035ad5ac",
+          "alerts": [
+            "Bail introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "contractors/art_1f27f875c5bd491b8a10c4b5399f8038",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        }
+      ],
+      "errors": [],
+      "callsOk": 36,
+      "callsFailed": [
+        "lease.get → FORBIDDEN Bail introuvable ou accès refusé."
+      ]
+    },
+    {
+      "role": "Agence (collaborateur)",
+      "lang": "en",
+      "dir": "ltr",
+      "menu": [
+        "dashboard",
+        "reports",
+        "pareto",
+        "properties",
+        "calendar",
+        "leases",
+        "tenants",
+        "reservations",
+        "guests",
+        "checkin",
+        "cleaning",
+        "incidents",
+        "contractors",
+        "quotes",
+        "workorders",
+        "notifications",
+        "settings"
+      ],
+      "visited": [
+        {
+          "route": "dashboard",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "reports",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "pareto",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "properties",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "calendar",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "leases",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "tenants",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "reservations",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "guests",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "checkin",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "cleaning",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "incidents",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "contractors",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "quotes",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "workorders",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "notifications",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "settings",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "property/prop_9ea6af409f6f465f9c9d123a24cd23cb",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "reservation/resv_674ef125a9b24135969925d66e9fd1df",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "incident/inc_ce3c9ae8442844fbbb8630fe499a38da",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "cleaning/cln_cb61779aaf914a3ab3ae1b38e1535f45",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "workorder/wo_666496b522e543a0bd21dcfccd26c50c",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "invoice/ivc_fb3c6fdf951a4071a4406164bbbced14",
+          "alerts": [
+            "Facture introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "lease/lea_379a835837dc4e2d8f923971035ad5ac",
+          "alerts": [
+            "Bail introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "contractors/art_1f27f875c5bd491b8a10c4b5399f8038",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        }
+      ],
+      "errors": [],
+      "callsOk": 30,
+      "callsFailed": [
+        "inv.get → FORBIDDEN Facture introuvable ou accès refusé.",
+        "lease.get → FORBIDDEN Bail introuvable ou accès refusé."
+      ]
+    },
+    {
+      "role": "Gardien",
+      "lang": "fr",
+      "dir": "ltr",
+      "menu": [
+        "dashboard",
+        "calendar",
+        "checkin",
+        "incidents",
+        "notifications",
+        "settings"
+      ],
+      "visited": [
+        {
+          "route": "dashboard",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "calendar",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "checkin",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "incidents",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "notifications",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "settings",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "property/prop_9ea6af409f6f465f9c9d123a24cd23cb",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "reservation/resv_674ef125a9b24135969925d66e9fd1df",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "incident/inc_ce3c9ae8442844fbbb8630fe499a38da",
+          "alerts": [
+            "Incident introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "cleaning/cln_cb61779aaf914a3ab3ae1b38e1535f45",
+          "alerts": [
+            "Mission introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "workorder/wo_666496b522e543a0bd21dcfccd26c50c",
+          "alerts": [
+            "Intervention introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "invoice/ivc_fb3c6fdf951a4071a4406164bbbced14",
+          "alerts": [
+            "Facture introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "lease/lea_379a835837dc4e2d8f923971035ad5ac",
+          "alerts": [
+            "Bail introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "contractors/art_1f27f875c5bd491b8a10c4b5399f8038",
+          "alerts": [
+            "Prestataire introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        }
+      ],
+      "errors": [],
+      "callsOk": 11,
+      "callsFailed": [
+        "inc.get → FORBIDDEN Incident introuvable ou accès refusé.",
+        "clean.get → FORBIDDEN Mission introuvable ou accès refusé.",
+        "wo.get → FORBIDDEN Intervention introuvable ou accès refusé.",
+        "inv.get → FORBIDDEN Facture introuvable ou accès refusé.",
+        "lease.get → FORBIDDEN Bail introuvable ou accès refusé.",
+        "ctr.get → FORBIDDEN Prestataire introuvable ou accès refusé."
+      ]
+    },
+    {
+      "role": "Ménage",
+      "lang": "fr",
+      "dir": "ltr",
+      "menu": [
+        "dashboard",
+        "cleaning",
+        "incidents",
+        "notifications",
+        "settings"
+      ],
+      "visited": [
+        {
+          "route": "dashboard",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "cleaning",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "incidents",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "notifications",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "settings",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "property/prop_9ea6af409f6f465f9c9d123a24cd23cb",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "reservation/resv_674ef125a9b24135969925d66e9fd1df",
+          "alerts": [
+            "Réservation introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "incident/inc_ce3c9ae8442844fbbb8630fe499a38da",
+          "alerts": [
+            "Incident introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "cleaning/cln_cb61779aaf914a3ab3ae1b38e1535f45",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "workorder/wo_666496b522e543a0bd21dcfccd26c50c",
+          "alerts": [
+            "Intervention introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "invoice/ivc_fb3c6fdf951a4071a4406164bbbced14",
+          "alerts": [
+            "Facture introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "lease/lea_379a835837dc4e2d8f923971035ad5ac",
+          "alerts": [
+            "Bail introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "contractors/art_1f27f875c5bd491b8a10c4b5399f8038",
+          "alerts": [
+            "Prestataire introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        }
+      ],
+      "errors": [],
+      "callsOk": 9,
+      "callsFailed": [
+        "resv.get → FORBIDDEN Réservation introuvable ou accès refusé.",
+        "inc.get → FORBIDDEN Incident introuvable ou accès refusé.",
+        "wo.get → FORBIDDEN Intervention introuvable ou accès refusé.",
+        "inv.get → FORBIDDEN Facture introuvable ou accès refusé.",
+        "lease.get → FORBIDDEN Bail introuvable ou accès refusé.",
+        "ctr.get → FORBIDDEN Prestataire introuvable ou accès refusé."
+      ]
+    },
+    {
+      "role": "Artisan",
+      "lang": "fr",
+      "dir": "ltr",
+      "menu": [
+        "dashboard",
+        "contractors",
+        "quotes",
+        "workorders",
+        "invoices",
+        "notifications",
+        "settings"
+      ],
+      "visited": [
+        {
+          "route": "dashboard",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "contractors",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "quotes",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "workorders",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "invoices",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "notifications",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "settings",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "property/prop_9ea6af409f6f465f9c9d123a24cd23cb",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "reservation/resv_674ef125a9b24135969925d66e9fd1df",
+          "alerts": [
+            "Réservation introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "incident/inc_ce3c9ae8442844fbbb8630fe499a38da",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "cleaning/cln_cb61779aaf914a3ab3ae1b38e1535f45",
+          "alerts": [
+            "Mission introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "workorder/wo_666496b522e543a0bd21dcfccd26c50c",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "invoice/ivc_fb3c6fdf951a4071a4406164bbbced14",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "lease/lea_379a835837dc4e2d8f923971035ad5ac",
+          "alerts": [
+            "Bail introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "contractors/art_1f27f875c5bd491b8a10c4b5399f8038",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        }
+      ],
+      "errors": [],
+      "callsOk": 14,
+      "callsFailed": [
+        "resv.get → FORBIDDEN Réservation introuvable ou accès refusé.",
+        "clean.get → FORBIDDEN Mission introuvable ou accès refusé.",
+        "lease.get → FORBIDDEN Bail introuvable ou accès refusé."
+      ]
+    },
+    {
+      "role": "Locataire",
+      "lang": "ar",
+      "dir": "rtl",
+      "menu": [
+        "dashboard",
+        "incidents",
+        "mylease",
+        "notifications",
+        "settings"
+      ],
+      "visited": [
+        {
+          "route": "dashboard",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "incidents",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "mylease",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "notifications",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "settings",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "property/prop_9ea6af409f6f465f9c9d123a24cd23cb",
+          "alerts": [
+            "Bien introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "reservation/resv_674ef125a9b24135969925d66e9fd1df",
+          "alerts": [
+            "Réservation introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "incident/inc_ce3c9ae8442844fbbb8630fe499a38da",
+          "alerts": [
+            "Incident introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "cleaning/cln_cb61779aaf914a3ab3ae1b38e1535f45",
+          "alerts": [
+            "Mission introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "workorder/wo_666496b522e543a0bd21dcfccd26c50c",
+          "alerts": [
+            "Intervention introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "invoice/ivc_fb3c6fdf951a4071a4406164bbbced14",
+          "alerts": [
+            "Facture introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "lease/lea_379a835837dc4e2d8f923971035ad5ac",
+          "alerts": [],
+          "notFound": false,
+          "empty": false,
+          "expected": true,
+          "denied": false,
+          "detail": true
+        },
+        {
+          "route": "contractors/art_1f27f875c5bd491b8a10c4b5399f8038",
+          "alerts": [
+            "Prestataire introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        }
+      ],
+      "errors": [],
+      "callsOk": 8,
+      "callsFailed": [
+        "property.get → FORBIDDEN Bien introuvable ou accès refusé.",
+        "resv.get → FORBIDDEN Réservation introuvable ou accès refusé.",
+        "inc.get → FORBIDDEN Incident introuvable ou accès refusé.",
+        "clean.get → FORBIDDEN Mission introuvable ou accès refusé.",
+        "wo.get → FORBIDDEN Intervention introuvable ou accès refusé.",
+        "inv.get → FORBIDDEN Facture introuvable ou accès refusé.",
+        "ctr.get → FORBIDDEN Prestataire introuvable ou accès refusé."
+      ]
+    },
+    {
+      "role": "Super administrateur",
+      "lang": "fr",
+      "dir": "ltr",
+      "menu": [
+        "dashboard",
+        "reports",
+        "contractors",
+        "notifications",
+        "users",
+        "subscriptions",
+        "settings",
+        "admin",
+        "audit"
+      ],
+      "visited": [
+        {
+          "route": "dashboard",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "reports",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "contractors",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "notifications",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "users",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "subscriptions",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "settings",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "admin",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "audit",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "property/prop_9ea6af409f6f465f9c9d123a24cd23cb",
+          "alerts": [
+            "Bien introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "reservation/resv_674ef125a9b24135969925d66e9fd1df",
+          "alerts": [
+            "Réservation introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "incident/inc_ce3c9ae8442844fbbb8630fe499a38da",
+          "alerts": [
+            "Incident introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "cleaning/cln_cb61779aaf914a3ab3ae1b38e1535f45",
+          "alerts": [
+            "Mission introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "workorder/wo_666496b522e543a0bd21dcfccd26c50c",
+          "alerts": [
+            "Intervention introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "invoice/ivc_fb3c6fdf951a4071a4406164bbbced14",
+          "alerts": [
+            "Facture introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "lease/lea_379a835837dc4e2d8f923971035ad5ac",
+          "alerts": [
+            "Bail introuvable ou accès refusé."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        },
+        {
+          "route": "contractors/art_1f27f875c5bd491b8a10c4b5399f8038",
+          "alerts": [
+            "Accès refusé aux documents de cet élément."
+          ],
+          "notFound": false,
+          "empty": false,
+          "expected": false,
+          "denied": true,
+          "detail": true
+        }
+      ],
+      "errors": [],
+      "callsOk": 11,
+      "callsFailed": [
+        "property.get → FORBIDDEN Bien introuvable ou accès refusé.",
+        "resv.get → FORBIDDEN Réservation introuvable ou accès refusé.",
+        "inc.get → FORBIDDEN Incident introuvable ou accès refusé.",
+        "clean.get → FORBIDDEN Mission introuvable ou accès refusé.",
+        "wo.get → FORBIDDEN Intervention introuvable ou accès refusé.",
+        "inv.get → FORBIDDEN Facture introuvable ou accès refusé.",
+        "lease.get → FORBIDDEN Bail introuvable ou accès refusé.",
+        "ctr.get → FORBIDDEN Accès refusé aux documents de cet élément."
+      ]
+    }
+  ],
+  "public": [
+    {
+      "mode": "app",
+      "heading": "Connexion",
+      "text": "IPImmoPilotMarrakech · MarocLa gestion locative, de l'arrivée du voyageur au dernier dirham.Réservations, ménage, maintenance, baux et finances réunis pour les ",
+      "errors": []
+    },
+    {
+      "mode": "guest",
+      "heading": "Riad Test A",
+      "text": "Riad Test AMarrakechFrançaisEnglishالعربيةVotre séjourArrivée04/11/2026 · à partir de 15:00Départ07/11/2026 · avant 11:00Voyageurs2Réservation au nom dePortail ",
+      "errors": []
+    },
+    {
+      "mode": "accept",
+      "heading": "Invitation",
+      "text": "IPImmoPilotMarrakech · MarocLa gestion locative, de l'arrivée du voyageur au dernier dirham.Réservations, ménage, maintenance, baux et finances réunis pour les ",
+      "errors": []
+    },
+    {
+      "mode": "reset",
+      "heading": "Définir votre mot de passe",
+      "text": "IPImmoPilotMarrakech · MarocLa gestion locative, de l'arrivée du voyageur au dernier dirham.Réservations, ménage, maintenance, baux et finances réunis pour les ",
+      "errors": []
+    }
+  ]
+}

@@ -1150,3 +1150,6 @@ Total par période|Total per period|المجموع لكل فترة
 Nom du responsable|Manager's name|اسم المسؤول
 
 Ouverture de votre espace…|Opening your workspace…|جارٍ فتح مساحتك…
+
+Passer en mode clair|Switch to light mode|التبديل إلى الوضع الفاتح
+Passer en mode sombre|Switch to dark mode|التبديل إلى الوضع الداكن

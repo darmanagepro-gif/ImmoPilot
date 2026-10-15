@@ -1,0 +1,117 @@
+[
+  {
+    "test": "Contrôle : lien brut « #reports » → la page entière quitte l'application (page blanche)",
+    "ok": true,
+    "detail": "http://localhost:8787/?gas=1&as=superA#reports"
+  },
+  {
+    "test": "Super administrateur › Rapports : reste dans l'application",
+    "ok": true,
+    "detail": "http://localhost:8787/frame?as=superA"
+  },
+  {
+    "test": "Super administrateur › Rapports : page Rapports affichée",
+    "ok": true,
+    "detail": "Rapports"
+  },
+  {
+    "test": "Super administrateur › Rapports : rapport chargé (synthèse affichée)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "test": "Historique Google alimenté",
+    "ok": true,
+    "detail": "['reports']"
+  },
+  {
+    "test": "Super administrateur › menu « users » : reste dans l'application",
+    "ok": true,
+    "detail": "Utilisateurs"
+  },
+  {
+    "test": "Super administrateur › menu « subscriptions » : reste dans l'application",
+    "ok": true,
+    "detail": "Abonnements"
+  },
+  {
+    "test": "Super administrateur › menu « admin » : reste dans l'application",
+    "ok": true,
+    "detail": "Administration globale"
+  },
+  {
+    "test": "Super administrateur › menu « audit » : reste dans l'application",
+    "ok": true,
+    "detail": "Journal d'audit"
+  },
+  {
+    "test": "Super administrateur › menu « notifications » : reste dans l'application",
+    "ok": true,
+    "detail": "Notifications"
+  },
+  {
+    "test": "Super administrateur › menu « settings » : reste dans l'application",
+    "ok": true,
+    "detail": "Paramètres"
+  },
+  {
+    "test": "Super administrateur › menu « dashboard » : reste dans l'application",
+    "ok": true,
+    "detail": "Tableau de bord"
+  },
+  {
+    "test": "Bouton Retour (google.script.history) : retour sur Rapports",
+    "ok": true,
+    "detail": "Rapports"
+  },
+  {
+    "test": "Aucune erreur JavaScript (super administrateur)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "test": "Propriétaire › menu « properties » : reste dans l'application",
+    "ok": true,
+    "detail": "Biens"
+  },
+  {
+    "test": "Propriétaire › menu « reservations » : reste dans l'application",
+    "ok": true,
+    "detail": "Réservations"
+  },
+  {
+    "test": "Propriétaire › menu « finance » : reste dans l'application",
+    "ok": true,
+    "detail": "Finances"
+  },
+  {
+    "test": "Propriétaire › menu « reports » : reste dans l'application",
+    "ok": true,
+    "detail": "Rapports"
+  },
+  {
+    "test": "Propriétaire › menu « pareto » : reste dans l'application",
+    "ok": true,
+    "detail": "Analyses Pareto"
+  },
+  {
+    "test": "Propriétaire › menu « incidents » : reste dans l'application",
+    "ok": true,
+    "detail": "Incidents"
+  },
+  {
+    "test": "Propriétaire › menu « leases » : reste dans l'application",
+    "ok": true,
+    "detail": "Locations longue durée"
+  },
+  {
+    "test": "Propriétaire › ouverture d'une fiche de bien : dans l'application",
+    "ok": true,
+    "detail": "property/prop_08db0cb478a74aebb7c66168c7372738"
+  },
+  {
+    "test": "Aucune erreur JavaScript (propriétaire)",
+    "ok": true,
+    "detail": ""
+  }
+]

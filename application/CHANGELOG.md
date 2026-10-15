@@ -1,5 +1,9 @@
 # Journal des modifications
 
+## 2.0.1 — 15 octobre 2026
+
+- Bouton jour / nuit (☀️ / 🌙) dans la barre du haut et sur l'écran de connexion : thème clair ou sombre, mémorisé par appareil, réglage de l'appareil suivi par défaut. Graphiques, assistant Rubban et calendrier adaptés.
+
 ## 2.0.0 — 13 octobre 2026
 
 Refonte complète en SaaS multi-organisations à partir de la phase 4, avec migration non destructive des données (voir MIGRATION.md et AUDIT.md).

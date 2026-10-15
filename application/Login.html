@@ -9,7 +9,7 @@ const Public = {
     app.appendChild(h("div", { class: "auth" },
       h("aside", { class: "auth-side" }, h("div", { class: "brand", style: { padding: 0 } }, h("div", { class: "brand-mark" }, "IP"), h("div", null, h("b", null, "ImmoPilot"), h("small", null, "Marrakech · Maroc"))),
         h("div", null, h("h1", null, t("La gestion locative, de l'arrivée du voyageur au dernier dirham.")), h("p", null, t("Réservations, ménage, maintenance, baux et finances réunis pour les propriétaires, les conciergeries et leurs équipes de terrain.")))),
-      h("main", { class: "auth-main" }, h("div", { class: "auth-card" }, h("div", { class: "actions", style: { justifyContent: "flex-end", marginBottom: "18px" } }, langSel), h("h2", null, title), sub ? h("p", { class: "muted" }, sub) : null, body))));
+      h("main", { class: "auth-main" }, h("div", { class: "auth-card" }, h("div", { class: "actions", style: { justifyContent: "flex-end", marginBottom: "18px" } }, themeButton(), langSel), h("h2", null, title), sub ? h("p", { class: "muted" }, sub) : null, body))));
   },
   login: function (msg) {
     const err = h("div", { class: msg ? "alert bad" : "alert bad hidden" }, msg || "");
