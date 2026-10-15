@@ -68,7 +68,9 @@ jobs:
             rm -f "$HOME/.clasprc.b64"
           fi
           if ! node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$HOME/.clasprc.json" 2>/dev/null; then
-            pos="$first (longueur reçue : $(printf '%s' "$CLASPRC_JSON" | wc -c) caractères)"
+            # Forme du texte autour de l'erreur, sans rien révéler : lettres → a, chiffres → 9, accolades remplacées (sinon masquées par GitHub).
+            shape=$(node -e 'const t=require("fs").readFileSync(process.argv[1],"utf8");const m=/position (\d+)/.exec(process.argv[2]||"");const p=m?+m[1]:t.length;const f=x=>x.replace(/[A-Za-z]/g,"a").replace(/[0-9]/g,"9").replace(/[{]/g,"(").replace(/[}]/g,")").replace(/[^ -~]/g,c=>"<U+"+c.charCodeAt(0).toString(16)+">");console.log("début="+f(t.slice(0,25))+" | autour="+f(t.slice(Math.max(0,p-30),p))+" ▶ "+f(t.slice(p,p+30))+" | fin="+f(t.slice(-25)))' "$HOME/.clasprc.json" "$first")
+            pos="$first (longueur reçue : $(printf '%s' "$CLASPRC_JSON" | wc -c) caractères). Forme : $shape"
             echo "::error title=Secret CLASPRC_JSON mal copié::Le texte n'est pas complet (souvent coupé ou avec des caractères en trop). Dans le Codespace, tapez « code ~/.clasprc.json », puis dans l'onglet qui s'ouvre Ctrl+A, Ctrl+C, et collez dans le secret (Update). Détail : $pos"
             exit 1
           fi
