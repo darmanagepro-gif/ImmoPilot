@@ -8,7 +8,7 @@ name: Déployer ImmoPilot France (Apps Script)
 on:
   push:
     branches: [main]
-    paths: ["application/dist-fr/**"]
+    paths: ["application/dist-fr/**", "application/dist-fr-demo/**"]
   workflow_dispatch:
 
 permissions:
@@ -28,9 +28,13 @@ jobs:
           - target: officiel
             title: "ImmoPilot France"
             cfg: application/france/apps-script.json
+            dist: application/dist-fr
+            demoFlag: "false"
           - target: demo
             title: "ImmoPilot France – Démo"
             cfg: application/france/apps-script-demo.json
+            dist: application/dist-fr-demo   # paquet « démo publique » : choix d'une vue sans compte, lecture seule
+            demoFlag: "true"
     concurrency:
       group: apps-script-france-${{ matrix.target }}
       cancel-in-progress: false
@@ -42,9 +46,11 @@ jobs:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |
           [ -n "$CLASPRC_JSON" ] || { echo "::error::Secret CLASPRC_JSON manquant (voir application/GITHUB_VERS_APPS_SCRIPT.md)."; exit 1; }
-          for f in ImmoPilot.gs Index.html appsscript.json; do test -f "application/dist-fr/$f" || { echo "::error::application/dist-fr/$f manquant"; exit 1; }; done
-          grep -q 'var IMMO_EDITION_ = "FR";' application/dist-fr/ImmoPilot.gs || { echo "::error::application/dist-fr n'est pas l'édition France"; exit 1; }
-          grep -q "FIN DU FICHIER ImmoPilot.gs" application/dist-fr/ImmoPilot.gs || { echo "::error::ImmoPilot.gs incomplet"; exit 1; }
+          D=${{ matrix.dist }}
+          for f in ImmoPilot.gs Index.html appsscript.json; do test -f "$D/$f" || { echo "::error::$D/$f manquant"; exit 1; }; done
+          grep -q 'var IMMO_EDITION_ = "FR";' "$D/ImmoPilot.gs" || { echo "::error::$D n'est pas l'édition France"; exit 1; }
+          grep -q 'var IMMO_PUBLIC_DEMO_ = ${{ matrix.demoFlag }};' "$D/ImmoPilot.gs" || { echo "::error::$D : mode démo publique inattendu (attendu ${{ matrix.demoFlag }})"; exit 1; }
+          grep -q "FIN DU FICHIER ImmoPilot.gs" "$D/ImmoPilot.gs" || { echo "::error::ImmoPilot.gs incomplet"; exit 1; }
 
       - uses: actions/setup-node@v4
         with:
@@ -86,10 +92,10 @@ jobs:
             echo "::notice title=Projet créé::${{ matrix.title }} — https://script.google.com/d/$SCRIPT_ID/edit"
           fi
           echo "SCRIPT_ID=$SCRIPT_ID" >> "$GITHUB_ENV"; echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> "$GITHUB_ENV"
-          printf '{"scriptId":"%s","rootDir":"."}' "$SCRIPT_ID" > application/dist-fr/.clasp.json
+          printf '{"scriptId":"%s","rootDir":"."}' "$SCRIPT_ID" > ${{ matrix.dist }}/.clasp.json
 
       - name: Envoyer le code (édition France)
-        working-directory: application/dist-fr
+        working-directory: ${{ matrix.dist }}
         run: |
           set +e
           out=$(clasp push --force 2>&1); code=$?
@@ -97,7 +103,7 @@ jobs:
           [ $code -eq 0 ] || { echo "::error title=Envoi impossible::$(echo "$out" | grep -v '^\s*$' | tail -n 4 | tr '\n' ' ' | cut -c1-500)"; exit 1; }
 
       - name: Application web (même adresse /exec à chaque mise à jour)
-        working-directory: application/dist-fr
+        working-directory: ${{ matrix.dist }}
         run: |
           set +e
           if [ -n "$DEPLOYMENT_ID" ]; then
@@ -132,4 +138,4 @@ jobs:
 
       - name: Effacer les identifiants
         if: always()
-        run: rm -f "$HOME/.clasprc.json" application/dist-fr/.clasp.json
+        run: rm -f "$HOME/.clasprc.json" ${{ matrix.dist }}/.clasp.json

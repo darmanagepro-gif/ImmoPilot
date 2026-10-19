@@ -12,6 +12,11 @@ var IMMO_BUILD_ = "dev";
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
  */
 var IMMO_EDITION_ = "MA";
+/**
+ * Démonstration publique (sans compte, vues au choix, lecture seule). Toujours false dans le code : seul le paquet
+ * de DÉMONSTRATION (node tests/build-bundle.js --edition=fr --demo → dist-fr-demo) l'active. Jamais dans la version officielle.
+ */
+var IMMO_PUBLIC_DEMO_ = false;
 var EDITIONS_ = {
   MA: {
     code: "MA", country: "MA", countryName: "Maroc", currency: "MAD", timezone: "Africa/Casablanca", city: "Marrakech", mapCenter: [31.6295, -7.9811],
@@ -40,7 +45,7 @@ var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
   VERSION: "2.1.0",
-  SCHEMA_VERSION: 6,
+  SCHEMA_VERSION: 7,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -156,7 +161,7 @@ var TABLES_SRC = {
     cols: "logId,timestamp#t,actorEmail,organizationId,action,entityType,entityId,detailsJson#j|actorUserId,result,errorId" },
   PlatformSettings: { pk: "settingKey", idp: "set", req: "settingKey", cols: "settingKey,settingValue,updatedAt#t,updatedBy" },
   Settings: { pk: "settingId", idp: "stg", org: "organizationId", req: "organizationId,settingKey", cols: "settingId,organizationId,settingKey,settingValue,updatedAt#t,updatedBy" },
-  Sessions: { pk: "sessionId", idp: "ses", req: "userId,tokenHash", cols: "sessionId,userId,tokenHash,createdAt#t,expiresAt#t,lastSeenAt#t,revokedAt#t,userAgent,impersonatorUserId" },
+  Sessions: { pk: "sessionId", idp: "ses", req: "userId,tokenHash", cols: "sessionId,userId,tokenHash,createdAt#t,expiresAt#t,lastSeenAt#t,revokedAt#t,userAgent,impersonatorUserId,mode" },
   PasswordResets: { pk: "resetId", idp: "rst", req: "userId,tokenHash", cols: "resetId,userId,tokenHash,createdAt#t,expiresAt#t,usedAt#t,purpose" },
   SupportGrants: { pk: "grantId", idp: "sgr", org: "organizationId", req: "superAdminUserId,organizationId,justification",
     enums: { status: ["REQUESTED", "ACTIVE", "DENIED", "REVOKED", "EXPIRED"] },

@@ -126,6 +126,11 @@ function principalFromToken_(token) {
   const p = buildPrincipal_(user);
   if (!p.roles.length) throw new AppError("AUTH", "Aucun rôle actif n'est attribué à ce compte, ou votre organisation est suspendue.");
   p.sessionId = s.sessionId;
+  if (s.mode === "DEMO_VIEW") {
+    // Session de démonstration publique : valable seulement dans le paquet de démonstration, toujours en lecture seule.
+    if (!IMMO_PUBLIC_DEMO_) throw new AppError("AUTH", "Session invalide. Veuillez vous reconnecter.");
+    p.demoView = String(s.userAgent || "").replace(/^demo:/, "");
+  }
   if (s.impersonatorUserId) {
     // Session « entrer dans l'espace » ouverte par un super administrateur : elle n'est valable que tant qu'il l'est encore.
     const su = dbGet_("Users", s.impersonatorUserId), sp = su && su.status === "ACTIVE" ? buildPrincipal_(su) : null;
@@ -220,7 +225,7 @@ function revokeAllSessions_(userId) {
 
 /* ---------------------- Routes authentifiées ---------------------- */
 function meLogout_(p) { dbUpdate_("Sessions", p.sessionId, { revokedAt: nowIso_() }); audit_("LOGOUT", "User", p.userId, ""); return { ok: true }; }
-function meLogoutAll_(p) { notWhileImpersonating_(p); revokeAllSessions_(p.userId); audit_("LOGOUT_ALL", "User", p.userId, ""); return { ok: true }; }
+function meLogoutAll_(p) { notWhileImpersonating_(p); if (p.demoView) forbid_("Indisponible dans la démonstration."); revokeAllSessions_(p.userId); audit_("LOGOUT_ALL", "User", p.userId, ""); return { ok: true }; }
 function meChangePassword_(p, a) {
   notWhileImpersonating_(p);
   const user = dbGet_("Users", p.userId);
@@ -301,6 +306,7 @@ function adminAccounts_(p, a) {
       lastLoginAt: u.lastLoginAt || "", categories: cats,
       roles: inCat.map(function (r) { const o = orgs[r.organizationId] || {}; return { role: r.role, status: r.status, organizationId: r.organizationId, organizationName: o.name || "", orgStatus: o.status || "", isDemo: bool_(o.isDemo) }; }) };
     row.isDemo = row.roles.length > 0 && row.roles.every(function (r) { return r.isDemo; });
+    if (p.demoView && !row.isDemo) return; // démonstration publique : seuls les comptes fictifs sont listés
     row.canEnter = row.userStatus === "ACTIVE" && rs.some(function (r) { const o = orgs[r.organizationId] || {}; return r.status === "ACTIVE" && o.status === "ACTIVE"; });
     cats.forEach(function (c) { counts[c]++; });
     if (cat && !inCat.length) return;
@@ -320,6 +326,7 @@ function meBootstrap_(p) {
   const unread = dbAll_("Notifications").filter(function (n) { return String(n.userId) === p.userId && !n.readAt; }).length;
   return {
     userId: p.userId, email: p.email, displayName: p.displayName, locale: (user && user.locale) || "fr", isSuper: p.isSuper, impersonator: p.impersonator || null,
+    demoView: p.demoView || null, demoViews: p.demoView ? demoViewList_() : [],
     roles: p.roles.map(function (r) { return { role: r.role, organizationId: r.organizationId, organizationName: (orgs[r.organizationId] || {}).name || "" }; }),
     caps: uiCaps_(p).concat(p.isSuper ? ["platform.admin"] : []),
     notifPrefs: parseJson_(user && user.notifPrefsJson, { email: true, mutedTypes: [] }),

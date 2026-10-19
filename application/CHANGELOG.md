@@ -6,6 +6,7 @@
 - France : n° d'enregistrement des meublés de tourisme, date et lieu de naissance et domicile des voyageurs étrangers, fiches individuelles de police en PDF (étrangers seulement, document sensible conservé au moins 6 mois), mentions légales des devis et factures (SIRET, TVA, pénalités, indemnité de 40 €), contrat de bail rappelant la loi du 6 juillet 1989.
 - Pages légales dans l'application (Maroc et France) : mentions légales, conditions générales, confidentialité, cookies et, en France, accord de sous-traitance (art. 28 RGPD) ; identité de l'éditeur dans les paramètres legal.* (« À compléter » surligné tant qu'elle manque).
 - Démonstration adaptée à l'édition (France : euros, Paris, CNI, données des fiches de police).
+- Démo publique France (paquet dist-fr-demo, projet de démonstration uniquement) : sur l'écran de connexion, « Découvrir la démo sans compte » ouvre l'application dans la vue Propriétaire, Agence, Gardien, Prestataire ou Super administrateur ; bandeau pour changer de vue ou quitter ; lecture seule imposée par le serveur (code DEMO_READONLY), sessions de 4 h, entrées limitées ; refusé par le paquet officiel.
 - Version serveur dédié (application/server) : même code exécuté sur un VPS avec SQLite, fichiers privés, e-mails SMTP, PDF Chromium, tâches planifiées, HTTPS Caddy, sauvegardes quotidiennes et script d'installation ; les 68 tests métier passent dans cet environnement, données identiques après redémarrage.
 
 ## 2.0.3 — 15 octobre 2026 — vitesse

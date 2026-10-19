@@ -656,6 +656,11 @@ function principalFromToken_(token) {
   const p = buildPrincipal_(user);
   if (!p.roles.length) throw new AppError("AUTH", "Aucun rôle actif n'est attribué à ce compte, ou votre organisation est suspendue.");
   p.sessionId = s.sessionId;
+  if (s.mode === "DEMO_VIEW") {
+    // Session de démonstration publique : valable seulement dans le paquet de démonstration, toujours en lecture seule.
+    if (!IMMO_PUBLIC_DEMO_) throw new AppError("AUTH", "Session invalide. Veuillez vous reconnecter.");
+    p.demoView = String(s.userAgent || "").replace(/^demo:/, "");
+  }
   if (s.impersonatorUserId) {
     // Session « entrer dans l'espace » ouverte par un super administrateur : elle n'est valable que tant qu'il l'est encore.
     const su = dbGet_("Users", s.impersonatorUserId), sp = su && su.status === "ACTIVE" ? buildPrincipal_(su) : null;
@@ -750,7 +755,7 @@ function revokeAllSessions_(userId) {
 
 /* ---------------------- Routes authentifiées ---------------------- */
 function meLogout_(p) { dbUpdate_("Sessions", p.sessionId, { revokedAt: nowIso_() }); audit_("LOGOUT", "User", p.userId, ""); return { ok: true }; }
-function meLogoutAll_(p) { notWhileImpersonating_(p); revokeAllSessions_(p.userId); audit_("LOGOUT_ALL", "User", p.userId, ""); return { ok: true }; }
+function meLogoutAll_(p) { notWhileImpersonating_(p); if (p.demoView) forbid_("Indisponible dans la démonstration."); revokeAllSessions_(p.userId); audit_("LOGOUT_ALL", "User", p.userId, ""); return { ok: true }; }
 function meChangePassword_(p, a) {
   notWhileImpersonating_(p);
   const user = dbGet_("Users", p.userId);
@@ -831,6 +836,7 @@ function adminAccounts_(p, a) {
       lastLoginAt: u.lastLoginAt || "", categories: cats,
       roles: inCat.map(function (r) { const o = orgs[r.organizationId] || {}; return { role: r.role, status: r.status, organizationId: r.organizationId, organizationName: o.name || "", orgStatus: o.status || "", isDemo: bool_(o.isDemo) }; }) };
     row.isDemo = row.roles.length > 0 && row.roles.every(function (r) { return r.isDemo; });
+    if (p.demoView && !row.isDemo) return; // démonstration publique : seuls les comptes fictifs sont listés
     row.canEnter = row.userStatus === "ACTIVE" && rs.some(function (r) { const o = orgs[r.organizationId] || {}; return r.status === "ACTIVE" && o.status === "ACTIVE"; });
     cats.forEach(function (c) { counts[c]++; });
     if (cat && !inCat.length) return;
@@ -850,6 +856,7 @@ function meBootstrap_(p) {
   const unread = dbAll_("Notifications").filter(function (n) { return String(n.userId) === p.userId && !n.readAt; }).length;
   return {
     userId: p.userId, email: p.email, displayName: p.displayName, locale: (user && user.locale) || "fr", isSuper: p.isSuper, impersonator: p.impersonator || null,
+    demoView: p.demoView || null, demoViews: p.demoView ? demoViewList_() : [],
     roles: p.roles.map(function (r) { return { role: r.role, organizationId: r.organizationId, organizationName: (orgs[r.organizationId] || {}).name || "" }; }),
     caps: uiCaps_(p).concat(p.isSuper ? ["platform.admin"] : []),
     notifPrefs: parseJson_(user && user.notifPrefsJson, { email: true, mutedTypes: [] }),
@@ -1408,7 +1415,7 @@ function routes_() { return {
 }; }
 function publicRoutes_() { return {
   "auth.login": "authLogin_", "assistant.kb": "assistantKbPublic_", "auth.requestReset": "authRequestReset_", "auth.resetPassword": "authResetPassword_",
-  "invite.info": "inviteInfo_", "invite.accept": "inviteAccept_", "legal.get": "legalGet_",
+  "invite.info": "inviteInfo_", "invite.accept": "inviteAccept_", "legal.get": "legalGet_", "demo.views": "demoPublicViews_", "demo.enter": "demoEnter_",
   "guest.portal.get": "guestPortalGet_", "guest.portal.save": "guestPortalSave_", "guest.portal.upload": "guestPortalUpload_", "guest.portal.incident": "guestPortalIncident_"
 }; }
 
@@ -1487,7 +1494,7 @@ function editionPublic_() {
   const e = edition_();
   return { code: e.code, country: e.country, countryName: e.countryName, currency: e.currency, timezone: e.timezone, city: e.city, mapCenter: e.mapCenter, phoneCountry: e.phoneCountry,
     localMobileRe: e.localMobileRe, tagline: e.tagline, taglineKey: e.taglineKey, logoSvg: e.logoSvg, policeForms: e.policeForms, registrationNumber: e.registrationNumber,
-    dataAuthority: e.dataAuthority, taxIdLabel: e.taxIdLabel };
+    dataAuthority: e.dataAuthority, taxIdLabel: e.taxIdLabel, publicDemo: !!IMMO_PUBLIC_DEMO_ };
 }
 /** Contrôle d'installation mémorisé 6 h par version installée : l'ouverture de l'application ne relit pas tous les fichiers à chaque fois. */
 function installCheckCached_() {
@@ -1547,6 +1554,7 @@ function apiRun_(token, route, args) {
     const a = argsGuard_(args);
     const p = principalFromToken_(token);
     CTX_.principal = p;
+    if (p.demoView && !demoRouteAllowed_(route)) return { ok: false, error: { code: "DEMO_READONLY", message: "Démonstration en lecture seule : cette action est désactivée. Vous pouvez parcourir toutes les pages et ouvrir les documents." } };
     return { ok: true, data: fn(p, a) };
   } catch (e) { return errorResponse_(e, route); }
 }
@@ -1604,12 +1612,17 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "f6c1e71a0966";
+var IMMO_BUILD_ = "1856b3d0ab6c";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
  */
 var IMMO_EDITION_ = "MA";
+/**
+ * Démonstration publique (sans compte, vues au choix, lecture seule). Toujours false dans le code : seul le paquet
+ * de DÉMONSTRATION (node tests/build-bundle.js --edition=fr --demo → dist-fr-demo) l'active. Jamais dans la version officielle.
+ */
+var IMMO_PUBLIC_DEMO_ = false;
 var EDITIONS_ = {
   MA: {
     code: "MA", country: "MA", countryName: "Maroc", currency: "MAD", timezone: "Africa/Casablanca", city: "Marrakech", mapCenter: [31.6295, -7.9811],
@@ -1638,7 +1651,7 @@ var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
   VERSION: "2.1.0",
-  SCHEMA_VERSION: 6,
+  SCHEMA_VERSION: 7,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -1754,7 +1767,7 @@ var TABLES_SRC = {
     cols: "logId,timestamp#t,actorEmail,organizationId,action,entityType,entityId,detailsJson#j|actorUserId,result,errorId" },
   PlatformSettings: { pk: "settingKey", idp: "set", req: "settingKey", cols: "settingKey,settingValue,updatedAt#t,updatedBy" },
   Settings: { pk: "settingId", idp: "stg", org: "organizationId", req: "organizationId,settingKey", cols: "settingId,organizationId,settingKey,settingValue,updatedAt#t,updatedBy" },
-  Sessions: { pk: "sessionId", idp: "ses", req: "userId,tokenHash", cols: "sessionId,userId,tokenHash,createdAt#t,expiresAt#t,lastSeenAt#t,revokedAt#t,userAgent,impersonatorUserId" },
+  Sessions: { pk: "sessionId", idp: "ses", req: "userId,tokenHash", cols: "sessionId,userId,tokenHash,createdAt#t,expiresAt#t,lastSeenAt#t,revokedAt#t,userAgent,impersonatorUserId,mode" },
   PasswordResets: { pk: "resetId", idp: "rst", req: "userId,tokenHash", cols: "resetId,userId,tokenHash,createdAt#t,expiresAt#t,usedAt#t,purpose" },
   SupportGrants: { pk: "grantId", idp: "sgr", org: "organizationId", req: "superAdminUserId,organizationId,justification",
     enums: { status: ["REQUESTED", "ACTIVE", "DENIED", "REVOKED", "EXPIRED"] },
@@ -3279,6 +3292,55 @@ function demoGuests_(ownerOrg, props, today) {
     out.idCopies++;
   });
   return out;
+}
+
+/* ============================ Démonstration publique (paquet de démonstration uniquement) ============================
+ * Le visiteur choisit une vue (propriétaire, agence, gardien, prestataire, super administrateur) sans compte ni mot de passe.
+ * La session ouverte est celle du compte de démonstration correspondant, marquée « DEMO_VIEW » : toutes les pages et documents
+ * sont consultables, aucune donnée ne peut être modifiée (contrôle serveur dans apiRun_). Désactivé dans la version officielle.
+ */
+var DEMO_VIEWS_ = [
+  { id: "owner", label: "Propriétaire", who: function () { return DEMO_SPEC_.owner; } },
+  { id: "agency", label: "Agence", who: function () { return DEMO_SPEC_.agency; } },
+  { id: "guard", label: "Gardien", who: function () { return DEMO_SPEC_.properties[0].guard; } },
+  { id: "provider", label: "Prestataire (ménage et travaux)", who: function () { return DEMO_SPEC_.provider; } },
+  { id: "admin", label: "Super administrateur", who: function () { return DEMO_SPEC_.superAdmin; } }
+];
+var DEMO_READ_RE_ = /\.(list|get|choices|orgChoices|calendar|today|history|summary|mine|kb|caps|availability|accounts|run|boot)$/;
+var DEMO_DOC_RE_ = /\.(pdf|orderPdf|reportPdf|contractPdf|sheet|receipt|export|policeForms)$/;
+function demoRouteAllowed_(route) {
+  if (["me.logout", "assistant.ask", "meta.get", "me.get"].indexOf(route) >= 0) return true;
+  if (["me.updateProfile", "admin.impersonate"].indexOf(route) >= 0) return false;
+  return DEMO_READ_RE_.test(route) || DEMO_DOC_RE_.test(route);
+}
+function demoViewUser_(v) {
+  const who = v.who() || {}, email = normalizeEmail_(who.email || "");
+  const u = dbAll_("Users").find(function (x) { return normalizeEmail_(x.email) === email; });
+  if (!u || u.status !== "ACTIVE") return null;
+  const p = buildPrincipal_(u);
+  return p.roles.length ? { user: u, principal: p, name: who.name || u.displayName } : null;
+}
+function demoViewList_() {
+  return DEMO_VIEWS_.map(function (v) { const x = demoViewUser_(v); return x ? { id: v.id, label: v.label, name: x.name } : null; }).filter(Boolean);
+}
+function demoPublicViews_() {
+  if (!IMMO_PUBLIC_DEMO_) throw new AppError("NOT_FOUND", "Fonction inconnue.");
+  const views = demoViewList_();
+  return { views: views, ready: views.length > 0, note: views.length ? "" : "La démonstration n'est pas encore créée : exécutez creerEnvironnementDemo puis creerHistoriqueDemo dans l'éditeur." };
+}
+function demoEnter_(a) {
+  if (!IMMO_PUBLIC_DEMO_) throw new AppError("NOT_FOUND", "Fonction inconnue.");
+  rateLimit_("demo-enter", 900, 3600);
+  const v = DEMO_VIEWS_.find(function (x) { return x.id === String(a && a.view || ""); });
+  assert_(v, "Vue inconnue.");
+  const x = demoViewUser_(v);
+  assert_(x, "Cette vue n'est pas disponible : la démonstration n'est pas encore créée ou est en veille.");
+  const token = randomToken_();
+  dbInsert_("Sessions", { userId: x.user.userId, tokenHash: sha256Hex_(token), createdAt: nowIso_(), expiresAt: new Date(Date.now() + 4 * 3600000).toISOString(), lastSeenAt: nowIso_(),
+    userAgent: "demo:" + v.id, mode: "DEMO_VIEW" });
+  x.principal.demoView = v.id;
+  CTX_.principal = x.principal;
+  return { token: token, me: meBootstrap_(x.principal), meta: metaGet_(x.principal) };
 }
 
 /* ======================================================================
@@ -7574,6 +7636,31 @@ function TEST_GROUPS_() {
         T.ok(T.call(provTok, "clean.list", {}).items.some(function (x) { return x.missionId === m; }), "Mohamed voit la mission");
         T.fails(guardTok, "property.get", { propertyId: r1.properties[2].propertyId }, "FORBIDDEN");
         T.ok(dbAll_("Users").filter(function (u) { return u.email === S.owner.email; }).every(function (u) { return u.phone === DEMO_PHONE_ && u.displayName === S.owner.name; }), "nom et téléphone renseignés");
+      }],
+      ["Démo publique sans compte : choix de la vue, lecture seule, désactivée hors paquet démo", function (T, fx) {
+        demoBuild_(fx.users.superA.email);
+        const saved = IMMO_PUBLIC_DEMO_;
+        try {
+          IMMO_PUBLIC_DEMO_ = false;
+          T.eq(apiPublic("demo.views", {}).error.code, "NOT_FOUND", "paquet officiel : liste des vues inaccessible");
+          T.eq(apiPublic("demo.enter", { view: "owner" }).error.code, "NOT_FOUND", "paquet officiel : entrée sans compte refusée");
+          IMMO_PUBLIC_DEMO_ = true;
+          const v = T.pub("demo.views", {});
+          T.eq(v.views.map(function (x) { return x.id; }), ["owner", "agency", "guard", "provider", "admin"], "5 vues proposées");
+          const e = T.pub("demo.enter", { view: "owner" });
+          T.ok(e.token && e.me.demoView === "owner" && e.me.demoViews.length === 5, "jeton de démonstration et sélecteur de vues");
+          T.eq(T.call(e.token, "property.list", {}).items.length, 3, "le propriétaire fictif voit ses 3 biens");
+          const pid = T.call(e.token, "property.list", {}).items[0].propertyId;
+          T.fails(e.token, "resv.create", { propertyId: pid, checkIn: tDays_(400), checkOut: tDays_(401), guestName: "X" }, "DEMO_READONLY");
+          T.fails(e.token, "me.updateProfile", { displayName: "Pirate" }, "DEMO_READONLY");
+          T.fails(e.token, "admin.impersonate", { userId: "x" }, "DEMO_READONLY");
+          const g = T.pub("demo.enter", { view: "guard" });
+          T.eq(T.call(g.token, "property.list", {}).items.length, 1, "vue gardien : un seul bien");
+          const ad = T.pub("demo.enter", { view: "admin" });
+          T.ok(T.call(ad.token, "admin.accounts", {}).items.every(function (r) { return r.isDemo; }), "vue super administrateur : uniquement les comptes fictifs");
+          IMMO_PUBLIC_DEMO_ = false;
+          T.eq(api(e.token, "property.list", {}).ok, false, "session de démonstration rejetée dans un paquet officiel");
+        } finally { IMMO_PUBLIC_DEMO_ = saved; }
       }],
       ["Historique de démonstration (6 mois) : données cohérentes, analyses alimentées, une seule exécution", function (T, fx) {
         const S = DEMO_SPEC_, today = todayStr_(), from = addDaysStr_(today, -183);

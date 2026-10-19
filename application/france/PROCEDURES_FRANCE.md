@@ -14,6 +14,7 @@ Deux façons de le mettre en ligne, indépendantes l'une de l'autre :
 
 Fichiers (dépôt GitHub `darmanagepro-gif/ImmoPilot`, dossier `application/`) :
 - `dist-fr/` : paquet Google Apps Script France (`ImmoPilot.gs`, `Index.html`, `appsscript.json`) ;
+- `dist-fr-demo/` : même paquet en mode « démo publique » (choix d'une vue sans compte, lecture seule), réservé au projet de démonstration ;
 - `server/` : version serveur dédié (et `server/deploy/` : installation, service, HTTPS, sauvegardes) ;
 - `editions/fr/` : logo (SVG) et icônes ;
 - `france/apps-script.json` : adresses du projet Google France officiel (créé automatiquement) ;
@@ -40,7 +41,13 @@ Une fois le projet créé, à faire **une seule fois** :
 GitHub crée un **second projet**, avec le même code et sa propre base, pour que les données fictives ne soient jamais mélangées avec celles de vos clients. Ses adresses sont notées dans `application/france/apps-script-demo.json`. À faire une fois, dans l'éditeur de ce projet :
 1. **setupProject**, puis acceptez les autorisations.
 2. **creerEnvironnementDemo**, puis **creerHistoriqueDemo** : biens à Paris, 6 mois d'historique, voyageurs complets, fiches de police.
-3. Chaque compte de démonstration reçoit son lien d'activation par e-mail.
+3. **Paramètres du projet › Propriétés du script** : `IMMO_APP_URL` (adresse `webAppUrl` de `apps-script-demo.json`) et `IMMO_EMBED_ORIGINS` = `https://darmanagepro-gif.github.io` (pour la page GitHub).
+
+**Démo sans compte.** Ce projet reçoit le paquet `dist-fr-demo` : l'écran de connexion affiche « Découvrir la démo sans compte » avec cinq vues (Propriétaire, Agence, Gardien, Prestataire, Super administrateur). Le visiteur entre sans mot de passe, change de vue par le bandeau bleu en haut de l'écran et quitte quand il veut. Tout est en **lecture seule** : il peut parcourir les pages, les calendriers, les analyses et ouvrir les PDF, mais aucune création, modification ou suppression n'est possible (le serveur la refuse). La vue Super administrateur ne liste que les comptes fictifs. Une visite dure au plus 4 heures, et le nombre d'entrées est limité pour éviter les abus.
+
+Ce mode n'existe **que** dans `dist-fr-demo` : le projet officiel (`dist-fr`) refuse ces accès, même avec un ancien lien de démonstration. Ne copiez donc jamais `dist-fr-demo` dans le projet officiel.
+
+Les comptes de démonstration reçoivent aussi un lien d'activation par e-mail ; il n'est pas nécessaire pour la visite sans compte.
 
 Mises à jour : automatiques, pour les deux projets. Chaque nouvelle version poussée sur GitHub met à jour la même adresse `/exec`. En cas de besoin, l'installation manuelle reste possible : copier `dist-fr/ImmoPilot.gs` et `dist-fr/Index.html` dans le projet, puis Déployer › Gérer les déploiements › Nouvelle version.
 

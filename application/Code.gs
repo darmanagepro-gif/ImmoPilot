@@ -58,7 +58,7 @@ function routes_() { return {
 }; }
 function publicRoutes_() { return {
   "auth.login": "authLogin_", "assistant.kb": "assistantKbPublic_", "auth.requestReset": "authRequestReset_", "auth.resetPassword": "authResetPassword_",
-  "invite.info": "inviteInfo_", "invite.accept": "inviteAccept_", "legal.get": "legalGet_",
+  "invite.info": "inviteInfo_", "invite.accept": "inviteAccept_", "legal.get": "legalGet_", "demo.views": "demoPublicViews_", "demo.enter": "demoEnter_",
   "guest.portal.get": "guestPortalGet_", "guest.portal.save": "guestPortalSave_", "guest.portal.upload": "guestPortalUpload_", "guest.portal.incident": "guestPortalIncident_"
 }; }
 
@@ -137,7 +137,7 @@ function editionPublic_() {
   const e = edition_();
   return { code: e.code, country: e.country, countryName: e.countryName, currency: e.currency, timezone: e.timezone, city: e.city, mapCenter: e.mapCenter, phoneCountry: e.phoneCountry,
     localMobileRe: e.localMobileRe, tagline: e.tagline, taglineKey: e.taglineKey, logoSvg: e.logoSvg, policeForms: e.policeForms, registrationNumber: e.registrationNumber,
-    dataAuthority: e.dataAuthority, taxIdLabel: e.taxIdLabel };
+    dataAuthority: e.dataAuthority, taxIdLabel: e.taxIdLabel, publicDemo: !!IMMO_PUBLIC_DEMO_ };
 }
 /** Contrôle d'installation mémorisé 6 h par version installée : l'ouverture de l'application ne relit pas tous les fichiers à chaque fois. */
 function installCheckCached_() {
@@ -197,6 +197,7 @@ function apiRun_(token, route, args) {
     const a = argsGuard_(args);
     const p = principalFromToken_(token);
     CTX_.principal = p;
+    if (p.demoView && !demoRouteAllowed_(route)) return { ok: false, error: { code: "DEMO_READONLY", message: "Démonstration en lecture seule : cette action est désactivée. Vous pouvez parcourir toutes les pages et ouvrir les documents." } };
     return { ok: true, data: fn(p, a) };
   } catch (e) { return errorResponse_(e, route); }
 }

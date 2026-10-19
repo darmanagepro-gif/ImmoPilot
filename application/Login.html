@@ -37,6 +37,26 @@ const Public = {
       }), r.docs.some(function (d) { return d.id === docId; }) ? docId : r.docs[0].id);
     }).catch(function (e) { clear(body).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
   },
+  /** Démonstration publique : choix d'une vue sans compte (paquet de démonstration uniquement). */
+  demoPicker: function () {
+    const box = h("div", { class: "demo-picker" }, h("b", null, t("Découvrir la démo sans compte")), h("p", { class: "small muted" }, t("Choisissez une vue : vous verrez l'application exactement comme cette personne, avec des données fictives. Démonstration en lecture seule.")));
+    const list = h("div", { class: "demo-views" }, h("span", { class: "small muted" }, t("Chargement…")));
+    box.appendChild(list);
+    apiP("demo.views", {}).then(function (r) {
+      clear(list);
+      if (!r.ready) { list.appendChild(h("div", { class: "alert warn" }, r.note)); return; }
+      r.views.forEach(function (v) { list.appendChild(btn(t(v.label) + " · " + v.name, function () { Public.enterDemo(v.id); }, "demo-view")); });
+    }).catch(function (e) { clear(list).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+    box.appendChild(h("p", { class: "small muted", style: { margin: "12px 0 0" } }, t("Vous avez un compte ? Connectez-vous ci-dessous.")));
+    return box;
+  },
+  enterDemo: function (view) {
+    apiP("demo.enter", { view: view }).then(function (r) {
+      apiCacheClear(); S.token = r.token; store("ip_token", r.token); S.me = r.me; S.meta = r.meta || null;
+      if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+      App.enter();
+    }).catch(function (e) { toast(errMsg(e), "bad"); });
+  },
   legalLinks: function () {
     return h("p", { class: "small legal-links" }, [["mentions", "Mentions légales"], ["cgv", "Conditions générales"], ["confidentialite", "Confidentialité"], ["cookies", "Cookies"]].map(function (x, i) {
       return [i ? " · " : "", h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.legal(x[0]); } }, t(x[1]))];
@@ -55,7 +75,7 @@ const Public = {
       }).catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); go.disabled = false; go.textContent = t("Se connecter"); });
     });
     const forgot = h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.forgot(); } }, t("Mot de passe oublié ou compte à activer ?"));
-    Public.frame(t("Connexion"), t("Accédez à votre espace ImmoPilot."), h("div", null, err, f.el, h("p", { class: "small", style: { marginTop: "16px" } }, forgot), Public.legalLinks()));
+    Public.frame(t("Connexion"), t("Accédez à votre espace ImmoPilot."), h("div", null, ED.publicDemo ? Public.demoPicker() : null, err, f.el, h("p", { class: "small", style: { marginTop: "16px" } }, forgot), Public.legalLinks()));
   },
   forgot: function () {
     formModal(t("Mot de passe oublié"), [{ k: "email", l: "E-mail", t: "email", req: true }], {}, function (v) {

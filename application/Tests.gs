@@ -543,6 +543,31 @@ function TEST_GROUPS_() {
         T.fails(guardTok, "property.get", { propertyId: r1.properties[2].propertyId }, "FORBIDDEN");
         T.ok(dbAll_("Users").filter(function (u) { return u.email === S.owner.email; }).every(function (u) { return u.phone === DEMO_PHONE_ && u.displayName === S.owner.name; }), "nom et téléphone renseignés");
       }],
+      ["Démo publique sans compte : choix de la vue, lecture seule, désactivée hors paquet démo", function (T, fx) {
+        demoBuild_(fx.users.superA.email);
+        const saved = IMMO_PUBLIC_DEMO_;
+        try {
+          IMMO_PUBLIC_DEMO_ = false;
+          T.eq(apiPublic("demo.views", {}).error.code, "NOT_FOUND", "paquet officiel : liste des vues inaccessible");
+          T.eq(apiPublic("demo.enter", { view: "owner" }).error.code, "NOT_FOUND", "paquet officiel : entrée sans compte refusée");
+          IMMO_PUBLIC_DEMO_ = true;
+          const v = T.pub("demo.views", {});
+          T.eq(v.views.map(function (x) { return x.id; }), ["owner", "agency", "guard", "provider", "admin"], "5 vues proposées");
+          const e = T.pub("demo.enter", { view: "owner" });
+          T.ok(e.token && e.me.demoView === "owner" && e.me.demoViews.length === 5, "jeton de démonstration et sélecteur de vues");
+          T.eq(T.call(e.token, "property.list", {}).items.length, 3, "le propriétaire fictif voit ses 3 biens");
+          const pid = T.call(e.token, "property.list", {}).items[0].propertyId;
+          T.fails(e.token, "resv.create", { propertyId: pid, checkIn: tDays_(400), checkOut: tDays_(401), guestName: "X" }, "DEMO_READONLY");
+          T.fails(e.token, "me.updateProfile", { displayName: "Pirate" }, "DEMO_READONLY");
+          T.fails(e.token, "admin.impersonate", { userId: "x" }, "DEMO_READONLY");
+          const g = T.pub("demo.enter", { view: "guard" });
+          T.eq(T.call(g.token, "property.list", {}).items.length, 1, "vue gardien : un seul bien");
+          const ad = T.pub("demo.enter", { view: "admin" });
+          T.ok(T.call(ad.token, "admin.accounts", {}).items.every(function (r) { return r.isDemo; }), "vue super administrateur : uniquement les comptes fictifs");
+          IMMO_PUBLIC_DEMO_ = false;
+          T.eq(api(e.token, "property.list", {}).ok, false, "session de démonstration rejetée dans un paquet officiel");
+        } finally { IMMO_PUBLIC_DEMO_ = saved; }
+      }],
       ["Historique de démonstration (6 mois) : données cohérentes, analyses alimentées, une seule exécution", function (T, fx) {
         const S = DEMO_SPEC_, today = todayStr_(), from = addDaysStr_(today, -183);
         demoBuild_(fx.users.superA.email);

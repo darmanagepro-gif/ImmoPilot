@@ -11,7 +11,9 @@ const ROOT = path.resolve(__dirname, "..");
 //           node tests/build-bundle.js --edition=fr → dist-fr/ (France, euro, logo tour Eiffel)
 const EDITION = ((process.argv.find(function (a) { return /^--edition=/.test(a); }) || "--edition=ma").split("=")[1] || "ma").toUpperCase();
 if (["MA", "FR"].indexOf(EDITION) < 0) throw new Error("Édition inconnue : " + EDITION);
-const OUT = path.join(ROOT, EDITION === "MA" ? "dist" : "dist-" + EDITION.toLowerCase());
+// --demo : paquet de DÉMONSTRATION publique (vues sans compte, lecture seule), dossier dist[-fr]-demo.
+const DEMO = process.argv.indexOf("--demo") >= 0;
+const OUT = path.join(ROOT, (EDITION === "MA" ? "dist" : "dist-" + EDITION.toLowerCase()) + (DEMO ? "-demo" : ""));
 fs.mkdirSync(OUT, { recursive: true });
 const gs = fs.readdirSync(ROOT).filter(function (f) { return /\.gs$/.test(f); }).sort();
 const version = (fs.readFileSync(path.join(ROOT, "Config.gs"), "utf8").match(/VERSION: "([^"]+)"/) || [])[1] || "";
@@ -26,6 +28,11 @@ if (EDITION !== "MA") {
   const logo = path.join(ROOT, "editions", EDITION.toLowerCase(), "pdf-logo-96.png");
   if (fs.existsSync(logo)) server = server.replace(/var PDF_LOGO_PNG_B64_ = "[^"]+";/, 'var PDF_LOGO_PNG_B64_ = "' + fs.readFileSync(logo).toString("base64") + '";');
   server = server.replace("ImmoPilot " + version + " — CODE SERVEUR", "ImmoPilot " + version + " (édition " + EDITION + ") — CODE SERVEUR");
+}
+if (DEMO) {
+  const flag = "var IMMO_PUBLIC_DEMO_ = false;";
+  if (server.indexOf(flag) < 0) throw new Error("Marqueur de démonstration introuvable dans Config.gs");
+  server = server.replace(flag, "var IMMO_PUBLIC_DEMO_ = true;");
 }
 const build = require("crypto").createHash("sha1").update(server).update(fs.readFileSync(path.join(ROOT, "Index.html"))).digest("hex").slice(0, 12);
 server = server.replace('var IMMO_BUILD_ = "dev";', 'var IMMO_BUILD_ = "' + build + '";');

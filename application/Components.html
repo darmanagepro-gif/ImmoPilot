@@ -93,7 +93,7 @@ function monthEnd(s) { const d = new Date(monthStart(s) + "T00:00:00Z"); d.setUT
 function rk() { const a = new Uint8Array(16); (window.crypto || window.msCrypto).getRandomValues(a); return "k_" + Array.from(a, function (b) { return ("0" + b.toString(16)).slice(-2); }).join(""); }
 function can(cap) { return !!(S.me && S.me.caps.indexOf(cap) >= 0); }
 function hasRole(r) { return !!(S.me && S.me.roles.some(function (x) { return x.role === r; })); }
-function errMsg(e) { return (e && e.message) || t("Une erreur est survenue."); }
+function errMsg(e) { return (e && e.message && t(e.message)) || t("Une erreur est survenue."); }
 
 /* ------------------------------ DOM sûr ------------------------------ */
 function h(tag, attrs) {

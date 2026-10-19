@@ -682,3 +682,52 @@ function demoGuests_(ownerOrg, props, today) {
   });
   return out;
 }
+
+/* ============================ Démonstration publique (paquet de démonstration uniquement) ============================
+ * Le visiteur choisit une vue (propriétaire, agence, gardien, prestataire, super administrateur) sans compte ni mot de passe.
+ * La session ouverte est celle du compte de démonstration correspondant, marquée « DEMO_VIEW » : toutes les pages et documents
+ * sont consultables, aucune donnée ne peut être modifiée (contrôle serveur dans apiRun_). Désactivé dans la version officielle.
+ */
+var DEMO_VIEWS_ = [
+  { id: "owner", label: "Propriétaire", who: function () { return DEMO_SPEC_.owner; } },
+  { id: "agency", label: "Agence", who: function () { return DEMO_SPEC_.agency; } },
+  { id: "guard", label: "Gardien", who: function () { return DEMO_SPEC_.properties[0].guard; } },
+  { id: "provider", label: "Prestataire (ménage et travaux)", who: function () { return DEMO_SPEC_.provider; } },
+  { id: "admin", label: "Super administrateur", who: function () { return DEMO_SPEC_.superAdmin; } }
+];
+var DEMO_READ_RE_ = /\.(list|get|choices|orgChoices|calendar|today|history|summary|mine|kb|caps|availability|accounts|run|boot)$/;
+var DEMO_DOC_RE_ = /\.(pdf|orderPdf|reportPdf|contractPdf|sheet|receipt|export|policeForms)$/;
+function demoRouteAllowed_(route) {
+  if (["me.logout", "assistant.ask", "meta.get", "me.get"].indexOf(route) >= 0) return true;
+  if (["me.updateProfile", "admin.impersonate"].indexOf(route) >= 0) return false;
+  return DEMO_READ_RE_.test(route) || DEMO_DOC_RE_.test(route);
+}
+function demoViewUser_(v) {
+  const who = v.who() || {}, email = normalizeEmail_(who.email || "");
+  const u = dbAll_("Users").find(function (x) { return normalizeEmail_(x.email) === email; });
+  if (!u || u.status !== "ACTIVE") return null;
+  const p = buildPrincipal_(u);
+  return p.roles.length ? { user: u, principal: p, name: who.name || u.displayName } : null;
+}
+function demoViewList_() {
+  return DEMO_VIEWS_.map(function (v) { const x = demoViewUser_(v); return x ? { id: v.id, label: v.label, name: x.name } : null; }).filter(Boolean);
+}
+function demoPublicViews_() {
+  if (!IMMO_PUBLIC_DEMO_) throw new AppError("NOT_FOUND", "Fonction inconnue.");
+  const views = demoViewList_();
+  return { views: views, ready: views.length > 0, note: views.length ? "" : "La démonstration n'est pas encore créée : exécutez creerEnvironnementDemo puis creerHistoriqueDemo dans l'éditeur." };
+}
+function demoEnter_(a) {
+  if (!IMMO_PUBLIC_DEMO_) throw new AppError("NOT_FOUND", "Fonction inconnue.");
+  rateLimit_("demo-enter", 900, 3600);
+  const v = DEMO_VIEWS_.find(function (x) { return x.id === String(a && a.view || ""); });
+  assert_(v, "Vue inconnue.");
+  const x = demoViewUser_(v);
+  assert_(x, "Cette vue n'est pas disponible : la démonstration n'est pas encore créée ou est en veille.");
+  const token = randomToken_();
+  dbInsert_("Sessions", { userId: x.user.userId, tokenHash: sha256Hex_(token), createdAt: nowIso_(), expiresAt: new Date(Date.now() + 4 * 3600000).toISOString(), lastSeenAt: nowIso_(),
+    userAgent: "demo:" + v.id, mode: "DEMO_VIEW" });
+  x.principal.demoView = v.id;
+  CTX_.principal = x.principal;
+  return { token: token, me: meBootstrap_(x.principal), meta: metaGet_(x.principal) };
+}

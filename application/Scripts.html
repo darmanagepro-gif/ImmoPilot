@@ -103,7 +103,12 @@ const App = window.App = {
     const imp = S.me.impersonator ? h("div", { class: "imp-banner", role: "status" },
       h("span", null, "👁 ", t("Vous êtes dans l'espace de"), " ", h("b", null, S.me.displayName), " (", S.me.email, ") — ", t("chaque action est enregistrée à votre nom") + " (" + S.me.impersonator.email + ")."),
       h("button", { type: "button", class: "btn sm", onclick: leaveAccount }, "↩ " + t("Revenir à mon espace"))) : null;
-    app.appendChild(h("div", { class: "shell" + (imp ? " impersonating" : "") }, sidebar, h("div", { class: "main" }, imp, top, h("main", { class: "content", id: "content" }))));
+    const demo = S.me.demoView ? h("div", { class: "demo-banner", role: "status" },
+      h("span", null, "▶ ", h("b", null, t("Démonstration")), " · " + t("lecture seule, données fictives") + " · " + t("Vue") + " :"),
+      (function () { const sel = h("select", { "aria-label": t("Changer de vue"), onchange: function (e) { Public.enterDemo(e.target.value); } },
+        (S.me.demoViews || []).map(function (v) { return h("option", { value: v.id }, t(v.label) + " · " + v.name); })); sel.value = S.me.demoView; return sel; })(),
+      h("button", { type: "button", class: "btn sm", onclick: function () { api("me.logout").catch(function () {}).then(function () { localLogout(); }); } }, t("Quitter la démo"))) : null;
+    app.appendChild(h("div", { class: "shell" + (imp ? " impersonating" : "") }, sidebar, h("div", { class: "main" }, imp, demo, top, h("main", { class: "content", id: "content" }))));
   },
   go: function (hash) {
     destroyCharts();
