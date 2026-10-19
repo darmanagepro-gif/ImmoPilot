@@ -16,7 +16,8 @@ Fichiers (dépôt GitHub `darmanagepro-gif/ImmoPilot`, dossier `application/`) :
 - `dist-fr/` : paquet Google Apps Script France (`ImmoPilot.gs`, `Index.html`, `appsscript.json`) ;
 - `server/` : version serveur dédié (et `server/deploy/` : installation, service, HTTPS, sauvegardes) ;
 - `editions/fr/` : logo (SVG) et icônes ;
-- `france/apps-script.json` : adresses du projet Google France (créé automatiquement).
+- `france/apps-script.json` : adresses du projet Google France officiel (créé automatiquement) ;
+- `france/apps-script-demo.json` : adresses du projet Google France de démonstration.
 
 ---
 
@@ -35,7 +36,13 @@ Une fois le projet créé, à faire **une seule fois** :
 7. **Abonnements › Forfaits** : vérifiez les prix (29 / 59 / 149 € HT par mois par défaut) et le prix de l'« Option agences ».
 8. Facultatif, démonstration : exécutez **creerEnvironnementDemo**, puis **creerHistoriqueDemo**. Vous obtenez des biens à Paris, des prix en euros, des voyageurs avec leurs pièces et les données des fiches de police. La démonstration est exclue des statistiques.
 
-Mises à jour : automatiques. Chaque nouvelle version poussée sur GitHub met à jour la même adresse `/exec`. En cas de besoin, l'installation manuelle reste possible : copier `dist-fr/ImmoPilot.gs` et `dist-fr/Index.html` dans le projet, puis Déployer › Gérer les déploiements › Nouvelle version.
+### A bis. Projet de démonstration séparé (« ImmoPilot France – Démo »)
+GitHub crée un **second projet**, avec le même code et sa propre base, pour que les données fictives ne soient jamais mélangées avec celles de vos clients. Ses adresses sont notées dans `application/france/apps-script-demo.json`. À faire une fois, dans l'éditeur de ce projet :
+1. **setupProject**, puis acceptez les autorisations.
+2. **creerEnvironnementDemo**, puis **creerHistoriqueDemo** : biens à Paris, 6 mois d'historique, voyageurs complets, fiches de police.
+3. Chaque compte de démonstration reçoit son lien d'activation par e-mail.
+
+Mises à jour : automatiques, pour les deux projets. Chaque nouvelle version poussée sur GitHub met à jour la même adresse `/exec`. En cas de besoin, l'installation manuelle reste possible : copier `dist-fr/ImmoPilot.gs` et `dist-fr/Index.html` dans le projet, puis Déployer › Gérer les déploiements › Nouvelle version.
 
 ---
 
