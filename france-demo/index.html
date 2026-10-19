@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ImmoPilot France – Démo</title>
+<meta name="description" content="ImmoPilot France – Démo — gestion locative (France)">
+<meta name="theme-color" content="#13233d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ImmoPilot">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #13233d; overflow: hidden; }
+  #frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #f3f5f8; padding-top: env(safe-area-inset-top); box-sizing: border-box; }
+  #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; color: #fff;
+            font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: #13233d; transition: opacity .3s; z-index: 2; text-align: center; padding: 24px; }
+  #splash img { width: 96px; height: 96px; border-radius: 22px; }
+  #splash .bar { width: 160px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.15); overflow: hidden; }
+  #splash .bar i { display: block; width: 40%; height: 100%; background: linear-gradient(90deg, #3F6FE0, #fff, #E5484D); animation: slide 1.2s infinite ease-in-out; }
+  #splash p { margin: 0; opacity: .85; font-size: 14px; max-width: 420px; line-height: 1.5; }
+  #splash a { color: #9fb6ff; }
+  .demo { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 3; background: #E5484D; color: #fff; font: 600 12px/1 -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+          padding: 6px 12px; border-radius: 999px; pointer-events: none; opacity: .92; }
+  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+  .hidden { opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div class="demo">Version de démonstration — données fictives</div>
+<div id="splash">
+  <img src="icons/icon-192.png" alt="">
+  <div class="bar"><i></i></div>
+  <p id="msg">Chargement d'ImmoPilot…</p>
+</div>
+<iframe id="frame" title="ImmoPilot" allow="camera; geolocation; clipboard-write; fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+<script src="config.js"></script>
+<script>
+(function () {
+  "use strict";
+  var cfg = window.IMMOPILOT_CONFIG || {}, splash = document.getElementById("splash"), msg = document.getElementById("msg"), frame = document.getElementById("frame");
+  var url = String(cfg.appUrl || "");
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url)) { msg.textContent = "Adresse de l'application manquante dans config.js."; return; }
+  // Liens reçus par e-mail (invitation, activation, mot de passe, portail voyageur, pages légales) transmis à l'application.
+  var p = new URLSearchParams(location.search), q = new URLSearchParams();
+  ["action", "token", "doc"].forEach(function (k) { var v = p.get(k); if (v && /^[A-Za-z0-9_-]{1,128}$/.test(v)) q.set(k, v); });
+  frame.src = url + (q.toString() ? "?" + q.toString() : "");
+  frame.addEventListener("load", function () { splash.classList.add("hidden"); });
+  setTimeout(function () {
+    if (!splash.classList.contains("hidden")) { msg.textContent = "Le chargement prend du temps… "; var a = document.createElement("a"); a.href = frame.src; a.target = "_top"; a.textContent = "Ouvrir l'application directement"; msg.appendChild(a); }
+  }, 15000);
+})();
+</script>
+</body>
+</html>
