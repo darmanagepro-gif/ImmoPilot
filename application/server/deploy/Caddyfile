@@ -1,0 +1,20 @@
+# ImmoPilot — HTTPS automatique (certificat Let's Encrypt renouvelé par Caddy)
+{{DOMAIN}} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	request_body {
+		max_size 13MB
+	}
+	reverse_proxy 127.0.0.1:8080 {
+		header_up X-Forwarded-For {remote_host}
+	}
+	log {
+		output file /var/log/caddy/immopilot-access.log {
+			roll_size 20MiB
+			roll_keep 10
+		}
+	}
+}

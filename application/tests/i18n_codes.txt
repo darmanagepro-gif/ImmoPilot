@@ -366,3 +366,19 @@ kpi.periodePrecedente|Période précédente|Previous period|الفترة الس�
 GARDENING|Jardinage|Gardening|البستنة|Jardinería|Giardinaggio|Tuinonderhoud
 POOL|Piscine|Pool maintenance|صيانة المسبح|Piscina|Piscina|Zwembadonderhoud
 set.contractors.platformOnly|Prestataires intégrés uniquement par l'administrateur|Providers added by the administrator only|مقدمو الخدمات يضيفهم المسؤول فقط|Proveedores incorporados solo por el administrador|Fornitori inseriti solo dall'amministratore|Dienstverleners alleen toegevoegd door de beheerder
+CNI|Carte nationale d'identité|National identity card|بطاقة التعريف الوطنية|Documento nacional de identidad|Carta d'identità|Identiteitskaart
+POLICE_FORM|Fiche de police|Police registration form|استمارة الشرطة|Ficha de policía|Scheda di polizia|Politieformulier
+set.legal.publisherName|Éditeur (nom ou raison sociale)|Publisher (name or company)|الناشر (الاسم أو الاسم التجاري)|Editor (nombre o razón social)|Editore (nome o ragione sociale)|Uitgever (naam of bedrijfsnaam)
+set.legal.legalForm|Forme juridique et capital|Legal form and share capital|الشكل القانوني ورأس المال|Forma jurídica y capital|Forma giuridica e capitale|Rechtsvorm en kapitaal
+set.legal.address|Adresse du siège|Registered office address|عنوان المقر|Domicilio social|Indirizzo della sede|Adres van de maatschappelijke zetel
+set.legal.registration|Immatriculation (RCS / SIREN ou RC / ICE)|Registration (RCS / SIREN or RC / ICE)|التسجيل (السجل التجاري)|Inscripción (RCS / SIREN o RC / ICE)|Iscrizione (RCS / SIREN o RC / ICE)|Inschrijving (RCS / SIREN of RC / ICE)
+set.legal.vatNumber|N° de TVA intracommunautaire|EU VAT number|رقم الضريبة على القيمة المضافة|N.º de IVA intracomunitario|Partita IVA intracomunitaria|Btw-nummer (EU)
+set.legal.director|Directeur de la publication|Publication director|مدير النشر|Director de la publicación|Direttore della pubblicazione|Verantwoordelijke uitgever
+set.legal.contactEmail|E-mail de contact (pages légales)|Contact e-mail (legal pages)|البريد الإلكتروني للتواصل (الصفحات القانونية)|Correo de contacto (páginas legales)|E-mail di contatto (pagine legali)|Contact-e-mail (juridische pagina's)
+set.legal.phone|Téléphone de l'éditeur|Publisher phone|هاتف الناشر|Teléfono del editor|Telefono dell'editore|Telefoon van de uitgever
+set.legal.hostName|Hébergeur|Hosting provider|مزود الاستضافة|Proveedor de alojamiento|Fornitore di hosting|Hostingprovider
+set.legal.hostAddress|Adresse de l'hébergeur|Hosting provider address|عنوان مزود الاستضافة|Dirección del proveedor de alojamiento|Indirizzo del fornitore di hosting|Adres van de hostingprovider
+set.legal.hostPhone|Téléphone de l'hébergeur|Hosting provider phone|هاتف مزود الاستضافة|Teléfono del proveedor de alojamiento|Telefono del fornitore di hosting|Telefoon van de hostingprovider
+set.legal.mediator|Médiateur de la consommation|Consumer mediator|وسيط المستهلك|Mediador de consumo|Mediatore dei consumatori|Consumentenbemiddelaar
+set.legal.dataAuthorityRef|Référence CNIL / CNDP|Data authority reference (CNIL / CNDP)|مرجع هيئة حماية المعطيات|Referencia CNIL / CNDP|Riferimento CNIL / CNDP|Referentie CNIL / CNDP
+set.legal.dpoEmail|E-mail du délégué à la protection des données|Data protection officer e-mail|البريد الإلكتروني لمندوب حماية المعطيات|Correo del delegado de protección de datos|E-mail del responsabile della protezione dei dati|E-mail van de functionaris voor gegevensbescherming

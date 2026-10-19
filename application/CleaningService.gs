@@ -43,7 +43,7 @@ function cleaningAutoCreate_(prop, r, p) {
   const start = new Date();
   const est = cleanEstimate_(prop);
   const m = dbInsert_("CleaningMissions", { organizationId: prop.organizationId, propertyId: prop.propertyId, reservationId: r.reservationId, providerUserId: "", providerEmail: "",
-    startAt: start.toISOString(), endAt: new Date(start.getTime() + est * 60000).toISOString(), price: 0, currency: prop.currency || "MAD", status: "CREATED", priority: "HIGH",
+    startAt: start.toISOString(), endAt: new Date(start.getTime() + est * 60000).toISOString(), price: 0, currency: prop.currency || cur_(), status: "CREATED", priority: "HIGH",
     estimatedMinutes: est, notes: "Créée automatiquement après le départ de " + r.guestName, createdAt: nowIso_(), createdBy: p ? p.email : "system", updatedAt: nowIso_(), reassignCount: 0, source: "CHECKOUT" });
   const def = dbAll_("PropertyAssignments").find(function (a) { return String(a.propertyId) === String(prop.propertyId) && a.role === "CLEANER" && a.status === "ACTIVE"; });
   if (def) { try { const u = cleanProvider_(def.email); const patch = cleanOffer_(m, u); Object.assign(m, patch); } catch (e) { console.error("Auto-attribution ménage : " + e.message); } }
@@ -104,7 +104,7 @@ function cleanCreate_(p, a) {
   const provider = a.providerEmail ? cleanProvider_(a.providerEmail) : null;
   return withLock_(function () {
     const m = dbInsert_("CleaningMissions", { organizationId: prop.organizationId, propertyId: prop.propertyId, reservationId: reservationId, providerUserId: "", providerEmail: "",
-      startAt: start.toISOString(), endAt: new Date(start.getTime() + est * 60000).toISOString(), price: a.price === "" || a.price == null ? 0 : money_(a.price, "Tarif"), currency: prop.currency || "MAD",
+      startAt: start.toISOString(), endAt: new Date(start.getTime() + est * 60000).toISOString(), price: a.price === "" || a.price == null ? 0 : money_(a.price, "Tarif"), currency: prop.currency || cur_(),
       status: "CREATED", priority: oneOf_(a.priority || "NORMAL", CLEAN_PRIORITIES_, "Priorité"), estimatedMinutes: est, notes: safeText_(a.notes, 1000), createdAt: nowIso_(), createdBy: p.email,
       updatedAt: nowIso_(), reassignCount: 0, source: "MANUAL" });
     if (provider) cleanOffer_(m, provider);
@@ -232,7 +232,7 @@ function cleanValidate_(p, a) {
     const price = a.price === undefined || a.price === "" ? num_(m.price) : money_(a.price, "Tarif");
     dbUpdate_("CleaningMissions", m.missionId, { status: "VALIDATED", validatedAt: nowIso_(), validatedBy: p.email, qualityScore: score, validationNote: safeText_(a.note, 500), price: price, updatedAt: nowIso_() });
     if (price > 0) dbInsertUnique_("Expenses", "uniqueKey", "cleaning:" + m.missionId, { organizationId: m.organizationId, propertyId: m.propertyId, category: "CLEANING", description: "Ménage mission " + m.missionId,
-      supplier: m.providerEmail, amount: price, vatAmount: 0, currency: m.currency || "MAD", expenseDate: String(m.completedAt || nowIso_()).slice(0, 10), status: "INVOICED", refType: "CLEANING", refId: m.missionId, createdAt: nowIso_(), createdBy: p.email });
+      supplier: m.providerEmail, amount: price, vatAmount: 0, currency: m.currency || cur_(), expenseDate: String(m.completedAt || nowIso_()).slice(0, 10), status: "INVOICED", refType: "CLEANING", refId: m.missionId, createdAt: nowIso_(), createdBy: p.email });
     audit_("CLEANING_VALIDATED", "CleaningMission", m.missionId, m.organizationId, { qualityScore: score, price: price });
     return { ok: true, status: "VALIDATED" };
   });
@@ -255,7 +255,7 @@ function cleanParties_(m, prop) {
   return { owner: ownerOrg, orderer: byOrg, provider: { name: (art && art.name) || (u && u.displayName) || m.providerEmail || "À attribuer", email: m.providerEmail || "", phone: (art && art.phone) || (u && u.phone) || "" } };
 }
 function cleanDT_(s) { const d = parseTs_(s); return d ? Utilities.formatDate(d, tz_(), "dd/MM/yyyy HH:mm") : "—"; }
-function cleanMoney_(v, cur) { return v === "" || v == null ? "—" : (Math.round(num_(v) * 100) / 100).toLocaleString("fr-FR") + " " + (cur || "MAD"); }
+function cleanMoney_(v, cur) { return v === "" || v == null ? "—" : (Math.round(num_(v) * 100) / 100).toLocaleString("fr-FR") + " " + (cur || cur_()); }
 
 /** Ordre de mission de ménage (avant intervention) : parties, lieu, horaires, tarif convenu, consignes et engagements. */
 function cleanOrderPdf_(p, a) {

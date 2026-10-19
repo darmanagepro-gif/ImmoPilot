@@ -8,7 +8,8 @@
  * Portail voyageur : accès sans compte, par lien à jeton (256 bits, haché en base), limité à UNE réservation,
  * valable jusqu'au lendemain du départ, révocable.
  */
-var ID_TYPES_ = ["CIN", "PASSPORT", "RESIDENCE_PERMIT", "DRIVING_LICENSE", "OTHER"];
+/** Pièces acceptées selon l'édition (CIN au Maroc, CNI en France). Les anciennes valeurs restent lisibles. */
+function idTypes_() { return edition_().idTypes; }
 
 function maskIdRef_(ref, orgId) {
   ref = safeText_(ref, 40).replace(/\s+/g, "").toUpperCase();
@@ -19,7 +20,7 @@ function maskIdRef_(ref, orgId) {
 function guestOut_(g, level) {
   const o = { guestId: g.guestId, firstName: g.firstName, lastName: g.lastName, isPrimary: g.isPrimary, status: g.status };
   if (level !== "min") { o.email = g.email; o.phone = g.phone; }
-  if (level === "full") { o.nationality = g.nationality; o.idType = g.idType; o.idRef = g.idRefMasked; }
+  if (level === "full") { o.nationality = g.nationality; o.idType = g.idType; o.idRef = g.idRefMasked; o.birthDate = g.birthDate; o.birthPlace = g.birthPlace; o.homeAddress = g.homeAddress; }
   return o;
 }
 function guestListFor_(p, r) {
@@ -38,8 +39,13 @@ function guestApplyInput_(a, orgId) {
   if (a.email !== undefined) o.email = a.email ? validateEmail_(a.email) : "";
   if (a.phone !== undefined) o.phone = safeText_(a.phone, 30);
   if (a.nationality !== undefined) o.nationality = safeText_(a.nationality, 60);
-  if (a.idType !== undefined) o.idType = a.idType ? oneOf_(a.idType, ID_TYPES_, "Type de pièce") : "";
+  if (a.idType !== undefined) o.idType = a.idType ? oneOf_(a.idType, idTypes_(), "Type de pièce") : "";
   if (a.idRef !== undefined) o.idRefMasked = maskIdRef_(a.idRef, orgId);
+  // Fiche individuelle de police (édition France, voyageurs étrangers) : naissance et domicile habituel.
+  if (a.birthDate !== undefined) o.birthDate = a.birthDate ? dateOnly_(a.birthDate, "Date de naissance") : "";
+  if (o.birthDate) assert_(o.birthDate <= todayStr_() && o.birthDate >= "1900-01-01", "Date de naissance invalide.");
+  if (a.birthPlace !== undefined) o.birthPlace = safeText_(a.birthPlace, 120);
+  if (a.homeAddress !== undefined) o.homeAddress = safeText_(a.homeAddress, 240);
   return o;
 }
 
@@ -63,7 +69,7 @@ function guestList_(p, a) {
 function guestSave_(p, a) {
   const r = assertResv_(p, a.reservationId, "reservation.edit");
   const data = guestApplyInput_(a, r.organizationId);
-  if (data.idType || data.idRefMasked) assert_(canResv_(p, r, "guestdoc.view"), "Droits insuffisants pour enregistrer une pièce d'identité.", "FORBIDDEN");
+  if (data.idType || data.idRefMasked || data.birthDate || data.birthPlace || data.homeAddress) assert_(canResv_(p, r, "guestdoc.view"), "Droits insuffisants pour enregistrer une pièce d'identité.", "FORBIDDEN");
   return withLock_(function () {
     if (a.guestId) {
       const g = dbGet_("Guests", safeText_(a.guestId, 120));
@@ -85,7 +91,7 @@ function guestPurge_(p, a) {
   const g = dbGet_("Guests", safeText_(a.guestId, 120));
   if (!g) notFound_("Voyageur");
   const r = assertResv_(p, g.reservationId, "guestdoc.view");
-  dbUpdate_("Guests", g.guestId, { idType: "", idRefMasked: "", nationality: "", status: "PURGED", purgedAt: nowIso_() });
+  dbUpdate_("Guests", g.guestId, { idType: "", idRefMasked: "", nationality: "", birthDate: "", birthPlace: "", homeAddress: "", status: "PURGED", purgedAt: nowIso_() });
   dbAll_("Documents").filter(function (d) { return d.ownerType === "GUEST" && String(d.ownerId) === String(g.guestId) && d.status === "ACTIVE"; }).forEach(function (d) {
     try { DriveApp.getFileById(d.fileId).setTrashed(true); } catch (e) { console.error(e.message); }
     dbUpdate_("Documents", d.documentId, { status: "PURGED", purgedAt: nowIso_() });
@@ -143,7 +149,7 @@ function guestPortalGet_(a) {
     accessInstructions: showAccess ? prop.accessInstructions : "", accessAvailableFrom: showAccess ? "" : addDaysStr_(r.checkIn, -1),
     guests: dbAll_("Guests").filter(function (g) { return String(g.reservationId) === String(r.reservationId) && g.status === "ACTIVE"; }).map(function (g) {
       return { guestId: g.guestId, firstName: g.firstName, lastName: g.lastName, idProvided: !!g.idType, documentCount: dbAll_("Documents").filter(function (d) { return d.ownerType === "GUEST" && String(d.ownerId) === String(g.guestId) && d.status === "ACTIVE"; }).length };
-    }), incidentCategories: getSetting_("list.incidentCategories", r.organizationId), idTypes: ID_TYPES_ };
+    }), incidentCategories: getSetting_("list.incidentCategories", r.organizationId), idTypes: idTypes_(), policeForms: !!edition_().policeForms };
 }
 function guestPortalSave_(a) {
   const x = guestFromToken_(a.token), r = x.r;
@@ -152,7 +158,8 @@ function guestPortalSave_(a) {
   return withLock_(function () {
     const saved = [];
     list.forEach(function (g) {
-      const data = guestApplyInput_({ lastName: g.lastName, firstName: g.firstName, nationality: g.nationality, idType: g.idType, idRef: g.idRef, email: g.email, phone: g.phone }, r.organizationId);
+      const data = guestApplyInput_({ lastName: g.lastName, firstName: g.firstName, nationality: g.nationality, idType: g.idType, idRef: g.idRef, email: g.email, phone: g.phone,
+        birthDate: g.birthDate || undefined, birthPlace: g.birthPlace || undefined, homeAddress: g.homeAddress || undefined }, r.organizationId);
       if (g.guestId) {
         const ex = dbGet_("Guests", safeText_(g.guestId, 120));
         assert_(ex && String(ex.reservationId) === String(r.reservationId) && ex.status === "ACTIVE", "Voyageur inconnu.");
@@ -189,3 +196,37 @@ function guestPortalIncident_(a) {
     title: "Problème signalé par un voyageur : " + prop.name, body: cat + " — " + i.description.slice(0, 200), link: "#incident/" + i.incidentId });
   return { ok: true, incidentId: i.incidentId };
 }
+
+/* --------------------- Fiches individuelles de police (édition France) ---------------------
+ * Hébergement touristique en France : chaque voyageur de nationalité étrangère remplit et signe une fiche individuelle
+ * (art. R. 814-1 et suivants du CESEDA) ; les enfants de moins de 15 ans peuvent figurer sur la fiche d'un adulte.
+ * Le document est produit à partir des informations saisies ; l'exploitant reste responsable de leur exactitude,
+ * de la signature des voyageurs, de la conservation et de la transmission aux services de police sur demande.
+ */
+function isFrenchNationality_(n) { return /^(fr|fra|france|fran[cç]ais|fran[cç]aise|french)$/i.test(String(n || "").trim()); }
+function guestPoliceForms_(p, a) {
+  assert_(edition_().policeForms, "Fiches de police disponibles dans l'édition France.", "FORBIDDEN");
+  const r = assertResv_(p, a.reservationId, "guestdoc.view"), prop = dbGet_("Properties", r.propertyId) || {};
+  const guests = dbAll_("Guests").filter(function (g) { return String(g.reservationId) === String(r.reservationId) && g.status === "ACTIVE"; });
+  const foreign = guests.filter(function (g) { return !isFrenchNationality_(g.nationality); });
+  assert_(foreign.length, "Aucun voyageur de nationalité étrangère n'est enregistré pour ce séjour (les voyageurs français n'ont pas de fiche à remplir).");
+  const val = function (v) { return escapeHtml_(v || "") || "<span class='muted'>……………………………</span>"; };
+  const age = function (d) { if (!d) return null; const t = todayStr_(); let y = Number(t.slice(0, 4)) - Number(d.slice(0, 4)); if (t.slice(5) < d.slice(5)) y--; return y; };
+  let html = "<p class='muted'>Hébergement : " + escapeHtml_([prop.name, prop.address, prop.city].filter(String).join(", ")) + (prop.registrationNumber ? " — n° d'enregistrement : " + escapeHtml_(prop.registrationNumber) : "") +
+    ". Séjour du " + escapeHtml_(pdfDate_(r.checkIn)) + " au " + escapeHtml_(pdfDate_(r.checkOut)) + ".</p>";
+  foreign.forEach(function (g, i) {
+    const minor = age(g.birthDate) !== null && age(g.birthDate) < 15;
+    html += (i ? "<div style='page-break-before:always'></div>" : "") + "<h2>Fiche individuelle de police — voyageur " + (i + 1) + " / " + foreign.length + (minor ? " (enfant de moins de 15 ans)" : "") + "</h2>" +
+      "<table><tbody>" + [["Nom", val(g.lastName)], ["Prénom(s)", val(g.firstName)], ["Date de naissance", val(g.birthDate ? pdfDate_(g.birthDate) : "")], ["Lieu de naissance", val(g.birthPlace)],
+        ["Nationalité", val(g.nationality)], ["Domicile habituel", val(g.homeAddress)], ["Téléphone", val(g.phone)], ["Adresse électronique", val(g.email)],
+        ["Pièce d'identité", val(g.idType ? (st_(g.idType) + " " + (g.idRefMasked || "")) : "")], ["Date d'arrivée", val(pdfDate_(r.checkIn))], ["Date de départ prévue", val(pdfDate_(r.checkOut))]]
+        .map(function (x) { return "<tr><th style='width:34%'>" + x[0] + "</th><td>" + x[1] + "</td></tr>"; }).join("") + "</tbody></table>" +
+      "<table class='sign' style='margin-top:10px'><tr><td>Signature du voyageur</td><td>Date</td></tr></table>";
+  });
+  html += "<p class='muted' style='margin-top:12px'>Fiche à faire signer par chaque voyageur étranger à son arrivée, à conserver 6 mois et à remettre aux services de police ou de gendarmerie sur leur demande. " +
+    "Les enfants de moins de 15 ans peuvent figurer sur la fiche d'un adulte qui les accompagne. ImmoPilot ne garantit pas la conformité juridique : vérifiez les obligations applicables à votre activité.</p>";
+  audit_("POLICE_FORMS_PDF", "Reservation", r.reservationId, r.organizationId, { guests: foreign.length });
+  return storeGeneratedPdf_(p, htmlToPdf_(pdfShell_("Fiches individuelles de police", html, { subtitle: "Réservation " + String(r.reservationId).slice(-8).toUpperCase() }), "Fiches_police_" + String(r.reservationId).slice(-8)),
+    { propertyId: r.propertyId, organizationId: r.organizationId }, "RESERVATION", r.reservationId, "POLICE_FORM");
+}
+function st_(code) { return { CNI: "Carte nationale d'identité", CIN: "Carte d'identité nationale", PASSPORT: "Passeport", RESIDENCE_PERMIT: "Titre de séjour", DRIVING_LICENSE: "Permis de conduire", OTHER: "Autre pièce" }[code] || code; }

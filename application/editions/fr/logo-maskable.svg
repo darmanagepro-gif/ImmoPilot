@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <clipPath id="r"><rect width="512" height="512"/></clipPath>
+    <linearGradient id="tw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A62A8"/><stop offset="1" stop-color="#22417A"/></linearGradient>
+  </defs>
+  <g clip-path="url(#r)">
+    <rect width="512" height="512" fill="#13233D"/>
+    <!-- Tour Eiffel -->
+    <g fill="url(#tw)">
+      <rect x="252" y="18" width="8" height="34" rx="3"/>
+      <path d="M244 52h24l4 40h-32z"/>
+      <rect x="232" y="88" width="48" height="10" rx="3"/>
+      <path d="M238 98h36l20 132h-76z"/>
+      <rect x="200" y="226" width="112" height="14" rx="4"/>
+      <path d="M212 240h88C312 292 326 326 340 352H172C186 326 200 292 212 240z"/>
+      <rect x="148" y="348" width="216" height="18" rx="5"/>
+      <path d="M160 366h192C358 420 384 474 420 512H92C128 474 154 420 160 366z"/>
+    </g>
+    <!-- Treillis et arche -->
+    <g fill="none" stroke="#13233D" stroke-width="5" stroke-linecap="round" opacity=".55">
+      <path d="M244 112l24 24M268 112l-24 24M240 150l32 32M272 150l-32 32M236 190l40 34M276 190l-40 34"/>
+      <path d="M218 252l76 88M294 252l-76 88"/>
+    </g>
+    <path d="M168 512 C 186 418, 326 418, 344 512 Z" fill="#13233D"/>
+    <!-- Monogramme -->
+    <text x="256" y="318" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-weight="800" font-size="184" fill="#FFFFFF" letter-spacing="-4">IP</text>
+    <!-- Bande tricolore -->
+    <rect x="164" y="344" width="62" height="16" rx="8" fill="#3F6FE0"/>
+    <rect x="225" y="344" width="62" height="16" fill="#FFFFFF"/>
+    <rect x="286" y="344" width="62" height="16" rx="8" fill="#E5484D"/>
+    <rect x="222" y="344" width="10" height="16" fill="#FFFFFF"/><rect x="280" y="344" width="10" height="16" fill="#FFFFFF"/>
+  </g>
+</svg>

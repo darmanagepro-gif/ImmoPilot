@@ -95,7 +95,7 @@ function migBackfill_() {
     const patch = {};
     if (!x.paymentStatus) patch.paymentStatus = "UNPAID";
     if (x.version === null || x.version === "") patch.version = 0;
-    if (!x.currency) patch.currency = "MAD";
+    if (!x.currency) patch.currency = cur_();
     if (!x.source) patch.source = "DIRECT";
     if (!x.checkInAt && isDateStr_(x.checkIn)) patch.checkInAt = localToDate_(x.checkIn, pr.checkInTime || DEFAULT_SETTINGS["reservation.defaultCheckIn"]).toISOString();
     if (!x.checkOutAt && isDateStr_(x.checkOut)) patch.checkOutAt = localToDate_(x.checkOut, pr.checkOutTime || DEFAULT_SETTINGS["reservation.defaultCheckOut"]).toISOString();
@@ -146,12 +146,12 @@ function migSeed_() {
   const r = { plans: 0, platformOrg: false };
   DEFAULT_PLANS.forEach(function (pl) {
     if (dbGet_("SubscriptionPlans", pl.planCode)) return;
-    dbInsert_("SubscriptionPlans", { planCode: pl.planCode, name: pl.name, price: pl.price, currency: "MAD", periodicity: pl.periodicity, maxProperties: pl.maxProperties,
+    dbInsert_("SubscriptionPlans", { planCode: pl.planCode, name: pl.name, price: pl.price, currency: cur_(), periodicity: pl.periodicity, maxProperties: pl.maxProperties,
       maxUsers: pl.maxUsers, storageMb: pl.storageMb, featuresJson: pl.features, quotasJson: { exportRows: IMMO_CONFIG.MAX_EXPORT_ROWS }, trialDays: pl.trialDays, status: "ACTIVE", sortOrder: pl.sortOrder, updatedAt: nowIso_(), updatedBy: "migration" });
     r.plans++;
   });
   if (!dbAll_("Organizations").some(function (o) { return o.type === "PLATFORM"; })) {
-    dbInsert_("Organizations", { name: "ImmoPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: "MA", city: "Marrakech", timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: "migration" });
+    dbInsert_("Organizations", { name: "ImmoPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: "migration" });
     r.platformOrg = true;
   }
   return r;

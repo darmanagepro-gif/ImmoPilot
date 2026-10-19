@@ -105,7 +105,7 @@ function tenantCreate_(p, a) {
   const email = a.email ? validateEmail_(a.email) : "";
   const u = email ? dbAll_("Users").find(function (x) { return normalizeEmail_(x.email) === email; }) : null;
   const t = dbInsert_("Tenants", { organizationId: orgId, userId: u && dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(u.userId) && r.role === "TENANT" && r.status === "ACTIVE"; }) ? u.userId : "",
-    fullName: reqText_(a.fullName, "Nom complet", 2, 120), email: email, phone: safeText_(a.phone, 30), nationality: safeText_(a.nationality, 60), idType: a.idType ? oneOf_(a.idType, ID_TYPES_, "Pièce") : "",
+    fullName: reqText_(a.fullName, "Nom complet", 2, 120), email: email, phone: safeText_(a.phone, 30), nationality: safeText_(a.nationality, 60), idType: a.idType ? oneOf_(a.idType, idTypes_(), "Pièce") : "",
     status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
   audit_("TENANT_CREATED", "Tenant", t.tenantId, orgId, {});
   return { ok: true, tenantId: t.tenantId, id: t.tenantId };
@@ -261,7 +261,7 @@ function leaseDepositReturn_(p, a) {
   if (ret > 0) paymentId = payRecord_(p, { refType: "LEASE", refId: x.l.leaseId, kind: "DEPOSIT_REFUND", amount: ret, method: a.method || "TRANSFER", paidAt: a.paidAt, reference: a.reference, requestKey: a.requestKey }).paymentId;
   dbUpdate_("Leases", x.l.leaseId, { depositReturned: round2_(num_(x.l.depositReturned) + ret), depositDeductions: ded, depositStatus: ded > 0 ? "PARTIALLY_RETURNED" : "RETURNED", updatedAt: nowIso_(), updatedBy: p.email });
   if (ded > 0) dbInsertUnique_("RevenueRecords", "description", "Retenue sur caution bail " + x.l.leaseId, { organizationId: x.l.organizationId, propertyId: x.l.propertyId, category: "DEPOSIT_DEDUCTION",
-    amount: ded, currency: "MAD", revenueDate: todayStr_(), status: "RECEIVED", receivedAt: nowIso_(), createdAt: nowIso_(), createdBy: p.email });
+    amount: ded, currency: cur_(), revenueDate: todayStr_(), status: "RECEIVED", receivedAt: nowIso_(), createdAt: nowIso_(), createdBy: p.email });
   audit_("LEASE_DEPOSIT_RETURNED", "Lease", x.l.leaseId, x.l.organizationId, { returned: ret, deductions: ded, reason: safeText_(a.deductionReason, 500) });
   return { ok: true, returned: ret, deductions: ded, paymentId: paymentId };
 }
@@ -291,7 +291,7 @@ function leaseDocument_(p, a) {
     fin: x.l.endDate || "indéterminée", loyer: x.l.monthlyRent, charges: x.l.charges, caution: x.l.deposit, jour_echeance: x.l.dueDay, indexation: x.l.indexationRate, conditions: x.l.terms, date: todayStr_() };
   const tpl = getSetting_("template.leaseDocId", x.l.organizationId);
   const pdf = tpl ? docFromTemplate_(tpl, map, propertyFolder_(x.l.organizationId, x.l.propertyId, "LEASE"), "Bail_" + x.l.leaseId).pdf :
-    htmlToPdf_(pdfShell_("Contrat de location", "<p class='muted'>MODÈLE INDICATIF — à faire valider par un professionnel du droit marocain avant signature (loi 67-12 notamment). ImmoPilot ne garantit pas la conformité juridique.</p>" +
+    htmlToPdf_(pdfShell_("Contrat de location", "<p class='muted'>MODÈLE INDICATIF — à faire valider par un professionnel du " + escapeHtml_(edition_().leaseLaw) + " avant signature. ImmoPilot ne garantit pas la conformité juridique.</p>" +
       htmlTable_(["Clause", "Contenu"], Object.keys(map).map(function (k) { return [k, map[k] == null ? "" : map[k]]; })) + "<p>Fait à " + escapeHtml_(x.prop.city || "") + ", le " + todayStr_() + "</p><p>Signature bailleur : ______________ &nbsp; Signature locataire : ______________</p>"), "Bail_" + x.l.leaseId);
   const out = storeGeneratedPdf_(p, pdf, { propertyId: x.l.propertyId, organizationId: x.l.organizationId }, "LEASE", x.l.leaseId, "CONTRACT");
   dbUpdate_("Leases", x.l.leaseId, { documentId: out.documentId });

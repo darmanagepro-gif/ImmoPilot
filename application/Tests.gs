@@ -113,6 +113,45 @@ function tDays_(n) { return addDaysStr_(todayStr_(), n); }
 /* ===================================== GROUPES DE TESTS ===================================== */
 function TEST_GROUPS_() {
   return [
+    { name: "Édition France", tests: [
+      ["Édition France : euro, Europe/Paris, CNI, n° d'enregistrement, fiches de police (étrangers seulement, document sensible conservé 6 mois)", function (T, fx) {
+        if (IMMO_EDITION_ !== "FR") {
+          T.eq(cur_(), "MAD", "édition Maroc : dirham");
+          const rm = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(900), checkOut: tDays_(902), guestName: "Test Maroc", idempotencyKey: T.key() });
+          T.fails(fx.tok.ownerA, "guest.policeForms", { reservationId: rm.reservationId }, "FORBIDDEN");
+          return;
+        }
+        T.eq([cur_(), DEFAULT_SETTINGS.currency, IMMO_CONFIG.TIMEZONE, getSetting_("currency")], ["EUR", "EUR", "Europe/Paris", "EUR"], "euro et fuseau de Paris");
+        T.eq(DEFAULT_PLANS.map(function (p) { return p.price; }), [29, 59, 149], "forfaits en euros");
+        const pub = editionPublic_();
+        T.ok(pub.code === "FR" && pub.currency === "EUR" && /<svg/.test(pub.logoSvg) && pub.policeForms === true && pub.phoneCountry === "33", "réglages transmis à l'interface (logo tour Eiffel)");
+        T.ok(T.call(fx.tok.ownerA, "meta.get", {}).idTypes.indexOf("CNI") >= 0, "carte nationale d'identité proposée");
+        T.call(fx.tok.ownerA, "property.update", { propertyId: fx.propA, registrationNumber: "7510112345678" });
+        T.eq(T.call(fx.tok.ownerA, "property.get", { propertyId: fx.propA }).registrationNumber, "7510112345678", "n° d'enregistrement du meublé de tourisme");
+        const r = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(900), checkOut: tDays_(903), guestName: "Hans Müller", guestCount: 3, idempotencyKey: T.key() });
+        T.fails(fx.tok.ownerA, "guest.save", { reservationId: r.reservationId, lastName: "Test", idType: "CIN", idRef: "AB12345" });
+        // Voyageur principal français : aucune fiche à établir
+        const prim = T.call(fx.tok.ownerA, "guest.list", { reservationId: r.reservationId }).items[0];
+        T.call(fx.tok.ownerA, "guest.save", { reservationId: r.reservationId, guestId: prim.guestId, lastName: "Dupont", firstName: "Marie", nationality: "Française", idType: "CNI", idRef: "X4RTBPFW4" });
+        T.fails(fx.tok.ownerA, "guest.policeForms", { reservationId: r.reservationId });
+        const de = T.call(fx.tok.ownerA, "guest.save", { reservationId: r.reservationId, lastName: "Müller", firstName: "Hans", nationality: "Allemande", idType: "PASSPORT", idRef: "C01X00T47",
+          birthDate: "1980-04-12", birthPlace: "Berlin (Allemagne)", homeAddress: "Friedrichstraße 10, 10117 Berlin", phone: "+49 30 1234567" });
+        T.fails(fx.tok.ownerA, "guest.save", { reservationId: r.reservationId, guestId: de.guestId, birthDate: tDays_(5) });
+        const full = T.call(fx.tok.ownerA, "guest.list", { reservationId: r.reservationId }).items.find(function (g) { return g.guestId === de.guestId; });
+        T.eq([full.birthDate, full.birthPlace], ["1980-04-12", "Berlin (Allemagne)"], "date et lieu de naissance enregistrés");
+        const pdf = T.call(fx.tok.ownerA, "guest.policeForms", { reservationId: r.reservationId });
+        const txt = Utilities.newBlob(Utilities.base64Decode(pdf.base64)).getDataAsString();
+        T.ok(/^%PDF/.test(txt) && txt.indexOf("Fiche individuelle de police") > 0 && txt.indexOf("Müller") > 0 && txt.indexOf("Friedrichstraße") > 0 && txt.indexOf("Dupont") < 0, "fiche pour le voyageur étranger uniquement");
+        T.ok(txt.indexOf("7510112345678") > 0 && txt.indexOf("conserver 6 mois") > 0, "n° d'enregistrement et durée de conservation");
+        const doc = dbGet_("Documents", pdf.documentId);
+        T.ok(doc.sensitive === true && doc.category === "POLICE_FORM" && doc.retainUntil >= addDaysStr_(tDays_(903), 183), "document sensible conservé au moins 6 mois après le départ");
+        T.fails(fx.tok.guard, "guest.policeForms", { reservationId: r.reservationId });
+        T.call(fx.tok.ownerA, "guest.purge", { guestId: de.guestId });
+        const purged = dbGet_("Guests", de.guestId);
+        T.ok(!purged.birthDate && !purged.birthPlace && !purged.homeAddress, "effacement des données de naissance et du domicile");
+        T.eq(waLink_("07 49 98 09 18", "x").split("?")[0], "https://wa.me/33749980918", "numéro français vers WhatsApp");
+      }]
+    ] },
     { name: "Cache des tables", tests: [
       ["Cache partagé : lecture sans feuille, invalidation immédiate à l'écriture, grosses tables, sessions révoquées, vidage manuel", function (T, fx) {
         if (typeof __MOCK__ === "undefined") T.skip("Compteurs de lecture disponibles dans le simulateur uniquement.");
@@ -476,7 +515,7 @@ function TEST_GROUPS_() {
         const r1 = demoBuild_(fx.users.superA.email);
         T.eq(r1.organizations.map(function (o) { return o.created; }), [true, true], "2 organisations créées");
         T.eq(r1.properties.length, 3, "3 biens");
-        T.eq(r1.properties.filter(function (p) { return Number(p.nightlyPrice) === 120 * DEMO_EUR_MAD_ && p.currency === "MAD"; }).length, 1, "duplex à 120 € convertis en MAD");
+        T.eq(r1.properties.filter(function (p) { return Number(p.nightlyPrice) === demoNightly_({ eur: 120 }) && p.currency === cur_(); }).length, 1, "duplex à 120 € dans la devise de l'édition");
         T.eq(r1.agencyAccess.length, 2, "2 biens confiés à l'agence");
         T.eq(r1.guards.length, 3, "un gardien par bien");
         T.ok(r1.provider.specialties.indexOf("CLEANING") >= 0 && r1.provider.specialties.indexOf("PLUMBING") >= 0, "prestataire ménage + tous corps de métier");
@@ -511,7 +550,7 @@ function TEST_GROUPS_() {
         T.ok(!h.already && h.counts.Reservations >= 40 && h.counts.CleaningMissions >= 25 && h.counts.Invoices >= 9 && h.counts.RentSchedules === 12, "volumes : " + JSON.stringify(h.counts));
         T.ok(demoHistory_(fx.users.superA.email).already, "deuxième exécution : rien n'est ajouté");
         const props = dbAll_("Properties").filter(function (p) { return /^DÉMO – /.test(p.name); });
-        T.ok(props.every(function (p) { return p.currency === "MAD"; }) && props.some(function (p) { return Number(p.nightlyPrice) === 120 * DEMO_EUR_MAD_; }), "prix en MAD (120 € convertis)");
+        T.ok(props.every(function (p) { return p.currency === cur_(); }) && props.some(function (p) { return Number(p.nightlyPrice) === demoNightly_({ eur: 120 }); }), "prix dans la devise de l'édition (120 €)");
         const ids = props.map(function (p) { return p.propertyId; });
         const resv = dbAll_("Reservations").filter(function (r) { return ids.indexOf(r.propertyId) >= 0; });
         const byProp = {};
@@ -633,6 +672,7 @@ function TEST_GROUPS_() {
         T.eq(String(f.getSharingAccess()), String(DriveApp.Access.PRIVATE), "fichier Drive privé");
       }],
       ["Modèle de document : seul un Google Docs du dossier « Modeles » est accepté", function (T, fx) {
+        if (typeof IMMO_RUNTIME_ !== "undefined" && IMMO_RUNTIME_ === "vps") T.skip("Modèles Google Docs : version Google Apps Script uniquement (le serveur dédié utilise les PDF intégrés).");
         const outside = DocumentApp.create("ImmoPilot_TEST_modele_hors_dossier");
         const inside = DocumentApp.create("ImmoPilot_TEST_modele_bail");
         DriveApp.getFileById(inside.getId()).moveTo(systemFolder_("Modeles"));
@@ -1130,7 +1170,8 @@ function TEST_GROUPS_() {
       }],
       ["Lien WhatsApp encodé (sans envoi automatique)", function (T) {
         const u = waLink_("06 12 34 56 78", "Bonjour & bienvenue à Marrakech ?");
-        T.eq(u, "https://wa.me/212612345678?text=" + encodeURIComponent("Bonjour & bienvenue à Marrakech ?"), "lien");
+        T.eq(u, "https://wa.me/" + edition_().phoneCountry + "612345678?text=" + encodeURIComponent("Bonjour & bienvenue à Marrakech ?"), "lien (indicatif de l'édition)");
+        T.eq(waLink_("+33 7 49 98 09 18", "x").split("?")[0], "https://wa.me/33749980918", "numéro international conservé");
       }],
       ["Notifications sans doublon (clé d'événement)", function (T, fx) {
         const n0 = dbAll_("Notifications").length;

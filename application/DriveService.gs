@@ -122,8 +122,9 @@ function storeFile_(ctx, ownerType, ownerId, category, input, uploaderEmail) {
   let file;
   try { file = folder.createFile(Utilities.newBlob(bytes, mime, cleanName)); file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE); }
   catch (e) { throw new AppError("DRIVE", "Enregistrement Drive impossible (quota ou autorisation) : " + e.message); }
-  const sensitive = ctx.sensitive || ["ID_DOCUMENT", "PASSPORT", "CIN"].indexOf(category) >= 0;
-  const retDays = Number(getSetting_("retention.sensitiveDocDays", ctx.organizationId)) || 30;
+  const sensitive = ctx.sensitive || ["ID_DOCUMENT", "PASSPORT", "CIN", "CNI", "POLICE_FORM"].indexOf(category) >= 0;
+  // Fiches de police : conservation de 6 mois au moins après le départ (obligation de l'hébergeur en France).
+  const retDays = Math.max(Number(getSetting_("retention.sensitiveDocDays", ctx.organizationId)) || 30, category === "POLICE_FORM" ? 183 : 0);
   let retainUntil = "";
   if (sensitive && (ownerType === "GUEST" || ownerType === "RESERVATION")) {
     const r = ownerType === "GUEST" ? dbGet_("Reservations", (dbGet_("Guests", ownerId) || {}).reservationId) : dbGet_("Reservations", ownerId);
@@ -273,7 +274,7 @@ function purgeExpiredDocuments_() {
   dbAll_("Guests").filter(function (x) { return x.status === "ACTIVE" && (x.idType || x.idRefMasked || x.nationality); }).forEach(function (x) {
     const r = dbGet_("Reservations", x.reservationId);
     const days = Number(getSetting_("retention.sensitiveDocDays", x.organizationId)) || 30;
-    if (r && addDaysStr_(r.checkOut, days) < today) { dbUpdate_("Guests", x.guestId, { idType: "", idRefMasked: "", nationality: "", status: "PURGED", purgedAt: nowIso_() }); g++; }
+    if (r && addDaysStr_(r.checkOut, days) < today) { dbUpdate_("Guests", x.guestId, { idType: "", idRefMasked: "", nationality: "", birthDate: "", birthPlace: "", homeAddress: "", status: "PURGED", purgedAt: nowIso_() }); g++; }
   });
   return { documentsPurged: n, guestsMinimized: g };
 }

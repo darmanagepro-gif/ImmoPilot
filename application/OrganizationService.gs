@@ -37,7 +37,7 @@ function orgCreate_(p, a) {
   const type = oneOf_(a.type || "OWNER_ORG", ORG_TYPES_, "Type d'organisation");
   return withLock_(function () {
     assert_(!dbAll_("Organizations").some(function (o) { return String(o.name).toLowerCase() === name.toLowerCase() && o.status !== "INACTIVE"; }), "Une organisation porte déjà ce nom.");
-    const o = dbInsert_("Organizations", { name: name, status: "ACTIVE", type: type, city: safeText_(a.city || "Marrakech", 80), country: safeText_(a.country || "MA", 2),
+    const o = dbInsert_("Organizations", { name: name, status: "ACTIVE", type: type, city: safeText_(a.city || edition_().city, 80), country: safeText_(a.country || edition_().country, 2),
       timezone: tz_(), locale: oneOf_(a.locale || "fr", IMMO_LANGS_, "Langue"), billingEmail: a.billingEmail ? validateEmail_(a.billingEmail) : "",
       createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
     audit_("ORGANIZATION_CREATED", "Organization", o.organizationId, o.organizationId, { name: name, type: type });
@@ -144,7 +144,7 @@ function ownerAgencyCreate_(p, a) {
   const agency = withLock_(function () {
     const same = dbAll_("Organizations").find(function (o) { return String(o.name).toLowerCase() === name.toLowerCase() && o.status !== "INACTIVE"; });
     if (same) throw new AppError("VALIDATION", "Une organisation porte déjà ce nom. S'il s'agit de la même agence, utilisez « Attribuer une agence » ; sinon, choisissez un autre nom.");
-    const o = dbInsert_("Organizations", { name: name, status: "ACTIVE", type: "AGENCY", city: safeText_(a.city || "Marrakech", 80), country: "MA", timezone: tz_(),
+    const o = dbInsert_("Organizations", { name: name, status: "ACTIVE", type: "AGENCY", city: safeText_(a.city || edition_().city, 80), country: edition_().country, timezone: tz_(),
       locale: oneOf_(a.locale || "fr", IMMO_LANGS_, "Langue"), billingEmail: adminEmail, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(),
       managedByOrgId: prop.organizationId, contactName: safeText_(a.adminName || "", 100), phone: safeText_(a.phone || "", 30), address: safeText_(a.address || "", 240) });
     audit_("AGENCY_CREATED_BY_OWNER", "Organization", o.organizationId, prop.organizationId, { name: name, propertyId: prop.propertyId, adminEmail: adminEmail });

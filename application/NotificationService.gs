@@ -66,12 +66,12 @@ function notify_(opts) {
 function safeAppUrl_() { try { return appUrl_(); } catch (e) { return ""; } }
 function superAdminIds_() { return dbAll_("UserRoles").filter(function (r) { return r.role === "SUPER_ADMIN" && r.status === "ACTIVE"; }).map(function (r) { return r.userId; }); }
 
-/** Normalise un numéro (format marocain 06/07 → 2126/2127) et construit un lien wa.me encodé. */
+/** Normalise un numéro (format national de l'édition : 06/07 → 2126/2127 au Maroc, 06/07 → 336/337 en France) et construit un lien wa.me encodé. */
 function waLink_(phone, text) {
   let d = String(phone || "").replace(/[^\d+]/g, "");
   if (d.indexOf("+") === 0) d = d.slice(1);
   if (d.indexOf("00") === 0) d = d.slice(2);
-  if (/^0[5-7]\d{8}$/.test(d)) d = "212" + d.slice(1);
+  if (new RegExp(edition_().localMobileRe).test(d)) d = edition_().phoneCountry + d.slice(1);
   assert_(/^\d{8,15}$/.test(d), "Numéro WhatsApp invalide (format international attendu).");
   return "https://wa.me/" + d + "?text=" + encodeURIComponent(String(text || "").slice(0, 1500));
 }

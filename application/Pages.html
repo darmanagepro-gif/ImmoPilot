@@ -10,7 +10,8 @@ function propertyFields(isCreate) {
     { k: "name", l: "Nom commercial", req: true }, { k: "propertyType", l: "Type de bien", t: "select", req: true, opts: function () { return (S.meta.propertyTypes || []).map(function (x) { return [x, st(x)]; }); } },
     { k: "rentalMode", l: "Mode de location", t: "select", req: true, opts: [["SHORT_TERM", st("SHORT_TERM")], ["LONG_TERM", st("LONG_TERM")], ["BOTH", st("BOTH")]] },
     !isCreate ? { k: "status", l: "Statut", t: "select", opts: [["ACTIVE", st("ACTIVE")], ["INACTIVE", st("INACTIVE")], ["MAINTENANCE", st("MAINTENANCE")]] } : null,
-    { k: "address", l: "Adresse complète", full: true }, { k: "city", l: "Ville", req: true, def: "Marrakech" }, { k: "neighborhood", l: "Quartier" },
+    { k: "address", l: "Adresse complète", full: true }, { k: "city", l: "Ville", req: true, def: ED.city }, { k: "neighborhood", l: "Quartier" },
+    ED.registrationNumber ? { k: "registrationNumber", l: "N° d'enregistrement (meublé de tourisme)", help: "Numéro délivré par la mairie, à afficher sur les annonces lorsqu'il est exigé.", show: function (v) { return v.rentalMode !== "LONG_TERM"; } } : null,
     { k: "building", l: "Immeuble / résidence" }, { k: "floor", l: "Étage" }, { k: "doorNumber", l: "N° de porte" },
     { k: "latitude", l: "Latitude", t: "number", step: "any" }, { k: "longitude", l: "Longitude", t: "number", step: "any" },
     { k: "surfaceM2", l: "Surface (m²)", t: "number", min: 0 }, { k: "bedrooms", l: "Chambres", t: "number", min: 0 }, { k: "bathrooms", l: "Salles de bain", t: "number", min: 0 }, { k: "capacity", l: "Capacité maximale", t: "number", min: 0 },
@@ -52,7 +53,7 @@ PAGES.properties = function (el) {
 function propertyMap(items) {
   const box = h("div", { class: "map" }), pts = items.filter(function (p) { return p.latitude && p.longitude; });
   const draw = function () {
-    const m = L.map(box).setView(pts.length ? [pts[0].latitude, pts[0].longitude] : [31.6295, -7.9811], 12);
+    const m = L.map(box).setView(pts.length ? [pts[0].latitude, pts[0].longitude] : ED.mapCenter, 12);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(m);
     pts.forEach(function (p) { const mk = L.marker([p.latitude, p.longitude]).addTo(m); const a = h("a", { href: "#property/" + p.propertyId }, p.name); mk.bindPopup(a); });
     if (pts.length > 1) m.fitBounds(pts.map(function (p) { return [p.latitude, p.longitude]; }), { padding: [30, 30] });
@@ -130,7 +131,7 @@ function agencyCreateDialog(p, back) {
     { k: "name", l: "Nom de l'agence", req: true },
     { k: "adminEmail", l: "E-mail du responsable de l'agence", t: "email", req: true, help: "Il recevra une invitation personnelle (valable 7 jours) pour créer son mot de passe." },
     { k: "adminName", l: "Nom du responsable" },
-    { k: "city", l: "Ville", def: "Marrakech" },
+    { k: "city", l: "Ville", def: ED.city },
     { k: "canManageReservations", l: "Peut gérer les réservations et arrivées", t: "checkbox", def: true }, { k: "canManageOperations", l: "Peut gérer ménage, incidents, devis et baux", t: "checkbox" },
     { k: "canViewFinance", l: "Peut consulter les finances du bien", t: "checkbox" }, { k: "commissionRate", l: "Commission de l'agence (%)", t: "number", min: 0, max: 100, step: "0.01", help: "Vide = commission de gestion du bien." },
     { k: "validFrom", l: "Valable du", t: "date" }, { k: "validTo", l: "au", t: "date" }], {}, function (v) {
@@ -329,7 +330,9 @@ PAGES.reservation = function (el, id) {
     if (r.canOperate && ["CONFIRMED", "IN_PROGRESS"].indexOf(r.status) >= 0) el.appendChild(h("div", { class: "actions", style: { marginBottom: "16px" } }, r.status === "CONFIRMED" ? btn(t("Effectuer le check-in"), function () { checkDialog(r, "IN"); }, "primary lg") : btn(t("Effectuer le check-out"), function () { checkDialog(r, "OUT"); }, "primary lg")));
     if (r.payments) el.appendChild(panel("Paiements et caution", table([{ l: "Date", date: true, k: "paidAt" }, { l: "Nature", f: function (x) { return st(x.kind); } }, { l: "Sens", f: function (x) { return x.direction === "IN" ? t("Entrée") : t("Sortie"); } }, { l: "Montant", money: true, k: "amount" }, { l: "Mode", f: function (x) { return st(x.method); } }, { l: "Référence", k: "reference" }, { l: "Statut", status: true, k: "status" }], r.payments, { empty: "Aucun paiement enregistré." }),
       r.canEdit ? [btn("+ " + t("Paiement"), function () { payDialog({ refType: "RESERVATION", refId: r.reservationId, kind: "RESERVATION", kinds: ["RESERVATION", "DEPOSIT", "REFUND", "DEPOSIT_REFUND"], amount: r.balance > 0 ? r.balance : "" }).then(function (x) { if (x) App.go("reservation/" + id); }); }, "primary")] : null));
-    if (r.guests) el.appendChild(panel("Voyageurs", guestTable(r), r.canEdit ? [btn("+ " + t("Voyageur"), function () { guestDialog(r, {}); })] : null));
+    const sensG = r.guests && r.guests[0] && r.guests[0].idType !== undefined;
+    if (r.guests) el.appendChild(panel("Voyageurs", guestTable(r), [r.canEdit ? btn("+ " + t("Voyageur"), function () { guestDialog(r, {}); }) : null,
+      ED.policeForms && sensG ? btn(t("Fiches de police (PDF)"), function () { api("guest.policeForms", { reservationId: r.reservationId }).then(download).catch(showErr); }) : null].filter(Boolean)));
     const ops = (r.checkIns || []).map(function (x) { return Object.assign({ kind: t("Arrivée") }, x); }).concat((r.checkOuts || []).map(function (x) { return Object.assign({ kind: t("Départ") }, x); }));
     if (ops.length) el.appendChild(panel("Arrivée et départ", table([{ l: "Type", k: "kind" }, { l: "Prévu", dt: true, k: "plannedAt" }, { l: "Réel", dt: true, k: "actualAt" }, { l: "Retard", f: function (x) { return x.lateMinutes ? x.lateMinutes + " min" : "—"; } }, { l: "Agent", k: "agentEmail" }, { l: "État", k: "conditionNotes" },
       { l: "Incident", f: function (x) { return x.incidentId ? h("a", { href: "#incident/" + x.incidentId }, t("Voir")) : "—"; } }], ops), [btn(t("Rapport PDF"), function () { api("ops.report", { reservationId: r.reservationId }).then(download).catch(showErr); })]));
@@ -356,7 +359,8 @@ function guestDialog(r, g) {
   const sens = r.guests && r.guests[0] && r.guests[0].idType !== undefined;
   formModal(g.guestId ? t("Modifier le voyageur") : t("Ajouter un voyageur"), [{ k: "lastName", l: "Nom", req: true }, { k: "firstName", l: "Prénom" }, { k: "email", l: "E-mail", t: "email" }, { k: "phone", l: "Téléphone", t: "tel" },
     sens ? { k: "nationality", l: "Nationalité" } : null, sens ? { k: "idType", l: "Type de pièce", t: "select", opts: function () { return (S.meta.idTypes || []).map(function (x) { return [x, st(x)]; }); } } : null,
-    sens ? { k: "idRef", l: "Numéro de pièce", help: "Seuls les 3 derniers caractères sont conservés sauf obligation légale configurée." } : null].filter(Boolean), g,
+    sens ? { k: "idRef", l: "Numéro de pièce", help: "Seuls les 3 derniers caractères sont conservés sauf obligation légale configurée." } : null].concat(sens && ED.policeForms ? [
+      { k: "birthDate", l: "Date de naissance", t: "date" }, { k: "birthPlace", l: "Lieu de naissance" }, { k: "homeAddress", l: "Domicile habituel", full: true, help: "Voyageurs étrangers : informations de la fiche individuelle de police." }] : []).filter(Boolean), g,
   function (v) { v.reservationId = r.reservationId; v.guestId = g.guestId; if (!v.idRef) delete v.idRef; return api("guest.save", v).then(function () { App.go("reservation/" + r.reservationId); }); });
 }
 PAGES.guests = function (el) {
@@ -639,7 +643,7 @@ function contractorDetail(el, id) {
   return api("ctr.get", { artisanId: id }).then(function (c) {
     $("page-title").textContent = c.name;
     el.appendChild(pageHead(c.name, (c.specialties || []).map(st).join(", "), [stTag(c.status), c.platform && !c.canEdit ? tag(t("Annuaire ImmoPilot"), "info") : null, (c.canEdit || can("workorder.operate")) ? btn(t("Modifier"), function () { formModal(t("Modifier"), contractorFields(false), Object.assign({}, c, { zones: (c.zones || []).join(", ") }), function (v) { v.artisanId = id; if (typeof v.zones === "string") v.zones = v.zones.split(","); return api("ctr.update", v).then(function () { App.go("contractors/" + id); }); }); }) : null,
-      c.phone ? h("a", { class: "btn", href: "https://wa.me/" + String(c.phone).replace(/\D/g, "").replace(/^0([5-7])/, "212$1"), target: "_blank", rel: "noopener" }, "WhatsApp") : null]));
+      c.phone ? h("a", { class: "btn", href: "https://wa.me/" + waNumber(c.phone), target: "_blank", rel: "noopener" }, "WhatsApp") : null]));
     el.appendChild(kpis([{ l: "Interventions", v: fmtNum(c.stats.interventions, 0) }, { l: "Contrôlées", v: fmtNum(c.stats.verified, 0), tone: "good" }, { l: "Taux de résolution", v: fmtPct(c.stats.resolutionRate) }, { l: "Délai moyen", v: c.stats.avgDelayDays === null ? "—" : fmtNum(c.stats.avgDelayDays, 1) + " j" },
       { l: "Facturé TTC", v: fmtMoney(c.stats.totalInvoicedTTC) }, { l: "Coût moyen", v: fmtMoney(c.stats.avgInvoiceTTC) }, { l: "Commissions", v: fmtMoney(c.stats.commissionTotal) }, { l: "Devis acceptés", v: fmtPct(c.stats.quoteApprovalRate) }]));
     el.appendChild(h("div", { class: "grid c2" }, panel("Coordonnées", kv([["E-mail", c.email], ["Téléphone", c.phone], ["Zones", (c.zones || []).join(", ")], ["Commission spécifique", isNil(c.commissionRate) ? "—" : c.commissionRate + " %"], ["Compte lié", c.hasAccount ? t("Oui") : t("Non")]])),

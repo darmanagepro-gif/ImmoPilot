@@ -195,11 +195,19 @@ html[data-theme="dark"]{
   --danger-b:#5A2A22; --field-bg:#0F1A2A; --shadow:0 1px 2px rgba(0,0,0,.45),0 4px 16px rgba(0,0,0,.35); color-scheme:dark;
 }
 html[data-theme="dark"] .brand-mark{background:#E6EBF2}
+.brand-mark.logo{background:none;padding:0;overflow:hidden}.brand-mark.logo svg{width:100%;height:100%;display:block}
 html[data-theme="dark"] .leaflet-container{filter:brightness(.85) contrast(1.05)}
 html[data-theme="dark"] .sig{background:#fff}
 html[data-theme="dark"] img{opacity:.95}
 .theme-btn{background:transparent;border:1px solid var(--line);border-radius:999px;width:38px;height:38px;display:grid;place-items:center;cursor:pointer;font-size:17px;line-height:1;color:var(--ink);transition:background .15s,transform .15s}
 .theme-btn:hover{background:var(--surface-2);transform:rotate(-12deg)}
+.legal-page{max-width:900px;margin:0 auto;padding:20px 16px 60px}
+.legal-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.legal-head .brand b{color:var(--ink)}.legal-head .brand small{color:var(--muted)}
+.legal-doc{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 26px;line-height:1.6}
+.legal-doc h2{margin-top:0}.legal-doc h3{margin:20px 0 6px;font-size:16px}.legal-doc li{margin:4px 0}
+mark.legal-missing{background:#FFE58A;color:#3A2E00;padding:0 4px;border-radius:4px}
+.legal-links{margin-top:14px;text-align:center}.legal-links a{color:var(--muted)}
 .imp-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:9px 28px;background:#B4432F;color:#fff;font-size:13.5px}
 .imp-banner .btn{background:#fff;color:#7a2416;border-color:#fff;font-weight:600}
 .imp-banner b{color:#fff}

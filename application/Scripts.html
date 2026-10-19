@@ -63,6 +63,7 @@ const App = window.App = {
     if (b.mode === "accept" && b.token) return Public.invite(b.token);
     if (b.mode === "reset" && b.token) return Public.reset(b.token);
     if (b.mode === "guest" && b.token) return Public.guest(b.token);
+    if (b.mode === "legal") return Public.legal(b.doc || "mentions");
     S.token = store("ip_token");
     if (!S.token) return Public.login();
     clear($("app")).appendChild(h("div", { class: "loading" }, t("Chargement…")));
@@ -89,7 +90,7 @@ const App = window.App = {
       });
     });
     const roleTxt = S.me.isSuper ? t("Super administrateur") : (S.me.roles[0] ? roleLabel(S.me.roles[0].role) + " · " + S.me.roles[0].organizationName : "");
-    const sidebar = h("aside", { class: "sidebar" }, h("div", { class: "brand" }, h("div", { class: "brand-mark" }, "IP"), h("div", null, h("b", null, "ImmoPilot"), h("small", null, t("Gestion immobilière")))), nav,
+    const sidebar = h("aside", { class: "sidebar" }, h("div", { class: "brand" }, brandMark(), h("div", null, h("b", null, "ImmoPilot"), h("small", null, t("Gestion immobilière")))), nav,
       h("div", { class: "sidebar-foot" }, "v" + S.me.version + " · " + S.me.timezone));
     const langSel = h("select", { class: "lang", "aria-label": t("Langue"), onchange: function (e) { setLang(e.target.value); if (!S.me.impersonator) api("me.updateProfile", { locale: S.lang }).catch(function () {}); App.shell(); App.go(S.route || "dashboard"); } },
       LANGS.map(function (l) { return h("option", { value: l[0], title: l[2] }, l[1]); }));
@@ -318,7 +319,7 @@ function mySubscriptions(el) {
 
 /* =============================== Paramètres =============================== */
 PAGES.settings = function (el) {
-  el.appendChild(pageHead(t("Paramètres"), ""));
+  el.appendChild(pageHead(t("Paramètres"), "", [btn(t("Informations légales"), function () { Public.legal("mentions", function () { App.shell(); App.go("settings"); }); })]));
   const orgAdmin = myOrgs(["OWNER", "AGENCY_ADMIN"]);
   tabs(el, [
     { id: "profile", label: "Mon profil", render: function (b) {
@@ -383,7 +384,7 @@ PAGES.admin = function (el) {
     { id: "orgs", label: "Organisations", render: function (b) {
       const lv = listView(b, { route: "org.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "SUSPENDED", "INACTIVE"] }, { k: "type", l: "Type", t: "select", opts: ["OWNER_ORG", "AGENCY", "PROVIDER", "PLATFORM"] }],
         tools: function () { return [btn("+ " + t("Organisation"), function () { formModal(t("Nouvelle organisation"), [{ k: "name", l: "Nom", req: true }, { k: "type", l: "Type", t: "select", req: true, opts: ["OWNER_ORG", "AGENCY", "PROVIDER"] },
-          { k: "city", l: "Ville", def: "Marrakech" }, { k: "billingEmail", l: "E-mail de facturation", t: "email" }, { k: "locale", l: "Langue", t: "select", opts: langOpts() },
+          { k: "city", l: "Ville", def: ED.city }, { k: "billingEmail", l: "E-mail de facturation", t: "email" }, { k: "locale", l: "Langue", t: "select", opts: langOpts() },
           { k: "planCode", l: "Forfait (essai)", t: "select", opts: function () { return api("plan.list").then(function (p) { return p.map(function (x) { return [x.planCode, x.name]; }); }); } }], {}, function (v) { return api("org.create", v).then(lv.reload); }, { success: "Organisation créée." }); }, "primary")]; },
         columns: [{ l: "Nom", k: "name" }, { l: "Type", f: function (o) { return st(o.type); } }, { l: "Statut", status: true, k: "status" }, { l: "Ville", k: "city" }, { l: "Utilisateurs", num: true, k: "userCount" }, { l: "Biens", num: true, k: "propertyCount" },
           { l: "Abonnement", f: function (o) { return o.billedToName ? t("Option agences de") + " " + o.billedToName : (o.planCode ? o.planCode + " · " + st(o.subscriptionStatus) : "—"); } }, { l: "Créée le", date: true, k: "createdAt" },

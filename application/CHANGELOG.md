@@ -1,5 +1,13 @@
 # Journal des modifications
 
+## 2.1.0 — 19 octobre 2026 — ImmoPilot France et serveur dédié
+
+- Édition France (même code, paquet dist-fr) : euro, Europe/Paris, Paris par défaut, téléphones +33, carte nationale d'identité (CNI), forfaits 29 / 59 / 149 € HT, logo tour Eiffel (interface, PDF, icônes).
+- France : n° d'enregistrement des meublés de tourisme, date et lieu de naissance et domicile des voyageurs étrangers, fiches individuelles de police en PDF (étrangers seulement, document sensible conservé au moins 6 mois), mentions légales des devis et factures (SIRET, TVA, pénalités, indemnité de 40 €), contrat de bail rappelant la loi du 6 juillet 1989.
+- Pages légales dans l'application (Maroc et France) : mentions légales, conditions générales, confidentialité, cookies et, en France, accord de sous-traitance (art. 28 RGPD) ; identité de l'éditeur dans les paramètres legal.* (« À compléter » surligné tant qu'elle manque).
+- Démonstration adaptée à l'édition (France : euros, Paris, CNI, données des fiches de police).
+- Version serveur dédié (application/server) : même code exécuté sur un VPS avec SQLite, fichiers privés, e-mails SMTP, PDF Chromium, tâches planifiées, HTTPS Caddy, sauvegardes quotidiennes et script d'installation ; les 68 tests métier passent dans cet environnement, données identiques après redémarrage.
+
 ## 2.0.3 — 15 octobre 2026 — vitesse
 
 - Cache partagé côté serveur (CacheService) : les tables sont gardées compressées en mémoire Google ; un écran lit en moyenne 0,5 feuille au lieu de 11 (mesuré sur le parcours complet de l'interface, 223 appels). Invalidation immédiate à chaque écriture, lectures sous verrou toujours faites sur la feuille, validation (flush) avant de rendre le verrou.

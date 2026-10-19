@@ -107,7 +107,7 @@
   {
     "test": "Propriétaire › ouverture d'une fiche de bien : dans l'application",
     "ok": true,
-    "detail": "property/prop_089749e603d7408e979c102937974b71"
+    "detail": "property/prop_b93bb330d48b458680ccb93f5805054d"
   },
   {
     "test": "Aucune erreur JavaScript (propriétaire)",

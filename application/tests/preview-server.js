@@ -18,7 +18,7 @@ const tokens = vm.runInContext("__fx.tok", ctx);
 function page(as, lang, mode, token, gas) {
   let html = fs.readFileSync(path.join(ROOT, "Index.html"), "utf8");
   html = html.replace(/<\?!=\s*include\("(\w+)"\);\s*\?>/g, function (m, n) { return fs.readFileSync(path.join(ROOT, n + ".html"), "utf8"); });
-  html = html.replace(/<\?!=\s*boot\.replace\([^?]*\?>/, JSON.stringify({ mode: mode || "app", token: token || "", appName: "ImmoPilot", version: "2.0.0", embed: (process.env.EMBED_ORIGINS || "").split(",").filter(Boolean) }));
+  html = html.replace(/<\?!=\s*boot\.replace\([^?]*\?>/, JSON.stringify({ mode: mode || "app", token: token || "", appName: "ImmoPilot", version: "2.0.0", embed: (process.env.EMBED_ORIGINS || "").split(",").filter(Boolean), edition: vm.runInContext("editionPublic_()", ctx), doc: "" }));
   html = html.replace("https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js", "/lib/chart.js").replace("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js", "/lib/leaflet.js")
     .replace("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css", "/lib/leaflet.css").replace(/<link[^>]+fonts\.googleapis[^>]+>/g, "");
   const shim = "<script>(function(){try{" + (as && tokens[as] ? "sessionStorage.setItem('ip_token'," + JSON.stringify(tokens[as]) + ");" : "") + (lang ? "localStorage.setItem('ip_lang'," + JSON.stringify(lang) + ");" : "") + "}catch(e){}" +

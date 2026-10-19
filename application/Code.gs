@@ -37,7 +37,7 @@ function routes_() { return {
   "property.agencyChoices": "propertyAgencyChoices_", "property.agencySet": "propertyAgencySet_", "property.agencyCreate": "ownerAgencyCreate_", "agency.mine": "ownerAgencyList_", "agency.update": "ownerAgencyUpdate_", "agency.resendInvite": "ownerAgencyResendInvite_", "agency.revokeAll": "ownerAgencyRevokeAll_", "agency.delete": "ownerAgencyDelete_", "property.access": "propertyAccessList_", "property.staffAssign": "propertyStaffAssign_", "property.staffRevoke": "propertyStaffRevoke_",
   "resv.list": "resvList_", "resv.get": "resvGet_", "resv.availability": "resvAvailability_", "resv.create": "resvCreate_", "resv.update": "resvUpdate_", "resv.setStatus": "resvSetStatus_", "resv.cancel": "resvCancel_",
   "resv.calendar": "resvCalendar_", "resv.sendConfirmation": "resvSendConfirmation_", "resv.sheet": "resvSheet_", "block.create": "blockCreate_", "block.cancel": "blockCancel_",
-  "guest.list": "guestList_", "guest.save": "guestSave_", "guest.purge": "guestPurge_", "guest.tokenCreate": "guestTokenCreate_", "guest.tokenRevoke": "guestTokenRevoke_",
+  "guest.list": "guestList_", "guest.policeForms": "guestPoliceForms_", "guest.save": "guestSave_", "guest.purge": "guestPurge_", "guest.tokenCreate": "guestTokenCreate_", "guest.tokenRevoke": "guestTokenRevoke_",
   "ops.today": "opsToday_", "ops.checkIn": "opsCheckIn_", "ops.checkOut": "opsCheckOut_", "ops.history": "opsHistory_", "ops.report": "opsReport_",
   "clean.list": "cleanList_", "clean.get": "cleanGet_", "clean.create": "cleanCreate_", "clean.assign": "cleanAssign_", "clean.respond": "cleanRespond_", "clean.start": "cleanStart_", "clean.room": "cleanRoom_",
   "clean.anomaly": "cleanAnomaly_", "clean.complete": "cleanComplete_", "clean.validate": "cleanValidate_", "clean.cancel": "cleanCancel_", "clean.orderPdf": "cleanOrderPdf_", "clean.reportPdf": "cleanReportPdf_",
@@ -58,7 +58,7 @@ function routes_() { return {
 }; }
 function publicRoutes_() { return {
   "auth.login": "authLogin_", "assistant.kb": "assistantKbPublic_", "auth.requestReset": "authRequestReset_", "auth.resetPassword": "authResetPassword_",
-  "invite.info": "inviteInfo_", "invite.accept": "inviteAccept_",
+  "invite.info": "inviteInfo_", "invite.accept": "inviteAccept_", "legal.get": "legalGet_",
   "guest.portal.get": "guestPortalGet_", "guest.portal.save": "guestPortalSave_", "guest.portal.upload": "guestPortalUpload_", "guest.portal.incident": "guestPortalIncident_"
 }; }
 
@@ -68,7 +68,7 @@ function publicRoutes_() { return {
  */
 var INSTALL_HTML_FILES_ = ["Index", "Styles", "Components", "I18n", "Login", "Dashboard", "Pages", "Scripts", "Assistant"];
 /* Première et dernière fonction de chaque fichier : détecte un fichier absent ET un fichier collé incomplètement. */
-var INSTALL_GS_SENTINELS_ = { Admin: ["assertEditor_", "auditList_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SubscriptionService: ["planOut_", "subscriptionJob_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
+var INSTALL_GS_SENTINELS_ = { Admin: ["assertEditor_", "auditList_"], Legal: ["legalGet_", "legalValues_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SubscriptionService: ["planOut_", "subscriptionJob_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
 function installCheck_() {
   const g = typeof globalThis !== "undefined" ? globalThis : this;
   const missingGs = Object.keys(INSTALL_GS_SENTINELS_).filter(function (f) { return INSTALL_GS_SENTINELS_[f].some(function (n) { return typeof g[n] !== "function"; }); });
@@ -132,6 +132,13 @@ function embedOrigins_() {
     .filter(Boolean).slice(0, 10);
 }
 
+/** Réglages d'édition utiles à l'interface (aucune donnée privée). */
+function editionPublic_() {
+  const e = edition_();
+  return { code: e.code, country: e.country, countryName: e.countryName, currency: e.currency, timezone: e.timezone, city: e.city, mapCenter: e.mapCenter, phoneCountry: e.phoneCountry,
+    localMobileRe: e.localMobileRe, tagline: e.tagline, taglineKey: e.taglineKey, logoSvg: e.logoSvg, policeForms: e.policeForms, registrationNumber: e.registrationNumber,
+    dataAuthority: e.dataAuthority, taxIdLabel: e.taxIdLabel };
+}
 /** Contrôle d'installation mémorisé 6 h par version installée : l'ouverture de l'application ne relit pas tous les fichiers à chaque fois. */
 function installCheckCached_() {
   if (IMMO_BUILD_ === "dev") return installCheck_();
@@ -145,11 +152,12 @@ function doGet(e) {
   const check = installCheckCached_();
   if (!check.ok) return installErrorPage_(check);
   const prm = (e && e.parameter) || {};
-  const action = ["accept", "reset", "guest"].indexOf(String(prm.action || "")) >= 0 ? String(prm.action) : "app";
+  const action = ["accept", "reset", "guest", "legal"].indexOf(String(prm.action || "")) >= 0 ? String(prm.action) : "app";
+  const doc = /^[a-z]{2,20}$/.test(String(prm.doc || "")) ? String(prm.doc) : "";
   const token = /^[a-f0-9]{64}$/.test(String(prm.token || "")) ? String(prm.token) : "";
   const t = HtmlService.createTemplateFromFile("Index");
   const embed = embedOrigins_();
-  t.boot = JSON.stringify({ mode: action, token: token, appName: IMMO_CONFIG.APP_NAME, version: IMMO_CONFIG.VERSION, embed: embed });
+  t.boot = JSON.stringify({ mode: action, token: token, appName: IMMO_CONFIG.APP_NAME, version: IMMO_CONFIG.VERSION, embed: embed, edition: editionPublic_(), doc: doc });
   return t.evaluate().setTitle(IMMO_CONFIG.APP_NAME).addMetaTag("viewport", "width=device-width, initial-scale=1, viewport-fit=cover")
     .setXFrameOptionsMode(embed.length ? HtmlService.XFrameOptionsMode.ALLOWALL : HtmlService.XFrameOptionsMode.DEFAULT);
 }
@@ -216,6 +224,6 @@ function metaGet_(p) {
   p.roles.forEach(function (r) { const best = bestRoleIn_(p, r.organizationId); if (best && INVITABLE_ROLES[best]) inviteRoles[r.organizationId] = INVITABLE_ROLES[best]; });
   return { enums: enums, paretoTypes: Object.keys(PARETO_TYPES_).map(function (k) { return { type: k, title: PARETO_TYPES_[k].title, unit: PARETO_TYPES_[k].unit }; }),
     reportTypes: Object.keys(REPORT_TYPES_).map(function (k) { return { type: k, title: REPORT_TYPES_[k] }; }), roles: IMMO_CONFIG.ROLES, inviteRoles: inviteRoles,
-    superInviteRoles: p.isSuper ? INVITABLE_ROLES.SUPER_ADMIN : [], roleCaps: ROLE_CAPS, propertyTypes: PROPERTY_TYPES_, sources: RESV_SOURCES_, idTypes: ID_TYPES_, payMethods: PAY_METHODS_,
+    superInviteRoles: p.isSuper ? INVITABLE_ROLES.SUPER_ADMIN : [], roleCaps: ROLE_CAPS, propertyTypes: PROPERTY_TYPES_, sources: RESV_SOURCES_, idTypes: idTypes_(), payMethods: PAY_METHODS_,
     planFeatures: PLAN_FEATURES_, severities: SEVERITIES_, settingsKeys: Object.keys(DEFAULT_SETTINGS), orgEditableSettings: ORG_EDITABLE_SETTINGS_ };
 }

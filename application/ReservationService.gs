@@ -125,7 +125,7 @@ function resvOut_(p, r, prop, acc) {
     const m = resvMoney_(r);
     Object.assign(o, { agencyOrganizationId: r.agencyOrganizationId, guestEmail: r.guestEmail, source: r.source, notes: r.notes, totalPrice: r.totalPrice, taxes: r.taxes, fees: r.fees,
       commissionRate: r.commissionRate, commissionAmount: r.commissionAmount, deposit: r.deposit, depositStatus: r.depositStatus, paymentStatus: m.paymentStatus, amountDue: m.amountDue, paid: m.netPaid,
-      balance: m.balance, depositHeld: m.depositHeld, cancelReason: r.cancelReason, refundDue: r.refundDue, version: r.version, currency: r.currency || "MAD",
+      balance: m.balance, depositHeld: m.depositHeld, cancelReason: r.cancelReason, refundDue: r.refundDue, version: r.version, currency: r.currency || cur_(),
       canEdit: !!acc.caps["reservation.edit"], canCancel: !!acc.caps["reservation.cancel"], nights: diffDays_(r.checkIn, r.checkOut) });
   }
   return o;
@@ -200,7 +200,7 @@ function resvCreate_(p, a) {
     guestCount: guestCount, guestName: guestName, guestEmail: a.guestEmail ? validateEmail_(a.guestEmail) : "", guestPhone: safeText_(a.guestPhone, 30), status: status,
     notes: safeText_(a.notes, 1000), source: oneOf_(a.source || "DIRECT", RESV_SOURCES_, "Origine"), totalPrice: price.totalPrice, taxes: price.taxes, fees: price.fees,
     commissionRate: rate, commissionAmount: round2_(price.totalPrice * rate / 100), deposit: price.deposit, depositStatus: price.deposit > 0 ? "EXPECTED" : "NONE",
-    paymentStatus: "UNPAID", currency: prop.currency || "MAD", version: 1, idempotencyKey: safeText_(a.requestKey || "", 120),
+    paymentStatus: "UNPAID", currency: prop.currency || cur_(), version: 1, idempotencyKey: safeText_(a.requestKey || "", 120),
     createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email
   };
   return withLock_(function () {
@@ -342,7 +342,7 @@ function resvSendConfirmation_(p, a) {
   const prop = dbGet_("Properties", r.propertyId), m = resvMoney_(r);
   const body = "Bonjour " + r.guestName + ",\n\nVotre réservation est " + (r.status === "CONFIRMED" ? "confirmée" : "en attente de confirmation") + ".\n\nLogement : " + prop.name + " (" + prop.city + ")\nArrivée : " + r.checkIn +
     " à partir de " + (prop.checkInTime || getSetting_("reservation.defaultCheckIn", r.organizationId)) + "\nDépart : " + r.checkOut + " avant " + (prop.checkOutTime || getSetting_("reservation.defaultCheckOut", r.organizationId)) +
-    "\nVoyageurs : " + r.guestCount + "\nMontant total : " + m.amountDue + " " + (r.currency || "MAD") + "\nDéjà réglé : " + m.netPaid + " — Solde : " + m.balance +
+    "\nVoyageurs : " + r.guestCount + "\nMontant total : " + m.amountDue + " " + (r.currency || cur_()) + "\nDéjà réglé : " + m.netPaid + " — Solde : " + m.balance +
     (prop.houseRules ? "\n\nRèglement intérieur :\n" + prop.houseRules : "") + "\n\nRéférence : " + r.reservationId + "\n\nÀ bientôt,\n" + IMMO_CONFIG.APP_NAME;
   const res = sendMailSafe_(r.guestEmail, "Votre réservation — " + prop.name + " (" + r.checkIn + ")", body, "resv-confirm-mail:" + r.reservationId + ":" + r.version, r.organizationId);
   audit_("RESERVATION_CONFIRMATION_SENT", "Reservation", r.reservationId, r.organizationId, { ok: res.ok });
@@ -355,7 +355,7 @@ function resvSheet_(p, a) {
   const r = assertResv_(p, a.reservationId, "reservation.view");
   const prop = dbGet_("Properties", r.propertyId), m = resvMoney_(r);
   const map = { reference: r.reservationId, bien: prop.name, adresse: (prop.address || "") + " " + (prop.city || ""), voyageur: r.guestName, voyageurs: r.guestCount, arrivee: r.checkIn, depart: r.checkOut,
-    nuits: diffDays_(r.checkIn, r.checkOut), prix: r.totalPrice, frais: r.fees, taxes: r.taxes, total: m.amountDue, paye: m.netPaid, solde: m.balance, caution: r.deposit, statut: r.status, devise: r.currency || "MAD" };
+    nuits: diffDays_(r.checkIn, r.checkOut), prix: r.totalPrice, frais: r.fees, taxes: r.taxes, total: m.amountDue, paye: m.netPaid, solde: m.balance, caution: r.deposit, statut: r.status, devise: r.currency || cur_() };
   const ctx = { propertyId: prop.propertyId, organizationId: prop.organizationId, sensitive: false };
   const tpl = getSetting_("template.reservationDocId", prop.organizationId);
   let pdf;

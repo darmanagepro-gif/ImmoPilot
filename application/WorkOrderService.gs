@@ -8,7 +8,7 @@
  */
 function quoteOut_(q) {
   return { quoteId: q.quoteId, incidentId: q.incidentId, propertyId: q.propertyId, artisanId: q.artisanId, artisanName: ((dbGet_("Artisans", q.artisanId) || {}).name) || "", status: q.status,
-    currency: q.currency || "MAD", amountHT: q.amountHT, vatRate: q.vatRate, amountTTC: q.amountTTC !== null && q.amountTTC !== "" ? q.amountTTC : q.totalAmount, validUntil: q.validUntil,
+    currency: q.currency || cur_(), amountHT: q.amountHT, vatRate: q.vatRate, amountTTC: q.amountTTC !== null && q.amountTTC !== "" ? q.amountTTC : q.totalAmount, validUntil: q.validUntil,
     estimatedDays: q.estimatedDays, lines: parseJson_(q.linesJson, []), requestNote: q.requestNote, requestedAt: q.requestedAt, submittedAt: q.submittedAt, decisionAt: q.decisionAt,
     decisionBy: q.decisionBy, decisionNote: q.decisionNote, commissionRateEst: q.commissionRateEst, commissionEstimate: q.commissionEstimate };
 }
@@ -58,7 +58,7 @@ function quoteRequest_(p, a) {
   assert_(contractorUsableFor_(p, c, prop), "Prestataire non autorisé pour ce bien.");
   assert_(["CLOSED", "CANCELLED", "RESOLVED"].indexOf(i.status) < 0, "Incident clos.");
   return withLock_(function () {
-    const q = dbInsert_("Quotes", { organizationId: prop.organizationId, propertyId: prop.propertyId, incidentId: i.incidentId, artisanId: c.artisanId, status: "REQUESTED", currency: prop.currency || "MAD",
+    const q = dbInsert_("Quotes", { organizationId: prop.organizationId, propertyId: prop.propertyId, incidentId: i.incidentId, artisanId: c.artisanId, status: "REQUESTED", currency: prop.currency || cur_(),
       totalAmount: "", validUntil: "", linesJson: "[]", decisionAt: "", decisionBy: "", decisionNote: "", createdAt: nowIso_(), createdBy: p.email, requestNote: safeText_(a.requestNote, 1000), requestedAt: nowIso_(), requestedBy: p.email });
     if (["OPEN", "QUALIFIED", "ASSIGNED"].indexOf(i.status) >= 0) dbUpdate_("IncidentsV4", i.incidentId, { status: "QUOTE_PENDING", contractorId: c.artisanId, updatedAt: nowIso_(), updatedBy: p.email });
     audit_("QUOTE_REQUESTED", "Quote", q.quoteId, prop.organizationId, { incidentId: i.incidentId, artisanId: c.artisanId });
@@ -87,7 +87,7 @@ function quoteSubmit_(p, a) {
     if (inc && ["QUOTE_PENDING", "OPEN", "QUALIFIED", "ASSIGNED"].indexOf(inc.status) >= 0) dbUpdate_("IncidentsV4", inc.incidentId, { status: "AWAITING_OWNER", estimatedCost: ttc, updatedAt: nowIso_(), updatedBy: p.email });
     audit_("QUOTE_SUBMITTED", "Quote", q.quoteId, q.organizationId, { amountHT: L.totalHT, amountTTC: ttc, byArtisan: x.mine });
     notify_({ eventKey: "quote-pending:" + q.quoteId, userIds: decisionMakers_(x.prop, ttc), type: "QUOTE_TO_VALIDATE", organizationId: q.organizationId,
-      title: "Devis à valider : " + x.prop.name, body: ttc + " " + (q.currency || "MAD") + " TTC — " + ((art || {}).name || ""), link: "#incident/" + q.incidentId });
+      title: "Devis à valider : " + x.prop.name, body: ttc + " " + (q.currency || cur_()) + " TTC — " + ((art || {}).name || ""), link: "#incident/" + q.incidentId });
     return { ok: true, amountHT: L.totalHT, amountTTC: ttc };
   });
 }
@@ -292,7 +292,7 @@ function providerIssuer_(art) {
 }
 /** Organisation cliente : l'agence qui gère le bien si c'est elle qui a fait la demande, sinon le propriétaire. */
 function requesterOrg_(prop, email) { return dbGet_("Organizations", commissionBeneficiary_({ createdBy: email || "" }, prop)) || dbGet_("Organizations", prop.organizationId) || {}; }
-function fmtAmount_(v, cur) { return (Math.round(num_(v) * 100) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + (cur || "MAD"); }
+function fmtAmount_(v, cur) { return (Math.round(num_(v) * 100) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + (cur || cur_()); }
 function docLinesHtml_(lines, cur) {
   return htmlTable_(["Désignation", "Qté", "PU HT", "Montant HT"], lines.map(function (l) { return [l.description, String(l.quantity), fmtAmount_(l.unitPrice, cur), fmtAmount_(l.amount, cur)]; }));
 }
@@ -305,7 +305,7 @@ function docTotalsHtml_(ht, vatRate, vat, ttc, cur, extra) {
 function quotePdf_(p, a) {
   const x = quoteLoad_(p, a.quoteId), q = x.q, prop = x.prop, art = dbGet_("Artisans", q.artisanId) || {};
   assert_(["PENDING", "APPROVED", "REJECTED", "EXPIRED"].indexOf(q.status) >= 0, "Le devis n'a pas encore été établi par le prestataire.");
-  const inc = dbGet_("IncidentsV4", q.incidentId) || {}, client = requesterOrg_(prop, q.requestedBy || q.createdBy), cur = q.currency || "MAD";
+  const inc = dbGet_("IncidentsV4", q.incidentId) || {}, client = requesterOrg_(prop, q.requestedBy || q.createdBy), cur = q.currency || cur_();
   const num = "DEV-" + String(q.quoteId).slice(-6).toUpperCase(), lines = parseJson_(q.linesJson, []);
   const ht = num_(q.amountHT) || sumBy_(lines, function (l) { return l.amount; }), vatRate = q.vatRate === "" || q.vatRate == null ? 20 : num_(q.vatRate);
   const ttc = num_(q.amountTTC) || num_(q.totalAmount) || round2_(ht * (1 + vatRate / 100)), vat = round2_(ttc - ht);
@@ -314,7 +314,8 @@ function quotePdf_(p, a) {
   html += "<h2>Objet</h2><p>" + escapeHtml_(inc.title || inc.description || "Intervention") + (q.requestNote ? "<br><span class='muted'>Demande : " + escapeHtml_(q.requestNote) + "</span>" : "") + "</p>";
   html += "<h2>Détail</h2>" + (lines.length ? docLinesHtml_(lines, cur) : "<p class='muted'>Montant forfaitaire.</p>") + docTotalsHtml_(ht, vatRate, vat, ttc, cur);
   html += "<h2>Conditions</h2><div class='box'>Délai d'exécution estimé : " + escapeHtml_(q.estimatedDays ? q.estimatedDays + " jour(s)" : "à convenir") + " après acceptation.<br>" +
-    "Travaux réalisés après acceptation du devis ; paiement à réception de la facture.<br>" + escapeHtml_(art.billingInfo || "") + "</div>";
+    "Travaux réalisés après acceptation du devis ; paiement à réception de la facture.<br>" + escapeHtml_(art.billingInfo || "") +
+    (art.taxId ? "<br>" + escapeHtml_(edition_().taxIdLabel) + " : " + escapeHtml_(art.taxId) : "") + (edition_().quoteLegal ? "<br><span class='muted'>" + escapeHtml_(edition_().quoteLegal) + "</span>" : "") + "</div>";
   if (q.status === "APPROVED") html += "<p><b>Devis accepté le " + escapeHtml_(pdfDate_(q.decisionAt)) + "</b>" + (q.decisionNote ? " — " + escapeHtml_(q.decisionNote) : "") + "</p>";
   if (q.status === "REJECTED") html += "<p><b>Devis refusé le " + escapeHtml_(pdfDate_(q.decisionAt)) + "</b>" + (q.decisionNote ? " — " + escapeHtml_(q.decisionNote) : "") + "</p>";
   html += "<h2>Signatures</h2><table class='sign'><tr><td>Le prestataire<br><span class='muted'>" + escapeHtml_(art.name || "") + "</span></td><td>Le client — « Bon pour accord »<br><span class='muted'>" + escapeHtml_(client.name || "") + "</span></td></tr></table>";
@@ -325,7 +326,7 @@ function quotePdf_(p, a) {
 
 /** Facture du prestataire au propriétaire du bien (sans la marque ImmoPilot ; la commission interne n'y figure pas). */
 function invoicePdf_(p, a) {
-  const x = invLoad_(p, a.invoiceId), v = x.v, prop = x.prop, art = dbGet_("Artisans", v.artisanId) || {}, cur = v.currency || "MAD";
+  const x = invLoad_(p, a.invoiceId), v = x.v, prop = x.prop, art = dbGet_("Artisans", v.artisanId) || {}, cur = v.currency || cur_();
   const owner = dbGet_("Organizations", prop.organizationId) || {}, w = v.workOrderId ? dbGet_("WorkOrders", v.workOrderId) : null, q = w && w.quoteId ? dbGet_("Quotes", w.quoteId) : null;
   let lines = q ? parseJson_(q.linesJson, []) : [];
   if (!lines.length || Math.abs(sumBy_(lines, function (l) { return l.amount; }) - num_(v.amountHT)) > 0.01) lines = [{ description: (w && (w.title || w.description)) || "Intervention", quantity: 1, unitPrice: num_(v.amountHT), amount: num_(v.amountHT) }];
@@ -334,7 +335,7 @@ function invoicePdf_(p, a) {
     (w ? "<br>Intervention : " + escapeHtml_(String(w.workOrderId).slice(-8).toUpperCase()) : "") + (q ? "<br>Devis : DEV-" + escapeHtml_(String(q.quoteId).slice(-6).toUpperCase()) : "") +
     "</td><td><b>Facturé à</b><br>" + escapeHtml_(owner.name || "") + "<br>" + escapeHtml_(owner.billingEmail || "") + "<br><span class='muted'>Lieu d'intervention : " + escapeHtml_(prop.name + ", " + [prop.address, prop.city].filter(String).join(", ")) + "</span></td></tr></table>";
   html += "<h2>Prestations</h2>" + docLinesHtml_(lines, cur) + docTotalsHtml_(v.amountHT, v.vatRate, v.vatAmount, v.amountTTC, cur, paidOn ? [["Statut", "Acquittée le " + paidOn]] : [["Reste à payer", fmtAmount_(v.amountTTC, cur)]]);
-  html += "<h2>Règlement</h2><div class='box'>" + escapeHtml_(art.billingInfo || "Règlement par virement à réception de facture.") + "<br>Mentions légales du prestataire (ICE, IF, RC, patente) : " + escapeHtml_(art.taxId || "à compléter dans la fiche du prestataire") + ".</div>";
+  html += "<h2>Règlement</h2><div class='box'>" + escapeHtml_(art.billingInfo || "Règlement par virement à réception de facture.") + "<br>" + escapeHtml_(edition_().taxIdLabel) + " : " + escapeHtml_(art.taxId || "à compléter dans la fiche du prestataire") + ".<br><span class='muted'>" + escapeHtml_(edition_().invoiceLegal) + "</span></div>";
   if (w && w.report) html += "<h2>Compte rendu d'intervention</h2><p>" + escapeHtml_(w.report) + "</p>";
   audit_("INVOICE_PDF", "Invoice", v.invoiceId, v.organizationId, {});
   return storeGeneratedPdf_(p, htmlToPdf_(pdfShell_("Facture", html, { issuer: providerIssuer_(art), subtitle: "N° " + (v.invoiceNumber || ""), footer: "Facture établie par " + (art.legalName || art.name || "le prestataire") + "." }),
@@ -344,7 +345,7 @@ function invoicePdf_(p, a) {
 function woOrderPdf_(p, a) {
   const x = woLoad_(p, a.workOrderId, "read"), w = x.w, prop = x.prop;
   const art = dbGet_("Artisans", w.artisanId) || {}, q = w.quoteId ? dbGet_("Quotes", w.quoteId) : null, inc = dbGet_("IncidentsV4", w.incidentId) || {};
-  const orderer = requesterOrg_(prop, w.createdBy), owner = dbGet_("Organizations", prop.organizationId) || {}, cur = (q && q.currency) || "MAD";
+  const orderer = requesterOrg_(prop, w.createdBy), owner = dbGet_("Organizations", prop.organizationId) || {}, cur = (q && q.currency) || cur_();
   const ST = { ASSIGNED: "Attribuée", ACCEPTED: "Acceptée", DECLINED: "Refusée", SCHEDULED: "Planifiée", IN_PROGRESS: "En cours", COMPLETED: "Terminée", VERIFIED: "Contrôlée", CANCELLED: "Annulée" };
   let html = "<h2>Parties</h2>" + htmlTable_(["", "Organisation / personne", "Contact"], [["Donneur d'ordre", orderer.name || "", orderer.billingEmail || ""],
     ["Propriétaire du bien (règlement)", owner.name || "", owner.billingEmail || ""], ["Prestataire", art.legalName || art.name || "", [art.email, art.phone].filter(String).join(" — ")]]);

@@ -7,9 +7,40 @@ const Public = {
     const langSel = h("select", { class: "lang", "aria-label": t("Langue"), onchange: function (e) { setLang(e.target.value); App.start(); } }, langOpts().map(function (l) { return h("option", { value: l[0] }, l[1]); }));
     langSel.value = S.lang;
     app.appendChild(h("div", { class: "auth" },
-      h("aside", { class: "auth-side" }, h("div", { class: "brand", style: { padding: 0 } }, h("div", { class: "brand-mark" }, "IP"), h("div", null, h("b", null, "ImmoPilot"), h("small", null, "Marrakech · Maroc"))),
-        h("div", null, h("h1", null, t("La gestion locative, de l'arrivée du voyageur au dernier dirham.")), h("p", null, t("Réservations, ménage, maintenance, baux et finances réunis pour les propriétaires, les conciergeries et leurs équipes de terrain.")))),
+      h("aside", { class: "auth-side" }, h("div", { class: "brand", style: { padding: 0 } }, brandMark(), h("div", null, h("b", null, "ImmoPilot"), h("small", null, ED.tagline))),
+        h("div", null, h("h1", null, t(ED.taglineKey)), h("p", null, t("Réservations, ménage, maintenance, baux et finances réunis pour les propriétaires, les conciergeries et leurs équipes de terrain.")))),
       h("main", { class: "auth-main" }, h("div", { class: "auth-card" }, h("div", { class: "actions", style: { justifyContent: "flex-end", marginBottom: "18px" } }, themeButton(), langSel), h("h2", null, title), sub ? h("p", { class: "muted" }, sub) : null, body))));
+  },
+  /** Pages légales (mentions, conditions, confidentialité, cookies, sous-traitance) : publiques, en français. */
+  legal: function (docId, back) {
+    const app = clear($("app"));
+    const body = h("div", { class: "legal-body" }, h("div", { class: "loading" }, t("Chargement…")));
+    const goBack = function () { if (back) back(); else if (S.token) App.start(); else Public.login(); };
+    app.appendChild(h("div", { class: "legal-page" },
+      h("header", { class: "legal-head" }, h("div", { class: "brand", style: { padding: 0 } }, brandMark(), h("div", null, h("b", null, "ImmoPilot"), h("small", null, ED.tagline))),
+        h("div", { class: "actions" }, themeButton(), btn("← " + t("Retour"), goBack))), body));
+    const mark = function (text) {
+      const out = h("span"); String(text).split(/(\[\[[^\]]+\]\])/).forEach(function (part) {
+        const m = /^\[\[(.+)\]\]$/.exec(part); out.appendChild(m ? h("mark", { class: "legal-missing" }, m[1]) : document.createTextNode(part)); });
+      return out;
+    };
+    apiP("legal.get", {}).then(function (r) {
+      clear(body);
+      if (S.lang !== "fr") body.appendChild(h("p", { class: "small muted" }, t("Les documents juridiques sont rédigés en français.")));
+      if (r.missing && r.missing.length && S.me && S.me.isSuper) body.appendChild(h("div", { class: "alert warn" }, t("Informations de l'éditeur à compléter dans Paramètres › Paramètres de la plateforme :") + " " + r.missing.join(", ") + "."));
+      tabs(body, r.docs.map(function (d) {
+        return { id: d.id, label: d.title, render: function (b) {
+          b.appendChild(h("article", { class: "legal-doc", lang: "fr" }, h("h2", null, d.title), h("p", { class: "small muted" }, t("Dernière mise à jour") + " : " + fmtDate(r.updatedAt)),
+            d.sections.map(function (s) { return h("section", null, h("h3", null, s.h), s.p.map(function (x) { return h("p", null, mark(x)); }), s.ul.length ? h("ul", null, s.ul.map(function (x) { return h("li", null, mark(x)); })) : null); }),
+            h("p", { class: "small muted" }, r.notice)));
+        } };
+      }), r.docs.some(function (d) { return d.id === docId; }) ? docId : r.docs[0].id);
+    }).catch(function (e) { clear(body).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+  },
+  legalLinks: function () {
+    return h("p", { class: "small legal-links" }, [["mentions", "Mentions légales"], ["cgv", "Conditions générales"], ["confidentialite", "Confidentialité"], ["cookies", "Cookies"]].map(function (x, i) {
+      return [i ? " · " : "", h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.legal(x[0]); } }, t(x[1]))];
+    }));
   },
   login: function (msg) {
     const err = h("div", { class: msg ? "alert bad" : "alert bad hidden" }, msg || "");
@@ -24,7 +55,7 @@ const Public = {
       }).catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); go.disabled = false; go.textContent = t("Se connecter"); });
     });
     const forgot = h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.forgot(); } }, t("Mot de passe oublié ou compte à activer ?"));
-    Public.frame(t("Connexion"), t("Accédez à votre espace ImmoPilot."), h("div", null, err, f.el, h("p", { class: "small", style: { marginTop: "16px" } }, forgot)));
+    Public.frame(t("Connexion"), t("Accédez à votre espace ImmoPilot."), h("div", null, err, f.el, h("p", { class: "small", style: { marginTop: "16px" } }, forgot), Public.legalLinks()));
   },
   forgot: function () {
     formModal(t("Mot de passe oublié"), [{ k: "email", l: "E-mail", t: "email", req: true }], {}, function (v) {
@@ -85,7 +116,8 @@ const Public = {
         while (rows.length < g.guestCount) rows.push({});
         const forms = rows.map(function (x, i) {
           const f = buildForm([{ k: "lastName", l: "Nom", req: true }, { k: "firstName", l: "Prénom" }, { k: "nationality", l: "Nationalité" },
-            { k: "idType", l: "Type de pièce", t: "select", opts: g.idTypes.map(function (x2) { return [x2, st(x2)]; }) }, { k: "idRef", l: "Numéro de pièce", help: "Seuls les derniers caractères sont conservés, sauf obligation légale." }], x);
+            { k: "idType", l: "Type de pièce", t: "select", opts: g.idTypes.map(function (x2) { return [x2, st(x2)]; }) }, { k: "idRef", l: "Numéro de pièce", help: "Seuls les derniers caractères sont conservés, sauf obligation légale." }].concat(g.policeForms ? [
+            { k: "birthDate", l: "Date de naissance", t: "date" }, { k: "birthPlace", l: "Lieu de naissance" }, { k: "homeAddress", l: "Domicile habituel", full: true, help: "Demandé aux voyageurs de nationalité étrangère (fiche individuelle de police)." }] : []), x);
           f.guestId = x.guestId; f.docCount = x.documentCount || 0; f.index = i; return f;
         });
         const formsBox = h("div");

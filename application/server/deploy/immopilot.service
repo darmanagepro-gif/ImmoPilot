@@ -1,0 +1,33 @@
+[Unit]
+Description=ImmoPilot (gestion locative SaaS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=immopilot
+Group=immopilot
+EnvironmentFile=/etc/immopilot/immopilot.env
+Environment=HOME=/var/lib/immopilot
+Environment=NODE_ENV=production
+WorkingDirectory=/opt/immopilot/src/application/server
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+# Durcissement : lecture seule partout sauf les données ; /tmp privé (impressions PDF)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/immopilot
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

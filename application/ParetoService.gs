@@ -11,15 +11,15 @@
 var PARETO_THRESHOLD_ = 80;
 var PARETO_TYPES_ = {
   INCIDENTS_BY_CATEGORY: { title: "Incidents par catégorie", unit: "COUNT", cap: "incident.view" },
-  INCIDENT_COST_BY_CATEGORY: { title: "Coût des incidents par catégorie", unit: "MAD", cap: "incident.view" },
-  MAINTENANCE_BY_CATEGORY: { title: "Dépenses de maintenance par catégorie d'incident", unit: "MAD", cap: "finance.view" },
-  COST_BY_CONTRACTOR: { title: "Coûts par prestataire", unit: "MAD", cap: "invoice.view" },
-  COST_BY_PROPERTY: { title: "Biens les plus coûteux", unit: "MAD", cap: "finance.view" },
+  INCIDENT_COST_BY_CATEGORY: { title: "Coût des incidents par catégorie", unit: "MONEY", cap: "incident.view" },
+  MAINTENANCE_BY_CATEGORY: { title: "Dépenses de maintenance par catégorie d'incident", unit: "MONEY", cap: "finance.view" },
+  COST_BY_CONTRACTOR: { title: "Coûts par prestataire", unit: "MONEY", cap: "invoice.view" },
+  COST_BY_PROPERTY: { title: "Biens les plus coûteux", unit: "MONEY", cap: "finance.view" },
   CANCEL_REASONS: { title: "Motifs d'annulation", unit: "COUNT", cap: "reservation.view" },
   CLEANING_ANOMALIES: { title: "Anomalies de ménage", unit: "COUNT", cap: "cleaning.manage" },
   DELAYS_NONCONFORMITIES: { title: "Retards et non-conformités", unit: "COUNT", cap: null },
-  EXPENSES_BY_CATEGORY: { title: "Dépenses par catégorie", unit: "MAD", cap: "finance.view" },
-  UNPAID: { title: "Impayés", unit: "MAD", cap: "finance.view" }
+  EXPENSES_BY_CATEGORY: { title: "Dépenses par catégorie", unit: "MONEY", cap: "finance.view" },
+  UNPAID: { title: "Impayés", unit: "MONEY", cap: "finance.view" }
 };
 
 /** Calcul pur de Pareto. items : [{key, label, value}]. */
@@ -150,14 +150,14 @@ function paretoRun_(p, a) {
     priorities: cur.items.filter(function (x) { return x.vital; }).map(function (x) { return x.label; }), computedAt: nowIso_() };
 }
 function paretoTable_(r) {
-  return { headers: ["Rang", "Élément", r.unit === "MAD" ? "Montant (MAD)" : "Nombre", "Part %", "Part cumulée %", "Prioritaire (80 %)", "Période précédente", "Évolution"],
+  return { headers: ["Rang", "Élément", r.unit === "MONEY" ? "Montant (" + cur_() + ")" : "Nombre", "Part %", "Part cumulée %", "Prioritaire (80 %)", "Période précédente", "Évolution"],
     rows: r.result.items.map(function (x) { return [x.rank, x.label, x.value, x.share, x.cumShare, x.vital ? "OUI" : "", x.previousValue, x.delta]; }) };
 }
 function paretoExport_(p, a) {
   const r = paretoRun_(p, a), t = paretoTable_(r), fmt = a.format === "pdf" ? "pdf" : "csv";
   audit_("PARETO_EXPORTED", "Report", r.type, "", { format: fmt, period: r.period.from + "/" + r.period.to });
   if (fmt === "csv") return { fileName: "pareto_" + r.type.toLowerCase() + "_" + r.period.from + "_" + r.period.to + ".csv", mimeType: "text/csv", content: toCsv_(t.headers, t.rows) };
-  const html = "<p>Période : " + r.period.from + " → " + r.period.to + " — Total : <b>" + r.result.total + (r.unit === "MAD" ? " MAD" : "") + "</b> (période précédente : " + r.previous.total + ")</p>" +
+  const html = "<p>Période : " + r.period.from + " → " + r.period.to + " — Total : <b>" + r.result.total + (r.unit === "MONEY" ? " " + cur_() : "") + "</b> (période précédente : " + r.previous.total + ")</p>" +
     "<p>Éléments prioritaires (≈ 80 % du total, " + r.result.vitalCount + " sur " + (r.result.itemCount || 0) + ") : <b>" + escapeHtml_(r.priorities.join(", ") || "—") + "</b></p>" +
     (r.result.empty ? "<p>Aucune donnée sur la période.</p>" : htmlTable_(t.headers, t.rows)) + (r.result.warnings.length ? "<p class='muted'>" + escapeHtml_(r.result.warnings.join(" ")) + "</p>" : "");
   const pdf = htmlToPdf_(pdfShell_("Pareto — " + r.title, html), "Pareto_" + r.type);

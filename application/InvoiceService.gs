@@ -16,7 +16,7 @@ function invoiceOut_(v) {
     invoiceNumber: v.invoiceNumber, issueDate: v.issueDate, dueDate: v.dueDate, amountHT: v.amountHT, vatRate: v.vatRate, vatAmount: v.vatAmount, amountTTC: v.amountTTC,
     commissionRate: v.commissionRate, commissionBase: v.commissionBase, commissionAmount: v.commissionAmount, commissionVatAmount: v.commissionVatAmount, commissionLocked: v.commissionLocked,
     commissionBeneficiaryOrgId: v.commissionBeneficiaryOrgId, netToContractor: v.netToContractor, paidAmount: v.paidAmount || 0, balance: round2_(num_(v.netToContractor || v.amountTTC) - num_(v.paidAmount)),
-    currency: v.currency || "MAD", status: v.status, documentId: v.documentId, notes: v.notes, createdAt: v.createdAt, approvedAt: v.approvedAt };
+    currency: v.currency || cur_(), status: v.status, documentId: v.documentId, notes: v.notes, createdAt: v.createdAt, approvedAt: v.approvedAt };
 }
 /** Calcul pur (testé) : retourne la ventilation d'une facture. */
 function computeInvoiceSplit_(amountHT, vatRate, commissionRate, commissionVatRate) {
@@ -62,7 +62,7 @@ function invSubmit_(p, a) {
       }
       const v = dbInsert_("Invoices", { organizationId: x.w.organizationId, propertyId: x.w.propertyId, workOrderId: x.w.workOrderId, incidentId: x.w.incidentId, artisanId: x.w.artisanId,
         invoiceNumber: reqText_(a.invoiceNumber, "Numéro de facture", 1, 60), issueDate: a.issueDate ? dateOnly_(a.issueDate, "Date de facture") : todayStr_(), dueDate: a.dueDate ? dateOnly_(a.dueDate, "Échéance") : addDaysStr_(todayStr_(), 30),
-        amountHT: split.amountHT, vatRate: vatRate, vatAmount: split.vatAmount, amountTTC: split.amountTTC, commissionRate: x.w.commissionRate, commissionLocked: false, currency: "MAD", status: "SUBMITTED",
+        amountHT: split.amountHT, vatRate: vatRate, vatAmount: split.vatAmount, amountTTC: split.amountTTC, commissionRate: x.w.commissionRate, commissionLocked: false, currency: cur_(), status: "SUBMITTED",
         documentId: docId, paidAmount: 0, createdAt: nowIso_(), createdBy: p.email, notes: notes });
       if (docId) dbUpdate_("Documents", docId, { ownerType: "INVOICE", ownerId: v.invoiceId, category: "INVOICE" });
       dbUpdate_("WorkOrders", x.w.workOrderId, { invoiceId: v.invoiceId, updatedAt: nowIso_() });
@@ -89,7 +89,7 @@ function invApprove_(p, a) {
     dbUpdate_("Invoices", v.invoiceId, { status: "APPROVED", approvedAt: nowIso_(), approvedBy: p.email, commissionRate: rate, commissionBase: split.commissionBase, commissionAmount: split.commissionAmount,
       commissionVatRate: isFinite(comVat) ? comVat : 20, commissionVatAmount: split.commissionVatAmount, commissionBeneficiaryOrgId: beneficiary, commissionLocked: true, netToContractor: split.netToContractor });
     dbInsertUnique_("Expenses", "uniqueKey", "invoice:" + v.invoiceId, { organizationId: v.organizationId, propertyId: v.propertyId, category: "MAINTENANCE", description: "Facture " + v.invoiceNumber + " — intervention " + v.workOrderId,
-      supplier: ((dbGet_("Artisans", v.artisanId) || {}).name) || "", amount: v.amountTTC, vatAmount: v.vatAmount, currency: v.currency || "MAD", expenseDate: v.issueDate, status: "INVOICED", refType: "INVOICE", refId: v.invoiceId,
+      supplier: ((dbGet_("Artisans", v.artisanId) || {}).name) || "", amount: v.amountTTC, vatAmount: v.vatAmount, currency: v.currency || cur_(), expenseDate: v.issueDate, status: "INVOICED", refType: "INVOICE", refId: v.invoiceId,
       documentId: v.documentId, createdAt: nowIso_(), createdBy: p.email });
     const inc = dbGet_("IncidentsV4", v.incidentId);
     if (inc) dbUpdate_("IncidentsV4", inc.incidentId, { finalCost: sumBy_(dbAll_("Invoices").filter(function (z) { return String(z.incidentId) === String(inc.incidentId) && ["APPROVED", "PARTIAL", "PAID"].indexOf(z.status) >= 0; }), function (z) { return z.amountTTC; }), updatedAt: nowIso_() });

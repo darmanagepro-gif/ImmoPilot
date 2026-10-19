@@ -1,0 +1,118 @@
+# ImmoPilot FRANCE (euro) sur Google Apps Script — projet distinct de la version Maroc.
+# 1re exécution : crée le projet « ImmoPilot France » dans votre Google Drive (même compte que la clé CLASPRC_JSON),
+# y envoie le code (application/dist-fr) et crée l'application web ; l'adresse est notée dans application/france/apps-script.json.
+# Ensuite, chaque modification de application/dist-fr met à jour la MÊME adresse /exec.
+# Le projet Maroc (secret APPS_SCRIPT_ID) n'est jamais utilisé ici.
+name: Déployer ImmoPilot France (Apps Script)
+
+on:
+  push:
+    branches: [main]
+    paths: ["application/dist-fr/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # pour enregistrer l'identifiant du projet créé (application/france/apps-script.json)
+
+concurrency:
+  group: apps-script-france
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.repository == 'darmanagepro-gif/ImmoPilot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier le paquet France
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          [ -n "$CLASPRC_JSON" ] || { echo "::error::Secret CLASPRC_JSON manquant (voir application/GITHUB_VERS_APPS_SCRIPT.md)."; exit 1; }
+          for f in ImmoPilot.gs Index.html appsscript.json; do test -f "application/dist-fr/$f" || { echo "::error::application/dist-fr/$f manquant"; exit 1; }; done
+          grep -q 'var IMMO_EDITION_ = "FR";' application/dist-fr/ImmoPilot.gs || { echo "::error::application/dist-fr n'est pas l'édition France"; exit 1; }
+          grep -q "FIN DU FICHIER ImmoPilot.gs" application/dist-fr/ImmoPilot.gs || { echo "::error::ImmoPilot.gs incomplet"; exit 1; }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Installer clasp (outil officiel de Google)
+        run: npm install -g @google/clasp@3.4.1
+
+      - name: Préparer les identifiants (temporaires)
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          umask 077
+          printf '%s' "$CLASPRC_JSON" | tr -d '\r\n' > "$HOME/.clasprc.json"
+          node -e 'const fs=require("fs"),f=process.argv[1];let t=fs.readFileSync(f,"utf8").trim();try{JSON.parse(t)}catch(e){const o=(t.match(/[{]/g)||[]).length,c=(t.match(/[}]/g)||[]).length;if(o>c&&/"\s*[}]?\s*$/.test(t)){const r=t+"}".repeat(o-c);try{const j=JSON.parse(r);if(/refresh_token/.test(JSON.stringify(j)))fs.writeFileSync(f,r)}catch(e2){}}}' "$HOME/.clasprc.json"
+          if ! node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$HOME/.clasprc.json" 2>/dev/null; then
+            printf '%s' "$CLASPRC_JSON" | tr -d ' \r\n' | base64 -d > "$HOME/.clasprc.b64" 2>/dev/null && node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$HOME/.clasprc.b64" 2>/dev/null && mv "$HOME/.clasprc.b64" "$HOME/.clasprc.json"
+            rm -f "$HOME/.clasprc.b64"
+          fi
+          node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$HOME/.clasprc.json" 2>/dev/null || { echo "::error::Secret CLASPRC_JSON illisible : remplacez-le (voir application/GITHUB_VERS_APPS_SCRIPT.md)."; exit 1; }
+          clasp show-authorized-user >/tmp/who.txt 2>&1 || { echo "::error title=Connexion Google refusée::$(tail -n 3 /tmp/who.txt | tr '\n' ' ' | cut -c1-300)"; exit 1; }
+
+      - name: Projet ImmoPilot France (création à la 1re exécution)
+        run: |
+          set +e
+          CFG=application/france/apps-script.json
+          SCRIPT_ID=""; DEPLOYMENT_ID=""
+          if [ -f "$CFG" ]; then
+            SCRIPT_ID=$(node -p 'require("./'"$CFG"'").scriptId || ""'); DEPLOYMENT_ID=$(node -p 'require("./'"$CFG"'").deploymentId || ""')
+          fi
+          if [ -z "$SCRIPT_ID" ]; then
+            tmp=$(mktemp -d); cd "$tmp"
+            out=$(clasp create-script --type standalone --title "ImmoPilot France" 2>&1); code=$?
+            echo "$out"
+            [ $code -eq 0 ] || { echo "::error title=Création du projet impossible::$(echo "$out" | tail -n 4 | tr '\n' ' ' | cut -c1-500)"; exit 1; }
+            SCRIPT_ID=$(node -p 'require("./.clasp.json").scriptId')
+            cd "$GITHUB_WORKSPACE"; rm -rf "$tmp"
+            echo "::notice title=Projet créé::ImmoPilot France — https://script.google.com/d/$SCRIPT_ID/edit"
+          fi
+          echo "SCRIPT_ID=$SCRIPT_ID" >> "$GITHUB_ENV"; echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> "$GITHUB_ENV"
+          printf '{"scriptId":"%s","rootDir":"."}' "$SCRIPT_ID" > application/dist-fr/.clasp.json
+
+      - name: Envoyer le code (édition France)
+        working-directory: application/dist-fr
+        run: |
+          set +e
+          out=$(clasp push --force 2>&1); code=$?
+          echo "$out"
+          [ $code -eq 0 ] || { echo "::error title=Envoi impossible::$(echo "$out" | grep -v '^\s*$' | tail -n 4 | tr '\n' ' ' | cut -c1-500)"; exit 1; }
+
+      - name: Application web (même adresse /exec à chaque mise à jour)
+        working-directory: application/dist-fr
+        run: |
+          set +e
+          if [ -n "$DEPLOYMENT_ID" ]; then
+            out=$(clasp update-deployment "$DEPLOYMENT_ID" --description "GitHub ${GITHUB_SHA::7}" 2>&1); code=$?
+          else
+            out=$(clasp create-deployment --description "ImmoPilot France ${GITHUB_SHA::7}" 2>&1); code=$?
+            DEPLOYMENT_ID=$(echo "$out" | grep -oE 'AKfyc[A-Za-z0-9_-]{20,}' | head -n 1)
+          fi
+          echo "$out"
+          [ $code -eq 0 ] && [ -n "$DEPLOYMENT_ID" ] || { echo "::error title=Déploiement impossible::$(echo "$out" | grep -v '^\s*$' | tail -n 4 | tr '\n' ' ' | cut -c1-500)"; exit 1; }
+          echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> "$GITHUB_ENV"
+          echo "::notice title=En ligne::https://script.google.com/macros/s/$DEPLOYMENT_ID/exec — éditeur : https://script.google.com/d/$SCRIPT_ID/edit"
+
+      - name: Enregistrer les identifiants du projet (non secrets)
+        run: |
+          mkdir -p application/france
+          node -e 'const fs=require("fs"),f="application/france/apps-script.json";const o=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,"utf8")):{};
+            Object.assign(o,{edition:"FR",title:"ImmoPilot France",scriptId:process.env.SCRIPT_ID,deploymentId:process.env.DEPLOYMENT_ID,
+              webAppUrl:"https://script.google.com/macros/s/"+process.env.DEPLOYMENT_ID+"/exec",editorUrl:"https://script.google.com/d/"+process.env.SCRIPT_ID+"/edit"});
+            o.createdAt=o.createdAt||new Date().toISOString();o.lastDeployment=new Date().toISOString();o.lastCommit=process.env.GITHUB_SHA.slice(0,7);
+            fs.writeFileSync(f,JSON.stringify(o,null,2)+"\n")'
+          if ! git diff --quiet -- application/france/apps-script.json 2>/dev/null || [ -n "$(git status --porcelain application/france)" ]; then
+            git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add application/france/apps-script.json
+            git commit -m "ImmoPilot France : identifiants du projet Apps Script" && git push || echo "::warning::Identifiants non enregistrés dans le dépôt (voir le résumé ci-dessus)."
+          fi
+
+      - name: Effacer les identifiants
+        if: always()
+        run: rm -f "$HOME/.clasprc.json" application/dist-fr/.clasp.json

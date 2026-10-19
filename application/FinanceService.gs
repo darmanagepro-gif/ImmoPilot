@@ -190,7 +190,7 @@ function payRecord_(p, a) {
         const remaining = round2_(num_(v.netToContractor || v.amountTTC) - num_(v.paidAmount)); assert_(amount <= remaining + 0.001, "Montant supérieur au net restant dû (" + remaining + ")."); }
       if (refType === "LEASE" && kind === "DEPOSIT_REFUND") { const held = leaseDepositHeld_(t.row.leaseId); assert_(amount <= held + 0.001, "Restitution supérieure à la caution détenue (" + held + ")."); }
       const pay = dbInsert_("Payments", { organizationId: t.organizationId, propertyId: t.propertyId, kind: kind, refType: refType, refId: safeText_(a.refId, 120), direction: PAY_DIRECTION_[kind], amount: amount,
-        currency: "MAD", method: oneOf_(a.method || "TRANSFER", PAY_METHODS_, "Mode de paiement"), paidAt: paidAt, reference: safeText_(a.reference, 120), proofDocId: safeText_(a.proofDocId || "", 120),
+        currency: cur_(), method: oneOf_(a.method || "TRANSFER", PAY_METHODS_, "Mode de paiement"), paidAt: paidAt, reference: safeText_(a.reference, 120), proofDocId: safeText_(a.proofDocId || "", 120),
         status: "RECORDED", reconciled: false, note: safeText_(a.note, 500), idempotencyKey: safeText_(a.requestKey || "", 120), recordedBy: p.email, createdAt: nowIso_() });
       paymentRefresh_(pay);
       audit_("PAYMENT_RECORDED", "Payment", pay.paymentId, t.organizationId, { refType: refType, refId: a.refId, kind: kind, amount: amount });
@@ -257,7 +257,7 @@ function expCreate_(p, a) {
   const prop = assertProp_(p, a.propertyId, "finance.manage");
   const e = dbInsert_("Expenses", { organizationId: prop.organizationId, propertyId: prop.propertyId, category: oneOf_(a.category, getSetting_("list.expenseCategories", prop.organizationId), "Catégorie"),
     description: reqText_(a.description, "Description", 2, 300), supplier: safeText_(a.supplier, 120), amount: money_(a.amount, "Montant", { min: 0.01 }), vatAmount: a.vatAmount ? money_(a.vatAmount, "TVA") : 0,
-    currency: "MAD", expenseDate: a.expenseDate ? dateOnly_(a.expenseDate, "Date") : todayStr_(), status: oneOf_(a.status || "INVOICED", ["PLANNED", "INVOICED"], "Statut"), refType: "MANUAL", refId: "",
+    currency: cur_(), expenseDate: a.expenseDate ? dateOnly_(a.expenseDate, "Date") : todayStr_(), status: oneOf_(a.status || "INVOICED", ["PLANNED", "INVOICED"], "Statut"), refType: "MANUAL", refId: "",
     uniqueKey: "manual:" + newId_("x"), documentId: safeText_(a.documentId || "", 120), createdAt: nowIso_(), createdBy: p.email });
   audit_("EXPENSE_CREATED", "Expense", e.expenseId, prop.organizationId, { amount: e.amount, category: e.category });
   return { ok: true, expenseId: e.expenseId, id: e.expenseId };
@@ -291,7 +291,7 @@ function expList_(p, a) {
 function revCreate_(p, a) {
   const prop = assertProp_(p, a.propertyId, "finance.manage");
   const r = dbInsert_("RevenueRecords", { organizationId: prop.organizationId, propertyId: prop.propertyId, category: safeText_(a.category || "OTHER", 40).toUpperCase(), description: reqText_(a.description, "Description", 2, 300),
-    amount: money_(a.amount, "Montant", { min: 0.01 }), currency: "MAD", revenueDate: a.revenueDate ? dateOnly_(a.revenueDate, "Date") : todayStr_(), status: "EXPECTED", createdAt: nowIso_(), createdBy: p.email });
+    amount: money_(a.amount, "Montant", { min: 0.01 }), currency: cur_(), revenueDate: a.revenueDate ? dateOnly_(a.revenueDate, "Date") : todayStr_(), status: "EXPECTED", createdAt: nowIso_(), createdBy: p.email });
   audit_("REVENUE_RECORD_CREATED", "RevenueRecord", r.revenueId, prop.organizationId, { amount: r.amount });
   return { ok: true, revenueId: r.revenueId };
 }

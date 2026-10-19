@@ -22,7 +22,14 @@ function loadProject(opts) {
   const ctx = vm.createContext(sandbox);
   // Ordre de chargement défavorable : Code.gs en premier (aucune dépendance au chargement ne doit exister entre fichiers).
   const gs = fs.readdirSync(BASE).filter(function (f) { return /\.gs$/.test(f); }).sort(function (a, b) { return a === "Code.gs" ? -1 : b === "Code.gs" ? 1 : a.localeCompare(b); });
-  gs.forEach(function (f) { const src = (opts.replace && opts.replace[f]) || f; vm.runInContext(fs.readFileSync(path.join(BASE, src), "utf8"), ctx, { filename: f }); });
+  // IMMO_EDITION=FR : mêmes tests sur l'édition France (euro, Europe/Paris, CNI, fiches de police).
+  const edition = String(process.env.IMMO_EDITION || "MA").toUpperCase();
+  gs.forEach(function (f) {
+    const src = (opts.replace && opts.replace[f]) || f;
+    let code = fs.readFileSync(path.join(BASE, src), "utf8");
+    if (edition !== "MA") code = code.replace('var IMMO_EDITION_ = "MA";', 'var IMMO_EDITION_ = "' + edition + '";');
+    vm.runInContext(code, ctx, { filename: f });
+  });
   return { ctx: ctx, mock: mock, files: gs };
 }
 
@@ -120,7 +127,7 @@ function installDiagnosticScenario() {
   step("Projet complet : l'application s'affiche normalement", function () {
     const { ctx } = loadProject();
     const r = vm.runInContext("verifierInstallation()", ctx);
-    ok(r.ok && r.expected.gs === 33 && r.expected.html === 9, JSON.stringify(r));
+    ok(r.ok && r.expected.gs === 34 && r.expected.html === 9, JSON.stringify(r));
     ok(/<!DOCTYPE html>/i.test(vm.runInContext("doGet({parameter:{}}).getContent()", ctx)) && vm.runInContext("doGet({parameter:{}}).getContent()", ctx).indexOf("installation incomplète") < 0, "page normale attendue");
   });
   step("Fichier HTML « Components » absent et fichier « Pareto » manquant : page explicative", function () {
@@ -169,7 +176,7 @@ function installDiagnosticScenario() {
 /** Version « 2 fichiers » (dist/) : même suite de tests, rendu de la page et vérification d'installation. */
 function bundleScenario() {
   require("child_process").execFileSync(process.execPath, [path.join(__dirname, "build-bundle.js")], { stdio: "ignore" });
-  const DIST = path.join(ROOT, "dist"), steps = [];
+  const DIST = path.join(ROOT, String(process.env.IMMO_EDITION || "MA").toUpperCase() === "MA" ? "dist" : "dist-" + String(process.env.IMMO_EDITION).toLowerCase()), steps = [];
   const step = function (name, fn) { try { const d = fn(); steps.push({ name: name, status: "PASS", detail: d || "" }); } catch (e) { steps.push({ name: name, status: "FAIL", detail: e.message }); } };
   const ok = function (c, m) { if (!c) throw new Error(m); };
   step("dist/ contient exactement ImmoPilot.gs, Index.html et appsscript.json", function () {

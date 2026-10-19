@@ -24,13 +24,13 @@ var PAYMENT_PROVIDERS_ = {
 };
 
 function planOut_(pl) {
-  return { planCode: pl.planCode, name: pl.name, price: pl.price, currency: pl.currency || "MAD", periodicity: pl.periodicity, maxProperties: pl.maxProperties, maxUsers: pl.maxUsers, storageMb: pl.storageMb,
+  return { planCode: pl.planCode, name: pl.name, price: pl.price, currency: pl.currency || cur_(), periodicity: pl.periodicity, maxProperties: pl.maxProperties, maxUsers: pl.maxUsers, storageMb: pl.storageMb,
     features: parseJson_(pl.featuresJson, []), quotas: parseJson_(pl.quotasJson, {}), trialDays: pl.trialDays, status: pl.status, sortOrder: pl.sortOrder, agencyOptionPrice: num_(pl.agencyOptionPrice) };
 }
 function subOut_(s, orgs) {
   const today = todayStr_();
   return { subscriptionId: s.subscriptionId, organizationId: s.organizationId, organizationName: ((orgs || {})[String(s.organizationId)] || {}).name || "", planCode: s.planCode, status: s.status,
-    startDate: s.startDate, trialEnd: s.trialEnd, periodEnd: s.periodEnd, nextDueDate: s.nextDueDate, paidThrough: s.paidThrough, price: s.price, currency: s.currency || "MAD", periodicity: s.periodicity,
+    startDate: s.startDate, trialEnd: s.trialEnd, periodEnd: s.periodEnd, nextDueDate: s.nextDueDate, paidThrough: s.paidThrough, price: s.price, currency: s.currency || cur_(), periodicity: s.periodicity,
     cancelAtPeriodEnd: bool_(s.cancelAtPeriodEnd), daysOverdue: s.status === "PAST_DUE" || s.status === "SUSPENDED" ? Math.max(0, diffDays_(s.nextDueDate || today, today)) : 0, createdAt: s.createdAt,
     agencyOption: subAgencyOption_(s) };
 }
@@ -55,7 +55,7 @@ function planSave_(p, a) {
   requireSuper_(p);
   const code = safeText_(a.planCode, 30).toUpperCase().replace(/[^A-Z0-9_]/g, "");
   assert_(code.length >= 2, "Code de forfait invalide.");
-  const data = { name: reqText_(a.name, "Nom", 2, 60), price: money_(a.price, "Prix"), currency: "MAD", periodicity: oneOf_(a.periodicity || "MONTHLY", Object.keys(PERIOD_MONTHS_), "Périodicité"),
+  const data = { name: reqText_(a.name, "Nom", 2, 60), price: money_(a.price, "Prix"), currency: cur_(), periodicity: oneOf_(a.periodicity || "MONTHLY", Object.keys(PERIOD_MONTHS_), "Périodicité"),
     maxProperties: Math.max(0, parseInt(a.maxProperties, 10) || 0), maxUsers: Math.max(0, parseInt(a.maxUsers, 10) || 0), storageMb: Math.max(0, parseInt(a.storageMb, 10) || 0),
     featuresJson: (Array.isArray(a.features) ? a.features : []).filter(function (f) { return PLAN_FEATURES_.indexOf(f) >= 0; }), quotasJson: { exportRows: Math.min(Math.max(parseInt((a.quotas || {}).exportRows, 10) || 1000, 100), IMMO_CONFIG.MAX_EXPORT_ROWS) },
     trialDays: Math.max(0, parseInt(a.trialDays, 10) || 0), agencyOptionPrice: a.agencyOptionPrice === "" || a.agencyOptionPrice == null ? 0 : money_(a.agencyOptionPrice, "Option agences"), status: oneOf_(a.status || "ACTIVE", ["ACTIVE", "RETIRED"], "Statut"), sortOrder: parseInt(a.sortOrder, 10) || 9, updatedAt: nowIso_(), updatedBy: p.email };
@@ -80,7 +80,7 @@ function subAssign_(p, a) {
       .forEach(function (s) { dbUpdate_("Subscriptions", s.subscriptionId, { status: "CANCELLED", canceledAt: nowIso_(), updatedAt: nowIso_(), updatedBy: p.email }); });
     const trialEnd = trial ? addDaysStr_(start, Number(plan.trialDays)) : "";
     const s = dbInsert_("Subscriptions", { organizationId: orgId, planCode: plan.planCode, status: trial ? "TRIAL" : "PAST_DUE", startDate: start, nextDueDate: trial ? trialEnd : start, periodEnd: trial ? trialEnd : start,
-      trialEnd: trialEnd, price: plan.price, agencyOptionPrice: num_(plan.agencyOptionPrice), currency: plan.currency || "MAD", periodicity: plan.periodicity, cancelAtPeriodEnd: false, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email });
+      trialEnd: trialEnd, price: plan.price, agencyOptionPrice: num_(plan.agencyOptionPrice), currency: plan.currency || cur_(), periodicity: plan.periodicity, cancelAtPeriodEnd: false, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email });
     dbUpdate_("Organizations", orgId, { planCode: plan.planCode, updatedAt: nowIso_() });
     audit_("SUBSCRIPTION_ASSIGNED", "Subscription", s.subscriptionId, orgId, { planCode: plan.planCode, trial: trial });
     return { ok: true, subscriptionId: s.subscriptionId, status: s.status, note: trial ? "" : "En attente du premier paiement (enregistrez-le pour activer)." };
@@ -92,7 +92,7 @@ function subApplyPayment_(s, amount, paidAt, method, reference, proofDocId, peri
   const today = todayStr_();
   const base = s.status === "ACTIVE" && s.periodEnd && s.periodEnd >= today ? s.periodEnd : today;
   const newEnd = addMonthsStr_(base, months);
-  const pay = dbInsert_("Payments", { organizationId: s.organizationId, propertyId: "", kind: "SUBSCRIPTION", refType: "SUBSCRIPTION", refId: s.subscriptionId, direction: "IN", amount: amount, currency: s.currency || "MAD",
+  const pay = dbInsert_("Payments", { organizationId: s.organizationId, propertyId: "", kind: "SUBSCRIPTION", refType: "SUBSCRIPTION", refId: s.subscriptionId, direction: "IN", amount: amount, currency: s.currency || cur_(),
     method: method, paidAt: paidAt, reference: reference, proofDocId: proofDocId, status: "RECORDED", reconciled: false, note: periods + " période(s)", recordedBy: actorEmail, createdAt: nowIso_() });
   dbUpdate_("Subscriptions", s.subscriptionId, { status: "ACTIVE", periodEnd: newEnd, nextDueDate: newEnd, paidThrough: newEnd, suspendedAt: "", updatedAt: nowIso_(), updatedBy: actorEmail });
   return { paymentId: pay.paymentId, periodEnd: newEnd };
@@ -178,7 +178,7 @@ function subContractPdf_(p, a) {
   const cur = entitlement_(orgId).subscription || subs[subs.length - 1], plan = dbGet_("SubscriptionPlans", cur.planCode) || {};
   const opt = subAgencyOption_(cur);
   const platform = dbAll_("Organizations").find(function (o) { return o.type === "PLATFORM"; }) || { name: IMMO_CONFIG.APP_NAME };
-  const fmt = function (v) { return (Math.round(num_(v) * 100) / 100).toLocaleString("fr-FR") + " " + (cur.currency || "MAD"); };
+  const fmt = function (v) { return (Math.round(num_(v) * 100) / 100).toLocaleString("fr-FR") + " " + (cur.currency || cur_()); };
   const per = { MONTHLY: "mois", QUARTERLY: "trimestre", YEARLY: "an" }[cur.periodicity] || "période";
   const feats = parseJson_(plan.featuresJson, []);
   const FEAT = { properties: "Biens", reservations: "Réservations", checkin: "Arrivées et départs", cleaning: "Ménage", incidents: "Incidents", finance_basic: "Finances (base)",
@@ -200,7 +200,7 @@ function subContractPdf_(p, a) {
     "Les agences créées par le client dans ImmoPilot n'ont pas d'abonnement propre : elles sont facturées en option sur cet abonnement, au prix par agence indiqué ci-dessus, et suivent son statut.",
     "La résiliation peut être demandée à tout moment ; elle prend effet à la fin de la période payée. Les données restent conservées et exportables.",
     "Chaque organisation n'accède qu'à ses propres données ; l'équipe ImmoPilot n'y accède qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
-    "Le client reste responsable des données qu'il saisit (voyageurs, locataires) et de ses obligations déclaratives, notamment au titre de la loi 09-08."
+    "Le client reste responsable des données qu'il saisit (voyageurs, locataires) et de ses obligations déclaratives, notamment au titre de la réglementation sur les données personnelles (" + edition_().dataLaw + ")."
   ].map(function (x) { return "<li>" + escapeHtml_(x) + "</li>"; }).join("") + "</ol></div>";
   html += "<h2>Historique des abonnements</h2>" + htmlTable_(["Référence", "Forfait", "Statut", "Début", "Payé jusqu'au", "Tarif"], subs.map(function (s) { return [s.subscriptionId, s.planCode, ST[s.status] || s.status, pdfDate_(s.startDate), pdfDate_(s.paidThrough), fmt(s.price)]; }));
   html += "<h2>Historique des règlements</h2>" + (pays.length ? htmlTable_(["Date", "Montant", "Mode", "Référence", "Détail"], pays.map(function (x) { return [pdfDate_(x.paidAt), fmt(x.amount), PDF_PAY_METHODS_[x.method] || x.method || "", x.reference || "", x.note || ""]; })) +

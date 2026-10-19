@@ -4,7 +4,7 @@
  */
 var PROPERTY_TYPES_ = ["APARTMENT", "STUDIO", "HOUSE", "VILLA", "RIAD", "COMMERCIAL", "OTHER"];
 var PROPERTY_TEXT_FIELDS_ = { name: 120, address: 240, city: 80, neighborhood: 120, building: 80, floor: 30, doorNumber: 40, accessInstructions: 1000, description: 3000,
-  houseRules: 3000, arrivalInstructions: 2000, departureInstructions: 2000 };
+  houseRules: 3000, arrivalInstructions: 2000, departureInstructions: 2000, registrationNumber: 40 };
 var PROPERTY_FIN_FIELDS_ = ["nightlyPrice", "cleaningFee", "monthlyRent", "charges", "managementCommissionRate", "touristTaxPerNight"];
 
 function propertyInput_(a, isCreate) {
@@ -30,7 +30,7 @@ function propertyInput_(a, isCreate) {
   if (a.equipment !== undefined) o.equipmentJson = list(a.equipment, 60, 60);
   if (a.rooms !== undefined) o.roomsJson = list(a.rooms, 30, 60);
   if (a.cleaningChecklist !== undefined) o.cleaningChecklistJson = list(a.cleaningChecklist, 60, 120);
-  if (a.currency !== undefined) o.currency = oneOf_(String(a.currency || "MAD").toUpperCase(), ["MAD", "EUR", "USD"], "Devise");
+  if (a.currency !== undefined) o.currency = oneOf_(String(a.currency || cur_()).toUpperCase(), ["MAD", "EUR", "USD"], "Devise");
   return o;
 }
 
@@ -41,7 +41,7 @@ function propertyOut_(p, x, full) {
     rentalMode: x.rentalMode, status: x.status, bedrooms: x.bedrooms, bathrooms: x.bathrooms, surfaceM2: x.surfaceM2, capacity: x.capacity, latitude: x.latitude, longitude: x.longitude,
     access: Object.keys(a.via), canEdit: !!a.caps["property.edit"], canAssign: !!a.caps["property.assign"], canReserve: !!a.caps["reservation.edit"], updatedAt: x.updatedAt };
   if (full) {
-    ["building", "floor", "doorNumber", "accessInstructions", "description", "houseRules", "arrivalInstructions", "departureInstructions", "checkInTime", "checkOutTime", "minTurnaroundMinutes", "currency", "residenceId", "createdAt", "createdBy"]
+    ["building", "floor", "doorNumber", "accessInstructions", "description", "houseRules", "arrivalInstructions", "departureInstructions", "checkInTime", "checkOutTime", "minTurnaroundMinutes", "currency", "residenceId", "createdAt", "createdBy", "registrationNumber"]
       .forEach(function (k) { o[k] = x[k]; });
     o.equipment = parseJson_(x.equipmentJson, []); o.rooms = parseJson_(x.roomsJson, []); o.cleaningChecklist = parseJson_(x.cleaningChecklistJson, []);
     o.caps = Object.keys(a.caps);
@@ -163,7 +163,7 @@ function propertyImport_(p, a) {
       const n = dbAll_("Properties").filter(function (x) { return String(x.organizationId) === orgId && ["ARCHIVED", "DELETED"].indexOf(x.status) < 0; }).length;
       assert_(n + valid.length <= Number(e.plan.maxProperties), "L'import dépasserait le quota de biens du forfait (" + e.plan.maxProperties + ").", "QUOTA");
     }
-    const ins = dbInsertMany_("Properties", valid.map(function (d) { return Object.assign({ propertyType: "APARTMENT", rentalMode: "SHORT_TERM", currency: "MAD", roomsJson: ["Séjour", "Chambre", "Cuisine", "Salle de bain"] }, d,
+    const ins = dbInsertMany_("Properties", valid.map(function (d) { return Object.assign({ propertyType: "APARTMENT", rentalMode: "SHORT_TERM", currency: cur_(), roomsJson: ["Séjour", "Chambre", "Cuisine", "Salle de bain"] }, d,
       { organizationId: orgId, ownerUserId: p.userId, status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email }); }));
     audit_("PROPERTIES_IMPORTED", "Property", "", orgId, { count: ins.length });
     return { ok: true, imported: ins.length };

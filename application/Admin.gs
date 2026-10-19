@@ -84,7 +84,7 @@ function createFirstSuperAdminInternal_(owner, props) {
   const emails = raw.split(",").map(normalizeEmail_).filter(Boolean);
   assert_(emails.length, "Renseignez IMMO_ADMIN_EMAILS (propriétés du script) avec au moins une adresse.", "CONFIG");
   let platform = dbAll_("Organizations").find(function (o) { return o.type === "PLATFORM"; });
-  if (!platform) platform = dbInsert_("Organizations", { name: "ImmoPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: "MA", city: "Marrakech", timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: owner });
+  if (!platform) platform = dbInsert_("Organizations", { name: "ImmoPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: owner });
   return emails.map(function (email) {
     validateEmail_(email);
     let user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });
@@ -98,7 +98,7 @@ function createFirstSuperAdminInternal_(owner, props) {
       catch (e) { link = "ERREUR : " + e.message + " — déployez l'application web puis relancez createFirstSuperAdmin()."; }
     }
     auditAs_(owner, "", "SUPER_ADMIN_PROVISIONED", "User", user.userId, platform.organizationId, { email: email });
-    return { email: email, userId: user.userId, roleCreated: !hasRole, activationLinkSent: !!link && link.indexOf("ERREUR") < 0, activationNote: link ? "Lien envoyé par e-mail et écrit dans le journal d'exécution." : "Compte déjà activé." };
+    return { email: email, userId: user.userId, roleCreated: !hasRole, activationLinkSent: !!link && link.indexOf("ERREUR") < 0, activationNote: link ? (link.indexOf("ERREUR") === 0 ? link : "Lien envoyé par e-mail et écrit dans le journal d'exécution.") : "Compte déjà activé." };
   });
 }
 

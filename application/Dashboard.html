@@ -253,7 +253,7 @@ PAGES.pareto = function (el) {
     destroyCharts(); clear(out).appendChild(h("div", { class: "loading" }, t("Calcul de l'analyse…")));
     api("pareto.run", state).then(function (r) {
       clear(out);
-      const R = r.result, money = r.unit === "MAD", fv = function (v) { return money ? fmtMoney(v) : fmtNum(v, 0); };
+      const R = r.result, money = r.unit === "MONEY" || r.unit === "MAD", fv = function (v) { return money ? fmtMoney(v) : fmtNum(v, 0); };
       out.appendChild(kpis([{ l: money ? "Montant total" : "Nombre total", v: fv(R.total), delta: r.previous.total || R.total ? r.totalDelta : null, deltaFmt: fv, invert: true },
         { l: "Éléments prioritaires", v: R.vitalCount + " / " + (R.itemCount || 0), sub: R.empty ? "" : fmtPct(R.vitalItemShare) + " " + t("des éléments") + " → " + fmtPct(R.vitalShare) + " " + t("du total"), tone: "warn" },
         { l: "Période précédente", v: fv(r.previous.total), sub: fmtDate(r.previousPeriod.from) + " → " + fmtDate(r.previousPeriod.to), tone: "neutral" }]));
