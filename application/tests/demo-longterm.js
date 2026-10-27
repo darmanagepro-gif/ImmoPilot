@@ -8,7 +8,8 @@
    ["rent.paymentInstructions", "Virement bancaire au compte du bailleur (coordonnées de démonstration : Banque Démo, RIB 000 000 0000000000000000 00), en indiquant la référence de l'avis."]]
     .forEach(function (x) { T.call(tok, "settings.set", { organizationId: org, key: x[0], value: x[1] }); });
   var l = dbGet_("Leases", leaseId);
-  T.call(tok, "property.update", { propertyId: l.propertyId, address: "Résidence Les Jardins, Bd Mohammed VI", surfaceM2: 92, propertyType: "APARTMENT",
+  T.call(tok, "tenant.update", { tenantId: l.tenantId, fullName: "Samira Haddad" });
+  T.call(tok, "property.update", { propertyId: l.propertyId, address: "Bd Mohammed VI, Agdal", surfaceM2: 92, propertyType: "APARTMENT",
     rooms: ["Entrée", "Séjour", "Cuisine", "Chambre 1", "Chambre 2", "Salle de bain", "Balcon"], equipment: ["Réfrigérateur", "Plaques de cuisson", "Four", "Lave-linge", "Canapé", "Table et 4 chaises", "Lit double", "Climatiseur"] });
   // Envois automatiques : relance (impayés), appel de la prochaine échéance, puis quittance automatique au paiement.
   rentAutomationJob_({ force: true, batch: 50 });
