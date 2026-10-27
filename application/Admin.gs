@@ -199,7 +199,8 @@ var ORG_EDITABLE_SETTINGS_ = ["reservation.defaultCheckIn", "reservation.default
   "cleaning.acceptanceMinutes", "cleaning.requirePhotos", "commission.contractorRate", "commission.vatRate", "finance.vatRate", "quote.agencyApprovalLimit", "workorder.requireQuote",
   "invoice.tolerancePercent", "rent.graceDays", "alerts.rentDueDays", "alerts.leaseEndDays", "alerts.incidentAgeDays", "alerts.incidentCost", "retention.sensitiveDocDays",
   "guests.storeIdReference", "notify.emailEnabled", "template.leaseDocId", "template.receiptDocId", "template.reservationDocId", "list.incidentCategories", "list.expenseCategories",
-  "list.cancelReasons", "list.cleaningAnomalies", "list.specialties", "locale", "currency"];
+  "list.cancelReasons", "list.cleaningAnomalies", "list.specialties", "locale", "currency",
+  "rent.autoCall", "rent.callDaysBefore", "rent.autoReminders", "rent.reminderDays", "rent.autoReceipt", "rent.copyEmail", "rent.paymentInstructions"];
 function settingsSet_(p, a) {
   const orgId = safeText_(a.organizationId || "", 120), key = String(a.key || "");
   assert_(Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key), "Paramètre inconnu.");
@@ -213,15 +214,19 @@ function settingsSet_(p, a) {
 function validateSettingValue_(key, v) {
   const def = DEFAULT_SETTINGS[key];
   if (typeof def === "boolean") return bool_(v);
+  if (key === "rent.callDaysBefore") { const n = parseInt(v, 10); assert_(n >= 0 && n <= 31, "Délai de 0 à 31 jours avant l'échéance."); return n; }
   if (typeof def === "number") { const n = Number(v); assert_(isFinite(n) && n >= 0 && n <= 1e7, "Valeur numérique invalide."); return n; }
   if (Array.isArray(def)) {
     const arr = Array.isArray(v) ? v : String(v || "").split(",").map(function (x) { return x.trim(); }).filter(Boolean);
     if (key === "reservation.cancellationPolicy") return arr.map(function (x) { const o = typeof x === "object" ? x : {}; return { daysBefore: Math.max(0, parseInt(o.daysBefore, 10) || 0), penaltyPercent: rate_(o.penaltyPercent, "Pénalité") }; }).sort(function (x, y) { return y.daysBefore - x.daysBefore; });
     if (key === "alerts.leaseEndDays") return arr.map(function (x) { return Math.max(1, parseInt(x, 10) || 30); }).slice(0, 5);
+    if (key === "rent.reminderDays") return rentReminderDays_(arr);
     return arr.slice(0, 40).map(function (x) { return safeText_(String(x).toUpperCase().replace(/[^A-Z0-9_]/g, "_"), 40); }).filter(Boolean);
   }
   if (/^template\./.test(key)) { const s = safeText_(v, 100); assert_(!s || /^[\w-]{20,}$/.test(s), "Identifiant de document Google invalide."); if (s) assertTemplateAllowed_(s); return s; }
   if (/Check(In|Out)$/.test(key)) { const s = safeText_(v, 5); assert_(/^([01]\d|2[0-3]):[0-5]\d$/.test(s), "Heure au format HH:MM attendue."); return s; }
+  if (key === "rent.copyEmail") return String(v || "").trim() ? validateEmail_(v) : "";
+  if (key === "rent.paymentInstructions") return safeText_(v, 800);
   if (key === "locale") return oneOf_(v, IMMO_LANGS_, "Langue");
   if (key === "currency") return oneOf_(String(v).toUpperCase(), ["MAD", "EUR", "USD"], "Devise");
   return safeText_(v, 500);

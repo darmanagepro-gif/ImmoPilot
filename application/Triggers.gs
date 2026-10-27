@@ -51,9 +51,9 @@ function runJob_(name, tasks) {
   return { ok: !errors.length, result: result, errors: errors };
 }
 
-/** Toutes les 15 minutes : expiration des missions de ménage, retards d'arrivée/départ. */
+/** Toutes les 15 minutes : expiration des missions de ménage, retards d'arrivée/départ, envois aux locataires (8 h – 20 h). */
 function jobFrequent() {
-  return jobSummary_(runJob_("jobFrequent", { cleaning: cleaningExpireJob_, checkinAlerts: checkinAlertsJob_ }));
+  return jobSummary_(runJob_("jobFrequent", { cleaning: cleaningExpireJob_, checkinAlerts: checkinAlertsJob_, rentMails: function () { return rentAutomationJob_(); } }));
 }
 /** Ne renvoie qu'un résumé (le détail est consigné dans ScheduledJobs) : la fonction est aussi appelable depuis le web. */
 function jobSummary_(r) { return { ok: !!(r && r.ok), skipped: !!(r && r.skipped), errorCount: r && r.errors ? r.errors.length : 0 }; }

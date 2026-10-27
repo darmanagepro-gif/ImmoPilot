@@ -44,8 +44,8 @@ function cur_() { return edition_().currency; }
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
-  VERSION: "2.1.0",
-  SCHEMA_VERSION: 7,
+  VERSION: "2.2.0",
+  SCHEMA_VERSION: 8,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -127,6 +127,14 @@ var DEFAULT_SETTINGS = Object.freeze({
   "template.leaseDocId": "",
   "template.receiptDocId": "",
   "template.reservationDocId": "",
+  // Location longue durée : envois automatiques au locataire (désactivés par défaut, à activer par l'organisation).
+  "rent.autoCall": false,
+  "rent.callDaysBefore": 7,
+  "rent.autoReminders": false,
+  "rent.reminderDays": [5, 15, 30],
+  "rent.autoReceipt": false,
+  "rent.copyEmail": "",
+  "rent.paymentInstructions": "",
   "list.incidentCategories": ["PLUMBING", "ELECTRICITY", "AC", "HUMIDITY", "LOCKSMITH", "FURNITURE", "APPLIANCE", "CLEANING", "DAMAGE", "SECURITY", "OTHER"],
   "list.expenseCategories": ["MAINTENANCE", "CLEANING", "UTILITIES", "TAXES", "INSURANCE", "AGENCY_FEES", "SUPPLIES", "OTHER"],
   "list.cancelReasons": ["GUEST_REQUEST", "NO_PAYMENT", "OVERBOOKING", "OWNER_REQUEST", "FORCE_MAJEURE", "OTHER"],
@@ -221,9 +229,21 @@ var TABLES_SRC = {
     cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t" },
   Leases: { pk: "leaseId", idp: "lea", org: "organizationId", req: "propertyId,tenantId,startDate,monthlyRent",
     enums: { status: ["DRAFT", "ACTIVE", "NOTICE", "ENDED", "RENEWED", "CANCELLED"] },
-    cols: "leaseId,organizationId,propertyId,tenantId,startDate#d,endDate#d,durationMonths#n,monthlyRent#n,charges#n,deposit#n,dueDay#n,indexationRate#n,nextIndexationDate#d,terms,documentId,status,noticeDate#d,noticeBy,depositStatus,depositReturned#n,depositDeductions#n,renewedFromLeaseId,endReason,createdAt#t,createdBy,updatedAt#t,updatedBy" },
+    cols: "leaseId,organizationId,propertyId,tenantId,startDate#d,endDate#d,durationMonths#n,monthlyRent#n,charges#n,deposit#n,dueDay#n,indexationRate#n,nextIndexationDate#d,terms,documentId,status,noticeDate#d,noticeBy,depositStatus,depositReturned#n,depositDeductions#n,renewedFromLeaseId,endReason,createdAt#t,createdBy,updatedAt#t,updatedBy|automationJson#j" },
   RentSchedules: { pk: "scheduleId", idp: "rsc", org: "organizationId", req: "leaseId,period", enums: { status: ["OPEN", "CANCELLED"] },
     cols: "scheduleId,organizationId,propertyId,leaseId,period,dueDate#d,rentAmount#n,chargesAmount#n,amountDue#n,status,createdAt#t,uniqueKey" },
+  // Envois au locataire (appels de loyer, relances, quittances, documents) : une ligne par envoi, clé unique contre les doublons.
+  RentMailings: { pk: "mailingId", idp: "rml", org: "organizationId", req: "leaseId,kind",
+    enums: { kind: ["CALL", "REMINDER", "RECEIPT", "DOCUMENT"], status: ["SENT", "FAILED", "SKIPPED"], trigger: ["AUTO", "MANUAL"] },
+    cols: "mailingId,organizationId,propertyId,leaseId,scheduleId,kind,level#n,recipient,status,trigger,documentId,subject,sentAt#t,error,attempts#n,uniqueKey,createdAt#t,createdBy" },
+  // Documents rédigés par l'agent (IA ou modèle intégré) : contrat de bail, courriers. Brouillon modifiable, puis PDF définitif.
+  LeaseDocs: { pk: "leaseDocId", idp: "ldc", org: "organizationId", req: "leaseId,docType",
+    enums: { docType: ["LEASE_CONTRACT", "LETTER"], status: ["DRAFT", "FINAL", "CANCELLED"] },
+    cols: "leaseDocId,organizationId,propertyId,leaseId,docType,subtype,status,title,inputsJson#j,sectionsJson#j,warningsJson#j,engine,documentId,createdAt#t,createdBy,updatedAt#t,updatedBy,finalizedAt#t,finalizedBy,sentAt#t,sentTo" },
+  // États des lieux d'entrée et de sortie : relevé pièce par pièce, compteurs, clés, photos, rédaction de l'agent.
+  LeaseInspections: { pk: "inspectionId", idp: "edl", org: "organizationId", req: "leaseId,type",
+    enums: { type: ["ENTRY", "EXIT"], status: ["DRAFT", "FINAL", "CANCELLED"] },
+    cols: "inspectionId,organizationId,propertyId,leaseId,type,inspectionDate#d,status,roomsJson#j,metersJson#j,keysJson#j,generalNote,attendees,summaryJson#j,engine,documentId,createdAt#t,createdBy,updatedAt#t,updatedBy,finalizedAt#t,finalizedBy,sentAt#t,sentTo" },
   Expenses: { pk: "expenseId", idp: "exp", org: "organizationId", req: "category,amount", enums: { status: ["PLANNED", "INVOICED", "PAID", "CANCELLED"] },
     cols: "expenseId,organizationId,propertyId,category,description,supplier,amount#n,vatAmount#n,currency,expenseDate#d,status,paidAt#t,refType,refId,uniqueKey,documentId,createdAt#t,createdBy" },
   RevenueRecords: { pk: "revenueId", idp: "rev", org: "organizationId", req: "category,amount", enums: { status: ["EXPECTED", "RECEIVED", "CANCELLED"] },

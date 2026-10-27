@@ -163,7 +163,14 @@ function leaseGet_(p, a) {
   o.payments = dbAll_("Payments").filter(function (z) { return (z.refType === "LEASE" && String(z.refId) === String(x.l.leaseId)) || (z.refType === "RENT_SCHEDULE" && o.schedules.some(function (s) { return s.scheduleId === z.refId; })); })
     .map(function (z) { return { paymentId: z.paymentId, kind: z.kind, refId: z.refId, amount: z.amount, paidAt: z.paidAt, method: z.method, status: z.status, reference: z.reference }; });
   o.documents = docList_(p, { ownerType: "LEASE", ownerId: x.l.leaseId });
-  if (o.canManage) o.history = auditHistory_("Lease", x.l.leaseId, 30);
+  o.agentDocs = leaseDocsOf_(x.l.leaseId, !o.canManage);
+  o.inspections = inspectionsOf_(x.l.leaseId, !o.canManage);
+  if (o.canManage) {
+    o.history = auditHistory_("Lease", x.l.leaseId, 30);
+    o.automation = rentAutomationView_(x.l);
+    o.mailings = rentMailingsOf_(x.l.leaseId);
+    o.agent = { ai: !!aiConfig_(), furnished: leaseFurnished_(x.l, x.prop) };
+  }
   return o;
 }
 function leaseCreate_(p, a) {
@@ -265,21 +272,14 @@ function leaseDepositReturn_(p, a) {
   audit_("LEASE_DEPOSIT_RETURNED", "Lease", x.l.leaseId, x.l.organizationId, { returned: ret, deductions: ded, reason: safeText_(a.deductionReason, 500) });
   return { ok: true, returned: ret, deductions: ded, paymentId: paymentId };
 }
-/** Quittance : uniquement pour une échéance intégralement payée. */
+/** Quittance : uniquement pour une échéance intégralement payée (PDF : RentAutomationService.rentReceiptPdf_). */
 function leaseReceipt_(p, a) {
   const s = dbGet_("RentSchedules", safeText_(a.scheduleId, 120));
   if (!s) notFound_("Échéance");
   const x = leaseLoad_(p, s.leaseId, "lease.view");
   const st = rentStatus_(s);
   assert_(st.status === "PAID", "Quittance disponible uniquement pour une échéance entièrement réglée (statut : " + st.status + ").");
-  const t = dbGet_("Tenants", x.l.tenantId) || {}, org = dbGet_("Organizations", x.l.organizationId) || {};
-  const pays = dbAll_("Payments").filter(function (z) { return z.refType === "RENT_SCHEDULE" && String(z.refId) === String(s.scheduleId) && z.status === "RECORDED"; });
-  const map = { bailleur: org.name, locataire: t.fullName, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), periode: s.period, loyer: s.rentAmount, charges: s.chargesAmount, total: s.amountDue,
-    date_paiement: pays.map(function (z) { return z.paidAt; }).join(", "), date: todayStr_() };
-  const tpl = getSetting_("template.receiptDocId", x.l.organizationId);
-  const pdf = tpl ? docFromTemplate_(tpl, map, propertyFolder_(x.l.organizationId, x.l.propertyId, "LEASE"), "Quittance_" + s.period + "_" + x.l.leaseId).pdf :
-    htmlToPdf_(pdfShell_("Quittance de loyer — " + s.period, "<p>Je soussigné(e), " + escapeHtml_(org.name) + ", bailleur, déclare avoir reçu de <b>" + escapeHtml_(t.fullName) + "</b> la somme de <b>" + s.amountDue + " MAD</b> au titre du loyer et des charges de la période " + escapeHtml_(s.period) + " pour le logement : " + escapeHtml_(map.bien + " — " + map.adresse) + ".</p>" +
-      htmlTable_(["Poste", "Montant (MAD)"], [["Loyer", s.rentAmount], ["Charges", s.chargesAmount], ["Total", s.amountDue]]) + "<p>Paiement(s) reçu(s) le : " + escapeHtml_(map.date_paiement) + "</p><p class='muted'>Document généré automatiquement — modèle à valider localement.</p>"), "Quittance_" + s.period);
+  const pdf = rentReceiptPdf_(rentCtx_(x.l), s);
   audit_("RENT_RECEIPT_GENERATED", "Lease", x.l.leaseId, x.l.organizationId, { period: s.period });
   return storeGeneratedPdf_(p, pdf, { propertyId: x.l.propertyId, organizationId: x.l.organizationId }, "LEASE", x.l.leaseId, "RECEIPT");
 }
@@ -316,9 +316,9 @@ function leaseJob_() {
     dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(l.leaseId) && s.status === "OPEN"; }).forEach(function (s) {
       const st = rentStatus_(s, today);
       if (st.remaining > 0 && s.dueDate === addDaysStr_(today, before) && t.userId) { notify_({ eventKey: "rent-due:" + s.scheduleId, userIds: [t.userId], type: "RENT_DUE", organizationId: l.organizationId,
-        title: "Échéance de loyer le " + s.dueDate, body: st.remaining + " MAD — " + prop.name, link: "#mylease" }); alerts++; }
+        title: "Échéance de loyer le " + s.dueDate, body: fmtAmount_(st.remaining) + " — " + prop.name, link: "#mylease" }); alerts++; }
       if (st.status === "LATE") { notify_({ eventKey: "rent-late:" + s.scheduleId + ":" + Math.floor(st.daysLate / 7), userIds: managers.concat(t.userId ? [t.userId] : []), type: "RENT_LATE", organizationId: l.organizationId,
-        title: "Loyer en retard (" + st.daysLate + " j) : " + prop.name, body: (t.fullName || "") + " — reste dû " + st.remaining + " MAD (période " + s.period + ").", link: "#lease/" + l.leaseId }); alerts++; }
+        title: "Loyer en retard (" + st.daysLate + " j) : " + prop.name, body: (t.fullName || "") + " — reste dû " + fmtAmount_(st.remaining) + " (période " + s.period + ").", link: "#lease/" + l.leaseId }); alerts++; }
     });
     if (l.endDate) (getSetting_("alerts.leaseEndDays", l.organizationId) || [60, 30]).forEach(function (d) {
       if (l.endDate === addDaysStr_(today, d)) { notify_({ eventKey: "lease-end:" + l.leaseId + ":" + d, userIds: managers, type: "LEASE_ENDING", organizationId: l.organizationId,

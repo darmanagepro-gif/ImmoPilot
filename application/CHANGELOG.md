@@ -1,5 +1,18 @@
 # Journal des modifications
 
+## 2.2.0 — 27 octobre 2026 — envois automatiques au locataire et agent de rédaction
+
+- Location longue durée : appels de loyer (avis d'échéance) envoyés automatiquement par e-mail au locataire avec le PDF joint, rent.callDaysBefore jours avant l'échéance (7 par défaut), avec les arriérés éventuels et les modalités de paiement de l'organisation (rent.paymentInstructions).
+- Relances automatiques des impayés aux jours rent.reminderDays après l'échéance (5, 15, 30 par défaut) : rappel, relance, dernière relance avant procédure ; une relance regroupe toutes les échéances impayées du bail ; jamais de rafale ni de doublon (clé unique par envoi, 3 essais au plus en cas d'échec).
+- Quittance automatique : dès qu'un paiement solde une échéance (bouton « Paiement »), la quittance PDF part au locataire ; paiement partiel = pas de quittance. Le paiement n'échoue jamais à cause de l'e-mail (nouvel essai automatique).
+- Désactivé par défaut : l'organisation active rent.autoCall, rent.autoReminders, rent.autoReceipt dans Paramètres ; copie possible à une adresse (rent.copyEmail) ; un bail peut être exclu ou avoir ses propres délais (« Régler pour ce bail »). Envois entre 8 h et 20 h, 12 au plus par passage de la tâche (toutes les 15 min). Locataire sans e-mail : rien n'est envoyé, le gestionnaire est prévenu une fois.
+- Fiche du bail : panneau « Envois automatiques au locataire » (réglages effectifs, prochain appel, prochaine relance, historique et PDF de chaque envoi) ; boutons « ✉ Appel », « ✉ » (quittance) et « Relancer » avec aperçu du PDF.
+- Agent de rédaction (IA) : contrat de bail (meublé ou vide, usage, clauses, consignes), courriers (renouvellement, révision du loyer, restitution du dépôt de garantie, courrier libre), états des lieux d'entrée et de sortie. Brouillon modifiable, avertissements juridiques calculés (Maroc : révision du loyer limitée par la loi 07-03 à une fois tous les 3 ans et 8 % pour l'habitation ; France : durée minimale, plafond du dépôt de garantie), puis PDF définitif rangé dans les documents du bail et envoi au locataire.
+- IA facultative (IMMO_AI_PROVIDER, IMMO_AI_API_KEY, modèle IMMO_AI_DOC_MODEL facultatif) : aucune donnée d'identité (nom, e-mail, téléphone, adresse, pièce d'identité) n'est transmise ; le serveur remplace ensuite les marqueurs [BAILLEUR], [LOCATAIRE], [ADRESSE_DU_BIEN]. Sans IA ou en cas d'erreur : modèles intégrés Maroc (loi 67-12) et France (loi 89-462).
+- États des lieux : pièces et éléments pré-remplis selon le bien (cuisine, salle de bain, chambres, extérieur, inventaire du mobilier si meublé), état et observation par élément, photos par pièce, compteurs, clés ; saisie adaptée au téléphone ; la sortie reprend l'état d'entrée et liste les écarts (dégradations, sans chiffrage automatique des retenues).
+- E-mails : pièces jointes, copie cachée et adresse de réponse (Apps Script et serveur dédié : colonnes ajoutées sans perte à la file d'envoi).
+- Nouvelles tables RentMailings, LeaseDocs, LeaseInspections et colonne Leases.automationJson (migration additive, schéma 8). 6 nouveaux tests (97 au total), aide Rubban et traductions dans les 6 langues.
+
 ## 2.1.0 — 19 octobre 2026 — ImmoPilot France et serveur dédié
 
 - Édition France (même code, paquet dist-fr) : euro, Europe/Paris, Paris par défaut, téléphones +33, carte nationale d'identité (CNI), forfaits 29 / 59 / 149 € HT, logo tour Eiffel (interface, PDF, icônes).

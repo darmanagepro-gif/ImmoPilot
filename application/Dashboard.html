@@ -177,7 +177,7 @@ PAGES.finance = function (el) {
       const sumBox = h("div");
       const lv = listView(b, { route: "exp.list", filters: [{ k: "from", l: "Du", t: "date" }, { k: "to", l: "Au", t: "date" }, { k: "propertyId", l: "Bien", t: "select", opts: function () { return propChoices("finance.manage"); } }, { k: "category", l: "Catégorie", t: "select", opts: listOpts("expenseCategories") }, { k: "status", l: "Statut", t: "select", opts: ["PLANNED", "INVOICED", "PAID", "CANCELLED"] }],
         tools: function () { return can("finance.manage") ? [btn("+ " + t("Dépense"), function () { expenseDialog().then(function (x) { if (x) lv.reload(); }); }, "primary"), btn("+ " + t("Revenu divers"), function () {
-          formModal(t("Revenu divers"), [{ k: "propertyId", l: "Bien", t: "select", req: true, opts: function () { return propChoices("finance.manage"); } }, { k: "category", l: "Catégorie", def: "OTHER" }, { k: "description", l: "Description", req: true }, { k: "amount", l: "Montant (MAD)", t: "number", req: true }, { k: "revenueDate", l: "Date", t: "date", def: today() }], {},
+          formModal(t("Revenu divers"), [{ k: "propertyId", l: "Bien", t: "select", req: true, opts: function () { return propChoices("finance.manage"); } }, { k: "category", l: "Catégorie", def: "OTHER" }, { k: "description", l: "Description", req: true }, { k: "amount", l: "Montant", t: "number", req: true }, { k: "revenueDate", l: "Date", t: "date", def: today() }], {},
             function (v) { return api("rev.create", v); }, { success: "Revenu enregistré." }); })] : []; },
         columns: [{ l: "Date", date: true, k: "expenseDate" }, { l: "Bien", k: "propertyName" }, { l: "Catégorie", f: function (x) { return st(x.category); } }, { l: "Description", k: "description" }, { l: "Fournisseur", k: "supplier" }, { l: "Montant", money: true, k: "amount" }, { l: "Statut", status: true, k: "status" },
           { l: "", f: function (x) { return h("span", { class: "actions" }, x.documentId ? btn(t("Pièce"), function () { openDoc(x.documentId); }, "sm") : null,
@@ -203,7 +203,12 @@ function payDialog(p) {
     { k: "method", l: "Mode", t: "select", req: true, opts: (S.meta.payMethods || []).map(function (m) { return [m, st(m)]; }), def: "TRANSFER" }, { k: "reference", l: "Référence (virement, reçu…)" }, { k: "note", l: "Note" }];
   if (p.kinds) fields.unshift({ k: "kind", l: "Nature", t: "select", req: true, opts: p.kinds.map(function (k) { return [k, st(k)]; }) });
   return formModal(p.title || t("Enregistrer un paiement"), fields, { amount: p.amount, kind: p.kind }, function (v) {
-    return api("pay.record", Object.assign({ refType: p.refType, refId: p.refId, kind: p.kind, requestKey: rk() }, v));
+    return api("pay.record", Object.assign({ refType: p.refType, refId: p.refId, kind: p.kind, requestKey: rk() }, v)).then(function (r) {
+      // Loyer soldé : quittance envoyée automatiquement au locataire (si activé dans les paramètres).
+      if (r && r.receipt && r.receipt.receipt) setTimeout(function () { toast(t("Quittance envoyée au locataire par e-mail") + " : " + r.receipt.to, "good"); }, 700);
+      else if (r && r.receipt && r.receipt.reason === "ERROR") setTimeout(function () { toast(t("Paiement enregistré, mais la quittance n'a pas pu être envoyée : nouvel essai automatique plus tard."), "warn"); }, 700);
+      return r;
+    });
   }, { intro: t("Enregistrez uniquement un paiement réellement reçu ou effectué. Le statut est mis à jour à partir des paiements enregistrés."), success: "Paiement enregistré." });
 }
 

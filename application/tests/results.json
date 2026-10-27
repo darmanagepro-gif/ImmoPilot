@@ -1,7 +1,7 @@
 {
-  "ranAt": "2026-10-19T13:48:45.178Z",
-  "durationMs": 12361,
-  "node": "v22.22.0",
+  "ranAt": "2026-10-27T11:33:51.848Z",
+  "durationMs": 13214,
+  "node": "v22.23.4",
   "filesLoaded": [
     "Code.gs",
     "Admin.gs",
@@ -21,6 +21,7 @@
     "GuestService.gs",
     "IncidentService.gs",
     "InvoiceService.gs",
+    "LeaseAgentService.gs",
     "LeaseService.gs",
     "Legal.gs",
     "Migrations.gs",
@@ -29,6 +30,7 @@
     "ParetoService.gs",
     "Permissions.gs",
     "PropertyService.gs",
+    "RentAutomationService.gs",
     "ReportsService.gs",
     "ReservationService.gs",
     "SubscriptionService.gs",
@@ -39,11 +41,11 @@
     "WorkOrderService.gs"
   ],
   "summary": {
-    "total": 69,
-    "passed": 69,
+    "total": 75,
+    "passed": 75,
     "failed": 0,
     "skipped": 0,
-    "ranAt": "2026-10-19T13:48:39.049Z"
+    "ranAt": "2026-10-27T11:33:45.168Z"
   },
   "results": [
     {
@@ -365,6 +367,42 @@
       "detail": ""
     },
     {
+      "group": "Automatisations loyers et agent IA",
+      "name": "Paramètres des envois automatiques : validation",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Automatisations loyers et agent IA",
+      "name": "Appel de loyer (PDF joint), quittance automatique au paiement, pas de doublon, copie au gestionnaire",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Automatisations loyers et agent IA",
+      "name": "Relances programmées : un seul e-mail par niveau, échéances regroupées, exclusion d'un bail, locataire sans e-mail",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Automatisations loyers et agent IA",
+      "name": "Agent IA : contrat de bail sans IA (modèle intégré), avertissements légaux, validation, envoi, accès locataire",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Automatisations loyers et agent IA",
+      "name": "Agent IA : rédaction par l'IA sans aucune donnée d'identité transmise, repli sur le modèle en cas d'erreur",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Automatisations loyers et agent IA",
+      "name": "États des lieux : entrée complète, sortie comparée à l'entrée, photos contrôlées, envoi",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
       "group": "KPI et Pareto",
       "name": "Pareto : classement, parts, cumul, seuil 80 %",
       "status": "PASS",
@@ -462,7 +500,7 @@
     }
   ],
   "routes": {
-    "serverRoutes": 177,
+    "serverRoutes": 197,
     "publicRoutes": 13,
     "clientCalls": 43,
     "missingOnServer": [],
@@ -594,6 +632,26 @@
       "lease.receipt",
       "lease.document",
       "lease.mine",
+      "lease.automation",
+      "rent.sendCall",
+      "rent.sendReminder",
+      "rent.sendReceipt",
+      "rent.preview",
+      "leasedoc.draft",
+      "leasedoc.get",
+      "leasedoc.update",
+      "leasedoc.pdf",
+      "leasedoc.finalize",
+      "leasedoc.send",
+      "leasedoc.cancel",
+      "inspection.create",
+      "inspection.get",
+      "inspection.save",
+      "inspection.write",
+      "inspection.pdf",
+      "inspection.finalize",
+      "inspection.send",
+      "inspection.cancel",
       "sub.list",
       "assistant.kb",
       "assistant.ask",
@@ -616,7 +674,7 @@
       {
         "name": "setupProject() crée la base, le dossier privé et le schéma",
         "status": "PASS",
-        "detail": "base ss_ac7c34c8ae21dabbb1ce43632, 3 migrations"
+        "detail": "base ss_0c9bbdb1bd164d8b00cfa6522, 3 migrations"
       },
       {
         "name": "Avant déploiement : pas de lien envoyé, message explicite",
@@ -706,7 +764,7 @@
       {
         "name": "Suite complète de tests sur la version 2 fichiers",
         "status": "PASS",
-        "detail": "69/69"
+        "detail": "75/75"
       },
       {
         "name": "La page contient toute l'interface (aucune inclusion restante)",

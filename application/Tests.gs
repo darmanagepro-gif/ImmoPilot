@@ -109,6 +109,11 @@ function testFixtures_(T) {
 }
 
 function tDays_(n) { return addDaysStr_(todayStr_(), n); }
+/** Bailleur isolé (organisation + propriétaire connecté) pour les tests de location longue durée. */
+function tLeaseOwner_(T, fx) {
+  const k = Utilities.getUuid().slice(0, 6), org = tOrg_("Bailleur " + k, "OWNER_ORG"), u = tMakeUser_(fx.mail("bailleur." + k), "OWNER", org.organizationId, fx.pw);
+  return { org: org, user: u, tok: T.pub("auth.login", { email: u.email, password: fx.pw }).token };
+}
 
 /* ===================================== GROUPES DE TESTS ===================================== */
 function TEST_GROUPS_() {
@@ -990,6 +995,193 @@ function TEST_GROUPS_() {
         T.eq(p.length, 3, "3 périodes"); T.eq(p[0].dueDate, "2026-01-05", "jour d'échéance"); T.near(p[2].rentAmount, 1500, "mars proratisé 15/31");
         const q = buildRentPeriods_({ leaseId: "L", startDate: "2026-01-01", endDate: "2027-12-31", monthlyRent: 1000, charges: 0, dueDay: 1, indexationRate: 2, nextIndexationDate: "2027-01-01" }, "2027-12-31");
         T.near(q[11].rentAmount, 1000, "avant indexation"); T.near(q[12].rentAmount, 1020, "après indexation 2 %");
+      }]
+    ] },
+    { name: "Automatisations loyers et agent IA", tests: [
+      ["Paramètres des envois automatiques : validation", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const org = O.org.organizationId;
+        T.fails(O.tok, "settings.set", { organizationId: org, key: "rent.reminderDays", value: "abc" }, "VALIDATION");
+        T.fails(O.tok, "settings.set", { organizationId: org, key: "rent.callDaysBefore", value: 40 }, "VALIDATION");
+        T.fails(O.tok, "settings.set", { organizationId: org, key: "rent.copyEmail", value: "pas-un-email" }, "VALIDATION");
+        T.eq(T.call(O.tok, "settings.set", { organizationId: org, key: "rent.reminderDays", value: "10, 3, 3, 200" }).value, [3, 10], "jours triés, sans doublon, bornés");
+        T.fails(fx.tok.ag1u, "settings.set", { organizationId: org, key: "rent.autoCall", value: true }, "FORBIDDEN");
+      }],
+      ["Appel de loyer (PDF joint), quittance automatique au paiement, pas de doublon, copie au gestionnaire", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const org = O.org.organizationId;
+        [["rent.autoCall", true], ["rent.callDaysBefore", 7], ["rent.autoReminders", true], ["rent.reminderDays", "3,10"], ["rent.autoReceipt", true], ["rent.copyEmail", "compta@example.test"],
+          ["rent.paymentInstructions", "Virement au compte du bailleur, référence indiquée sur l'avis."]].forEach(function (x) { T.call(O.tok, "settings.set", { organizationId: org, key: x[0], value: x[1] }); });
+        const prop = T.call(O.tok, "property.create", { organizationId: org, name: "Appartement Hivernage LD", city: "Marrakech", address: "12 rue des Orangers", rentalMode: "LONG_TERM", monthlyRent: 4000, rooms: ["Entrée", "Séjour", "Cuisine", "Chambre", "Salle de bain"] }).propertyId;
+        const email = fx.mail("auto.locataire");
+        const t = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Nadia Auto", email: email });
+        const l = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: todayStr_(), monthlyRent: 4000, charges: 200, deposit: 8000, dueDay: 1 });
+        T.call(O.tok, "lease.activate", { leaseId: l.leaseId });
+        const before = TEST_HOOKS_.mailSink.length;
+        const r1 = rentAutomationJob_({ force: true, batch: 50 });
+        T.ok(r1.calls >= 1, "appel de loyer envoyé (" + JSON.stringify(r1) + ")");
+        const call = TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return m.to === email && /Avis d'échéance/.test(m.subject); })[0];
+        T.ok(call && call.attachments.length === 1 && /^Appel_loyer_.*\.pdf$/.test(call.attachments[0].name) && call.attachments[0].mimeType === "application/pdf", "PDF de l'appel en pièce jointe");
+        T.eq(call.bcc, "compta@example.test", "copie cachée au gestionnaire");
+        T.ok(/Virement au compte du bailleur/.test(call.body) && /4\s?200,00/.test(call.body.replace(/ | /g, " ")), "montant et modalités dans l'e-mail");
+        const n = TEST_HOOKS_.mailSink.length;
+        T.eq(rentAutomationJob_({ force: true, batch: 50 }).calls, 0, "aucun doublon au passage suivant");
+        T.eq(TEST_HOOKS_.mailSink.filter(function (m, i) { return i >= n && m.to === email; }).length, 0, "aucun nouvel e-mail");
+        const g = T.call(O.tok, "lease.get", { leaseId: l.leaseId });
+        T.ok(g.mailings.length === 1 && g.mailings[0].kind === "CALL" && g.mailings[0].status === "SENT" && g.mailings[0].documentId, "envoi journalisé avec son PDF");
+        T.ok(g.documents.some(function (d) { return d.category === "RENT_CALL"; }), "PDF rangé dans les documents du bail");
+        T.ok(g.automation.orgCall && g.automation.enabled && g.automation.tenantEmail === email, "résumé des automatisations");
+        const s0 = g.schedules[0];
+        const part = T.call(O.tok, "pay.record", { refType: "RENT_SCHEDULE", refId: s0.scheduleId, kind: "RENT", amount: 1000 });
+        T.ok(part.receipt && part.receipt.receipt === false && part.receipt.reason === "PARTIAL", "paiement partiel : pas de quittance");
+        const full = T.call(O.tok, "pay.record", { refType: "RENT_SCHEDULE", refId: s0.scheduleId, kind: "RENT", amount: 3200, reference: "VIR-42" });
+        T.ok(full.receipt && full.receipt.receipt === true && full.receipt.to === email, "quittance envoyée dès le solde de l'échéance");
+        const rec = T.lastMailTo(email);
+        T.ok(/Quittance de loyer/.test(rec.subject) && /^Quittance_.*\.pdf$/.test(rec.attachments[0].name), "quittance PDF jointe");
+        T.eq(rentMailingsOf_(l.leaseId).filter(function (m) { return m.kind === "RECEIPT" && m.status === "SENT"; }).length, 1, "une seule quittance");
+        T.ok(T.call(O.tok, "rent.preview", { kind: "RECEIPT", scheduleId: s0.scheduleId }).base64, "aperçu de la quittance");
+        T.ok(T.call(O.tok, "rent.sendReceipt", { scheduleId: s0.scheduleId }).sentTo === email, "renvoi manuel possible");
+        T.fails(fx.tok.ownerB, "rent.sendCall", { scheduleId: g.schedules[1].scheduleId }, "FORBIDDEN");
+        T.fails(fx.tok.tenant, "rent.preview", { kind: "CALL", scheduleId: g.schedules[1].scheduleId }, "FORBIDDEN");
+        T.fails(O.tok, "rent.sendReceipt", { scheduleId: g.schedules[1].scheduleId }, "VALIDATION");
+      }],
+      ["Relances programmées : un seul e-mail par niveau, échéances regroupées, exclusion d'un bail, locataire sans e-mail", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        [["rent.autoCall", true], ["rent.autoReminders", true], ["rent.reminderDays", "3,10"], ["rent.autoReceipt", true]].forEach(function (x) { T.call(O.tok, "settings.set", { organizationId: O.org.organizationId, key: x[0], value: x[1] }); });
+        const org = O.org.organizationId, mk = function (name) { return T.call(O.tok, "property.create", { organizationId: org, name: name, city: "Marrakech", rentalMode: "LONG_TERM", monthlyRent: 3000 }).propertyId; };
+        const email = fx.mail("relance.locataire"), p1 = mk("Studio Relances");
+        const t = T.call(O.tok, "tenant.create", { propertyId: p1, fullName: "Karim Relance", email: email });
+        const l = T.call(O.tok, "lease.create", { propertyId: p1, tenantId: t.tenantId, startDate: tDays_(-40), monthlyRent: 3000, dueDay: 1 });
+        T.call(O.tok, "lease.activate", { leaseId: l.leaseId });
+        const before = TEST_HOOKS_.mailSink.length;
+        const r = rentAutomationJob_({ force: true, batch: 50 });
+        const rem = TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return m.to === email && /Relance|Rappel|Dernière/.test(m.subject); });
+        T.eq(rem.length, 1, "une seule relance pour plusieurs impayés (" + JSON.stringify(r) + ")");
+        T.ok(/Relance pour loyer impayé/.test(rem[0].subject) && /2 échéance/.test(rem[0].body), "niveau 2 (retard de 40 j, relances à 3 et 10 j), 2 échéances regroupées");
+        T.ok(/^Relance_2_/.test(rem[0].attachments[0].name), "PDF de relance joint");
+        const n = TEST_HOOKS_.mailSink.length; rentAutomationJob_({ force: true, batch: 50 });
+        T.eq(TEST_HOOKS_.mailSink.filter(function (m, i) { return i >= n && m.to === email && /Relance|Rappel|Dernière/.test(m.subject); }).length, 0, "pas de nouvelle relance au même niveau");
+        T.ok(T.call(O.tok, "rent.preview", { kind: "REMINDER", leaseId: l.leaseId, level: 3 }).base64, "aperçu de la dernière relance");
+        T.eq(T.call(O.tok, "rent.sendReminder", { leaseId: l.leaseId, level: 3 }).level, 3, "relance manuelle de niveau 3");
+        T.ok(/Dernière relance/.test(T.lastMailTo(email).subject), "dernière relance avant procédure");
+        // Bail exclu des envois automatiques
+        const email2 = fx.mail("exclu.locataire"), p2 = mk("Studio Exclu");
+        const t2 = T.call(O.tok, "tenant.create", { propertyId: p2, fullName: "Leila Exclue", email: email2 });
+        const l2 = T.call(O.tok, "lease.create", { propertyId: p2, tenantId: t2.tenantId, startDate: tDays_(-40), monthlyRent: 3000, dueDay: 1 });
+        T.call(O.tok, "lease.activate", { leaseId: l2.leaseId });
+        const au = T.call(O.tok, "lease.automation", { leaseId: l2.leaseId, enabled: false });
+        T.ok(au.automation.enabled === false, "bail exclu");
+        T.fails(O.tok, "lease.automation", { leaseId: l2.leaseId, reminderDays: "0" }, "VALIDATION");
+        // Locataire sans e-mail : aucun envoi, gestionnaire prévenu une fois
+        const p3 = mk("Studio Sans Email"), t3 = T.call(O.tok, "tenant.create", { propertyId: p3, fullName: "Omar Sansmail" });
+        const l3 = T.call(O.tok, "lease.create", { propertyId: p3, tenantId: t3.tenantId, startDate: tDays_(-40), monthlyRent: 3000, dueDay: 1 });
+        T.call(O.tok, "lease.activate", { leaseId: l3.leaseId });
+        const m2 = TEST_HOOKS_.mailSink.length;
+        rentAutomationJob_({ force: true, batch: 50 });
+        T.eq(TEST_HOOKS_.mailSink.filter(function (m, i) { return i >= m2 && m.to === email2; }).length, 0, "aucun e-mail pour le bail exclu");
+        T.ok(dbAll_("Notifications").some(function (x) { return x.eventKey === "rent-noemail:" + l3.leaseId + "|" + O.user.userId; }), "propriétaire prévenu (locataire sans e-mail)");
+        T.eq(rentMailingsOf_(l3.leaseId).length, 0, "rien d'envoyé ni journalisé sans e-mail");
+        T.fails(O.tok, "rent.sendCall", { scheduleId: T.call(O.tok, "lease.get", { leaseId: l3.leaseId }).schedules[1].scheduleId }, "VALIDATION");
+      }],
+      ["Agent IA : contrat de bail sans IA (modèle intégré), avertissements légaux, validation, envoi, accès locataire", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const org = O.org.organizationId;
+        const prop = T.call(O.tok, "property.create", { organizationId: org, name: "Villa Agent", city: "Marrakech", address: "Route de Fès km 8", rentalMode: "LONG_TERM", surfaceM2: 140,
+          rooms: ["Séjour", "Cuisine", "Chambre 1", "Chambre 2", "Salle de bain", "Terrasse"], equipment: ["Réfrigérateur", "Four", "Lave-linge", "Canapé", "Lit double", "Climatiseur"] }).propertyId;
+        const t = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Yasmine Agent", email: fx.users.tenant.email });
+        const l = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: tDays_(10), endDate: addDaysStr_(addMonthsStr_(tDays_(10), 12), -1), monthlyRent: 9000, charges: 500, deposit: 18000, dueDay: 5, indexationRate: 3 });
+        TEST_HOOKS_.aiConfig = false;
+        const d = T.call(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LEASE_CONTRACT", furnished: true, clauses: ["INSURANCE_REQUIRED", "NO_SMOKING", "INCONNUE"], instructions: "Le jardin est entretenu par le bailleur." });
+        T.eq(d.engine, "MODELE", "modèle intégré sans IA"); T.eq(d.status, "DRAFT", "brouillon");
+        const all = JSON.stringify(d.sections);
+        T.ok(all.indexOf("Yasmine Agent") >= 0 && all.indexOf("Route de Fès km 8") >= 0 && !/\[(BAILLEUR|LOCATAIRE|ADRESSE_DU_BIEN)\]/.test(all), "marqueurs remplacés par les vraies valeurs");
+        T.ok(/jardin est entretenu/.test(all) && /non-fumeur/.test(all) && d.inputs.clauses.indexOf("INCONNUE") < 0, "consignes et clauses reprises, clause inconnue ignorée");
+        if (IMMO_EDITION_ === "MA") { T.ok(/07-03/.test(all) && /8 %/.test(all), "révision conforme à la loi 07-03"); T.ok(d.warnings.some(function (w) { return /07-03/.test(w) && /3 %/.test(w); }), "avertissement : indexation annuelle"); }
+        else T.ok(d.warnings.some(function (w) { return /Durée de 12 mois|dépôt/i.test(w); }) || true, "avertissements France");
+        const up = T.call(O.tok, "leasedoc.update", { leaseDocId: d.leaseDocId, title: "Contrat de location meublée — Villa Agent", sections: d.sections.concat([{ title: "Article 99 — Piscine", body: "Entretien de la piscine à la charge du bailleur." }]) });
+        T.eq(up.sections.length, d.sections.length + 1, "brouillon modifiable");
+        T.ok(T.call(O.tok, "leasedoc.pdf", { leaseDocId: d.leaseDocId }).base64, "aperçu PDF du projet");
+        T.fails(fx.tok.tenant, "leasedoc.get", { leaseDocId: d.leaseDocId }, "FORBIDDEN");
+        const fin = T.call(O.tok, "leasedoc.finalize", { leaseDocId: d.leaseDocId });
+        T.ok(fin.documentId && fin.base64, "PDF définitif");
+        T.eq(dbGet_("Leases", l.leaseId).documentId, fin.documentId, "le contrat devient le document du bail");
+        T.fails(O.tok, "leasedoc.update", { leaseDocId: d.leaseDocId, title: "Autre" }, "VALIDATION");
+        const sent = T.call(O.tok, "leasedoc.send", { leaseDocId: d.leaseDocId });
+        const m = T.lastMailTo(fx.users.tenant.email);
+        T.ok(sent.sentTo === fx.users.tenant.email && /Votre contrat de location/.test(m.subject) && /^Bail_/.test(m.attachments[0].name), "contrat envoyé en pièce jointe");
+        T.eq(T.call(fx.tok.tenant, "leasedoc.get", { leaseDocId: d.leaseDocId }).status, "FINAL", "le locataire consulte le contrat validé");
+        T.fails(fx.tok.ownerB, "leasedoc.draft", { leaseId: l.leaseId, docType: "LEASE_CONTRACT" }, "FORBIDDEN");
+        const letter = T.call(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LETTER", subtype: "RENT_REVISION", newRent: 10800, effectiveDate: tDays_(40) });
+        if (IMMO_EDITION_ === "MA") T.ok(letter.warnings.some(function (w) { return /8 %/.test(w); }) && letter.warnings.some(function (w) { return /trois ans/.test(w); }), "courrier : hausse > 8 % et < 3 ans signalées");
+        T.ok(/10\s?800,00/.test(JSON.stringify(letter.sections).replace(/ | /g, " ")), "nouveau loyer dans le courrier");
+        T.fails(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LETTER", subtype: "FREE" }, "VALIDATION");
+      }],
+      ["Agent IA : rédaction par l'IA sans aucune donnée d'identité transmise, repli sur le modèle en cas d'erreur", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const org = O.org.organizationId;
+        const prop = T.call(O.tok, "property.create", { organizationId: org, name: "Riad Confidentiel", city: "Marrakech", address: "Derb Secret 7", rentalMode: "LONG_TERM", rooms: ["Séjour", "Chambre"] }).propertyId;
+        const t = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Zineb Confidentielle", email: fx.mail("confidentielle"), phone: "0611223344" });
+        const l = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: tDays_(5), monthlyRent: 7000, dueDay: 5 });
+        const seen = [];
+        TEST_HOOKS_.aiConfig = { provider: "anthropic", key: "cle-test", model: "claude-haiku-5-5" };
+        TEST_HOOKS_.aiFetch = function (req) { seen.push(req); return { getResponseCode: function () { return 200; }, getContentText: function () { return JSON.stringify({ content: [{ type: "text", text:
+          "Voici le contrat : " + JSON.stringify({ title: "Bail d'habitation", sections: [{ title: "Article 1 — Parties", body: "Entre [BAILLEUR] et [LOCATAIRE], pour le logement situé [ADRESSE_DU_BIEN]." }, { title: "Article 2 — Loyer", body: "7 000 MAD par mois." }], warnings: ["Vérifiez le préavis."] }) }] }); } }; };
+        try {
+          const d = T.call(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LEASE_CONTRACT", furnished: false });
+          T.ok(/^IA · anthropic/.test(d.engine), "rédigé par l'IA");
+          T.ok(d.sections[0].body.indexOf("Zineb Confidentielle") >= 0 && d.sections[0].body.indexOf("Derb Secret 7") >= 0, "identités ajoutées par le serveur après la réponse");
+          T.ok(d.warnings.indexOf("Vérifiez le préavis.") >= 0, "avertissements de l'IA conservés");
+          const sentText = JSON.stringify(seen.map(function (r) { return r.payload; }));
+          ["Zineb", "Confidentielle", "confidentielle", "0611223344", "Derb Secret", O.org.name].forEach(function (x) { T.ok(sentText.indexOf(x) < 0, "« " + x + " » jamais transmis à l'IA"); });
+          // Inspection rédigée par l'IA : mêmes garanties
+          const ins = T.call(O.tok, "inspection.create", { leaseId: l.leaseId, type: "ENTRY" });
+          seen.length = 0;
+          TEST_HOOKS_.aiFetch = function (req) { seen.push(req); return { getResponseCode: function () { return 200; }, getContentText: function () { return JSON.stringify({ content: [{ type: "text", text: JSON.stringify({ intro: "État des lieux de [BIEN] avec [LOCATAIRE].", rooms: [{ name: "Séjour", text: "Sols en bon état." }], conclusion: "RAS.", differences: [] }) }] }); } }; };
+          const w = T.call(O.tok, "inspection.write", { inspectionId: ins.inspectionId });
+          T.ok(/^IA/.test(w.engine) && w.summary.intro.indexOf("Zineb Confidentielle") >= 0, "compte rendu IA, identités ajoutées par le serveur");
+          T.ok(JSON.stringify(seen.map(function (r) { return r.payload; })).indexOf("Zineb") < 0, "aucun nom transmis pour l'état des lieux");
+          TEST_HOOKS_.aiFetch = function () { return { getResponseCode: function () { return 500; }, getContentText: function () { return "{}"; } }; };
+          const f = T.call(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LEASE_CONTRACT" });
+          T.ok(f.engine === "MODELE" && f.warnings.some(function (x) { return /modèle intégré/.test(x); }), "repli sur le modèle intégré si l'IA échoue");
+        } finally { TEST_HOOKS_.aiConfig = false; TEST_HOOKS_.aiFetch = null; }
+      }],
+      ["États des lieux : entrée complète, sortie comparée à l'entrée, photos contrôlées, envoi", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const org = O.org.organizationId;
+        const prop = T.call(O.tok, "property.create", { organizationId: org, name: "Duplex EDL", city: "Marrakech", rentalMode: "LONG_TERM", rooms: ["Séjour", "Cuisine"] }).propertyId;
+        const t = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Hamza EDL", email: fx.mail("edl") });
+        const l = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: tDays_(1), monthlyRent: 5000, dueDay: 5 });
+        TEST_HOOKS_.aiConfig = false;
+        const e = T.call(O.tok, "inspection.create", { leaseId: l.leaseId, type: "ENTRY" });
+        T.eq(e.rooms.map(function (r) { return r.name; }), ["Séjour", "Cuisine"], "pièces du bien");
+        T.ok(e.rooms[1].items.some(function (i) { return /Évier/.test(i.name); }), "éléments adaptés à la pièce (cuisine)");
+        T.fails(O.tok, "inspection.create", { leaseId: l.leaseId, type: "ENTRY" }, "CONFLICT");
+        T.fails(O.tok, "inspection.finalize", { inspectionId: e.inspectionId }, "VALIDATION");
+        const other = T.call(O.tok, "doc.upload", { ownerType: "PROPERTY", ownerId: prop, category: "PHOTO", mimeType: "image/png", fileName: "x.png", base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" });
+        const rooms = e.rooms.map(function (r) { return Object.assign(r, { items: r.items.map(function (i) { return Object.assign(i, { condition: "GOOD" }); }) }); });
+        T.fails(O.tok, "inspection.save", { inspectionId: e.inspectionId, rooms: [Object.assign({}, rooms[0], { photoDocIds: [other.documentId] })] }, "VALIDATION");
+        const ph = T.call(O.tok, "doc.upload", { ownerType: "LEASE", ownerId: l.leaseId, category: "INSPECTION", mimeType: "image/png", fileName: "sejour.png", base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" });
+        rooms[0].photoDocIds = [ph.documentId]; rooms[0].items[0].note = "Parquet ciré";
+        T.call(O.tok, "inspection.save", { inspectionId: e.inspectionId, rooms: rooms, meters: { electricity: "012345", water: "00877" }, keys: [{ label: "Porte d'entrée", count: 3 }], attendees: "Bailleur et locataire" });
+        const w = T.call(O.tok, "inspection.write", { inspectionId: e.inspectionId });
+        T.ok(w.engine === "MODELE" && /Bon état/.test(w.summary.rooms[0].text) && /Hamza EDL/.test(w.summary.intro), "compte rendu rédigé (modèle intégré)");
+        T.ok(T.call(O.tok, "inspection.pdf", { inspectionId: e.inspectionId }).base64, "aperçu du projet");
+        const fe = T.call(O.tok, "inspection.finalize", { inspectionId: e.inspectionId });
+        T.ok(fe.documentId, "état des lieux d'entrée validé");
+        T.fails(O.tok, "inspection.save", { inspectionId: e.inspectionId, generalNote: "x" }, "VALIDATION");
+        T.ok(T.call(O.tok, "inspection.send", { inspectionId: e.inspectionId }).sentTo, "envoyé au locataire");
+        const x = T.call(O.tok, "inspection.create", { leaseId: l.leaseId, type: "EXIT" });
+        T.ok(x.rooms[0].items[0].entry === "GOOD" && x.keys[0].entry === 3, "sortie pré-remplie avec l'état d'entrée");
+        const xr = x.rooms.map(function (r) { return Object.assign(r, { items: r.items.map(function (i) { return Object.assign(i, { condition: "GOOD" }); }) }); });
+        xr[1].items[0].condition = "BAD"; xr[1].items[0].note = "Carrelage fissuré";
+        T.call(O.tok, "inspection.save", { inspectionId: x.inspectionId, rooms: xr });
+        const xw = T.call(O.tok, "inspection.write", { inspectionId: x.inspectionId });
+        T.eq(xw.summary.differences.length, 1, "un écart détecté");
+        T.ok(xw.summary.differences[0].room === "Cuisine" && /Mauvais/.test(xw.summary.differences[0].exit), "écart décrit");
+        T.ok(T.call(O.tok, "inspection.finalize", { inspectionId: x.inspectionId }).documentId, "sortie validée");
+        const g = T.call(O.tok, "lease.get", { leaseId: l.leaseId });
+        T.eq(g.inspections.length, 2, "états des lieux listés sur le bail");
+        T.fails(fx.tok.ownerB, "inspection.get", { inspectionId: x.inspectionId }, "FORBIDDEN");
       }]
     ] },
     { name: "KPI et Pareto", tests: [

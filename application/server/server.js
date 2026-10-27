@@ -177,7 +177,9 @@ async function mailTick() {
     const rows = rt.db.prepare("SELECT * FROM outbox WHERE status = 'QUEUED' AND (next IS NULL OR next <= ?) ORDER BY id LIMIT 20").all(now);
     for (const m of rows) {
       try {
-        await transport.sendMail({ from: { name: m.sender || "ImmoPilot", address: C.mailFrom }, to: m.recipient, subject: m.subject, text: m.body, html: m.html || undefined });
+        let attachments; try { attachments = m.attachments ? JSON.parse(m.attachments).map(function (a) { return { filename: a.name, contentType: a.type, content: Buffer.from(a.base64, "base64") }; }) : undefined; } catch (e) { attachments = undefined; }
+        await transport.sendMail({ from: { name: m.sender || "ImmoPilot", address: C.mailFrom }, to: m.recipient, bcc: m.bcc || undefined, replyTo: m.replyto || undefined,
+          subject: m.subject, text: m.body, html: m.html || undefined, attachments: attachments });
         rt.db.prepare("UPDATE outbox SET status = 'SENT', sent = ?, error = NULL WHERE id = ?").run(new Date().toISOString(), m.id);
       } catch (e) {
         const tries = (m.tries || 0) + 1;
@@ -186,6 +188,7 @@ async function mailTick() {
       }
     }
     rt.db.prepare("DELETE FROM outbox WHERE status = 'SENT' AND sent < ?").run(new Date(Date.now() - 30 * 86400000).toISOString()); // corps des e-mails : 30 jours
+    rt.db.prepare("UPDATE outbox SET attachments = NULL WHERE status = 'SENT' AND attachments IS NOT NULL").run(); // les PDF restent dans les documents de l'application
   } finally { mailBusy = false; }
 }
 setInterval(mailTick, 30000).unref();

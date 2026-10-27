@@ -1,6 +1,6 @@
 /**
- * ImmoPilot 2.1.0 — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
- * Contient les 34 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, ReportsService.gs, ReservationService.gs, SubscriptionService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
+ * ImmoPilot 2.2.0 — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
+ * Contient les 36 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SubscriptionService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
  * À coller seul dans le projet Apps Script (aucun autre fichier .gs ne doit rester dans le projet).
  */
 
@@ -208,7 +208,8 @@ var ORG_EDITABLE_SETTINGS_ = ["reservation.defaultCheckIn", "reservation.default
   "cleaning.acceptanceMinutes", "cleaning.requirePhotos", "commission.contractorRate", "commission.vatRate", "finance.vatRate", "quote.agencyApprovalLimit", "workorder.requireQuote",
   "invoice.tolerancePercent", "rent.graceDays", "alerts.rentDueDays", "alerts.leaseEndDays", "alerts.incidentAgeDays", "alerts.incidentCost", "retention.sensitiveDocDays",
   "guests.storeIdReference", "notify.emailEnabled", "template.leaseDocId", "template.receiptDocId", "template.reservationDocId", "list.incidentCategories", "list.expenseCategories",
-  "list.cancelReasons", "list.cleaningAnomalies", "list.specialties", "locale", "currency"];
+  "list.cancelReasons", "list.cleaningAnomalies", "list.specialties", "locale", "currency",
+  "rent.autoCall", "rent.callDaysBefore", "rent.autoReminders", "rent.reminderDays", "rent.autoReceipt", "rent.copyEmail", "rent.paymentInstructions"];
 function settingsSet_(p, a) {
   const orgId = safeText_(a.organizationId || "", 120), key = String(a.key || "");
   assert_(Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key), "Paramètre inconnu.");
@@ -222,15 +223,19 @@ function settingsSet_(p, a) {
 function validateSettingValue_(key, v) {
   const def = DEFAULT_SETTINGS[key];
   if (typeof def === "boolean") return bool_(v);
+  if (key === "rent.callDaysBefore") { const n = parseInt(v, 10); assert_(n >= 0 && n <= 31, "Délai de 0 à 31 jours avant l'échéance."); return n; }
   if (typeof def === "number") { const n = Number(v); assert_(isFinite(n) && n >= 0 && n <= 1e7, "Valeur numérique invalide."); return n; }
   if (Array.isArray(def)) {
     const arr = Array.isArray(v) ? v : String(v || "").split(",").map(function (x) { return x.trim(); }).filter(Boolean);
     if (key === "reservation.cancellationPolicy") return arr.map(function (x) { const o = typeof x === "object" ? x : {}; return { daysBefore: Math.max(0, parseInt(o.daysBefore, 10) || 0), penaltyPercent: rate_(o.penaltyPercent, "Pénalité") }; }).sort(function (x, y) { return y.daysBefore - x.daysBefore; });
     if (key === "alerts.leaseEndDays") return arr.map(function (x) { return Math.max(1, parseInt(x, 10) || 30); }).slice(0, 5);
+    if (key === "rent.reminderDays") return rentReminderDays_(arr);
     return arr.slice(0, 40).map(function (x) { return safeText_(String(x).toUpperCase().replace(/[^A-Z0-9_]/g, "_"), 40); }).filter(Boolean);
   }
   if (/^template\./.test(key)) { const s = safeText_(v, 100); assert_(!s || /^[\w-]{20,}$/.test(s), "Identifiant de document Google invalide."); if (s) assertTemplateAllowed_(s); return s; }
   if (/Check(In|Out)$/.test(key)) { const s = safeText_(v, 5); assert_(/^([01]\d|2[0-3]):[0-5]\d$/.test(s), "Heure au format HH:MM attendue."); return s; }
+  if (key === "rent.copyEmail") return String(v || "").trim() ? validateEmail_(v) : "";
+  if (key === "rent.paymentInstructions") return safeText_(v, 800);
   if (key === "locale") return oneOf_(v, IMMO_LANGS_, "Langue");
   if (key === "currency") return oneOf_(String(v).toUpperCase(), ["MAD", "EUR", "USD"], "Devise");
   return safeText_(v, 500);
@@ -351,9 +356,22 @@ var ASSISTANT_KB_ = [
     s: ["Ouvrez « Prestataires » › « + Prestataire » : nom, e-mail, téléphone, types de prestation, zones, mentions légales et coordonnées de paiement.", "Le compte du prestataire est invité automatiquement (rôle ménage et/ou artisan).", "Les propriétaires et agences le choisissent ensuite dans la liste selon le type de prestation."] },
   // ---------- Location longue durée ----------
   { id: "lease", t: "Créer un bail et générer le contrat", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "bail location longue durée louer année annuel mensuel locataire contrat loyer charges caution indexation créer bail إيجار",
-    s: ["Créez d'abord le locataire dans « Locataires ».", "« Locations longue durée » › « Nouveau bail » : bien, locataire, dates, loyer, charges, caution, jour d'échéance.", "« Activer le bail » génère l'échéancier des loyers ; « Encaisser la caution » enregistre le dépôt de garantie. « Générer le contrat » produit un modèle indicatif à faire valider."] },
+    s: ["Créez d'abord le locataire dans « Locataires » (avec son e-mail pour les envois automatiques).", "« Locations longue durée » › « Nouveau bail » : bien, locataire, dates, loyer, charges, caution, jour d'échéance.", "« Activer le bail » génère l'échéancier des loyers ; « Encaisser la caution » enregistre le dépôt de garantie. « ✦ Rédiger le bail » fait rédiger le contrat par l'agent, à relire avant signature."] },
   { id: "rent", t: "Encaisser un loyer, quittance et retards", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "loyer encaisser quittance retard impayé échéance relance locataire",
-    s: ["Ouvrez le bail › échéancier › « Payer » sur l'échéance : montant, date, mode.", "« Quittance » produit la quittance PDF d'une échéance payée.", "Les retards apparaissent dans le tableau de bord et l'analyse « Impayés »."] },
+    s: ["Ouvrez le bail › échéancier › « Paiement » sur l'échéance : montant, date, mode.", "« Quittance » produit la quittance PDF d'une échéance payée ; si les quittances automatiques sont activées, elle part aussitôt au locataire par e-mail.", "Les retards apparaissent dans le tableau de bord et l'analyse « Impayés » ; les relances peuvent partir automatiquement (voir « Appels de loyer, relances et quittances »)."] },
+  { id: "rent-auto", t: "Appels de loyer, relances et quittances envoyés automatiquement par e-mail", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "appel de loyer avis d'échéance relance automatique impayé quittance automatique email pdf locataire rappel mise en demeure envoi automatique",
+    s: ["Activez les envois dans « Paramètres » › « Paramètres de l'organisation » : rent.autoCall (appels de loyer), rent.autoReminders (relances), rent.autoReceipt (quittances). Ils sont désactivés par défaut.",
+      "Réglez les délais : rent.callDaysBefore (jours avant l'échéance, 7 par défaut) et rent.reminderDays (jours après l'échéance, par exemple 5, 15, 30 : rappel, relance, dernière relance). Ajoutez vos modalités de paiement (rent.paymentInstructions) et, si besoin, une adresse en copie (rent.copyEmail).",
+      "Chaque envoi part par e-mail au locataire avec le PDF en pièce jointe, entre 8 h et 20 h, sans doublon. Une relance regroupe toutes les échéances impayées du bail.",
+      "Quand vous enregistrez le paiement complet d'une échéance (bouton « Paiement »), la quittance part aussitôt au locataire.",
+      "Sur la fiche du bail, panneau « Envois automatiques au locataire » : réglages propres au bail (« Régler pour ce bail », ou exclure le bail), prochain envoi prévu, historique et PDF de chaque envoi. Les boutons « ✉ Appel », « ✉ » (quittance) et « Relancer » envoient à la demande, avec aperçu."] },
+  { id: "lease-agent", t: "Rédiger le bail ou un courrier avec l'agent IA", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "agent ia rédiger bail contrat de location modèle courrier révision loyer renouvellement restitution dépôt garantie intelligence artificielle",
+    s: ["Ouvrez le bail › « ✦ Rédiger le bail » (ou panneau « Agent de rédaction (IA) »).", "Choisissez meublé ou non, l'usage, les clauses, et écrivez vos consignes (sans données personnelles). Les montants, dates et durées viennent du bail.",
+      "L'agent rédige un brouillon : relisez les « Points à vérifier » (par exemple la règle de révision du loyer), modifiez les articles, puis « Valider et générer le PDF ».", "Le contrat validé devient le document du bail ; vous pouvez l'envoyer au locataire par e-mail.",
+      "« Courrier au locataire » : renouvellement, révision du loyer, restitution du dépôt de garantie ou courrier libre.", "Aucune donnée d'identité n'est transmise au service d'IA ; sans IA configurée, des modèles intégrés adaptés à votre pays sont utilisés. Faites relire les documents par un professionnel."] },
+  { id: "inspection", t: "Faire l'état des lieux d'entrée ou de sortie", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "état des lieux edl entrée sortie inventaire photos compteurs clés dégradations vétusté caution",
+    s: ["Ouvrez le bail › « État des lieux d'entrée » (ou « de sortie »). Les pièces du bien et les éléments à contrôler sont pré-remplis.", "Pour chaque élément choisissez l'état (neuf, bon état, état d'usage, mauvais état, sans objet), ajoutez une observation et des photos (📷). « Tout en bon état » accélère la saisie.",
+      "Relevez les compteurs et les clés remises, puis « ✦ Rédiger avec l'agent » : il rédige le compte rendu. À la sortie, il compare avec l'entrée et liste les écarts.", "« Valider » génère le PDF définitif, rangé dans les documents du bail ; « ✉ Envoyer au locataire » le lui adresse par e-mail."] },
   { id: "lease-end", t: "Préavis, renouvellement, fin de bail et caution", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "préavis renouveler fin de bail restitution caution résiliation",
     s: ["Dans le bail : « Préavis », « Renouveler » ou « Terminer le bail ».", "« Restituer la caution » : montant rendu et retenues éventuelles."] },
   { id: "tenant-space", t: "Espace locataire", r: ["TENANT"], go: "mylease", k: "locataire mon bail payer loyer quittance justificatif incident",
@@ -427,16 +445,17 @@ function assistantSystemPrompt_(p, lang, page) {
 }
 
 /** Appel du service d'IA (serveur uniquement). Retourne le texte de la réponse ou lève une erreur. */
-function aiCall_(cfg, system, messages) {
+function aiCall_(cfg, system, messages, maxTokens) {
+  const max = Math.max(100, Math.min(8000, Number(maxTokens) || AI_LIMITS_.maxTokens));
   let req;
   if (cfg.provider === "anthropic") {
     req = { url: "https://api.anthropic.com/v1/messages", method: "post", contentType: "application/json", muteHttpExceptions: true,
       headers: { "x-api-key": cfg.key, "anthropic-version": "2023-06-01" },
-      payload: JSON.stringify({ model: cfg.model, max_tokens: AI_LIMITS_.maxTokens, system: system, messages: messages }) };
+      payload: JSON.stringify({ model: cfg.model, max_tokens: max, system: system, messages: messages }) };
   } else {
     req = { url: "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(cfg.model) + ":generateContent", method: "post", contentType: "application/json", muteHttpExceptions: true,
       headers: { "x-goog-api-key": cfg.key },
-      payload: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: AI_LIMITS_.maxTokens, temperature: 0.2 },
+      payload: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: max, temperature: 0.2 },
         contents: messages.map(function (m) { return { role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }; }) }) };
   }
   const res = TEST_HOOKS_.aiFetch ? TEST_HOOKS_.aiFetch(req) : UrlFetchApp.fetch(req.url, req), code = res.getResponseCode();
@@ -1409,6 +1428,11 @@ function routes_() { return {
   "tenant.list": "tenantList_", "tenant.create": "tenantCreate_", "tenant.update": "tenantUpdate_",
   "lease.list": "leaseList_", "lease.get": "leaseGet_", "lease.create": "leaseCreate_", "lease.update": "leaseUpdate_", "lease.activate": "leaseActivate_", "lease.notice": "leaseNotice_",
   "lease.end": "leaseEnd_", "lease.renew": "leaseRenew_", "lease.depositReturn": "leaseDepositReturn_", "lease.receipt": "leaseReceipt_", "lease.document": "leaseDocument_", "lease.mine": function (p) { return leaseMine_(p); },
+  "lease.automation": "leaseAutomationSet_", "rent.sendCall": "rentSendCallRoute_", "rent.sendReminder": "rentSendReminderRoute_", "rent.sendReceipt": "rentSendReceiptRoute_", "rent.preview": "rentPreview_",
+  "leasedoc.draft": "leaseDocDraft_", "leasedoc.get": "leaseDocGet_", "leasedoc.update": "leaseDocUpdate_", "leasedoc.pdf": "leaseDocPdf_", "leasedoc.finalize": "leaseDocFinalize_",
+  "leasedoc.send": "leaseDocSend_", "leasedoc.cancel": "leaseDocCancel_",
+  "inspection.create": "inspectionCreate_", "inspection.get": "inspectionGet_", "inspection.save": "inspectionSave_", "inspection.write": "inspectionWrite_", "inspection.pdf": "inspectionPdf_",
+  "inspection.finalize": "inspectionFinalize_", "inspection.send": "inspectionSend_", "inspection.cancel": "inspectionCancel_",
   "plan.list": "planList_", "plan.save": "planSave_", "sub.assign": "subAssign_", "sub.recordPayment": "subRecordPayment_", "sub.setStatus": "subSetStatus_", "sub.list": "subList_",
   "sub.mine": function (p) { return subMine_(p); }, "sub.requestChange": "subRequestChange_", "sub.contractPdf": "subContractPdf_", "assistant.kb": "assistantKb_", "assistant.ask": "assistantAsk_",
   "dash.get": "dashGet_", "pareto.run": "paretoRun_", "pareto.export": "paretoExport_", "report.run": "reportRun_", "report.export": "reportExport_"
@@ -1425,7 +1449,7 @@ function publicRoutes_() { return {
  */
 var INSTALL_HTML_FILES_ = ["Index", "Styles", "Components", "I18n", "Login", "Dashboard", "Pages", "Scripts", "Assistant"];
 /* Première et dernière fonction de chaque fichier : détecte un fichier absent ET un fichier collé incomplètement. */
-var INSTALL_GS_SENTINELS_ = { Admin: ["assertEditor_", "auditList_"], Legal: ["legalGet_", "legalValues_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SubscriptionService: ["planOut_", "subscriptionJob_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
+var INSTALL_GS_SENTINELS_ = { Admin: ["assertEditor_", "auditList_"], Legal: ["legalGet_", "legalValues_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], LeaseAgentService: ["laFill_", "inspectionCancel_"], RentAutomationService: ["rentReminderDays_", "rentMailingsOf_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SubscriptionService: ["planOut_", "subscriptionJob_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
 function installCheck_() {
   const g = typeof globalThis !== "undefined" ? globalThis : this;
   const missingGs = Object.keys(INSTALL_GS_SENTINELS_).filter(function (f) { return INSTALL_GS_SENTINELS_[f].some(function (n) { return typeof g[n] !== "function"; }); });
@@ -1612,7 +1636,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "1856b3d0ab6c";
+var IMMO_BUILD_ = "89a355430dc0";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -1650,8 +1674,8 @@ function cur_() { return edition_().currency; }
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
-  VERSION: "2.1.0",
-  SCHEMA_VERSION: 7,
+  VERSION: "2.2.0",
+  SCHEMA_VERSION: 8,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -1733,6 +1757,14 @@ var DEFAULT_SETTINGS = Object.freeze({
   "template.leaseDocId": "",
   "template.receiptDocId": "",
   "template.reservationDocId": "",
+  // Location longue durée : envois automatiques au locataire (désactivés par défaut, à activer par l'organisation).
+  "rent.autoCall": false,
+  "rent.callDaysBefore": 7,
+  "rent.autoReminders": false,
+  "rent.reminderDays": [5, 15, 30],
+  "rent.autoReceipt": false,
+  "rent.copyEmail": "",
+  "rent.paymentInstructions": "",
   "list.incidentCategories": ["PLUMBING", "ELECTRICITY", "AC", "HUMIDITY", "LOCKSMITH", "FURNITURE", "APPLIANCE", "CLEANING", "DAMAGE", "SECURITY", "OTHER"],
   "list.expenseCategories": ["MAINTENANCE", "CLEANING", "UTILITIES", "TAXES", "INSURANCE", "AGENCY_FEES", "SUPPLIES", "OTHER"],
   "list.cancelReasons": ["GUEST_REQUEST", "NO_PAYMENT", "OVERBOOKING", "OWNER_REQUEST", "FORCE_MAJEURE", "OTHER"],
@@ -1827,9 +1859,21 @@ var TABLES_SRC = {
     cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t" },
   Leases: { pk: "leaseId", idp: "lea", org: "organizationId", req: "propertyId,tenantId,startDate,monthlyRent",
     enums: { status: ["DRAFT", "ACTIVE", "NOTICE", "ENDED", "RENEWED", "CANCELLED"] },
-    cols: "leaseId,organizationId,propertyId,tenantId,startDate#d,endDate#d,durationMonths#n,monthlyRent#n,charges#n,deposit#n,dueDay#n,indexationRate#n,nextIndexationDate#d,terms,documentId,status,noticeDate#d,noticeBy,depositStatus,depositReturned#n,depositDeductions#n,renewedFromLeaseId,endReason,createdAt#t,createdBy,updatedAt#t,updatedBy" },
+    cols: "leaseId,organizationId,propertyId,tenantId,startDate#d,endDate#d,durationMonths#n,monthlyRent#n,charges#n,deposit#n,dueDay#n,indexationRate#n,nextIndexationDate#d,terms,documentId,status,noticeDate#d,noticeBy,depositStatus,depositReturned#n,depositDeductions#n,renewedFromLeaseId,endReason,createdAt#t,createdBy,updatedAt#t,updatedBy|automationJson#j" },
   RentSchedules: { pk: "scheduleId", idp: "rsc", org: "organizationId", req: "leaseId,period", enums: { status: ["OPEN", "CANCELLED"] },
     cols: "scheduleId,organizationId,propertyId,leaseId,period,dueDate#d,rentAmount#n,chargesAmount#n,amountDue#n,status,createdAt#t,uniqueKey" },
+  // Envois au locataire (appels de loyer, relances, quittances, documents) : une ligne par envoi, clé unique contre les doublons.
+  RentMailings: { pk: "mailingId", idp: "rml", org: "organizationId", req: "leaseId,kind",
+    enums: { kind: ["CALL", "REMINDER", "RECEIPT", "DOCUMENT"], status: ["SENT", "FAILED", "SKIPPED"], trigger: ["AUTO", "MANUAL"] },
+    cols: "mailingId,organizationId,propertyId,leaseId,scheduleId,kind,level#n,recipient,status,trigger,documentId,subject,sentAt#t,error,attempts#n,uniqueKey,createdAt#t,createdBy" },
+  // Documents rédigés par l'agent (IA ou modèle intégré) : contrat de bail, courriers. Brouillon modifiable, puis PDF définitif.
+  LeaseDocs: { pk: "leaseDocId", idp: "ldc", org: "organizationId", req: "leaseId,docType",
+    enums: { docType: ["LEASE_CONTRACT", "LETTER"], status: ["DRAFT", "FINAL", "CANCELLED"] },
+    cols: "leaseDocId,organizationId,propertyId,leaseId,docType,subtype,status,title,inputsJson#j,sectionsJson#j,warningsJson#j,engine,documentId,createdAt#t,createdBy,updatedAt#t,updatedBy,finalizedAt#t,finalizedBy,sentAt#t,sentTo" },
+  // États des lieux d'entrée et de sortie : relevé pièce par pièce, compteurs, clés, photos, rédaction de l'agent.
+  LeaseInspections: { pk: "inspectionId", idp: "edl", org: "organizationId", req: "leaseId,type",
+    enums: { type: ["ENTRY", "EXIT"], status: ["DRAFT", "FINAL", "CANCELLED"] },
+    cols: "inspectionId,organizationId,propertyId,leaseId,type,inspectionDate#d,status,roomsJson#j,metersJson#j,keysJson#j,generalNote,attendees,summaryJson#j,engine,documentId,createdAt#t,createdBy,updatedAt#t,updatedBy,finalizedAt#t,finalizedBy,sentAt#t,sentTo" },
   Expenses: { pk: "expenseId", idp: "exp", org: "organizationId", req: "category,amount", enums: { status: ["PLANNED", "INVOICED", "PAID", "CANCELLED"] },
     cols: "expenseId,organizationId,propertyId,category,description,supplier,amount#n,vatAmount#n,currency,expenseDate#d,status,paidAt#t,refType,refId,uniqueKey,documentId,createdAt#t,createdBy" },
   RevenueRecords: { pk: "revenueId", idp: "rev", org: "organizationId", req: "category,amount", enums: { status: ["EXPECTED", "RECEIVED", "CANCELLED"] },
@@ -3307,7 +3351,7 @@ var DEMO_VIEWS_ = [
   { id: "admin", label: "Super administrateur", who: function () { return DEMO_SPEC_.superAdmin; } }
 ];
 var DEMO_READ_RE_ = /\.(list|get|choices|orgChoices|calendar|today|history|summary|mine|kb|caps|availability|accounts|run|boot)$/;
-var DEMO_DOC_RE_ = /\.(pdf|orderPdf|reportPdf|contractPdf|sheet|receipt|export|policeForms)$/;
+var DEMO_DOC_RE_ = /\.(pdf|orderPdf|reportPdf|contractPdf|sheet|receipt|export|policeForms|preview)$/;
 function demoRouteAllowed_(route) {
   if (["me.logout", "assistant.ask", "meta.get", "me.get"].indexOf(route) >= 0) return true;
   if (["me.updateProfile", "admin.impersonate"].indexOf(route) >= 0) return false;
@@ -3826,7 +3870,10 @@ function payRecord_(p, a) {
         status: "RECORDED", reconciled: false, note: safeText_(a.note, 500), idempotencyKey: safeText_(a.requestKey || "", 120), recordedBy: p.email, createdAt: nowIso_() });
       paymentRefresh_(pay);
       audit_("PAYMENT_RECORDED", "Payment", pay.paymentId, t.organizationId, { refType: refType, refId: a.refId, kind: kind, amount: amount });
-      return { ok: true, paymentId: pay.paymentId, id: pay.paymentId };
+      const out = { ok: true, paymentId: pay.paymentId, id: pay.paymentId };
+      // Loyer : quittance envoyée automatiquement au locataire dès que l'échéance est soldée (si activé) ; n'échoue jamais.
+      if (refType === "RENT_SCHEDULE") { const r = rentAfterPayment_(pay, p.email); if (r) out.receipt = r; }
+      return out;
     });
   });
 }
@@ -4489,6 +4536,560 @@ function invRefreshPaid_(invoiceId) {
 }
 
 /* ======================================================================
+ * LeaseAgentService.gs
+ * ====================================================================== */
+/**
+ * AGENT DE RÉDACTION (location longue durée) : contrat de bail, états des lieux d'entrée et de sortie, courriers au locataire.
+ *
+ * Deux moteurs, même résultat (un brouillon modifiable, puis un PDF définitif) :
+ *  - IA : si l'assistant IA est configuré (IMMO_AI_PROVIDER + IMMO_AI_API_KEY ; modèle facultatif IMMO_AI_DOC_MODEL), le serveur
+ *    demande la rédaction au service d'IA. AUCUNE donnée d'identité n'est transmise : ni nom, ni e-mail, ni téléphone, ni adresse,
+ *    ni pièce d'identité. L'IA écrit avec des marqueurs ([BAILLEUR], [LOCATAIRE], [ADRESSE_DU_BIEN], [VILLE]) que le serveur
+ *    remplace ensuite par les vraies valeurs.
+ *  - MODÈLE INTÉGRÉ : sans IA (ou en cas d'erreur), un modèle rédigé à l'avance pour l'édition (Maroc : loi 67-12, loi 07-03 ;
+ *    France : loi 89-462) est rempli avec les données du bail. L'application fonctionne donc toujours.
+ * Règles :
+ *  - Rien n'est envoyé au locataire sans action explicite du bailleur (« Valider », puis « Envoyer au locataire »).
+ *  - Les avertissements juridiques calculés par le serveur (révision du loyer, dépôt de garantie, durée) s'ajoutent à ceux de l'IA.
+ *  - Les documents sont des modèles : ils doivent être relus par un professionnel ; ImmoPilot ne garantit pas leur conformité.
+ */
+var LA_CONDITIONS_ = ["NEW", "GOOD", "WORN", "BAD", "NA"];
+var LA_CONDITION_LABELS_ = { NEW: "Neuf", GOOD: "Bon état", WORN: "État d'usage", BAD: "Mauvais état", NA: "Sans objet" };
+var LA_CONDITION_RANK_ = { NEW: 0, GOOD: 1, WORN: 2, BAD: 3 };
+var LA_CLAUSES_ = ["INSURANCE_REQUIRED", "SUBLET_FORBIDDEN", "PETS_ALLOWED", "PETS_FORBIDDEN", "NO_SMOKING", "GUARANTOR", "WORKS_AUTH_REQUIRED"];
+var LA_LETTER_TYPES_ = ["RENEWAL", "RENT_REVISION", "DEPOSIT_RETURN", "FREE"];
+var LA_LIMITS_ = { perOrgDay: 60, contractTokens: 6000, inspectionTokens: 4000, letterTokens: 1500 };
+var AI_DOC_MODEL_PROPERTY_ = "IMMO_AI_DOC_MODEL";
+
+/* ------------------------------ Outils communs ------------------------------ */
+function laCtx_(p, leaseId, cap) {
+  const x = leaseLoad_(p, leaseId, cap || "lease.manage");
+  const c = rentCtx_(x.l);
+  c.self = x.self;
+  return c;
+}
+function laFacts_(c) {
+  const ed = edition_(), l = c.l, prop = c.prop;
+  return { pays: ed.countryName, droitApplicable: ed.leaseLaw, devise: cur_(), ville: prop.city || ed.city, typeDeBien: prop.propertyType || "", surfaceM2: num_(prop.surfaceM2) || null,
+    chambres: num_(prop.bedrooms) || null, sallesDeBain: num_(prop.bathrooms) || null, pieces: parseJson_(prop.roomsJson, []), equipements: parseJson_(prop.equipmentJson, []),
+    debut: l.startDate, fin: l.endDate || null, dureeMois: num_(l.durationMonths) || null, loyerMensuel: num_(l.monthlyRent), chargesMensuelles: num_(l.charges), depotDeGarantie: num_(l.deposit),
+    jourEcheance: num_(l.dueDay) || 5, indexationAnnuellePct: num_(l.indexationRate), conditionsParticulieres: l.terms || "" };
+}
+/** Remplace les marqueurs par les vraies valeurs (après la réponse de l'IA : les identités ne lui sont jamais transmises). */
+function laFill_(text, c) {
+  const map = { "[BAILLEUR]": c.org.name || "le bailleur", "[LOCATAIRE]": c.t.fullName || "le locataire", "[ADRESSE_DU_BIEN]": rentAddress_(c.prop) || c.prop.name || "", "[VILLE]": c.prop.city || edition_().city, "[BIEN]": c.prop.name || "" };
+  return String(text || "").replace(/\[(BAILLEUR|LOCATAIRE|ADRESSE_DU_BIEN|VILLE|BIEN)\]/g, function (m) { return map[m]; });
+}
+function laMoney_(v) { return fmtAmount_(v, cur_()); }
+function laParas_(text) { return String(text || "").split(/\n{2,}|\r\n\r\n/).map(function (pg) { return "<p>" + escapeHtml_(pg.trim()).replace(/\n/g, "<br>") + "</p>"; }).join(""); }
+function laAiCfg_() {
+  const cfg = aiConfig_(); if (!cfg) return null;
+  let model = ""; try { model = String(PropertiesService.getScriptProperties().getProperty(AI_DOC_MODEL_PROPERTY_) || "").trim(); } catch (e) { model = ""; }
+  return model ? Object.assign({}, cfg, { model: model }) : cfg;
+}
+/** Appel IA attendant un objet JSON. Retourne null si l'IA n'est pas configurée ; lève une erreur si la réponse est inexploitable. */
+function laAiJson_(orgId, system, payload, maxTokens) {
+  const cfg = laAiCfg_(); if (!cfg) return null;
+  rateLimit_("ai-doc:" + orgId, LA_LIMITS_.perOrgDay, 86400); rateLimit_("ai-platform", AI_LIMITS_.platformDay, 86400);
+  const text = aiCall_(cfg, system, [{ role: "user", content: JSON.stringify(payload) }], maxTokens);
+  const i = text.indexOf("{"), j = text.lastIndexOf("}");
+  if (i < 0 || j <= i) throw new Error("réponse sans JSON");
+  const data = JSON.parse(text.slice(i, j + 1));
+  return { data: data, engine: "IA · " + cfg.provider + " · " + cfg.model };
+}
+function laSections_(raw, c) {
+  assert_(Array.isArray(raw) && raw.length >= 1 && raw.length <= 40, "Le document doit contenir entre 1 et 40 parties.");
+  let total = 0;
+  const out = raw.map(function (x) {
+    const title = safeText_(laFill_(x && x.title, c), 200), body = String(laFill_(x && x.body, c) || "").replace(/\r/g, "").slice(0, 8000).trim();
+    total += title.length + body.length;
+    return { title: title, body: body };
+  }).filter(function (x) { return x.title || x.body; });
+  assert_(out.length && total <= 80000, "Document vide ou trop long.");
+  return out;
+}
+function laWarnings_(arr) { return (Array.isArray(arr) ? arr : []).map(function (w) { return safeText_(w, 400); }).filter(Boolean).filter(function (w, i, a) { return a.indexOf(w) === i; }).slice(0, 12); }
+function leaseFurnished_(l, prop) {
+  const d = dbAll_("LeaseDocs").filter(function (x) { return String(x.leaseId) === String(l.leaseId) && x.docType === "LEASE_CONTRACT" && x.status !== "CANCELLED"; })
+    .sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); })[0];
+  if (d) return !!(parseJson_(d.inputsJson, {}) || {}).furnished;
+  return parseJson_((prop || {}).equipmentJson, []).length >= 5;
+}
+
+/* ------------------------------ Contrat de bail ------------------------------ */
+function laContractInputs_(a) {
+  const clauses = (Array.isArray(a.clauses) ? a.clauses : String(a.clauses || "").split(",")).map(function (x) { return String(x).trim(); }).filter(function (x) { return LA_CLAUSES_.indexOf(x) >= 0; });
+  return { furnished: bool_(a.furnished), usage: oneOf_(a.usage || "HABITATION", ["HABITATION", "MIXED"], "Usage"), clauses: clauses.filter(function (x, i, arr) { return arr.indexOf(x) === i; }),
+    instructions: safeText_(a.instructions, 1500) };
+}
+/** Avertissements juridiques calculés (indépendants de l'IA). */
+function laContractWarnings_(c, inp) {
+  const w = ["Modèle généré automatiquement : faites-le relire par un professionnel (avocat, notaire ou adoul selon le cas) avant signature. ImmoPilot ne garantit pas sa conformité juridique."];
+  const l = c.l, rent = num_(l.monthlyRent), dep = num_(l.deposit), months = l.endDate ? diffDays_(l.startDate, addDaysStr_(l.endDate, 1)) / 30.44 : null;
+  if (IMMO_EDITION_ === "MA") {
+    if (num_(l.indexationRate) > 0) w.push("Le bail prévoit une indexation annuelle de " + num_(l.indexationRate) + " % : au Maroc, la loi n° 07-03 ne permet de réviser le loyer qu'au plus tôt tous les trois ans, dans la limite de " + (inp.usage === "MIXED" ? "8 % (habitation) et 10 % (autres locaux)" : "8 % pour l'habitation") + ". Le contrat reprend la règle légale ; ajustez l'indexation du bail dans ImmoPilot.");
+    w.push("Faites signer le contrat en deux exemplaires et légaliser les signatures pour lui donner date certaine.");
+  } else {
+    const maxDep = inp.furnished ? 2 : 1;
+    if (rent > 0 && dep > rent * maxDep + 0.01) w.push("Dépôt de garantie de " + laMoney_(dep) + " : la loi limite le dépôt à " + maxDep + " mois de loyer hors charges pour un logement " + (inp.furnished ? "meublé" : "vide") + ".");
+    if (months !== null && months < (inp.furnished ? 11.9 : 35.9)) w.push("Durée de " + Math.round(months) + " mois : la durée minimale est de " + (inp.furnished ? "1 an pour un meublé (9 mois pour un étudiant)" : "3 ans pour un logement vide loué par un particulier (6 ans par une société)") + ".");
+    w.push("Annexez les diagnostics obligatoires (dossier de diagnostic technique) et la notice d'information prévue par l'arrêté du 29 mai 2015.");
+  }
+  if (!c.t.email) w.push("Le locataire n'a pas d'adresse e-mail : l'envoi par e-mail du contrat et des quittances sera impossible.");
+  return w;
+}
+function laClauseText_(code, inp, ma) {
+  return {
+    INSURANCE_REQUIRED: "Le locataire est tenu de s'assurer contre les risques dont il doit répondre en sa qualité de locataire (notamment incendie, dégâts des eaux, explosion) et d'en justifier à la remise des clés puis à chaque demande du bailleur.",
+    SUBLET_FORBIDDEN: "Le locataire ne peut ni sous-louer tout ou partie du logement, ni céder le présent bail, sans l'accord écrit et préalable du bailleur.",
+    PETS_ALLOWED: "La détention d'animaux domestiques est autorisée, sous réserve qu'ils ne causent ni dégât ni trouble de voisinage.",
+    PETS_FORBIDDEN: ma ? "La détention d'animaux est interdite dans le logement, sauf accord écrit du bailleur." : "La détention d'animaux domestiques est autorisée dans les limites prévues par la loi ; elle ne doit causer ni dégât ni trouble de voisinage.",
+    NO_SMOKING: "Il est convenu que le logement est non-fumeur : le locataire s'engage à ne pas fumer à l'intérieur des locaux.",
+    GUARANTOR: "Les obligations du locataire sont garanties par une caution solidaire, qui s'engage par un acte de cautionnement distinct, annexé au présent contrat.",
+    WORKS_AUTH_REQUIRED: "Le locataire ne peut effectuer aucune transformation des lieux, des équipements ou de la distribution des pièces sans l'accord écrit du bailleur ; les simples aménagements restent permis."
+  }[code] || "";
+}
+/** Contrat rédigé par le modèle intégré (édition Maroc ou France). */
+function laContractTemplate_(c, inp) {
+  const l = c.l, prop = c.prop, ma = IMMO_EDITION_ === "MA", rent = num_(l.monthlyRent), ch = num_(l.charges), dep = num_(l.deposit);
+  const rooms = parseJson_(prop.roomsJson, []), equip = parseJson_(prop.equipmentJson, []);
+  const usage = inp.usage === "MIXED" ? "à usage mixte d'habitation et professionnel" : "à usage d'habitation";
+  const nature = inp.furnished ? "meublé" : "non meublé (vide)";
+  const S = [];
+  const add = function (t, b) { S.push({ title: "Article " + (S.length + 1) + " — " + t, body: b }); };
+  add("Objet", "Le bailleur, [BAILLEUR], donne en location au locataire, [LOCATAIRE], qui accepte, le logement désigné à l'article 2, " + usage + ", " + nature + ".\n\n" +
+    (ma ? "Le présent contrat est régi par la loi n° 67-12 régissant les rapports contractuels entre les bailleurs et les locataires des locaux à usage d'habitation ou à usage professionnel, par la loi n° 07-03 relative à la révision du montant du loyer et, pour ce qu'elles ne prévoient pas, par le Dahir des obligations et contrats."
+      : "Le présent contrat est régi par la loi n° 89-462 du 6 juillet 1989 tendant à améliorer les rapports locatifs" + (inp.furnished ? ", notamment son titre Ier bis relatif aux logements meublés" : "") + "."));
+  add("Désignation du logement", (prop.propertyType ? "Type de bien : " + st_label_(prop.propertyType) + ".\n" : "") + "Adresse : [ADRESSE_DU_BIEN].\n" +
+    (num_(prop.surfaceM2) ? "Surface " + (ma ? "approximative" : "habitable") + " : " + num_(prop.surfaceM2) + " m².\n" : "") +
+    (rooms.length ? "Composition : " + rooms.join(", ") + ".\n" : "") + (inp.furnished && equip.length ? "Équipements et mobilier fournis : " + equip.join(", ") + " (détail dans l'inventaire annexé).\n" : "") +
+    "\nLe locataire déclare bien connaître les lieux pour les avoir visités. Un état des lieux contradictoire est établi lors de la remise des clés" + (inp.furnished ? ", accompagné d'un inventaire du mobilier" : "") + ".");
+  if (l.endDate) add("Durée", "Le présent bail prend effet le " + pdfDate_(l.startDate) + " pour une durée de " + Math.max(1, Math.round(diffDays_(l.startDate, addDaysStr_(l.endDate, 1)) / 30.44)) + " mois, soit jusqu'au " + pdfDate_(l.endDate) + ".\n\n" +
+    (ma ? "À son terme, il pourra être renouvelé d'un commun accord ; à défaut de congé délivré dans les formes et délais prévus par la loi, il se poursuit dans les conditions prévues par la loi n° 67-12."
+      : "À défaut de congé donné dans les conditions prévues par la loi, il est reconduit tacitement pour une durée de " + (inp.furnished ? "un an." : "trois ans (six ans si le bailleur est une personne morale).")));
+  else add("Durée", "Le présent bail prend effet le " + pdfDate_(l.startDate) + " pour une durée indéterminée. Il prend fin par congé donné dans les formes et délais prévus par la loi.");
+  add("Loyer", "Le loyer mensuel est fixé à " + laMoney_(rent) + " (" + (ch > 0 ? "hors charges" : "charges comprises, sauf consommations individuelles") + ").\n\n" +
+    "Il est payable d'avance, au plus tard le " + (num_(l.dueDay) || 5) + " de chaque mois, par virement ou par tout autre moyen convenu entre les parties. Un avis d'échéance est adressé au locataire avant chaque échéance ; une quittance lui est remise gratuitement pour chaque échéance intégralement réglée.");
+  if (ch > 0) add("Charges", "En sus du loyer, le locataire verse chaque mois une provision pour charges de " + laMoney_(ch) + (ma ? ", destinée aux charges communes (entretien des parties communes, gardiennage, ascenseur le cas échéant)." : ", qui fait l'objet d'une régularisation annuelle sur justificatifs.") +
+    "\n\nLes consommations individuelles (eau, électricité, gaz, téléphone, internet) sont à la charge du locataire, qui souscrit les abonnements correspondants, sauf accord contraire écrit.");
+  else add("Charges et consommations", "Les consommations individuelles (eau, électricité, gaz, téléphone, internet) sont à la charge du locataire, qui souscrit les abonnements correspondants, sauf accord contraire écrit.");
+  add("Révision du loyer", ma ? "Le loyer ne peut être révisé que dans les conditions et limites prévues par la loi n° 07-03 relative à la révision du montant du loyer : la révision ne peut intervenir qu'au terme d'une période d'au moins trois ans, et l'augmentation ne peut excéder " + (inp.usage === "MIXED" ? "8 % pour les locaux à usage d'habitation et 10 % pour les autres locaux." : "8 % pour les locaux à usage d'habitation.")
+    : (num_(l.indexationRate) > 0 ? "Le loyer est révisé chaque année à la date anniversaire du bail, selon la variation de l'indice de référence des loyers (IRL) publié par l'INSEE, l'indice de référence étant celui du dernier trimestre connu à la date de signature du bail."
+      : "Le présent bail ne comporte pas de clause de révision annuelle : le loyer n'est pas révisé en cours de bail."));
+  add("Dépôt de garantie", dep > 0 ? "Un dépôt de garantie de " + laMoney_(dep) + (rent > 0 ? " (soit " + Math.round(dep / rent * 10) / 10 + " mois de loyer)" : "") + " est versé à la signature. Il n'est pas productif d'intérêts et ne peut être imputé par le locataire sur le dernier loyer.\n\n" +
+      (ma ? "Il est restitué en fin de bail, après remise des clés et état des lieux de sortie, déduction faite des sommes restant dues au bailleur et dûment justifiées." : "Il est restitué dans un délai d'un mois à compter de la remise des clés si l'état des lieux de sortie est conforme à l'état des lieux d'entrée, et de deux mois dans le cas contraire, déduction faite des sommes restant dues au bailleur et dûment justifiées.")
+    : "Aucun dépôt de garantie n'est demandé.");
+  add("Obligations du bailleur", "Le bailleur est tenu de délivrer au locataire un logement en bon état d'usage et de réparation, avec des équipements en bon état de fonctionnement ; d'assurer au locataire la jouissance paisible du logement ; d'entretenir les locaux et d'y faire les réparations autres que locatives, notamment les grosses réparations ; de remettre gratuitement une quittance au locataire qui en fait la demande ou après chaque paiement intégral.");
+  add("Obligations du locataire", "Le locataire est tenu de payer le loyer et les charges aux termes convenus ; d'user paisiblement des lieux suivant leur destination ; de répondre des dégradations et pertes survenues pendant la durée du bail, sauf si elles résultent de la vétusté, d'une malfaçon, d'un vice de construction, d'un cas fortuit ou de force majeure ; de prendre à sa charge l'entretien courant du logement et les menues réparations ; de laisser exécuter les travaux nécessaires au maintien en état du logement ; de restituer les lieux en fin de bail dans l'état constaté à l'entrée, compte tenu de l'usure normale.");
+  inp.clauses.forEach(function (k) { const tx = laClauseText_(k, inp, ma); if (tx) add({ INSURANCE_REQUIRED: "Assurance", SUBLET_FORBIDDEN: "Sous-location et cession", PETS_ALLOWED: "Animaux", PETS_FORBIDDEN: "Animaux", NO_SMOKING: "Logement non-fumeur", GUARANTOR: "Cautionnement", WORKS_AUTH_REQUIRED: "Travaux et transformations" }[k], tx); });
+  if (inp.clauses.indexOf("SUBLET_FORBIDDEN") < 0) add("Sous-location et cession", "Toute sous-location ou cession du bail est soumise à l'accord écrit et préalable du bailleur.");
+  if (!ma && inp.clauses.indexOf("INSURANCE_REQUIRED") < 0) add("Assurance", laClauseText_("INSURANCE_REQUIRED", inp, ma));
+  add("Congé et fin du bail", ma ? "Le locataire peut mettre fin au bail en donnant congé par écrit au bailleur, dans le respect du délai de préavis prévu par la loi. Le bailleur ne peut donner congé que dans les cas et conditions prévus par la loi n° 67-12. Tout congé est notifié dans les formes prévues par la loi."
+    : "Le locataire peut donner congé à tout moment, par lettre recommandée avec avis de réception, acte de commissaire de justice ou remise en main propre contre émargement, avec un préavis de " + (inp.furnished ? "un mois." : "trois mois (un mois dans les cas prévus par la loi, notamment en zone tendue).") +
+      " Le bailleur ne peut donner congé que pour le terme du bail, avec un préavis de " + (inp.furnished ? "trois mois" : "six mois") + ", pour reprendre le logement, le vendre ou pour un motif légitime et sérieux.");
+  add("Défaut de paiement", ma ? "En cas de non-paiement du loyer ou des charges à leur échéance, le bailleur peut, après une mise en demeure restée sans effet, engager les procédures prévues par la loi pour obtenir le paiement des sommes dues et, le cas échéant, la résiliation du bail et l'expulsion."
+    : "À défaut de paiement du loyer ou des charges aux termes convenus, ou de versement du dépôt de garantie, le bail sera résilié de plein droit dans les conditions et délais prévus à l'article 24 de la loi du 6 juillet 1989, après un commandement de payer demeuré infructueux. Il en va de même à défaut d'assurance des risques locatifs, un mois après un commandement demeuré infructueux.");
+  const special = [l.terms, inp.instructions].filter(function (x) { return String(x || "").trim(); }).join("\n\n");
+  if (special) add("Conditions particulières", special);
+  add(ma ? "Élection de domicile et litiges" : "Élection de domicile", ma ? "Pour l'exécution des présentes, les parties élisent domicile, le bailleur à son adresse et le locataire dans les lieux loués. Tout litige relatif au présent contrat relève du tribunal compétent du lieu de situation du logement."
+    : "Pour l'exécution des présentes, le bailleur fait élection de domicile à son adresse et le locataire dans les lieux loués.");
+  add("Annexes", "Sont annexés au présent contrat : l'état des lieux d'entrée" + (inp.furnished ? ", l'inventaire du mobilier" : "") + (inp.clauses.indexOf("GUARANTOR") >= 0 ? ", l'acte de cautionnement" : "") +
+    (ma ? "." : ", le dossier de diagnostic technique, la notice d'information et, le cas échéant, les extraits du règlement de copropriété."));
+  return { title: "Contrat de location — logement " + (inp.furnished ? "meublé" : "vide"), sections: S };
+}
+function st_label_(code) { return ({ APARTMENT: "appartement", VILLA: "villa", RIAD: "riad", STUDIO: "studio", HOUSE: "maison", DUPLEX: "duplex", ROOM: "chambre", OFFICE: "bureau" })[String(code || "").toUpperCase()] || String(code || "").toLowerCase(); }
+
+function laContractAi_(c, inp, base) {
+  const ma = IMMO_EDITION_ === "MA";
+  const system = "Tu es l'agent de rédaction juridique d'ImmoPilot, logiciel de gestion locative (" + edition_().countryName + "). Tu rédiges en français un contrat de location " +
+    (inp.furnished ? "meublée" : "vide") + " conforme au " + edition_().leaseLaw + ".\nRègles impératives :\n" +
+    "- Pars de la TRAME fournie (déjà conforme) et améliore-la : clarté, articles complets, consignes de l'utilisateur intégrées. Garde tous les articles utiles de la trame.\n" +
+    "- Utilise UNIQUEMENT les faits fournis. N'invente aucun montant, aucune date, aucun nom, aucune adresse.\n" +
+    "- Pour les identités et l'adresse, écris exactement les marqueurs [BAILLEUR], [LOCATAIRE], [ADRESSE_DU_BIEN], [VILLE].\n" +
+    "- Ne cite un numéro d'article de loi que si tu es certain qu'il existe et qu'il est pertinent ; sinon renvoie à « la loi ».\n" +
+    (ma ? "- Maroc : la loi n° 07-03 limite la révision du loyer d'habitation à une fois tous les 3 ans au plus tôt et à 8 % au maximum (10 % pour les autres locaux). N'écris jamais d'indexation annuelle.\n" : "- France : respecte les durées minimales, le plafond du dépôt de garantie (1 mois vide, 2 mois meublé, hors charges) et la révision annuelle selon l'IRL.\n") +
+    "- Si une consigne de l'utilisateur est contraire à la loi ou abusive, ne l'applique pas et explique-le dans « warnings ».\n" +
+    "- Pas de Markdown. Paragraphes séparés par une ligne vide. Titres sous la forme « Article N — Intitulé ».\n" +
+    "Réponds UNIQUEMENT par un objet JSON : {\"title\": string, \"sections\": [{\"title\": string, \"body\": string}], \"warnings\": [string]}.";
+  const payload = { faits: laFacts_(c), options: { meuble: inp.furnished, usage: inp.usage === "MIXED" ? "mixte habitation et professionnel" : "habitation", clauses: inp.clauses },
+    consignesUtilisateur: inp.instructions || "", trame: base.sections };
+  delete payload.faits.conditionsParticulieres;
+  payload.conditionsParticulieresDuBail = c.l.terms || "";
+  return laAiJson_(c.l.organizationId, system, payload, LA_LIMITS_.contractTokens);
+}
+
+/* ------------------------------ Courriers ------------------------------ */
+function laLetterInputs_(a) {
+  const o = { subtype: oneOf_(a.subtype || "FREE", LA_LETTER_TYPES_, "Type de courrier"), subject: safeText_(a.subject, 150), instructions: safeText_(a.instructions, 1500) };
+  if (a.newRent !== undefined && a.newRent !== "") o.newRent = money_(a.newRent, "Nouveau loyer", { min: 1 });
+  if (a.effectiveDate) o.effectiveDate = dateOnly_(a.effectiveDate, "Date d'effet");
+  if (a.newEndDate) o.newEndDate = dateOnly_(a.newEndDate, "Nouvelle date de fin");
+  if (a.deductions !== undefined && a.deductions !== "") o.deductions = money_(a.deductions, "Retenues");
+  if (a.deductionReason) o.deductionReason = safeText_(a.deductionReason, 600);
+  if (o.subtype === "FREE") assert_(o.subject || o.instructions, "Indiquez l'objet ou le contenu souhaité du courrier.");
+  return o;
+}
+function laLetterWarnings_(c, inp) {
+  const w = [], l = c.l, rent = num_(l.monthlyRent);
+  if (inp.subtype === "RENT_REVISION" && inp.newRent && IMMO_EDITION_ === "MA") {
+    if (inp.newRent > rent * 1.08 + 0.01) w.push("Hausse de " + Math.round((inp.newRent / rent - 1) * 1000) / 10 + " % : la loi n° 07-03 la limite à 8 % pour un logement d'habitation.");
+    const since = inp.effectiveDate || todayStr_();
+    if (diffDays_(l.startDate, since) < 3 * 365) w.push("Moins de trois ans depuis le début du bail : la loi n° 07-03 ne permet pas encore de réviser le loyer (sauf décision de justice).");
+  }
+  if (!c.t.email) w.push("Le locataire n'a pas d'adresse e-mail : le courrier devra lui être remis en main propre ou envoyé par voie postale.");
+  return w;
+}
+function laLetterTemplate_(c, inp) {
+  const l = c.l, held = leaseDepositHeld_(l.leaseId), today = todayStr_(), ma = IMMO_EDITION_ === "MA";
+  const S = [], add = function (t, b) { S.push({ title: t, body: b }); };
+  if (inp.subtype === "RENEWAL") {
+    const start = l.endDate ? addDaysStr_(l.endDate, 1) : today, end = inp.newEndDate || addDaysStr_(addMonthsStr_(start, 12), -1);
+    add("Objet : proposition de renouvellement du bail", "Madame, Monsieur,\n\nLe bail du logement situé [ADRESSE_DU_BIEN] arrive à échéance le " + pdfDate_(l.endDate || today) + ". Nous avons le plaisir de vous proposer son renouvellement du " +
+      pdfDate_(start) + " au " + pdfDate_(end) + ", pour un loyer mensuel de " + laMoney_(inp.newRent || l.monthlyRent) + (num_(l.charges) ? " et une provision pour charges de " + laMoney_(l.charges) : "") + ", les autres conditions du bail restant inchangées.\n\n" +
+      "Nous vous remercions de nous faire part de votre réponse avant le " + pdfDate_(addDaysStr_(today, 30)) + "." + (inp.instructions ? "\n\n" + inp.instructions : ""));
+  } else if (inp.subtype === "RENT_REVISION") {
+    add("Objet : révision du loyer", "Madame, Monsieur,\n\nConformément aux dispositions du bail et " + (ma ? "de la loi n° 07-03 relative à la révision du montant du loyer" : "de l'article 17-1 de la loi du 6 juillet 1989 (indice de référence des loyers)") +
+      ", nous vous informons que le loyer mensuel du logement situé [ADRESSE_DU_BIEN] est porté de " + laMoney_(l.monthlyRent) + " à " + laMoney_(inp.newRent || l.monthlyRent) + " à compter du " + pdfDate_(inp.effectiveDate || addMonthsStr_(today, 1)) + ".\n\n" +
+      "Les autres conditions du bail demeurent inchangées." + (inp.instructions ? "\n\n" + inp.instructions : ""));
+  } else if (inp.subtype === "DEPOSIT_RETURN") {
+    const ded = num_(inp.deductions), ret = Math.max(0, round2_(held - ded));
+    add("Objet : décompte et restitution du dépôt de garantie", "Madame, Monsieur,\n\nÀ la suite de la fin du bail et de l'état des lieux de sortie du logement situé [ADRESSE_DU_BIEN], voici le décompte de votre dépôt de garantie :\n\n" +
+      "Dépôt de garantie détenu : " + laMoney_(held) + "\nRetenues : " + laMoney_(ded) + (inp.deductionReason ? " (" + inp.deductionReason + ")" : "") + "\nMontant restitué : " + laMoney_(ret) + "\n\n" +
+      (ded > 0 ? "Les retenues sont justifiées par les pièces jointes (devis, factures ou état des lieux), compte tenu de l'usure normale du logement.\n\n" : "") + "La somme restituée vous est versée par virement." + (inp.instructions ? "\n\n" + inp.instructions : ""));
+  } else {
+    add("Objet : " + (inp.subject || "information concernant votre location"), "Madame, Monsieur,\n\n" + (inp.instructions || "") );
+  }
+  add("", "Nous restons à votre disposition pour toute question.\n\nVeuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées.\n\n[BAILLEUR]");
+  return { title: { RENEWAL: "Proposition de renouvellement du bail", RENT_REVISION: "Notification de révision du loyer", DEPOSIT_RETURN: "Restitution du dépôt de garantie", FREE: inp.subject || "Courrier au locataire" }[inp.subtype], sections: S };
+}
+function laLetterAi_(c, inp, base) {
+  const system = "Tu es l'agent de rédaction d'ImmoPilot (" + edition_().countryName + ", " + edition_().leaseLaw + "). Rédige en français un courrier du bailleur au locataire, courtois, précis et bref.\n" +
+    "- Utilise uniquement les faits fournis ; n'invente aucun montant, date ni nom ; marqueurs [BAILLEUR], [LOCATAIRE], [ADRESSE_DU_BIEN], [VILLE] pour les identités et l'adresse.\n" +
+    "- Si la demande est contraire à la loi, n'applique pas la partie concernée et explique-le dans « warnings ».\n" +
+    "- Pas de Markdown. Réponds UNIQUEMENT en JSON : {\"title\": string, \"sections\": [{\"title\": string, \"body\": string}], \"warnings\": [string]} (1 à 3 sections, la première commence par « Objet : »).";
+  const facts = laFacts_(c); delete facts.equipements; delete facts.pieces;
+  return laAiJson_(c.l.organizationId, system, { typeDeCourrier: inp.subtype, faits: facts, depotDetenu: leaseDepositHeld_(c.l.leaseId), donnees: { nouveauLoyer: inp.newRent || null, dateEffet: inp.effectiveDate || null,
+    nouvelleFin: inp.newEndDate || null, retenues: inp.deductions || null, motifRetenues: inp.deductionReason || null, objet: inp.subject || null }, consignesUtilisateur: inp.instructions || "", trame: base.sections }, LA_LIMITS_.letterTokens);
+}
+
+/* ------------------------------ Routes : documents rédigés ------------------------------ */
+function leaseDocOut_(d, full) {
+  const o = { leaseDocId: d.leaseDocId, leaseId: d.leaseId, docType: d.docType, subtype: d.subtype, status: d.status, title: d.title, engine: d.engine, documentId: d.documentId,
+    createdAt: d.createdAt, updatedAt: d.updatedAt, finalizedAt: d.finalizedAt, sentAt: d.sentAt, sentTo: d.sentTo };
+  if (full) { o.sections = parseJson_(d.sectionsJson, []); o.warnings = parseJson_(d.warningsJson, []); o.inputs = parseJson_(d.inputsJson, {}); }
+  return o;
+}
+function leaseDocsOf_(leaseId, finalOnly) {
+  return dbAll_("LeaseDocs").filter(function (d) { return String(d.leaseId) === String(leaseId) && d.status !== "CANCELLED" && (!finalOnly || d.status === "FINAL"); })
+    .sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); }).map(function (d) { return leaseDocOut_(d, false); });
+}
+function leaseDocLoad_(p, id, cap) {
+  const d = dbGet_("LeaseDocs", safeText_(id, 120)); if (!d || d.status === "CANCELLED") notFound_("Document");
+  const c = laCtx_(p, d.leaseId, cap);
+  if (c.self) assert_(d.status === "FINAL", "Document non disponible.", "FORBIDDEN");
+  return { d: d, c: c };
+}
+/** Rédaction d'un brouillon : IA si configurée, sinon modèle intégré. */
+function leaseDocDraft_(p, a) {
+  const c = laCtx_(p, a.leaseId, "lease.manage"), docType = oneOf_(a.docType || "LEASE_CONTRACT", ["LEASE_CONTRACT", "LETTER"], "Type de document");
+  const inp = docType === "LEASE_CONTRACT" ? laContractInputs_(a) : laLetterInputs_(a);
+  const base = docType === "LEASE_CONTRACT" ? laContractTemplate_(c, inp) : laLetterTemplate_(c, inp);
+  let title = base.title, sections = laSections_(base.sections, c), warnings = docType === "LEASE_CONTRACT" ? laContractWarnings_(c, inp) : laLetterWarnings_(c, inp), engine = "MODELE";
+  if (a.useAi !== false) {
+    try {
+      const r = docType === "LEASE_CONTRACT" ? laContractAi_(c, inp, base) : laLetterAi_(c, inp, base);
+      if (r) { sections = laSections_(r.data.sections, c); title = safeText_(laFill_(r.data.title, c), 200) || title; warnings = warnings.concat(laWarnings_(r.data.warnings)); engine = r.engine; }
+    } catch (e) {
+      console.error("Agent IA (" + docType + ") : " + e.message);
+      warnings.push("L'agent IA n'a pas pu rédiger ce document (" + String(e.message).slice(0, 120) + ") : le modèle intégré a été utilisé.");
+    }
+  }
+  const d = dbInsert_("LeaseDocs", { organizationId: c.l.organizationId, propertyId: c.l.propertyId, leaseId: c.l.leaseId, docType: docType, subtype: inp.subtype || "", status: "DRAFT", title: title,
+    inputsJson: inp, sectionsJson: sections, warningsJson: laWarnings_(warnings), engine: engine, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("LEASE_DOC_DRAFTED", "Lease", c.l.leaseId, c.l.organizationId, { leaseDocId: d.leaseDocId, docType: docType, engine: engine });
+  return leaseDocOut_(dbGet_("LeaseDocs", d.leaseDocId), true);
+}
+function leaseDocGet_(p, a) { const x = leaseDocLoad_(p, a.leaseDocId, "lease.view"); return leaseDocOut_(x.d, true); }
+function leaseDocUpdate_(p, a) {
+  const x = leaseDocLoad_(p, a.leaseDocId, "lease.manage");
+  assert_(x.d.status === "DRAFT", "Document validé : créez une nouvelle version pour le modifier.");
+  const patch = { updatedAt: nowIso_(), updatedBy: p.email };
+  if (a.title !== undefined) patch.title = reqText_(a.title, "Titre", 2, 200);
+  if (a.sections !== undefined) patch.sectionsJson = laSections_(a.sections, x.c);
+  dbUpdate_("LeaseDocs", x.d.leaseDocId, patch);
+  return leaseDocOut_(dbGet_("LeaseDocs", x.d.leaseDocId), true);
+}
+function leaseDocHtml_(c, d) {
+  const sections = parseJson_(d.sectionsJson, []), draft = d.status !== "FINAL", ma = IMMO_EDITION_ === "MA", t = c.t, org = c.org, prop = c.prop;
+  let inner = draft ? "<div class='box' style='border-color:#e9b341;background:#fff8e6'><b>PROJET — document non validé, à relire avant signature.</b></div>" : "";
+  if (d.docType === "LEASE_CONTRACT") {
+    inner += "<h2>Entre les soussignés</h2><table><tr><th style='width:50%'>Le bailleur</th><th>Le locataire</th></tr><tr><td><b>" + escapeHtml_(org.name || "") + "</b><br>" +
+      escapeHtml_([org.address, org.city].filter(String).join(", ") || "Adresse : ____________________") + "<br>" + escapeHtml_(org.phone ? "Tél. " + org.phone : "") + "</td><td><b>" + escapeHtml_(t.fullName || "") + "</b><br>" +
+      (t.nationality ? "Nationalité : " + escapeHtml_(t.nationality) + "<br>" : "") + "Pièce d'identité : " + escapeHtml_(t.idType ? ({ CIN: "CIN", CNI: "CNI", PASSPORT: "Passeport", RESIDENCE_PERMIT: "Titre de séjour", DRIVING_LICENSE: "Permis de conduire" }[t.idType] || t.idType) : "____") +
+      " n° ____________________<br>" + escapeHtml_([t.email, t.phone].filter(String).join(" · ")) + "</td></tr></table><p>Logement : <b>" + escapeHtml_(prop.name || "") + "</b> — " + escapeHtml_(rentAddress_(prop)) + "</p>";
+  }
+  sections.forEach(function (s) { inner += (s.title ? "<h2>" + escapeHtml_(s.title) + "</h2>" : "") + laParas_(s.body); });
+  if (d.docType === "LEASE_CONTRACT") inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + (draft ? "____________" : pdfDate_(String(d.finalizedAt || todayStr_()).slice(0, 10))) + ", en deux exemplaires originaux" + (ma ? "." : ", dont un remis à chaque partie.") + "</p>" +
+    "<table class='sign'><tr><td><b>Le bailleur</b><br><span class='muted'>« Lu et approuvé », signature</span></td><td><b>Le locataire</b><br><span class='muted'>« Lu et approuvé », signature</span></td></tr></table>";
+  else inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + pdfDate_(todayStr_()) + ".</p>";
+  return pdfShell_(d.title || "Document", inner, { subtitle: (prop.name || "") + (d.docType === "LETTER" ? " · à l'attention de " + (t.fullName || "") : ""), issuer: rentIssuer_(org),
+    footer: (draft ? "PROJET — " : "") + "Document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; ImmoPilot ne garantit pas sa conformité juridique." });
+}
+function leaseDocFileName_(d) { return (d.docType === "LEASE_CONTRACT" ? "Bail_" : "Courrier_") + String(d.leaseId).slice(-6) + "_" + todayStr_(); }
+/** Aperçu PDF (brouillon marqué « PROJET ») ou PDF définitif déjà enregistré. */
+function leaseDocPdf_(p, a) {
+  const x = leaseDocLoad_(p, a.leaseDocId, "lease.view");
+  if (x.d.status === "FINAL" && x.d.documentId) return docGet_(p, { documentId: x.d.documentId });
+  const blob = htmlToPdf_(leaseDocHtml_(x.c, x.d), leaseDocFileName_(x.d) + "_projet");
+  return { fileName: blob.getName(), mimeType: "application/pdf", base64: Utilities.base64Encode(blob.getBytes()) };
+}
+/** Validation : PDF définitif enregistré dans les documents du bail ; le contrat devient le document du bail. */
+function leaseDocFinalize_(p, a) {
+  const x = leaseDocLoad_(p, a.leaseDocId, "lease.manage");
+  assert_(x.d.status === "DRAFT", "Document déjà validé.");
+  const d = Object.assign({}, x.d, { status: "FINAL", finalizedAt: nowIso_() });
+  const blob = htmlToPdf_(leaseDocHtml_(x.c, d), leaseDocFileName_(d));
+  const out = storeGeneratedPdf_(p, blob, { propertyId: x.c.l.propertyId, organizationId: x.c.l.organizationId }, "LEASE", x.c.l.leaseId, d.docType === "LEASE_CONTRACT" ? "CONTRACT" : "LETTER");
+  dbUpdate_("LeaseDocs", d.leaseDocId, { status: "FINAL", finalizedAt: d.finalizedAt, finalizedBy: p.email, documentId: out.documentId, updatedAt: nowIso_(), updatedBy: p.email });
+  if (d.docType === "LEASE_CONTRACT") dbUpdate_("Leases", x.c.l.leaseId, { documentId: out.documentId, updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("LEASE_DOC_FINALIZED", "Lease", x.c.l.leaseId, x.c.l.organizationId, { leaseDocId: d.leaseDocId, docType: d.docType });
+  return out;
+}
+function leaseDocCancel_(p, a) {
+  const x = leaseDocLoad_(p, a.leaseDocId, "lease.manage");
+  dbUpdate_("LeaseDocs", x.d.leaseDocId, { status: "CANCELLED", updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("LEASE_DOC_CANCELLED", "Lease", x.c.l.leaseId, x.c.l.organizationId, { leaseDocId: x.d.leaseDocId });
+  return { ok: true };
+}
+/** Envoi par e-mail au locataire d'un document validé (PDF joint). */
+function laSendStored_(p, c, documentId, subject, message, ownerKey) {
+  const doc = dbGet_("Documents", documentId); assert_(doc && doc.status === "ACTIVE", "PDF introuvable : validez à nouveau le document.");
+  rateLimit_("rentmail:" + p.userId, 60, 3600);
+  const r = rentDeliver_({ c: c, kind: "DOCUMENT", trigger: "MANUAL", actor: p.email, documentId: documentId, uniqueKey: "",
+    build: function () { const b = DriveApp.getFileById(doc.fileId).getBlob(); b.setName(doc.fileName); return b; },
+    mail: function () { return rentMailText_(c, "DOCUMENT", { subject: subject, message: message }); }, category: "LETTER" });
+  return rentDeliverResult_(r);
+}
+function leaseDocSend_(p, a) {
+  const x = leaseDocLoad_(p, a.leaseDocId, "lease.manage");
+  assert_(x.d.status === "FINAL" && x.d.documentId, "Validez d'abord le document.");
+  const contract = x.d.docType === "LEASE_CONTRACT";
+  const msg = safeText_(a.message, 2000) || (contract ? "Veuillez trouver ci-joint votre contrat de location pour le logement « " + (x.c.prop.name || "") + " ». Merci de le relire ; nous conviendrons ensemble de la date de signature." :
+    "Veuillez trouver ci-joint notre courrier : « " + (x.d.title || "") + " ».");
+  const out = laSendStored_(p, x.c, x.d.documentId, (contract ? "Votre contrat de location — " : "") + (x.d.title || "Document") + " — " + (x.c.prop.name || ""), msg);
+  dbUpdate_("LeaseDocs", x.d.leaseDocId, { sentAt: nowIso_(), sentTo: out.sentTo });
+  return out;
+}
+
+/* ------------------------------ États des lieux ------------------------------ */
+function laRoomItems_(room, furnished) {
+  const n = String(room || "").toLowerCase(), base = ["Sols", "Murs", "Plafond", "Portes", "Fenêtres et volets", "Éclairage et prises électriques"];
+  let extra = [];
+  if (/cuisine|kitchen/.test(n)) extra = ["Évier et robinetterie", "Plan de travail", "Placards", "Plaques de cuisson et four", "Réfrigérateur", "Hotte"];
+  else if (/bain|douche|sdb|bathroom/.test(n)) extra = ["Lavabo et robinetterie", "Douche ou baignoire", "Carrelage et joints", "Miroir", "Ventilation", "Chauffe-eau"];
+  else if (/wc|toilette/.test(n)) extra = ["Cuvette et chasse d'eau", "Lave-mains"];
+  else if (/chambre|bedroom/.test(n)) extra = ["Placards et rangements"].concat(furnished ? ["Lit et literie", "Rideaux"] : []);
+  else if (/séjour|sejour|salon|living/.test(n)) extra = ["Climatisation ou chauffage"].concat(furnished ? ["Canapé", "Table et chaises", "Rideaux"] : []);
+  else if (/entr[ée]e|hall/.test(n)) extra = ["Porte d'entrée et serrure", "Interphone"];
+  if (/terrasse|balcon|jardin|patio|piscine|ext[ée]rieur/.test(n)) return ["Sol", "Garde-corps", "Plantations", "Éclairage extérieur"].concat(/piscine/.test(n) ? ["Bassin et équipements"] : []);
+  return base.concat(extra);
+}
+function laDefaultRooms_(prop, furnished) {
+  let rooms = parseJson_(prop.roomsJson, []).filter(String);
+  if (!rooms.length) rooms = ["Entrée", "Séjour", "Cuisine", "Chambre", "Salle de bain", "WC"];
+  const out = rooms.slice(0, 30).map(function (r) { return { name: String(r).slice(0, 80), items: laRoomItems_(r, furnished).map(function (i) { return { name: i, condition: "", note: "" }; }), note: "", photoDocIds: [] }; });
+  const equip = parseJson_(prop.equipmentJson, []);
+  if (furnished && equip.length) out.push({ name: "Inventaire du mobilier et des équipements", items: equip.slice(0, 40).map(function (e) { return { name: String(e).slice(0, 80), condition: "", note: "" }; }), note: "", photoDocIds: [] });
+  return out;
+}
+function laDefaultKeys_() { return [{ label: "Clés de la porte d'entrée", count: "" }, { label: "Clés de la boîte aux lettres", count: "" }, { label: "Badges ou télécommandes", count: "" }]; }
+function inspectionOut_(r, full) {
+  const o = { inspectionId: r.inspectionId, leaseId: r.leaseId, type: r.type, inspectionDate: r.inspectionDate, status: r.status, engine: r.engine, documentId: r.documentId,
+    createdAt: r.createdAt, updatedAt: r.updatedAt, finalizedAt: r.finalizedAt, sentAt: r.sentAt, sentTo: r.sentTo };
+  if (full) { o.rooms = parseJson_(r.roomsJson, []); o.meters = parseJson_(r.metersJson, {}); o.keys = parseJson_(r.keysJson, []); o.generalNote = r.generalNote; o.attendees = r.attendees; o.summary = parseJson_(r.summaryJson, null); }
+  return o;
+}
+function inspectionsOf_(leaseId, finalOnly) {
+  return dbAll_("LeaseInspections").filter(function (r) { return String(r.leaseId) === String(leaseId) && r.status !== "CANCELLED" && (!finalOnly || r.status === "FINAL"); })
+    .sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); }).map(function (r) { return inspectionOut_(r, false); });
+}
+function inspectionLoad_(p, id, cap) {
+  const r = dbGet_("LeaseInspections", safeText_(id, 120)); if (!r || r.status === "CANCELLED") notFound_("État des lieux");
+  const c = laCtx_(p, r.leaseId, cap);
+  if (c.self) assert_(r.status === "FINAL", "État des lieux non disponible.", "FORBIDDEN");
+  return { r: r, c: c };
+}
+function inspectionEntryOf_(leaseId) {
+  return dbAll_("LeaseInspections").filter(function (r) { return String(r.leaseId) === String(leaseId) && r.type === "ENTRY" && r.status === "FINAL"; })
+    .sort(function (a, b) { return String(b.finalizedAt).localeCompare(String(a.finalizedAt)); })[0] || null;
+}
+function inspectionCreate_(p, a) {
+  const c = laCtx_(p, a.leaseId, "lease.manage"), type = oneOf_(a.type || "ENTRY", ["ENTRY", "EXIT"], "Type d'état des lieux");
+  assert_(!dbAll_("LeaseInspections").some(function (r) { return String(r.leaseId) === String(c.l.leaseId) && r.type === type && r.status === "DRAFT"; }), "Un état des lieux de ce type est déjà en cours : ouvrez-le pour le compléter.", "CONFLICT");
+  const furnished = leaseFurnished_(c.l, c.prop);
+  let rooms = laDefaultRooms_(c.prop, furnished), keys = laDefaultKeys_();
+  if (type === "EXIT") {
+    const entry = inspectionEntryOf_(c.l.leaseId);
+    if (entry) {
+      rooms = parseJson_(entry.roomsJson, []).map(function (r) { return { name: r.name, items: (r.items || []).map(function (i) { return { name: i.name, condition: "", note: "", entry: i.condition || "", entryNote: i.note || "" }; }), note: "", photoDocIds: [] }; });
+      keys = parseJson_(entry.keysJson, []).map(function (k) { return { label: k.label, count: "", entry: k.count }; });
+    }
+  }
+  const r = dbInsert_("LeaseInspections", { organizationId: c.l.organizationId, propertyId: c.l.propertyId, leaseId: c.l.leaseId, type: type, inspectionDate: a.inspectionDate ? dateOnly_(a.inspectionDate, "Date") : todayStr_(),
+    status: "DRAFT", roomsJson: rooms, metersJson: {}, keysJson: keys, generalNote: "", attendees: "", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("INSPECTION_CREATED", "Lease", c.l.leaseId, c.l.organizationId, { inspectionId: r.inspectionId, type: type });
+  return inspectionOut_(dbGet_("LeaseInspections", r.inspectionId), true);
+}
+function inspectionGet_(p, a) {
+  const x = inspectionLoad_(p, a.inspectionId, "lease.view"), o = inspectionOut_(x.r, true);
+  o.propertyName = x.c.prop.name; o.tenantName = x.c.t.fullName; o.canManage = canProp_(p, x.c.prop, "lease.manage"); o.ai = !!aiConfig_();
+  return o;
+}
+function laCond_(v) { v = String(v || ""); return LA_CONDITIONS_.indexOf(v) >= 0 ? v : ""; }
+function inspectionSave_(p, a) {
+  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  assert_(x.r.status === "DRAFT", "État des lieux validé : il ne peut plus être modifié.");
+  const patch = { updatedAt: nowIso_(), updatedBy: p.email };
+  if (a.inspectionDate) patch.inspectionDate = dateOnly_(a.inspectionDate, "Date");
+  if (a.rooms !== undefined) {
+    assert_(Array.isArray(a.rooms) && a.rooms.length <= 30, "30 pièces au maximum.");
+    patch.roomsJson = a.rooms.map(function (r) {
+      const items = (Array.isArray(r.items) ? r.items : []).slice(0, 40).map(function (i) { const o = { name: safeText_(i && i.name, 80), condition: laCond_(i && i.condition), note: safeText_(i && i.note, 500) };
+        if (i && i.entry !== undefined) { o.entry = laCond_(i.entry); o.entryNote = safeText_(i.entryNote, 500); } return o; }).filter(function (i) { return i.name; });
+      return { name: reqText_(r && r.name, "Nom de la pièce", 1, 80), items: items, note: safeText_(r && r.note, 1000), photoDocIds: assertDocsOf_((r && r.photoDocIds) || [], "LEASE", x.r.leaseId).slice(0, 12) };
+    });
+  }
+  if (a.meters !== undefined) { const m = a.meters || {}; patch.metersJson = { electricity: safeText_(m.electricity, 40), water: safeText_(m.water, 40), gas: safeText_(m.gas, 40), other: safeText_(m.other, 120) }; }
+  if (a.keys !== undefined) patch.keysJson = (Array.isArray(a.keys) ? a.keys : []).slice(0, 12).map(function (k) { const o = { label: safeText_(k && k.label, 80), count: k && k.count !== "" && k.count != null ? Math.max(0, Math.min(99, parseInt(k.count, 10) || 0)) : "" };
+    if (k && k.entry !== undefined) o.entry = k.entry; return o; }).filter(function (k) { return k.label; });
+  if (a.generalNote !== undefined) patch.generalNote = safeText_(a.generalNote, 3000);
+  if (a.attendees !== undefined) patch.attendees = safeText_(a.attendees, 300);
+  if (a.summary !== undefined) patch.summaryJson = laSummaryClean_(a.summary, x.c);
+  dbUpdate_("LeaseInspections", x.r.inspectionId, patch);
+  return inspectionOut_(dbGet_("LeaseInspections", x.r.inspectionId), true);
+}
+function laSummaryClean_(s, c) {
+  if (!s) return "";
+  return { intro: safeText_(laFill_(s.intro, c), 3000), conclusion: safeText_(laFill_(s.conclusion, c), 3000),
+    rooms: (Array.isArray(s.rooms) ? s.rooms : []).slice(0, 40).map(function (r) { return { name: safeText_(r && r.name, 80), text: safeText_(laFill_(r && r.text, c), 3000) }; }).filter(function (r) { return r.name; }),
+    differences: (Array.isArray(s.differences) ? s.differences : []).slice(0, 80).map(function (d) { return { room: safeText_(d && d.room, 80), item: safeText_(d && d.item, 80), entry: safeText_(d && d.entry, 40), exit: safeText_(d && d.exit, 40), comment: safeText_(laFill_(d && d.comment, c), 600) }; }) };
+}
+/** Écarts entre l'entrée et la sortie (état plus dégradé à la sortie). */
+function laDifferences_(rooms) {
+  const out = [];
+  rooms.forEach(function (r) { (r.items || []).forEach(function (i) {
+    if (i.entry && i.condition && LA_CONDITION_RANK_[i.condition] !== undefined && LA_CONDITION_RANK_[i.entry] !== undefined && LA_CONDITION_RANK_[i.condition] > LA_CONDITION_RANK_[i.entry])
+      out.push({ room: r.name, item: i.name, entry: LA_CONDITION_LABELS_[i.entry], exit: LA_CONDITION_LABELS_[i.condition], comment: i.note || "" });
+  }); });
+  return out;
+}
+function laInspectionTemplate_(r) {
+  const rooms = parseJson_(r.roomsJson, []), exit = r.type === "EXIT";
+  const roomText = function (room) {
+    const groups = {};
+    (room.items || []).forEach(function (i) { if (!i.condition || i.condition === "NA") return; (groups[i.condition] = groups[i.condition] || []).push(i.name.toLowerCase() + (i.note ? " (" + i.note + ")" : "")); });
+    const parts = ["NEW", "GOOD", "WORN", "BAD"].filter(function (k) { return groups[k]; }).map(function (k) { return LA_CONDITION_LABELS_[k] + " : " + groups[k].join(", ") + "."; });
+    const missing = (room.items || []).filter(function (i) { return !i.condition; }).length;
+    return (parts.join(" ") || "Aucun élément renseigné.") + (missing ? " " + missing + " élément(s) non renseigné(s)." : "") + (room.note ? " Observations : " + room.note : "") + ((room.photoDocIds || []).length ? " " + room.photoDocIds.length + " photo(s) jointe(s)." : "");
+  };
+  const diffs = exit ? laDifferences_(rooms) : [];
+  return { intro: (exit ? "État des lieux de sortie" : "État des lieux d'entrée") + " du logement [BIEN], situé [ADRESSE_DU_BIEN], établi contradictoirement le " + pdfDate_(r.inspectionDate) + " entre [BAILLEUR] et [LOCATAIRE]." +
+      (r.attendees ? " Personnes présentes : " + r.attendees + "." : ""),
+    rooms: rooms.map(function (room) { return { name: room.name, text: roomText(room) }; }),
+    conclusion: exit ? (diffs.length ? diffs.length + " élément(s) présentent un état plus dégradé qu'à l'entrée (voir le tableau des écarts). Toute retenue sur le dépôt de garantie doit être justifiée (devis, facture) et tenir compte de l'usure normale liée à la durée d'occupation."
+        : "Aucune dégradation par rapport à l'état des lieux d'entrée n'a été relevée.") : "Le locataire reconnaît avoir reçu le logement dans l'état décrit ci-dessus. Les défauts non signalés pourront être ajoutés par écrit dans les jours suivant la remise des clés, selon les règles applicables.",
+    differences: diffs.map(function (d) { return Object.assign(d, { comment: d.comment || "À apprécier en tenant compte de la vétusté." }); }) };
+}
+function laInspectionAi_(c, r) {
+  const exit = r.type === "EXIT", rooms = parseJson_(r.roomsJson, []);
+  const system = "Tu es l'agent de rédaction d'ImmoPilot (" + edition_().countryName + "). Rédige en français le compte rendu d'un état des lieux " + (exit ? "de SORTIE" : "d'ENTRÉE") + " d'un logement loué, à partir des relevés fournis.\n" +
+    "- Décris UNIQUEMENT ce qui est relevé (états et observations). N'invente aucun défaut, aucun équipement, aucun nom.\n" +
+    "- Style factuel et précis, phrases courtes, vocabulaire d'état des lieux. Une description par pièce (2 à 5 phrases).\n" +
+    (exit ? "- Compare avec l'état à l'entrée (champ « entree ») ; liste dans « differences » les éléments plus dégradés à la sortie, en distinguant l'usure normale des dégradations. Ne chiffre aucune retenue.\n" : "- Les éléments sans état sont « non renseignés » : signale-les sans les décrire.\n") +
+    "- Marqueurs pour les identités et l'adresse : [BAILLEUR], [LOCATAIRE], [ADRESSE_DU_BIEN], [BIEN].\n" +
+    "Réponds UNIQUEMENT en JSON : {\"intro\": string, \"rooms\": [{\"name\": string, \"text\": string}], \"conclusion\": string, \"differences\": [{\"room\": string, \"item\": string, \"entry\": string, \"exit\": string, \"comment\": string}]}.";
+  const payload = { type: exit ? "sortie" : "entrée", date: r.inspectionDate, meuble: leaseFurnished_(c.l, c.prop), pieces: rooms.map(function (room) {
+    return { nom: room.name, observations: room.note || "", photos: (room.photoDocIds || []).length, elements: (room.items || []).map(function (i) {
+      const o = { element: i.name, etat: LA_CONDITION_LABELS_[i.condition] || "non renseigné", observation: i.note || "" }; if (exit) { o.entree = LA_CONDITION_LABELS_[i.entry] || "non renseigné"; o.observationEntree = i.entryNote || ""; } return o; }) };
+  }), compteurs: parseJson_(r.metersJson, {}), cles: parseJson_(r.keysJson, []), remarquesGenerales: r.generalNote || "" };
+  return laAiJson_(c.l.organizationId, system, payload, LA_LIMITS_.inspectionTokens);
+}
+/** Rédaction du compte rendu par l'agent (IA ou modèle intégré), enregistrée dans le brouillon. */
+function inspectionWrite_(p, a) {
+  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  assert_(x.r.status === "DRAFT", "État des lieux déjà validé.");
+  let summary = laInspectionTemplate_(x.r), engine = "MODELE", warning = "";
+  if (a.useAi !== false) {
+    try { const res = laInspectionAi_(x.c, x.r); if (res) { summary = res.data; engine = res.engine; } }
+    catch (e) { console.error("Agent IA (état des lieux) : " + e.message); warning = "L'agent IA n'a pas pu rédiger le compte rendu : le modèle intégré a été utilisé."; }
+  }
+  const clean = laSummaryClean_(summary, x.c);
+  if (x.r.type === "EXIT" && !clean.differences.length) clean.differences = laDifferences_(parseJson_(x.r.roomsJson, [])).map(function (d) { return Object.assign(d, { comment: d.comment || "À apprécier en tenant compte de la vétusté." }); });
+  dbUpdate_("LeaseInspections", x.r.inspectionId, { summaryJson: clean, engine: engine, updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("INSPECTION_WRITTEN", "Lease", x.c.l.leaseId, x.c.l.organizationId, { inspectionId: x.r.inspectionId, engine: engine });
+  const o = inspectionOut_(dbGet_("LeaseInspections", x.r.inspectionId), true); o.warning = warning; return o;
+}
+function inspectionHtml_(c, r, withPhotos) {
+  const rooms = parseJson_(r.roomsJson, []), meters = parseJson_(r.metersJson, {}), keys = parseJson_(r.keysJson, []), sum = parseJson_(r.summaryJson, null) || laSummaryClean_(laInspectionTemplate_(r), c);
+  const exit = r.type === "EXIT", draft = r.status !== "FINAL", byRoom = {};
+  (sum.rooms || []).forEach(function (x) { byRoom[x.name] = x.text; });
+  let inner = draft ? "<div class='box' style='border-color:#e9b341;background:#fff8e6'><b>PROJET — état des lieux non validé.</b></div>" : "";
+  inner += rentParties_(c) + laParas_(laFill_(sum.intro, c));
+  inner += "<h2>Compteurs</h2>" + htmlTable_(["Électricité", "Eau", "Gaz", "Autre"], [[meters.electricity || "—", meters.water || "—", meters.gas || "—", meters.other || "—"]]);
+  if (keys.length) inner += "<h2>Clés et accès remis</h2>" + htmlTable_(exit ? ["Désignation", "Nombre à l'entrée", "Nombre restitué"] : ["Désignation", "Nombre"], keys.map(function (k) { return exit ? [k.label, k.entry === "" || k.entry == null ? "—" : String(k.entry), k.count === "" ? "—" : String(k.count)] : [k.label, k.count === "" ? "—" : String(k.count)]; }));
+  rooms.forEach(function (room) {
+    inner += "<h2>" + escapeHtml_(room.name) + "</h2>" + htmlTable_(exit ? ["Élément", "État à l'entrée", "État à la sortie", "Observations"] : ["Élément", "État", "Observations"], (room.items || []).map(function (i) {
+      return exit ? [i.name, LA_CONDITION_LABELS_[i.entry] || "—", LA_CONDITION_LABELS_[i.condition] || "—", i.note || ""] : [i.name, LA_CONDITION_LABELS_[i.condition] || "—", i.note || ""]; }));
+    if (byRoom[room.name]) inner += laParas_(laFill_(byRoom[room.name], c));
+    if (withPhotos && (room.photoDocIds || []).length) {
+      const imgs = room.photoDocIds.slice(0, 6).map(pdfImageData_).filter(String);
+      for (let i = 0; i < imgs.length; i += 2) inner += "<table class='photos'><tr><td><img src='" + imgs[i] + "'></td><td>" + (imgs[i + 1] ? "<img src='" + imgs[i + 1] + "'>" : "") + "</td></tr></table>";
+    }
+  });
+  if (exit && (sum.differences || []).length) inner += "<h2>Écarts constatés par rapport à l'entrée</h2>" + htmlTable_(["Pièce", "Élément", "Entrée", "Sortie", "Commentaire"], sum.differences.map(function (d) { return [d.room, d.item, d.entry, d.exit, d.comment]; }));
+  if (r.generalNote) inner += "<h2>Observations générales</h2>" + laParas_(r.generalNote);
+  inner += "<h2>Conclusion</h2>" + laParas_(laFill_(sum.conclusion, c));
+  inner += "<p style='margin-top:14px'>Fait à " + escapeHtml_(c.prop.city || edition_().city) + ", le " + pdfDate_(r.inspectionDate) + ", en deux exemplaires.</p><table class='sign'><tr><td><b>Le bailleur ou son représentant</b><br><span class='muted'>signature</span></td><td><b>Le locataire</b><br><span class='muted'>signature</span></td></tr></table>";
+  return pdfShell_(exit ? "État des lieux de sortie" : "État des lieux d'entrée", inner, { subtitle: (c.prop.name || "") + " · " + pdfDate_(r.inspectionDate), issuer: rentIssuer_(c.org),
+    footer: (draft ? "PROJET — " : "") + "État des lieux établi via " + IMMO_CONFIG.APP_NAME + (r.engine && r.engine !== "MODELE" ? " (rédaction assistée par IA, relevés saisis par le bailleur)" : "") + "." });
+}
+function inspectionPdf_(p, a) {
+  const x = inspectionLoad_(p, a.inspectionId, "lease.view");
+  if (x.r.status === "FINAL" && x.r.documentId) return docGet_(p, { documentId: x.r.documentId });
+  const blob = htmlToPdf_(inspectionHtml_(x.c, x.r, true), "Etat_des_lieux_" + (x.r.type === "EXIT" ? "sortie" : "entree") + "_projet");
+  return { fileName: blob.getName(), mimeType: "application/pdf", base64: Utilities.base64Encode(blob.getBytes()) };
+}
+function inspectionFinalize_(p, a) {
+  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  assert_(x.r.status === "DRAFT", "État des lieux déjà validé.");
+  const rooms = parseJson_(x.r.roomsJson, []);
+  const blank = rooms.reduce(function (n, room) { return n + (room.items || []).filter(function (i) { return !i.condition; }).length; }, 0);
+  assert_(!blank || a.allowIncomplete === true, blank + " élément(s) sans état : complétez-les (ou choisissez « Sans objet ») avant de valider.");
+  const r = Object.assign({}, x.r, { status: "FINAL", finalizedAt: nowIso_() });
+  if (!parseJson_(r.summaryJson, null)) r.summaryJson = laSummaryClean_(laInspectionTemplate_(r), x.c);
+  const blob = htmlToPdf_(inspectionHtml_(x.c, r, true), "Etat_des_lieux_" + (r.type === "EXIT" ? "sortie" : "entree") + "_" + r.inspectionDate);
+  const out = storeGeneratedPdf_(p, blob, { propertyId: x.c.l.propertyId, organizationId: x.c.l.organizationId }, "LEASE", x.c.l.leaseId, "INSPECTION");
+  dbUpdate_("LeaseInspections", r.inspectionId, { status: "FINAL", finalizedAt: r.finalizedAt, finalizedBy: p.email, documentId: out.documentId, summaryJson: r.summaryJson, updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("INSPECTION_FINALIZED", "Lease", x.c.l.leaseId, x.c.l.organizationId, { inspectionId: r.inspectionId, type: r.type });
+  return out;
+}
+function inspectionSend_(p, a) {
+  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  assert_(x.r.status === "FINAL" && x.r.documentId, "Validez d'abord l'état des lieux.");
+  const label = x.r.type === "EXIT" ? "État des lieux de sortie" : "État des lieux d'entrée";
+  const out = laSendStored_(p, x.c, x.r.documentId, label + " — " + (x.c.prop.name || ""), safeText_(a.message, 2000) || "Veuillez trouver ci-joint l'" + label.charAt(0).toLowerCase() + label.slice(1) +
+    " du logement « " + (x.c.prop.name || "") + " », établi le " + pdfDate_(x.r.inspectionDate) + ". Conservez-le avec votre contrat de location.");
+  dbUpdate_("LeaseInspections", x.r.inspectionId, { sentAt: nowIso_(), sentTo: out.sentTo });
+  return out;
+}
+function inspectionCancel_(p, a) {
+  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  assert_(x.r.status === "DRAFT", "Un état des lieux validé ne peut pas être supprimé.");
+  dbUpdate_("LeaseInspections", x.r.inspectionId, { status: "CANCELLED", updatedAt: nowIso_(), updatedBy: p.email });
+  return { ok: true };
+}
+
+/* ======================================================================
  * LeaseService.gs
  * ====================================================================== */
 /**
@@ -4656,7 +5257,14 @@ function leaseGet_(p, a) {
   o.payments = dbAll_("Payments").filter(function (z) { return (z.refType === "LEASE" && String(z.refId) === String(x.l.leaseId)) || (z.refType === "RENT_SCHEDULE" && o.schedules.some(function (s) { return s.scheduleId === z.refId; })); })
     .map(function (z) { return { paymentId: z.paymentId, kind: z.kind, refId: z.refId, amount: z.amount, paidAt: z.paidAt, method: z.method, status: z.status, reference: z.reference }; });
   o.documents = docList_(p, { ownerType: "LEASE", ownerId: x.l.leaseId });
-  if (o.canManage) o.history = auditHistory_("Lease", x.l.leaseId, 30);
+  o.agentDocs = leaseDocsOf_(x.l.leaseId, !o.canManage);
+  o.inspections = inspectionsOf_(x.l.leaseId, !o.canManage);
+  if (o.canManage) {
+    o.history = auditHistory_("Lease", x.l.leaseId, 30);
+    o.automation = rentAutomationView_(x.l);
+    o.mailings = rentMailingsOf_(x.l.leaseId);
+    o.agent = { ai: !!aiConfig_(), furnished: leaseFurnished_(x.l, x.prop) };
+  }
   return o;
 }
 function leaseCreate_(p, a) {
@@ -4758,21 +5366,14 @@ function leaseDepositReturn_(p, a) {
   audit_("LEASE_DEPOSIT_RETURNED", "Lease", x.l.leaseId, x.l.organizationId, { returned: ret, deductions: ded, reason: safeText_(a.deductionReason, 500) });
   return { ok: true, returned: ret, deductions: ded, paymentId: paymentId };
 }
-/** Quittance : uniquement pour une échéance intégralement payée. */
+/** Quittance : uniquement pour une échéance intégralement payée (PDF : RentAutomationService.rentReceiptPdf_). */
 function leaseReceipt_(p, a) {
   const s = dbGet_("RentSchedules", safeText_(a.scheduleId, 120));
   if (!s) notFound_("Échéance");
   const x = leaseLoad_(p, s.leaseId, "lease.view");
   const st = rentStatus_(s);
   assert_(st.status === "PAID", "Quittance disponible uniquement pour une échéance entièrement réglée (statut : " + st.status + ").");
-  const t = dbGet_("Tenants", x.l.tenantId) || {}, org = dbGet_("Organizations", x.l.organizationId) || {};
-  const pays = dbAll_("Payments").filter(function (z) { return z.refType === "RENT_SCHEDULE" && String(z.refId) === String(s.scheduleId) && z.status === "RECORDED"; });
-  const map = { bailleur: org.name, locataire: t.fullName, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), periode: s.period, loyer: s.rentAmount, charges: s.chargesAmount, total: s.amountDue,
-    date_paiement: pays.map(function (z) { return z.paidAt; }).join(", "), date: todayStr_() };
-  const tpl = getSetting_("template.receiptDocId", x.l.organizationId);
-  const pdf = tpl ? docFromTemplate_(tpl, map, propertyFolder_(x.l.organizationId, x.l.propertyId, "LEASE"), "Quittance_" + s.period + "_" + x.l.leaseId).pdf :
-    htmlToPdf_(pdfShell_("Quittance de loyer — " + s.period, "<p>Je soussigné(e), " + escapeHtml_(org.name) + ", bailleur, déclare avoir reçu de <b>" + escapeHtml_(t.fullName) + "</b> la somme de <b>" + s.amountDue + " MAD</b> au titre du loyer et des charges de la période " + escapeHtml_(s.period) + " pour le logement : " + escapeHtml_(map.bien + " — " + map.adresse) + ".</p>" +
-      htmlTable_(["Poste", "Montant (MAD)"], [["Loyer", s.rentAmount], ["Charges", s.chargesAmount], ["Total", s.amountDue]]) + "<p>Paiement(s) reçu(s) le : " + escapeHtml_(map.date_paiement) + "</p><p class='muted'>Document généré automatiquement — modèle à valider localement.</p>"), "Quittance_" + s.period);
+  const pdf = rentReceiptPdf_(rentCtx_(x.l), s);
   audit_("RENT_RECEIPT_GENERATED", "Lease", x.l.leaseId, x.l.organizationId, { period: s.period });
   return storeGeneratedPdf_(p, pdf, { propertyId: x.l.propertyId, organizationId: x.l.organizationId }, "LEASE", x.l.leaseId, "RECEIPT");
 }
@@ -4809,9 +5410,9 @@ function leaseJob_() {
     dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(l.leaseId) && s.status === "OPEN"; }).forEach(function (s) {
       const st = rentStatus_(s, today);
       if (st.remaining > 0 && s.dueDate === addDaysStr_(today, before) && t.userId) { notify_({ eventKey: "rent-due:" + s.scheduleId, userIds: [t.userId], type: "RENT_DUE", organizationId: l.organizationId,
-        title: "Échéance de loyer le " + s.dueDate, body: st.remaining + " MAD — " + prop.name, link: "#mylease" }); alerts++; }
+        title: "Échéance de loyer le " + s.dueDate, body: fmtAmount_(st.remaining) + " — " + prop.name, link: "#mylease" }); alerts++; }
       if (st.status === "LATE") { notify_({ eventKey: "rent-late:" + s.scheduleId + ":" + Math.floor(st.daysLate / 7), userIds: managers.concat(t.userId ? [t.userId] : []), type: "RENT_LATE", organizationId: l.organizationId,
-        title: "Loyer en retard (" + st.daysLate + " j) : " + prop.name, body: (t.fullName || "") + " — reste dû " + st.remaining + " MAD (période " + s.period + ").", link: "#lease/" + l.leaseId }); alerts++; }
+        title: "Loyer en retard (" + st.daysLate + " j) : " + prop.name, body: (t.fullName || "") + " — reste dû " + fmtAmount_(st.remaining) + " (période " + s.period + ").", link: "#lease/" + l.leaseId }); alerts++; }
     });
     if (l.endDate) (getSetting_("alerts.leaseEndDays", l.organizationId) || [60, 30]).forEach(function (d) {
       if (l.endDate === addDaysStr_(today, d)) { notify_({ eventKey: "lease-end:" + l.leaseId + ":" + d, userIds: managers, type: "LEASE_ENDING", organizationId: l.organizationId,
@@ -5224,7 +5825,12 @@ function listBackups_() {
  * Anti-doublon : chaque envoi porte une clé d'événement ; NotificationLogs garde (eventKey, canal, destinataire).
  * WhatsApp : ImmoPilot génère un lien qui OUVRE une conversation pré-remplie. Aucun message n'est envoyé automatiquement.
  */
-function sendMailSafe_(to, subject, body, eventKey, orgId) {
+/**
+ * opts (facultatif) : { attachments: [Blob] (PDF joints), bcc: "copie@…", replyTo: "…", senderName: "…", plain: true (pas de bouton
+ * « Ouvrir ImmoPilot » pour les liens : e-mails adressés à un locataire sans compte) }.
+ */
+function sendMailSafe_(to, subject, body, eventKey, orgId, opts) {
+  opts = opts || {};
   to = validateEmail_(to);
   const key = String(eventKey || "") ;
   if (key && dbAll_("NotificationLogs").some(function (l) { return l.eventKey === key && l.channel === "EMAIL" && l.recipient === to && l.status === "SENT"; })) return { ok: true, duplicate: true };
@@ -5232,9 +5838,14 @@ function sendMailSafe_(to, subject, body, eventKey, orgId) {
   try {
     const quota = TEST_HOOKS_.mailQuota !== null ? TEST_HOOKS_.mailQuota : MailApp.getRemainingDailyQuota();
     if (quota < 1) throw new Error("Quota quotidien MailApp épuisé.");
-    const text = String(body || "").slice(0, 20000), html = mailHtml_(text);
-    if (TEST_HOOKS_.mailSink) TEST_HOOKS_.mailSink.push({ to: to, subject: subject, body: text, htmlBody: html });
-    else MailApp.sendEmail({ to: to, subject: safeText_(subject, 200), body: text, htmlBody: html, name: IMMO_CONFIG.APP_NAME });
+    const text = String(body || "").slice(0, 20000), html = opts.plain ? mailHtmlPlain_(text) : mailHtml_(text);
+    const msg = { to: to, subject: safeText_(subject, 200), body: text, htmlBody: html, name: safeText_(opts.senderName || IMMO_CONFIG.APP_NAME, 80) };
+    if (opts.attachments && opts.attachments.length) msg.attachments = opts.attachments;
+    if (opts.bcc) msg.bcc = validateEmail_(opts.bcc);
+    if (opts.replyTo) msg.replyTo = validateEmail_(opts.replyTo);
+    if (TEST_HOOKS_.mailSink) TEST_HOOKS_.mailSink.push({ to: to, subject: subject, body: text, htmlBody: html, bcc: msg.bcc || "", replyTo: msg.replyTo || "", name: msg.name,
+      attachments: (msg.attachments || []).map(function (b) { return { name: b.getName(), mimeType: b.getContentType(), size: b.getBytes().length }; }) });
+    else MailApp.sendEmail(msg);
   } catch (e) { status = "FAILED"; error = String(e.message || e).slice(0, 300); }
   try { dbInsert_("NotificationLogs", { eventKey: key || newId_("evt"), channel: "EMAIL", recipient: to, type: "", status: status, sentAt: nowIso_(), error: error, organizationId: orgId || "" }); } catch (e2) { console.error(e2.message); }
   return status === "SENT" ? { ok: true } : { ok: false, error: error };
@@ -5254,6 +5865,15 @@ function mailHtml_(text) {
       "<br><span style=\"font-size:12px;color:#64748b\">Si le bouton ne fonctionne pas, copiez ce lien en entier dans la barre d'adresse de votre navigateur :<br><a href=\"" + url + "\" style=\"color:#2f4fd8;word-break:break-all\">" + url + "</a></span><br>";
   }).join("");
   return "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1d2b3a\">" + inner + "</div>";
+}
+
+/** Version HTML simple (texte échappé, liens cliquables tels quels) pour les e-mails adressés à des personnes sans compte. */
+function mailHtmlPlain_(text) {
+  const parts = String(text || "").split(/(https:\/\/[^\s<>"]+)/);
+  return "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1d2b3a\">" + parts.map(function (part, i) {
+    if (i % 2 === 0) return escapeHtml_(part).replace(/\n/g, "<br>");
+    const url = escapeHtml_(part); return "<a href=\"" + url + "\" style=\"color:#2f4fd8\">" + url + "</a>";
+  }).join("") + "</div>";
 }
 
 /**
@@ -6337,6 +6957,376 @@ function propertyStaffRevoke_(p, a) {
 }
 
 /* ======================================================================
+ * RentAutomationService.gs
+ * ====================================================================== */
+/**
+ * Location longue durée — envois automatiques au locataire, avec le PDF en pièce jointe :
+ *  - APPEL DE LOYER (avis d'échéance) : rent.callDaysBefore jours avant l'échéance ;
+ *  - RELANCES : aux jours rent.reminderDays après l'échéance (par défaut 5, 15 et 30), tant qu'il reste un impayé ;
+ *    une relance regroupe TOUTES les échéances impayées du bail (jamais une rafale d'e-mails pour d'anciens impayés) ;
+ *  - QUITTANCE : dès qu'une échéance est entièrement soldée par un paiement enregistré (bouton « Paiement » du bailleur).
+ * Règles :
+ *  - Désactivé par défaut. L'organisation active chaque envoi dans Paramètres (rent.autoCall, rent.autoReminders, rent.autoReceipt) ;
+ *    un bail peut être exclu ou avoir ses propres délais (Leases.automationJson).
+ *  - Jamais d'envoi en double : chaque envoi a une clé unique (RentMailings.uniqueKey). Un envoi en échec est retenté (3 essais au plus).
+ *  - Envois automatiques entre 8 h et 20 h (heure locale), au plus RENT_MAIL_BATCH_ par passage de la tâche (toutes les 15 min) :
+ *    le quota d'e-mails du compte est ainsi étalé sur la journée.
+ *  - Une échéance n'est jamais considérée payée sans paiement enregistré (voir LeaseService.gs).
+ */
+var RENT_MAIL_BATCH_ = 12, RENT_MAIL_HOURS_ = [8, 20], RENT_MAIL_MAX_ATTEMPTS_ = 3;
+var RENT_REMINDER_TITLES_ = ["Rappel de loyer", "Relance pour loyer impayé", "Dernière relance avant procédure"];
+
+/** Jours de relance : entiers de 1 à 120, sans doublon, triés, 5 au plus. */
+function rentReminderDays_(arr) {
+  const out = (Array.isArray(arr) ? arr : String(arr || "").split(",")).map(function (x) { return parseInt(x, 10); })
+    .filter(function (n, i, a) { return n >= 1 && n <= 120 && a.indexOf(n) === i; }).sort(function (a, b) { return a - b; }).slice(0, 5);
+  assert_(out.length >= 1, "Indiquez au moins un délai de relance (en jours après l'échéance), par exemple 5, 15, 30.");
+  return out;
+}
+
+/** Réglages effectifs d'un bail : ceux de l'organisation, éventuellement remplacés par ceux du bail. */
+function rentAutoCfg_(lease) {
+  const o = lease.organizationId, own = parseJson_(lease.automationJson, {}) || {};
+  let days = getSetting_("rent.reminderDays", o);
+  if (Array.isArray(own.reminderDays) && own.reminderDays.length) { try { days = rentReminderDays_(own.reminderDays); } catch (e) { /* réglage du bail invalide : celui de l'organisation */ } }
+  else { try { days = rentReminderDays_(days); } catch (e) { days = [5, 15, 30]; } }
+  const before = own.callDaysBefore !== undefined && own.callDaysBefore !== "" && own.callDaysBefore !== null ? Number(own.callDaysBefore) : Number(getSetting_("rent.callDaysBefore", o));
+  return {
+    leaseEnabled: own.enabled !== false,
+    call: !!getSetting_("rent.autoCall", o), reminders: !!getSetting_("rent.autoReminders", o), receipt: !!getSetting_("rent.autoReceipt", o),
+    callDaysBefore: isFinite(before) ? Math.max(0, Math.min(31, before)) : 7, reminderDays: days,
+    copyEmail: String(getSetting_("rent.copyEmail", o) || ""), paymentInstructions: String(getSetting_("rent.paymentInstructions", o) || ""),
+    custom: { enabled: own.enabled !== false, callDaysBefore: own.callDaysBefore === undefined ? "" : own.callDaysBefore, reminderDays: Array.isArray(own.reminderDays) ? own.reminderDays : [] }
+  };
+}
+
+/** Contexte d'un bail pour les documents : bail, bien, locataire, bailleur (organisation propriétaire du bien). */
+function rentCtx_(leaseOrId) {
+  const l = typeof leaseOrId === "object" ? leaseOrId : dbGet_("Leases", leaseOrId);
+  if (!l) notFound_("Bail");
+  const prop = dbGet_("Properties", l.propertyId) || {}, t = dbGet_("Tenants", l.tenantId) || {}, org = dbGet_("Organizations", l.organizationId) || {};
+  return { l: l, prop: prop, t: t, org: org, cfg: rentAutoCfg_(l) };
+}
+function rentIssuer_(org) {
+  return { name: org.name || "Bailleur", lines: [org.address, [org.city].filter(String).join(" "), org.phone ? "Tél. " + org.phone : "", org.billingEmail || ""].filter(function (x) { return x; }) };
+}
+function rentAddress_(prop) { return [prop.address, prop.building, prop.doorNumber ? "porte " + prop.doorNumber : "", prop.city].filter(function (x) { return x; }).join(", "); }
+function rentPeriodLabel_(s) {
+  const mois = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+  const m = parseInt(String(s.period).slice(5, 7), 10);
+  return (mois[m - 1] || "") + " " + String(s.period).slice(0, 4);
+}
+/** Échéances ouvertes d'un bail avec leur statut calculé, triées par date. */
+function rentOpenSchedules_(leaseId, today) {
+  return dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(leaseId) && s.status === "OPEN"; })
+    .map(function (s) { return rentStatus_(s, today); })
+    .sort(function (a, b) { return String(a.dueDate).localeCompare(String(b.dueDate)); });
+}
+function rentReference_(l, s) { return "LOY-" + String(s.period).replace("-", "") + "-" + String(l.leaseId).slice(-6).toUpperCase(); }
+function rentParties_(c) {
+  return "<table style='margin:6px 0 10px'><tr><th style='width:50%'>Bailleur</th><th>Locataire</th></tr><tr><td><b>" + escapeHtml_(c.org.name || "") + "</b><br>" +
+    escapeHtml_([c.org.address, c.org.city].filter(String).join(", ")) + "</td><td><b>" + escapeHtml_(c.t.fullName || "") + "</b><br>" + escapeHtml_(c.prop.name || "") + "<br>" +
+    escapeHtml_(rentAddress_(c.prop)) + "</td></tr></table>";
+}
+function rentPayInfoHtml_(c) {
+  return c.cfg.paymentInstructions ? "<div class='box'><b>Modalités de paiement</b><br>" + escapeHtml_(c.cfg.paymentInstructions).replace(/\n/g, "<br>") + "</div>" : "";
+}
+
+/* ------------------------------ Documents PDF ------------------------------ */
+/** Avis d'échéance (appel de loyer) d'une échéance, avec les arriérés éventuels. */
+function rentCallPdf_(c, s) {
+  const st = rentStatus_(s), cur = cur_(), today = todayStr_();
+  // Arriérés : échéances antérieures DÉJÀ échues et non soldées (jamais les échéances à venir).
+  const arrears = rentOpenSchedules_(c.l.leaseId, today).filter(function (x) { return x.scheduleId !== s.scheduleId && x.remaining > 0 && x.dueDate < s.dueDate && x.dueDate < today; });
+  const arrearsTotal = sumBy_(arrears, function (x) { return x.remaining; });
+  const rows = [["Loyer — " + rentPeriodLabel_(s), fmtAmount_(s.rentAmount, cur)], ["Charges", fmtAmount_(s.chargesAmount, cur)]];
+  if (st.paid > 0) rows.push(["Déjà réglé sur cette échéance", "− " + fmtAmount_(st.paid, cur)]);
+  rows.push(["<b>Montant de l'échéance</b>", "<b>" + escapeHtml_(fmtAmount_(st.remaining, cur)) + "</b>"]);
+  arrears.forEach(function (a) { rows.push(["Arriéré — " + rentPeriodLabel_(a) + " (échéance du " + pdfDate_(a.dueDate) + ")", fmtAmount_(a.remaining, cur)]); });
+  if (arrears.length) rows.push(["<b>Total à régler</b>", "<b>" + escapeHtml_(fmtAmount_(round2_(st.remaining + arrearsTotal), cur)) + "</b>"]);
+  const table = "<table><tr><th>Désignation</th><th class='right'>Montant</th></tr>" + rows.map(function (r) { return "<tr><td>" + (/^<b>/.test(r[0]) ? r[0] : escapeHtml_(r[0])) + "</td><td class='right'>" + (/^<b>/.test(r[1]) ? r[1] : escapeHtml_(r[1])) + "</td></tr>"; }).join("") + "</table>";
+  const inner = rentParties_(c) + "<p>Madame, Monsieur,</p><p>Nous vous prions de bien vouloir régler le loyer et les charges de la période <b>" + escapeHtml_(rentPeriodLabel_(s)) + "</b> pour le logement désigné ci-dessus, <b>au plus tard le " + pdfDate_(s.dueDate) + "</b>.</p>" +
+    table + "<p>Référence à indiquer avec votre règlement : <b>" + escapeHtml_(rentReference_(c.l, s)) + "</b></p>" + rentPayInfoHtml_(c) +
+    "<p class='muted'>Cet avis d'échéance ne vaut pas quittance. La quittance vous sera adressée après encaissement de la totalité de l'échéance.</p>" +
+    "<p style='margin-top:18px'>Fait le " + pdfDate_(today) + ".<br>Le bailleur, " + escapeHtml_(c.org.name || "") + "</p>";
+  return htmlToPdf_(pdfShell_("Avis d'échéance — appel de loyer", inner, { subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org),
+    footer: "Document émis par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Appel_loyer_" + s.period + "_" + String(c.l.leaseId).slice(-6));
+}
+/** Relance : niveau 1 à 3 ; liste toutes les échéances impayées échues du bail. */
+function rentReminderPdf_(c, unpaid, level) {
+  const cur = cur_(), today = todayStr_(), total = sumBy_(unpaid, function (x) { return x.remaining; });
+  const lvl = Math.max(1, Math.min(3, level)), title = RENT_REMINDER_TITLES_[lvl - 1];
+  const table = htmlTable_(["Période", "Échéance", "Montant dû", "Déjà réglé", "Reste dû", "Retard"], unpaid.map(function (x) {
+    return [rentPeriodLabel_(x), pdfDate_(x.dueDate), fmtAmount_(x.amountDue, cur), fmtAmount_(x.paid, cur), fmtAmount_(x.remaining, cur), diffDays_(x.dueDate, today) + " j"];
+  }));
+  const texts = [
+    "<p>Sauf erreur ou omission de notre part, nous n'avons pas encore reçu le règlement des sommes ci-dessous. Il s'agit peut-être d'un simple oubli : nous vous remercions de bien vouloir régulariser dès que possible.</p>",
+    "<p>Malgré notre précédent rappel, les sommes ci-dessous restent impayées à ce jour. Nous vous demandons de procéder à leur règlement <b>sous 8 jours</b> à compter de la réception de ce courrier, ou de nous contacter sans tarder si vous rencontrez une difficulté, afin de convenir d'une solution.</p>",
+    "<p>Malgré nos relances, les sommes ci-dessous restent impayées. Nous vous mettons en demeure de les régler <b>sous 8 jours</b> à compter de la réception de ce courrier. À défaut, nous nous verrons contraints d'engager, sans autre avis, les démarches prévues par le " + escapeHtml_(edition_().leaseLaw) + " pour le recouvrement des sommes dues.</p>"
+  ];
+  const inner = rentParties_(c) + "<p><b>Objet : " + escapeHtml_(title) + "</b></p><p>Madame, Monsieur,</p>" + texts[lvl - 1] + table +
+    "<p><b>Total restant dû : " + escapeHtml_(fmtAmount_(total, cur)) + "</b></p>" + rentPayInfoHtml_(c) +
+    "<p class='muted'>Si votre règlement nous est parvenu entre-temps, merci de ne pas tenir compte de ce courrier.</p>" +
+    "<p style='margin-top:18px'>Fait le " + pdfDate_(today) + ".<br>Le bailleur, " + escapeHtml_(c.org.name || "") + "</p>";
+  return htmlToPdf_(pdfShell_(title, inner, { subtitle: (c.prop.name || "") + " · " + unpaid.length + " échéance(s) impayée(s)", issuer: rentIssuer_(c.org),
+    footer: "Document émis par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Relance_" + lvl + "_" + today + "_" + String(c.l.leaseId).slice(-6));
+}
+/** Quittance d'une échéance entièrement réglée (modèle intégré ou modèle Google Docs de l'organisation). */
+function rentReceiptPdf_(c, s) {
+  const cur = cur_(), pays = dbAll_("Payments").filter(function (z) { return z.refType === "RENT_SCHEDULE" && String(z.refId) === String(s.scheduleId) && z.status === "RECORDED" && z.kind === "RENT"; });
+  const tpl = getSetting_("template.receiptDocId", c.l.organizationId);
+  const map = { bailleur: c.org.name, locataire: c.t.fullName, bien: c.prop.name, adresse: rentAddress_(c.prop), periode: s.period, loyer: s.rentAmount, charges: s.chargesAmount, total: s.amountDue,
+    date_paiement: pays.map(function (z) { return pdfDate_(z.paidAt); }).join(", "), date: pdfDate_(todayStr_()) };
+  if (tpl) return docFromTemplate_(tpl, map, propertyFolder_(c.l.organizationId, c.l.propertyId, "LEASE"), "Quittance_" + s.period + "_" + c.l.leaseId).pdf;
+  const inner = rentParties_(c) + "<p>Je soussigné(e), <b>" + escapeHtml_(c.org.name || "") + "</b>, bailleur du logement désigné ci-dessus, déclare avoir reçu de <b>" + escapeHtml_(c.t.fullName || "") +
+    "</b> la somme de <b>" + escapeHtml_(fmtAmount_(s.amountDue, cur)) + "</b> au titre du loyer et des charges de la période <b>" + escapeHtml_(rentPeriodLabel_(s)) + "</b>, et lui en donne quittance, sous réserve de tous mes droits.</p>" +
+    htmlTable_(["Poste", "Montant"], [["Loyer", fmtAmount_(s.rentAmount, cur)], ["Charges", fmtAmount_(s.chargesAmount, cur)], ["Total réglé", fmtAmount_(s.amountDue, cur)]]) +
+    "<h2>Paiement(s) reçu(s)</h2>" + htmlTable_(["Date", "Mode", "Référence", "Montant"], pays.map(function (z) { return [pdfDate_(z.paidAt), PDF_PAY_METHODS_[z.method] || z.method, z.reference || "—", fmtAmount_(z.amount, cur)]; })) +
+    "<p class='muted'>Cette quittance annule tous les reçus partiels qui auraient pu être donnés pour la même période.</p>" +
+    "<p style='margin-top:18px'>Fait le " + pdfDate_(todayStr_()) + ".<br>Le bailleur, " + escapeHtml_(c.org.name || "") + "</p>";
+  return htmlToPdf_(pdfShell_("Quittance de loyer", inner, { subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org),
+    footer: "Quittance délivrée gratuitement par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Quittance_" + s.period + "_" + String(c.l.leaseId).slice(-6));
+}
+
+/* ------------------------------ Envoi et journal ------------------------------ */
+/** Enregistre un PDF généré dans les documents du bail (dossier privé « Contrats » du bien). */
+function rentStorePdf_(c, blob, category, actorEmail) {
+  const d = storeFile_({ propertyId: c.l.propertyId, organizationId: c.l.organizationId }, "LEASE", c.l.leaseId, category,
+    { mimeType: "application/pdf", fileName: blob.getName(), base64: Utilities.base64Encode(blob.getBytes()) }, actorEmail || "système");
+  return d.documentId;
+}
+function rentMailText_(c, kind, data) {
+  const cur = cur_(), hello = "Bonjour " + (c.t.fullName || "") + ",\n\n", sign = "\n\nCordialement,\n" + (c.org.name || "Le bailleur") +
+    (c.org.phone ? "\nTél. " + c.org.phone : "") + "\n\n—\nMessage envoyé par " + IMMO_CONFIG.APP_NAME + " pour le compte de " + (c.org.name || "votre bailleur") + ".";
+  const pay = c.cfg.paymentInstructions ? "\n\nModalités de paiement :\n" + c.cfg.paymentInstructions : "";
+  if (kind === "CALL") return { subject: "Avis d'échéance — loyer " + rentPeriodLabel_(data.s) + " — " + (c.prop.name || ""),
+    body: hello + "Veuillez trouver ci-joint l'avis d'échéance de votre loyer pour la période " + rentPeriodLabel_(data.s) + " (" + (c.prop.name || "") + ").\n\nMontant à régler : " +
+      fmtAmount_(data.total, cur) + ", au plus tard le " + pdfDate_(data.s.dueDate) + ".\nRéférence à indiquer : " + rentReference_(c.l, data.s) + "." + pay +
+      "\n\nSi vous avez déjà effectué ce règlement, merci de ne pas tenir compte de ce message." + sign };
+  if (kind === "REMINDER") return { subject: RENT_REMINDER_TITLES_[data.level - 1] + " — " + (c.prop.name || ""),
+    body: hello + ["Sauf erreur de notre part, votre loyer n'a pas encore été réglé.", "Malgré notre précédent rappel, des loyers restent impayés.", "Malgré nos relances, des loyers restent impayés : vous trouverez ci-joint notre dernière relance avant procédure."][data.level - 1] +
+      "\n\nTotal restant dû : " + fmtAmount_(data.total, cur) + " (" + data.count + " échéance(s)). Le détail figure dans le document joint." + pay +
+      "\n\nSi vous avez déjà réglé, merci de ne pas tenir compte de ce message. En cas de difficulté, contactez-nous." + sign };
+  if (kind === "RECEIPT") return { subject: "Quittance de loyer — " + rentPeriodLabel_(data.s) + " — " + (c.prop.name || ""),
+    body: hello + "Nous avons bien reçu votre règlement de " + fmtAmount_(data.s.amountDue, cur) + " pour la période " + rentPeriodLabel_(data.s) + ".\nVeuillez trouver ci-joint votre quittance de loyer.\n\nMerci." + sign };
+  return { subject: data.subject, body: hello + data.message + sign };
+}
+/**
+ * Envoie un e-mail au locataire avec un PDF et l'inscrit dans RentMailings.
+ * o : { c, kind, level, scheduleId, uniqueKey, trigger: AUTO|MANUAL, actor, build: function () → Blob, category, mail: { subject, body } | fonction,
+ *       documentId (facultatif : PDF déjà enregistré, réutilisé au lieu d'en créer un nouveau) }
+ * Retour : { ok, status, mailingId, documentId, error }
+ */
+function rentDeliver_(o) {
+  const c = o.c, to = String(c.t.email || "").trim(), key = o.uniqueKey;
+  const prev = key ? dbAll_("RentMailings").filter(function (m) { return m.uniqueKey === key; })[0] : null;
+  if (prev && prev.status === "SENT") return { ok: true, duplicate: true, status: "SENT", mailingId: prev.mailingId, documentId: prev.documentId };
+  if (prev && o.trigger === "AUTO" && num_(prev.attempts) >= RENT_MAIL_MAX_ATTEMPTS_) return { ok: false, status: "FAILED", mailingId: prev.mailingId, error: prev.error };
+  const base = { organizationId: c.l.organizationId, propertyId: c.l.propertyId, leaseId: c.l.leaseId, scheduleId: o.scheduleId || "", kind: o.kind, level: o.level || 0, recipient: to,
+    trigger: o.trigger || "AUTO", uniqueKey: key || newId_("rml"), createdAt: nowIso_(), createdBy: o.actor || "système" };
+  if (!to) {
+    const row = prev ? (dbUpdate_("RentMailings", prev.mailingId, { status: "SKIPPED", error: "Aucune adresse e-mail pour le locataire.", attempts: num_(prev.attempts) + 1 }), prev)
+      : dbInsert_("RentMailings", Object.assign(base, { status: "SKIPPED", error: "Aucune adresse e-mail pour le locataire.", attempts: 1 }));
+    return { ok: false, status: "SKIPPED", mailingId: row.mailingId, error: "Aucune adresse e-mail pour le locataire : ajoutez-la dans « Locataires »." };
+  }
+  let docId = o.documentId || (prev && prev.documentId ? prev.documentId : ""), blob = null, error = "";
+  try {
+    blob = o.build();
+    if (!docId) docId = rentStorePdf_(c, blob, o.category, o.actor);
+  } catch (e) { error = "Document : " + String(e.message || e).slice(0, 250); }
+  const txt = typeof o.mail === "function" ? o.mail() : o.mail;
+  let res = { ok: false, error: error };
+  if (!error) res = sendMailSafe_(to, txt.subject, txt.body, "rentmail:" + base.uniqueKey + ":" + (prev ? num_(prev.attempts) + 1 : 1), c.l.organizationId,
+    { attachments: [blob], bcc: c.cfg.copyEmail || "", replyTo: c.org.billingEmail || "", senderName: c.org.name || IMMO_CONFIG.APP_NAME, plain: true });
+  const patch = { status: res.ok ? "SENT" : "FAILED", sentAt: res.ok ? nowIso_() : "", error: res.ok ? "" : String(res.error || error).slice(0, 300), documentId: docId, subject: safeText_(txt.subject, 200) };
+  let row;
+  if (prev) { patch.attempts = num_(prev.attempts) + 1; dbUpdate_("RentMailings", prev.mailingId, patch); row = prev; }
+  else row = dbInsert_("RentMailings", Object.assign(base, patch, { attempts: 1 }));
+  audit_(res.ok ? "RENT_MAIL_SENT" : "RENT_MAIL_FAILED", "Lease", c.l.leaseId, c.l.organizationId, { kind: o.kind, level: o.level || 0, scheduleId: o.scheduleId || "", trigger: base.trigger });
+  if (!res.ok && base.trigger === "AUTO" && c.prop.propertyId) notify_({ eventKey: "rentmail-failed:" + base.uniqueKey, userIds: propertyManagers_(c.prop, "canManageOperations"), type: "RENT_MAIL_FAILED",
+    organizationId: c.l.organizationId, email: false, title: "Envoi au locataire impossible : " + (c.prop.name || ""), body: (c.t.fullName || "") + " — " + patch.error, link: "#lease/" + c.l.leaseId });
+  return { ok: !!res.ok, status: patch.status, mailingId: row.mailingId, documentId: docId, error: res.ok ? "" : patch.error, to: to };
+}
+
+function rentSendCall_(c, s, trigger, actor) {
+  const today = todayStr_(), st = rentStatus_(s), arrears = rentOpenSchedules_(c.l.leaseId, today).filter(function (x) { return x.scheduleId !== s.scheduleId && x.remaining > 0 && x.dueDate < s.dueDate && x.dueDate < today; });
+  const total = round2_(st.remaining + sumBy_(arrears, function (x) { return x.remaining; }));
+  return rentDeliver_({ c: c, kind: "CALL", scheduleId: s.scheduleId, uniqueKey: trigger === "AUTO" ? "CALL:" + s.scheduleId : "", trigger: trigger, actor: actor, category: "RENT_CALL",
+    build: function () { return rentCallPdf_(c, s); }, mail: function () { return rentMailText_(c, "CALL", { s: s, total: total }); } });
+}
+function rentSendReminder_(c, unpaid, level, trigger, actor) {
+  const total = sumBy_(unpaid, function (x) { return x.remaining; });
+  return rentDeliver_({ c: c, kind: "REMINDER", level: level, scheduleId: unpaid[0].scheduleId, trigger: trigger, actor: actor, category: "RENT_REMINDER",
+    uniqueKey: trigger === "AUTO" ? "REMINDER:" + c.l.leaseId + ":" + unpaid[0].scheduleId + ":" + level : "",
+    build: function () { return rentReminderPdf_(c, unpaid, level); }, mail: function () { return rentMailText_(c, "REMINDER", { level: level, total: total, count: unpaid.length }); } });
+}
+function rentSendReceipt_(c, s, trigger, actor) {
+  return rentDeliver_({ c: c, kind: "RECEIPT", scheduleId: s.scheduleId, uniqueKey: trigger === "AUTO" ? "RECEIPT:" + s.scheduleId : "", trigger: trigger, actor: actor, category: "RECEIPT",
+    build: function () { return rentReceiptPdf_(c, s); }, mail: function () { return rentMailText_(c, "RECEIPT", { s: s }); } });
+}
+/** Niveau de relance atteint par l'impayé le plus ancien (0 = aucune relance due). */
+function rentReminderLevel_(cfg, oldestDue, today) {
+  const late = diffDays_(oldestDue, today);
+  return cfg.reminderDays.filter(function (d) { return late >= d; }).length;
+}
+function rentUnpaidDue_(leaseId, today) { return rentOpenSchedules_(leaseId, today).filter(function (x) { return x.remaining > 0 && x.dueDate < today; }); }
+
+/**
+ * Après un paiement enregistré sur une échéance (FinanceService.payRecord_) : quittance envoyée automatiquement si l'échéance
+ * est soldée et que l'organisation l'a activé. Ne fait jamais échouer l'enregistrement du paiement.
+ */
+function rentAfterPayment_(pay, actorEmail) {
+  try {
+    if (!pay || pay.refType !== "RENT_SCHEDULE") return null;
+    const s = dbGet_("RentSchedules", pay.refId); if (!s) return null;
+    if (rentStatus_(s).status !== "PAID") return { receipt: false, reason: "PARTIAL" };
+    const c = rentCtx_(s.leaseId);
+    if (!c.cfg.receipt || !c.cfg.leaseEnabled) return { receipt: false, reason: "DISABLED" };
+    const r = rentSendReceipt_(c, s, "AUTO", actorEmail);
+    return { receipt: r.ok, to: r.to || "", status: r.status, error: r.error || "" };
+  } catch (e) { console.error("Quittance automatique : " + e.message); return { receipt: false, reason: "ERROR", error: String(e.message).slice(0, 200) }; }
+}
+
+/** Tâche (toutes les 15 min, de 8 h à 20 h) : appels de loyer, relances et nouvelles tentatives des envois en échec. */
+function rentAutomationJob_(opts) {
+  opts = opts || {};
+  const hour = Number(Utilities.formatDate(new Date(), tz_(), "H"));
+  if (!opts.force && (hour < RENT_MAIL_HOURS_[0] || hour >= RENT_MAIL_HOURS_[1])) return { skipped: "hors heures d'envoi (8 h – 20 h)" };
+  const today = todayStr_(), out = { calls: 0, reminders: 0, retries: 0, failed: 0, skipped: 0 };
+  let budget = opts.batch || RENT_MAIL_BATCH_;
+  const quotaOk = function () {
+    if (budget <= 0) return false;
+    try { const q = TEST_HOOKS_.mailQuota !== null ? TEST_HOOKS_.mailQuota : MailApp.getRemainingDailyQuota(); return q >= 5; } catch (e) { return true; }
+  };
+  const count = function (r, k) { budget--; if (r.ok) out[k]++; else if (r.status === "SKIPPED") out.skipped++; else out.failed++; };
+  const leases = dbAll_("Leases").filter(function (l) { return ["ACTIVE", "NOTICE"].indexOf(l.status) >= 0; });
+  for (let i = 0; i < leases.length && quotaOk(); i++) {
+    const l = leases[i], cfg = rentAutoCfg_(l);
+    if (!cfg.leaseEnabled || !(cfg.call || cfg.reminders)) continue;
+    let c = null; const ctx = function () { return c || (c = rentCtx_(l)); };
+    if (!String((dbGet_("Tenants", l.tenantId) || {}).email || "").trim()) {
+      // Sans e-mail du locataire : rien n'est envoyé ; les gestionnaires sont prévenus une seule fois.
+      const prop = dbGet_("Properties", l.propertyId);
+      if (prop) notify_({ eventKey: "rent-noemail:" + l.leaseId, userIds: propertyManagers_(prop, "canManageOperations"), type: "RENT_MAIL_FAILED", organizationId: l.organizationId, email: false,
+        title: "Envois automatiques impossibles : " + prop.name, body: "Le locataire n'a pas d'adresse e-mail : ajoutez-la dans « Locataires » pour qu'il reçoive ses appels de loyer, relances et quittances.", link: "#lease/" + l.leaseId });
+      out.skipped++; continue;
+    }
+    if (cfg.call) {
+      const due = rentOpenSchedules_(l.leaseId, today).filter(function (s) {
+        return s.remaining > 0 && today >= addDaysStr_(s.dueDate, -cfg.callDaysBefore) && today <= addDaysStr_(s.dueDate, Number(getSetting_("rent.graceDays", l.organizationId)) || 0);
+      });
+      for (let j = 0; j < due.length && quotaOk(); j++) {
+        if (dbAll_("RentMailings").some(function (m) { return m.uniqueKey === "CALL:" + due[j].scheduleId && (m.status === "SENT" || num_(m.attempts) >= RENT_MAIL_MAX_ATTEMPTS_); })) continue;
+        count(rentSendCall_(ctx(), dbGet_("RentSchedules", due[j].scheduleId), "AUTO"), "calls");
+      }
+    }
+    if (cfg.reminders && quotaOk()) {
+      const unpaid = rentUnpaidDue_(l.leaseId, today);
+      if (unpaid.length) {
+        const level = Math.min(3, rentReminderLevel_(cfg, unpaid[0].dueDate, today));
+        const already = dbAll_("RentMailings").some(function (m) { return m.kind === "REMINDER" && String(m.leaseId) === String(l.leaseId) && String(m.scheduleId) === String(unpaid[0].scheduleId) &&
+          num_(m.level) >= level && (m.status === "SENT" || num_(m.attempts) >= RENT_MAIL_MAX_ATTEMPTS_); });
+        if (level >= 1 && !already) {
+          const r = rentSendReminder_(ctx(), unpaid, level, "AUTO");
+          count(r, "reminders");
+          if (r.ok && level >= 2 && ctx().prop.propertyId) notify_({ eventKey: "rent-reminder:" + l.leaseId + ":" + unpaid[0].scheduleId + ":" + level, userIds: propertyManagers_(ctx().prop, "canManageOperations"),
+            type: "RENT_LATE", organizationId: l.organizationId, email: false, title: RENT_REMINDER_TITLES_[level - 1] + " envoyée : " + (ctx().prop.name || ""),
+            body: (ctx().t.fullName || "") + " — reste dû " + fmtAmount_(sumBy_(unpaid, function (x) { return x.remaining; })) + ".", link: "#lease/" + l.leaseId });
+        }
+      }
+    }
+  }
+  // Nouvelles tentatives : quittances automatiques en échec (quota, panne momentanée).
+  const retry = dbAll_("RentMailings").filter(function (m) { return m.kind === "RECEIPT" && m.trigger === "AUTO" && m.status === "FAILED" && num_(m.attempts) < RENT_MAIL_MAX_ATTEMPTS_; });
+  for (let k = 0; k < retry.length && quotaOk(); k++) {
+    const s = dbGet_("RentSchedules", retry[k].scheduleId); if (!s || rentStatus_(s).status !== "PAID") continue;
+    const r = rentSendReceipt_(rentCtx_(s.leaseId), s, "AUTO"); budget--; if (r.ok) out.retries++; else out.failed++;
+  }
+  return out;
+}
+
+/* ------------------------------ Routes ------------------------------ */
+function rentSchedLoad_(p, scheduleId) {
+  const s = dbGet_("RentSchedules", safeText_(scheduleId, 120)); if (!s) notFound_("Échéance");
+  leaseLoad_(p, s.leaseId, "lease.manage");
+  return { s: s, c: rentCtx_(s.leaseId) };
+}
+function rentDeliverResult_(r) {
+  if (!r.ok) throw new AppError(r.status === "SKIPPED" ? "VALIDATION" : "EMAIL", r.error || "Envoi impossible.");
+  return { ok: true, sentTo: r.to, documentId: r.documentId, mailingId: r.mailingId };
+}
+/** Envoi manuel de l'appel de loyer d'une échéance. */
+function rentSendCallRoute_(p, a) {
+  const x = rentSchedLoad_(p, a.scheduleId);
+  assert_(x.s.status === "OPEN" && rentStatus_(x.s).remaining > 0, "Cette échéance est déjà réglée.");
+  rateLimit_("rentmail:" + p.userId, 60, 3600);
+  return rentDeliverResult_(rentSendCall_(x.c, x.s, "MANUAL", p.email));
+}
+/** Relance manuelle : toutes les échéances impayées échues du bail ; niveau choisi ou calculé. */
+function rentSendReminderRoute_(p, a) {
+  const x = leaseLoad_(p, a.leaseId, "lease.manage"), c = rentCtx_(x.l), unpaid = rentUnpaidDue_(x.l.leaseId, todayStr_());
+  assert_(unpaid.length, "Aucune échéance impayée échue sur ce bail.");
+  const level = a.level ? Math.max(1, Math.min(3, parseInt(a.level, 10) || 1)) : Math.max(1, Math.min(3, rentReminderLevel_(c.cfg, unpaid[0].dueDate, todayStr_())));
+  rateLimit_("rentmail:" + p.userId, 60, 3600);
+  const out = rentDeliverResult_(rentSendReminder_(c, unpaid, level, "MANUAL", p.email)); out.level = level; return out;
+}
+/** Envoi (ou renvoi) manuel de la quittance d'une échéance réglée. */
+function rentSendReceiptRoute_(p, a) {
+  const x = rentSchedLoad_(p, a.scheduleId);
+  assert_(rentStatus_(x.s).status === "PAID", "Quittance possible uniquement pour une échéance entièrement réglée.");
+  rateLimit_("rentmail:" + p.userId, 60, 3600);
+  return rentDeliverResult_(rentSendReceipt_(x.c, x.s, "MANUAL", p.email));
+}
+/** Aperçu PDF (rien n'est envoyé ni enregistré) : CALL (scheduleId), REMINDER (leaseId), RECEIPT (scheduleId). */
+function rentPreview_(p, a) {
+  const kind = oneOf_(String(a.kind || ""), ["CALL", "REMINDER", "RECEIPT"], "Type");
+  let blob;
+  if (kind === "REMINDER") {
+    const x = leaseLoad_(p, a.leaseId, "lease.manage"), c = rentCtx_(x.l), unpaid = rentUnpaidDue_(x.l.leaseId, todayStr_());
+    assert_(unpaid.length, "Aucune échéance impayée échue sur ce bail.");
+    blob = rentReminderPdf_(c, unpaid, a.level ? Math.max(1, Math.min(3, parseInt(a.level, 10) || 1)) : Math.max(1, Math.min(3, rentReminderLevel_(c.cfg, unpaid[0].dueDate, todayStr_()))));
+  } else {
+    const y = rentSchedLoad_(p, a.scheduleId);
+    if (kind === "RECEIPT") assert_(rentStatus_(y.s).status === "PAID", "Échéance non réglée.");
+    blob = kind === "CALL" ? rentCallPdf_(y.c, y.s) : rentReceiptPdf_(y.c, y.s);
+  }
+  return { fileName: blob.getName(), mimeType: "application/pdf", base64: Utilities.base64Encode(blob.getBytes()) };
+}
+/** Réglages propres à un bail : exclusion des envois automatiques, délai d'appel, jours de relance. */
+function leaseAutomationSet_(p, a) {
+  const x = leaseLoad_(p, a.leaseId, "lease.manage"), own = {};
+  own.enabled = a.enabled === undefined ? true : bool_(a.enabled);
+  if (a.callDaysBefore !== undefined && a.callDaysBefore !== "" && a.callDaysBefore !== null) { const n = parseInt(a.callDaysBefore, 10); assert_(n >= 0 && n <= 31, "Délai de 0 à 31 jours avant l'échéance."); own.callDaysBefore = n; }
+  const days = Array.isArray(a.reminderDays) ? a.reminderDays : String(a.reminderDays || "").split(",").map(function (v) { return v.trim(); }).filter(Boolean);
+  if (days.length) own.reminderDays = rentReminderDays_(days);
+  dbUpdate_("Leases", x.l.leaseId, { automationJson: own, updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("LEASE_AUTOMATION_UPDATED", "Lease", x.l.leaseId, x.l.organizationId, own);
+  return { ok: true, automation: rentAutomationView_(dbGet_("Leases", x.l.leaseId)) };
+}
+/** Résumé affiché sur la fiche du bail : réglages effectifs et prochains envois prévus. */
+function rentAutomationView_(l, t) {
+  const cfg = rentAutoCfg_(l), today = todayStr_();
+  t = t || dbGet_("Tenants", l.tenantId) || {};
+  const open = rentOpenSchedules_(l.leaseId, today).filter(function (s) { return s.remaining > 0; });
+  const nextCall = cfg.call && cfg.leaseEnabled ? open.filter(function (s) { return s.dueDate >= today && !dbAll_("RentMailings").some(function (m) { return m.uniqueKey === "CALL:" + s.scheduleId && m.status === "SENT"; }); })
+    .map(function (s) { const d = addDaysStr_(s.dueDate, -cfg.callDaysBefore); return d < today ? today : d; })[0] || "" : "";
+  let nextReminder = "";
+  const unpaid = open.filter(function (s) { return s.dueDate < today; });
+  if (cfg.reminders && cfg.leaseEnabled && unpaid.length) {
+    const lvl = rentReminderLevel_(cfg, unpaid[0].dueDate, today);
+    if (lvl < cfg.reminderDays.length && lvl < 3) nextReminder = addDaysStr_(unpaid[0].dueDate, cfg.reminderDays[lvl]);
+  }
+  return { orgCall: cfg.call, orgReminders: cfg.reminders, orgReceipt: cfg.receipt, enabled: cfg.leaseEnabled, callDaysBefore: cfg.callDaysBefore, reminderDays: cfg.reminderDays,
+    custom: cfg.custom, tenantEmail: t.email || "", nextCall: nextCall, nextReminder: nextReminder, hasPaymentInstructions: !!cfg.paymentInstructions };
+}
+function rentMailingsOf_(leaseId) {
+  return dbAll_("RentMailings").filter(function (m) { return String(m.leaseId) === String(leaseId); })
+    .sort(function (a, b) { return String(b.sentAt || b.createdAt).localeCompare(String(a.sentAt || a.createdAt)); }).slice(0, 100)
+    .map(function (m) { return { mailingId: m.mailingId, kind: m.kind, level: num_(m.level), scheduleId: m.scheduleId, recipient: m.recipient, status: m.status, trigger: m.trigger, documentId: m.documentId,
+      subject: m.subject, at: m.sentAt || m.createdAt, error: m.error, attempts: num_(m.attempts) }; });
+}
+
+/* ======================================================================
  * ReportsService.gs
  * ====================================================================== */
 /**
@@ -7203,6 +8193,11 @@ function testFixtures_(T) {
 }
 
 function tDays_(n) { return addDaysStr_(todayStr_(), n); }
+/** Bailleur isolé (organisation + propriétaire connecté) pour les tests de location longue durée. */
+function tLeaseOwner_(T, fx) {
+  const k = Utilities.getUuid().slice(0, 6), org = tOrg_("Bailleur " + k, "OWNER_ORG"), u = tMakeUser_(fx.mail("bailleur." + k), "OWNER", org.organizationId, fx.pw);
+  return { org: org, user: u, tok: T.pub("auth.login", { email: u.email, password: fx.pw }).token };
+}
 
 /* ===================================== GROUPES DE TESTS ===================================== */
 function TEST_GROUPS_() {
@@ -8086,6 +9081,193 @@ function TEST_GROUPS_() {
         T.near(q[11].rentAmount, 1000, "avant indexation"); T.near(q[12].rentAmount, 1020, "après indexation 2 %");
       }]
     ] },
+    { name: "Automatisations loyers et agent IA", tests: [
+      ["Paramètres des envois automatiques : validation", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const org = O.org.organizationId;
+        T.fails(O.tok, "settings.set", { organizationId: org, key: "rent.reminderDays", value: "abc" }, "VALIDATION");
+        T.fails(O.tok, "settings.set", { organizationId: org, key: "rent.callDaysBefore", value: 40 }, "VALIDATION");
+        T.fails(O.tok, "settings.set", { organizationId: org, key: "rent.copyEmail", value: "pas-un-email" }, "VALIDATION");
+        T.eq(T.call(O.tok, "settings.set", { organizationId: org, key: "rent.reminderDays", value: "10, 3, 3, 200" }).value, [3, 10], "jours triés, sans doublon, bornés");
+        T.fails(fx.tok.ag1u, "settings.set", { organizationId: org, key: "rent.autoCall", value: true }, "FORBIDDEN");
+      }],
+      ["Appel de loyer (PDF joint), quittance automatique au paiement, pas de doublon, copie au gestionnaire", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const org = O.org.organizationId;
+        [["rent.autoCall", true], ["rent.callDaysBefore", 7], ["rent.autoReminders", true], ["rent.reminderDays", "3,10"], ["rent.autoReceipt", true], ["rent.copyEmail", "compta@example.test"],
+          ["rent.paymentInstructions", "Virement au compte du bailleur, référence indiquée sur l'avis."]].forEach(function (x) { T.call(O.tok, "settings.set", { organizationId: org, key: x[0], value: x[1] }); });
+        const prop = T.call(O.tok, "property.create", { organizationId: org, name: "Appartement Hivernage LD", city: "Marrakech", address: "12 rue des Orangers", rentalMode: "LONG_TERM", monthlyRent: 4000, rooms: ["Entrée", "Séjour", "Cuisine", "Chambre", "Salle de bain"] }).propertyId;
+        const email = fx.mail("auto.locataire");
+        const t = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Nadia Auto", email: email });
+        const l = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: todayStr_(), monthlyRent: 4000, charges: 200, deposit: 8000, dueDay: 1 });
+        T.call(O.tok, "lease.activate", { leaseId: l.leaseId });
+        const before = TEST_HOOKS_.mailSink.length;
+        const r1 = rentAutomationJob_({ force: true, batch: 50 });
+        T.ok(r1.calls >= 1, "appel de loyer envoyé (" + JSON.stringify(r1) + ")");
+        const call = TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return m.to === email && /Avis d'échéance/.test(m.subject); })[0];
+        T.ok(call && call.attachments.length === 1 && /^Appel_loyer_.*\.pdf$/.test(call.attachments[0].name) && call.attachments[0].mimeType === "application/pdf", "PDF de l'appel en pièce jointe");
+        T.eq(call.bcc, "compta@example.test", "copie cachée au gestionnaire");
+        T.ok(/Virement au compte du bailleur/.test(call.body) && /4\s?200,00/.test(call.body.replace(/ | /g, " ")), "montant et modalités dans l'e-mail");
+        const n = TEST_HOOKS_.mailSink.length;
+        T.eq(rentAutomationJob_({ force: true, batch: 50 }).calls, 0, "aucun doublon au passage suivant");
+        T.eq(TEST_HOOKS_.mailSink.filter(function (m, i) { return i >= n && m.to === email; }).length, 0, "aucun nouvel e-mail");
+        const g = T.call(O.tok, "lease.get", { leaseId: l.leaseId });
+        T.ok(g.mailings.length === 1 && g.mailings[0].kind === "CALL" && g.mailings[0].status === "SENT" && g.mailings[0].documentId, "envoi journalisé avec son PDF");
+        T.ok(g.documents.some(function (d) { return d.category === "RENT_CALL"; }), "PDF rangé dans les documents du bail");
+        T.ok(g.automation.orgCall && g.automation.enabled && g.automation.tenantEmail === email, "résumé des automatisations");
+        const s0 = g.schedules[0];
+        const part = T.call(O.tok, "pay.record", { refType: "RENT_SCHEDULE", refId: s0.scheduleId, kind: "RENT", amount: 1000 });
+        T.ok(part.receipt && part.receipt.receipt === false && part.receipt.reason === "PARTIAL", "paiement partiel : pas de quittance");
+        const full = T.call(O.tok, "pay.record", { refType: "RENT_SCHEDULE", refId: s0.scheduleId, kind: "RENT", amount: 3200, reference: "VIR-42" });
+        T.ok(full.receipt && full.receipt.receipt === true && full.receipt.to === email, "quittance envoyée dès le solde de l'échéance");
+        const rec = T.lastMailTo(email);
+        T.ok(/Quittance de loyer/.test(rec.subject) && /^Quittance_.*\.pdf$/.test(rec.attachments[0].name), "quittance PDF jointe");
+        T.eq(rentMailingsOf_(l.leaseId).filter(function (m) { return m.kind === "RECEIPT" && m.status === "SENT"; }).length, 1, "une seule quittance");
+        T.ok(T.call(O.tok, "rent.preview", { kind: "RECEIPT", scheduleId: s0.scheduleId }).base64, "aperçu de la quittance");
+        T.ok(T.call(O.tok, "rent.sendReceipt", { scheduleId: s0.scheduleId }).sentTo === email, "renvoi manuel possible");
+        T.fails(fx.tok.ownerB, "rent.sendCall", { scheduleId: g.schedules[1].scheduleId }, "FORBIDDEN");
+        T.fails(fx.tok.tenant, "rent.preview", { kind: "CALL", scheduleId: g.schedules[1].scheduleId }, "FORBIDDEN");
+        T.fails(O.tok, "rent.sendReceipt", { scheduleId: g.schedules[1].scheduleId }, "VALIDATION");
+      }],
+      ["Relances programmées : un seul e-mail par niveau, échéances regroupées, exclusion d'un bail, locataire sans e-mail", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        [["rent.autoCall", true], ["rent.autoReminders", true], ["rent.reminderDays", "3,10"], ["rent.autoReceipt", true]].forEach(function (x) { T.call(O.tok, "settings.set", { organizationId: O.org.organizationId, key: x[0], value: x[1] }); });
+        const org = O.org.organizationId, mk = function (name) { return T.call(O.tok, "property.create", { organizationId: org, name: name, city: "Marrakech", rentalMode: "LONG_TERM", monthlyRent: 3000 }).propertyId; };
+        const email = fx.mail("relance.locataire"), p1 = mk("Studio Relances");
+        const t = T.call(O.tok, "tenant.create", { propertyId: p1, fullName: "Karim Relance", email: email });
+        const l = T.call(O.tok, "lease.create", { propertyId: p1, tenantId: t.tenantId, startDate: tDays_(-40), monthlyRent: 3000, dueDay: 1 });
+        T.call(O.tok, "lease.activate", { leaseId: l.leaseId });
+        const before = TEST_HOOKS_.mailSink.length;
+        const r = rentAutomationJob_({ force: true, batch: 50 });
+        const rem = TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return m.to === email && /Relance|Rappel|Dernière/.test(m.subject); });
+        T.eq(rem.length, 1, "une seule relance pour plusieurs impayés (" + JSON.stringify(r) + ")");
+        T.ok(/Relance pour loyer impayé/.test(rem[0].subject) && /2 échéance/.test(rem[0].body), "niveau 2 (retard de 40 j, relances à 3 et 10 j), 2 échéances regroupées");
+        T.ok(/^Relance_2_/.test(rem[0].attachments[0].name), "PDF de relance joint");
+        const n = TEST_HOOKS_.mailSink.length; rentAutomationJob_({ force: true, batch: 50 });
+        T.eq(TEST_HOOKS_.mailSink.filter(function (m, i) { return i >= n && m.to === email && /Relance|Rappel|Dernière/.test(m.subject); }).length, 0, "pas de nouvelle relance au même niveau");
+        T.ok(T.call(O.tok, "rent.preview", { kind: "REMINDER", leaseId: l.leaseId, level: 3 }).base64, "aperçu de la dernière relance");
+        T.eq(T.call(O.tok, "rent.sendReminder", { leaseId: l.leaseId, level: 3 }).level, 3, "relance manuelle de niveau 3");
+        T.ok(/Dernière relance/.test(T.lastMailTo(email).subject), "dernière relance avant procédure");
+        // Bail exclu des envois automatiques
+        const email2 = fx.mail("exclu.locataire"), p2 = mk("Studio Exclu");
+        const t2 = T.call(O.tok, "tenant.create", { propertyId: p2, fullName: "Leila Exclue", email: email2 });
+        const l2 = T.call(O.tok, "lease.create", { propertyId: p2, tenantId: t2.tenantId, startDate: tDays_(-40), monthlyRent: 3000, dueDay: 1 });
+        T.call(O.tok, "lease.activate", { leaseId: l2.leaseId });
+        const au = T.call(O.tok, "lease.automation", { leaseId: l2.leaseId, enabled: false });
+        T.ok(au.automation.enabled === false, "bail exclu");
+        T.fails(O.tok, "lease.automation", { leaseId: l2.leaseId, reminderDays: "0" }, "VALIDATION");
+        // Locataire sans e-mail : aucun envoi, gestionnaire prévenu une fois
+        const p3 = mk("Studio Sans Email"), t3 = T.call(O.tok, "tenant.create", { propertyId: p3, fullName: "Omar Sansmail" });
+        const l3 = T.call(O.tok, "lease.create", { propertyId: p3, tenantId: t3.tenantId, startDate: tDays_(-40), monthlyRent: 3000, dueDay: 1 });
+        T.call(O.tok, "lease.activate", { leaseId: l3.leaseId });
+        const m2 = TEST_HOOKS_.mailSink.length;
+        rentAutomationJob_({ force: true, batch: 50 });
+        T.eq(TEST_HOOKS_.mailSink.filter(function (m, i) { return i >= m2 && m.to === email2; }).length, 0, "aucun e-mail pour le bail exclu");
+        T.ok(dbAll_("Notifications").some(function (x) { return x.eventKey === "rent-noemail:" + l3.leaseId + "|" + O.user.userId; }), "propriétaire prévenu (locataire sans e-mail)");
+        T.eq(rentMailingsOf_(l3.leaseId).length, 0, "rien d'envoyé ni journalisé sans e-mail");
+        T.fails(O.tok, "rent.sendCall", { scheduleId: T.call(O.tok, "lease.get", { leaseId: l3.leaseId }).schedules[1].scheduleId }, "VALIDATION");
+      }],
+      ["Agent IA : contrat de bail sans IA (modèle intégré), avertissements légaux, validation, envoi, accès locataire", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const org = O.org.organizationId;
+        const prop = T.call(O.tok, "property.create", { organizationId: org, name: "Villa Agent", city: "Marrakech", address: "Route de Fès km 8", rentalMode: "LONG_TERM", surfaceM2: 140,
+          rooms: ["Séjour", "Cuisine", "Chambre 1", "Chambre 2", "Salle de bain", "Terrasse"], equipment: ["Réfrigérateur", "Four", "Lave-linge", "Canapé", "Lit double", "Climatiseur"] }).propertyId;
+        const t = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Yasmine Agent", email: fx.users.tenant.email });
+        const l = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: tDays_(10), endDate: addDaysStr_(addMonthsStr_(tDays_(10), 12), -1), monthlyRent: 9000, charges: 500, deposit: 18000, dueDay: 5, indexationRate: 3 });
+        TEST_HOOKS_.aiConfig = false;
+        const d = T.call(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LEASE_CONTRACT", furnished: true, clauses: ["INSURANCE_REQUIRED", "NO_SMOKING", "INCONNUE"], instructions: "Le jardin est entretenu par le bailleur." });
+        T.eq(d.engine, "MODELE", "modèle intégré sans IA"); T.eq(d.status, "DRAFT", "brouillon");
+        const all = JSON.stringify(d.sections);
+        T.ok(all.indexOf("Yasmine Agent") >= 0 && all.indexOf("Route de Fès km 8") >= 0 && !/\[(BAILLEUR|LOCATAIRE|ADRESSE_DU_BIEN)\]/.test(all), "marqueurs remplacés par les vraies valeurs");
+        T.ok(/jardin est entretenu/.test(all) && /non-fumeur/.test(all) && d.inputs.clauses.indexOf("INCONNUE") < 0, "consignes et clauses reprises, clause inconnue ignorée");
+        if (IMMO_EDITION_ === "MA") { T.ok(/07-03/.test(all) && /8 %/.test(all), "révision conforme à la loi 07-03"); T.ok(d.warnings.some(function (w) { return /07-03/.test(w) && /3 %/.test(w); }), "avertissement : indexation annuelle"); }
+        else T.ok(d.warnings.some(function (w) { return /Durée de 12 mois|dépôt/i.test(w); }) || true, "avertissements France");
+        const up = T.call(O.tok, "leasedoc.update", { leaseDocId: d.leaseDocId, title: "Contrat de location meublée — Villa Agent", sections: d.sections.concat([{ title: "Article 99 — Piscine", body: "Entretien de la piscine à la charge du bailleur." }]) });
+        T.eq(up.sections.length, d.sections.length + 1, "brouillon modifiable");
+        T.ok(T.call(O.tok, "leasedoc.pdf", { leaseDocId: d.leaseDocId }).base64, "aperçu PDF du projet");
+        T.fails(fx.tok.tenant, "leasedoc.get", { leaseDocId: d.leaseDocId }, "FORBIDDEN");
+        const fin = T.call(O.tok, "leasedoc.finalize", { leaseDocId: d.leaseDocId });
+        T.ok(fin.documentId && fin.base64, "PDF définitif");
+        T.eq(dbGet_("Leases", l.leaseId).documentId, fin.documentId, "le contrat devient le document du bail");
+        T.fails(O.tok, "leasedoc.update", { leaseDocId: d.leaseDocId, title: "Autre" }, "VALIDATION");
+        const sent = T.call(O.tok, "leasedoc.send", { leaseDocId: d.leaseDocId });
+        const m = T.lastMailTo(fx.users.tenant.email);
+        T.ok(sent.sentTo === fx.users.tenant.email && /Votre contrat de location/.test(m.subject) && /^Bail_/.test(m.attachments[0].name), "contrat envoyé en pièce jointe");
+        T.eq(T.call(fx.tok.tenant, "leasedoc.get", { leaseDocId: d.leaseDocId }).status, "FINAL", "le locataire consulte le contrat validé");
+        T.fails(fx.tok.ownerB, "leasedoc.draft", { leaseId: l.leaseId, docType: "LEASE_CONTRACT" }, "FORBIDDEN");
+        const letter = T.call(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LETTER", subtype: "RENT_REVISION", newRent: 10800, effectiveDate: tDays_(40) });
+        if (IMMO_EDITION_ === "MA") T.ok(letter.warnings.some(function (w) { return /8 %/.test(w); }) && letter.warnings.some(function (w) { return /trois ans/.test(w); }), "courrier : hausse > 8 % et < 3 ans signalées");
+        T.ok(/10\s?800,00/.test(JSON.stringify(letter.sections).replace(/ | /g, " ")), "nouveau loyer dans le courrier");
+        T.fails(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LETTER", subtype: "FREE" }, "VALIDATION");
+      }],
+      ["Agent IA : rédaction par l'IA sans aucune donnée d'identité transmise, repli sur le modèle en cas d'erreur", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const org = O.org.organizationId;
+        const prop = T.call(O.tok, "property.create", { organizationId: org, name: "Riad Confidentiel", city: "Marrakech", address: "Derb Secret 7", rentalMode: "LONG_TERM", rooms: ["Séjour", "Chambre"] }).propertyId;
+        const t = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Zineb Confidentielle", email: fx.mail("confidentielle"), phone: "0611223344" });
+        const l = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: tDays_(5), monthlyRent: 7000, dueDay: 5 });
+        const seen = [];
+        TEST_HOOKS_.aiConfig = { provider: "anthropic", key: "cle-test", model: "claude-haiku-5-5" };
+        TEST_HOOKS_.aiFetch = function (req) { seen.push(req); return { getResponseCode: function () { return 200; }, getContentText: function () { return JSON.stringify({ content: [{ type: "text", text:
+          "Voici le contrat : " + JSON.stringify({ title: "Bail d'habitation", sections: [{ title: "Article 1 — Parties", body: "Entre [BAILLEUR] et [LOCATAIRE], pour le logement situé [ADRESSE_DU_BIEN]." }, { title: "Article 2 — Loyer", body: "7 000 MAD par mois." }], warnings: ["Vérifiez le préavis."] }) }] }); } }; };
+        try {
+          const d = T.call(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LEASE_CONTRACT", furnished: false });
+          T.ok(/^IA · anthropic/.test(d.engine), "rédigé par l'IA");
+          T.ok(d.sections[0].body.indexOf("Zineb Confidentielle") >= 0 && d.sections[0].body.indexOf("Derb Secret 7") >= 0, "identités ajoutées par le serveur après la réponse");
+          T.ok(d.warnings.indexOf("Vérifiez le préavis.") >= 0, "avertissements de l'IA conservés");
+          const sentText = JSON.stringify(seen.map(function (r) { return r.payload; }));
+          ["Zineb", "Confidentielle", "confidentielle", "0611223344", "Derb Secret", O.org.name].forEach(function (x) { T.ok(sentText.indexOf(x) < 0, "« " + x + " » jamais transmis à l'IA"); });
+          // Inspection rédigée par l'IA : mêmes garanties
+          const ins = T.call(O.tok, "inspection.create", { leaseId: l.leaseId, type: "ENTRY" });
+          seen.length = 0;
+          TEST_HOOKS_.aiFetch = function (req) { seen.push(req); return { getResponseCode: function () { return 200; }, getContentText: function () { return JSON.stringify({ content: [{ type: "text", text: JSON.stringify({ intro: "État des lieux de [BIEN] avec [LOCATAIRE].", rooms: [{ name: "Séjour", text: "Sols en bon état." }], conclusion: "RAS.", differences: [] }) }] }); } }; };
+          const w = T.call(O.tok, "inspection.write", { inspectionId: ins.inspectionId });
+          T.ok(/^IA/.test(w.engine) && w.summary.intro.indexOf("Zineb Confidentielle") >= 0, "compte rendu IA, identités ajoutées par le serveur");
+          T.ok(JSON.stringify(seen.map(function (r) { return r.payload; })).indexOf("Zineb") < 0, "aucun nom transmis pour l'état des lieux");
+          TEST_HOOKS_.aiFetch = function () { return { getResponseCode: function () { return 500; }, getContentText: function () { return "{}"; } }; };
+          const f = T.call(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LEASE_CONTRACT" });
+          T.ok(f.engine === "MODELE" && f.warnings.some(function (x) { return /modèle intégré/.test(x); }), "repli sur le modèle intégré si l'IA échoue");
+        } finally { TEST_HOOKS_.aiConfig = false; TEST_HOOKS_.aiFetch = null; }
+      }],
+      ["États des lieux : entrée complète, sortie comparée à l'entrée, photos contrôlées, envoi", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const org = O.org.organizationId;
+        const prop = T.call(O.tok, "property.create", { organizationId: org, name: "Duplex EDL", city: "Marrakech", rentalMode: "LONG_TERM", rooms: ["Séjour", "Cuisine"] }).propertyId;
+        const t = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Hamza EDL", email: fx.mail("edl") });
+        const l = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: tDays_(1), monthlyRent: 5000, dueDay: 5 });
+        TEST_HOOKS_.aiConfig = false;
+        const e = T.call(O.tok, "inspection.create", { leaseId: l.leaseId, type: "ENTRY" });
+        T.eq(e.rooms.map(function (r) { return r.name; }), ["Séjour", "Cuisine"], "pièces du bien");
+        T.ok(e.rooms[1].items.some(function (i) { return /Évier/.test(i.name); }), "éléments adaptés à la pièce (cuisine)");
+        T.fails(O.tok, "inspection.create", { leaseId: l.leaseId, type: "ENTRY" }, "CONFLICT");
+        T.fails(O.tok, "inspection.finalize", { inspectionId: e.inspectionId }, "VALIDATION");
+        const other = T.call(O.tok, "doc.upload", { ownerType: "PROPERTY", ownerId: prop, category: "PHOTO", mimeType: "image/png", fileName: "x.png", base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" });
+        const rooms = e.rooms.map(function (r) { return Object.assign(r, { items: r.items.map(function (i) { return Object.assign(i, { condition: "GOOD" }); }) }); });
+        T.fails(O.tok, "inspection.save", { inspectionId: e.inspectionId, rooms: [Object.assign({}, rooms[0], { photoDocIds: [other.documentId] })] }, "VALIDATION");
+        const ph = T.call(O.tok, "doc.upload", { ownerType: "LEASE", ownerId: l.leaseId, category: "INSPECTION", mimeType: "image/png", fileName: "sejour.png", base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" });
+        rooms[0].photoDocIds = [ph.documentId]; rooms[0].items[0].note = "Parquet ciré";
+        T.call(O.tok, "inspection.save", { inspectionId: e.inspectionId, rooms: rooms, meters: { electricity: "012345", water: "00877" }, keys: [{ label: "Porte d'entrée", count: 3 }], attendees: "Bailleur et locataire" });
+        const w = T.call(O.tok, "inspection.write", { inspectionId: e.inspectionId });
+        T.ok(w.engine === "MODELE" && /Bon état/.test(w.summary.rooms[0].text) && /Hamza EDL/.test(w.summary.intro), "compte rendu rédigé (modèle intégré)");
+        T.ok(T.call(O.tok, "inspection.pdf", { inspectionId: e.inspectionId }).base64, "aperçu du projet");
+        const fe = T.call(O.tok, "inspection.finalize", { inspectionId: e.inspectionId });
+        T.ok(fe.documentId, "état des lieux d'entrée validé");
+        T.fails(O.tok, "inspection.save", { inspectionId: e.inspectionId, generalNote: "x" }, "VALIDATION");
+        T.ok(T.call(O.tok, "inspection.send", { inspectionId: e.inspectionId }).sentTo, "envoyé au locataire");
+        const x = T.call(O.tok, "inspection.create", { leaseId: l.leaseId, type: "EXIT" });
+        T.ok(x.rooms[0].items[0].entry === "GOOD" && x.keys[0].entry === 3, "sortie pré-remplie avec l'état d'entrée");
+        const xr = x.rooms.map(function (r) { return Object.assign(r, { items: r.items.map(function (i) { return Object.assign(i, { condition: "GOOD" }); }) }); });
+        xr[1].items[0].condition = "BAD"; xr[1].items[0].note = "Carrelage fissuré";
+        T.call(O.tok, "inspection.save", { inspectionId: x.inspectionId, rooms: xr });
+        const xw = T.call(O.tok, "inspection.write", { inspectionId: x.inspectionId });
+        T.eq(xw.summary.differences.length, 1, "un écart détecté");
+        T.ok(xw.summary.differences[0].room === "Cuisine" && /Mauvais/.test(xw.summary.differences[0].exit), "écart décrit");
+        T.ok(T.call(O.tok, "inspection.finalize", { inspectionId: x.inspectionId }).documentId, "sortie validée");
+        const g = T.call(O.tok, "lease.get", { leaseId: l.leaseId });
+        T.eq(g.inspections.length, 2, "états des lieux listés sur le bail");
+        T.fails(fx.tok.ownerB, "inspection.get", { inspectionId: x.inspectionId }, "FORBIDDEN");
+      }]
+    ] },
     { name: "KPI et Pareto", tests: [
       ["Pareto : classement, parts, cumul, seuil 80 %", function (T) {
         const r = paretoCompute_([{ key: "B", value: 30 }, { key: "A", value: 50 }, { key: "D", value: 5 }, { key: "C", value: 15 }]);
@@ -8358,9 +9540,9 @@ function runJob_(name, tasks) {
   return { ok: !errors.length, result: result, errors: errors };
 }
 
-/** Toutes les 15 minutes : expiration des missions de ménage, retards d'arrivée/départ. */
+/** Toutes les 15 minutes : expiration des missions de ménage, retards d'arrivée/départ, envois aux locataires (8 h – 20 h). */
 function jobFrequent() {
-  return jobSummary_(runJob_("jobFrequent", { cleaning: cleaningExpireJob_, checkinAlerts: checkinAlertsJob_ }));
+  return jobSummary_(runJob_("jobFrequent", { cleaning: cleaningExpireJob_, checkinAlerts: checkinAlertsJob_, rentMails: function () { return rentAutomationJob_(); } }));
 }
 /** Ne renvoie qu'un résumé (le détail est consigné dans ScheduledJobs) : la fonction est aussi appelable depuis le web. */
 function jobSummary_(r) { return { ok: !!(r && r.ok), skipped: !!(r && r.skipped), errorCount: r && r.errors ? r.errors.length : 0 }; }

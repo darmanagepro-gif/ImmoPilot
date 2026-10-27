@@ -757,7 +757,7 @@ PAGES.lease = function (el, id) {
       }
       if (["ENDED", "NOTICE", "RENEWED"].indexOf(l.status) >= 0 && l.depositHeld > 0) A.push(btn(t("Restituer la caution"), function () { formModal(t("Restitution de caution"), [{ k: "amountReturned", l: "Montant restitué", t: "number", req: true, def: l.depositHeld }, { k: "deductionReason", l: "Motif des retenues éventuelles", t: "textarea" }, { k: "method", l: "Mode", t: "select", opts: (S.meta.payMethods || []).map(function (m) { return [m, st(m)]; }) }, { k: "reference", l: "Référence" }], {}, function (v) { v.leaseId = id; v.requestKey = rk(); return api("lease.depositReturn", v).then(go); }); }));
       if (l.deposit > 0 && l.depositHeld < l.deposit && ["DRAFT", "ACTIVE"].indexOf(l.status) >= 0) A.push(btn(t("Encaisser la caution"), function () { payDialog({ refType: "LEASE", refId: id, kind: "DEPOSIT", amount: l.deposit - l.depositHeld }).then(function (x) { if (x) go(); }); }));
-      A.push(btn(t("Générer le contrat"), function () { api("lease.document", { leaseId: id }).then(download).catch(showErr); }));
+      A.push(btn("✦ " + t("Rédiger le bail"), function () { contractAgentDialog(l); }));
     }
     el.appendChild(pageHead(l.tenantName, l.propertyName + " · " + fmtDate(l.startDate) + " → " + (l.endDate ? fmtDate(l.endDate) : t("durée indéterminée")), A));
     el.appendChild(kpis([{ l: "Loyer + charges", v: fmtMoney(Number(l.monthlyRent) + Number(l.charges || 0)) }, { l: "Arriérés", v: fmtMoney(l.arrears), tone: l.arrears ? "bad" : "good", sub: l.lateCount + " " + t("échéance(s) en retard") },
@@ -765,7 +765,11 @@ PAGES.lease = function (el, id) {
     el.appendChild(panel("Échéancier", table([{ l: "Période", k: "period" }, { l: "Échéance", date: true, k: "dueDate" }, { l: "Loyer", money: true, k: "rentAmount" }, { l: "Charges", money: true, k: "chargesAmount" }, { l: "Dû", money: true, k: "amountDue" }, { l: "Payé", money: true, k: "paid" }, { l: "Reste", money: true, k: "remaining" },
       { l: "Statut", f: function (s) { return h("span", null, stTag(s.status), s.daysLate ? " " + s.daysLate + " j" : ""); } },
       { l: "", f: function (s) { return h("span", { class: "actions" }, l.canManage && s.remaining > 0 && s.status !== "CANCELLED" ? btn(t("Paiement"), function () { payDialog({ refType: "RENT_SCHEDULE", refId: s.scheduleId, kind: "RENT", amount: s.remaining }).then(function (x) { if (x) go(); }); }, "sm primary") : null,
-        s.status === "PAID" ? btn(t("Quittance"), function () { api("lease.receipt", { scheduleId: s.scheduleId }).then(download).catch(showErr); }, "sm") : null); } }], l.schedules, { empty: "Échéancier généré à l'activation." })));
+        l.canManage && s.remaining > 0 && s.status !== "CANCELLED" ? btn("✉ " + t("Appel"), function () { rentMailConfirm("CALL", { scheduleId: s.scheduleId }, l).then(function (x) { if (x) go(); }); }, "sm") : null,
+        s.status === "PAID" ? btn(t("Quittance"), function () { api("lease.receipt", { scheduleId: s.scheduleId }).then(download).catch(showErr); }, "sm") : null,
+        l.canManage && s.status === "PAID" ? btn("✉", function () { rentMailConfirm("RECEIPT", { scheduleId: s.scheduleId }, l).then(function (x) { if (x) go(); }); }, "sm") : null); } }], l.schedules, { empty: "Échéancier généré à l'activation." })));
+    if (l.canManage && l.automation) el.appendChild(rentAutomationPanel(l, go));
+    el.appendChild(leaseAgentPanel(l, go));
     el.appendChild(h("div", { class: "grid c2" }, panel("Conditions", kv([["Jour d'échéance", l.dueDay], ["Indexation", l.indexationRate ? l.indexationRate + " % / an" : "—"], ["Prochaine indexation", fmtDate(l.nextIndexationDate)], ["Préavis", l.noticeDate ? fmtDate(l.noticeDate) + " (" + st(l.noticeBy) + ")" : "—"], ["Conditions particulières", l.terms]])),
       panel("Locataire", kv([["Nom", l.tenantName], ["E-mail", l.tenantEmail], ["Téléphone", l.tenantPhone]]))));
     el.appendChild(panel("Paiements", table([{ l: "Date", date: true, k: "paidAt" }, { l: "Nature", f: function (x) { return st(x.kind); } }, { l: "Montant", money: true, k: "amount" }, { l: "Mode", f: function (x) { return st(x.method); } }, { l: "Référence", k: "reference" }, { l: "Statut", status: true, k: "status" }], l.payments)));
@@ -793,8 +797,234 @@ PAGES.mylease = function (el) {
         table([{ l: "Période", k: "period" }, { l: "Échéance", date: true, k: "dueDate" }, { l: "Dû", money: true, k: "amountDue" }, { l: "Payé", money: true, k: "paid" }, { l: "Statut", status: true, k: "status" },
           { l: "", f: function (s) { return s.status === "PAID" ? btn(t("Quittance"), function () { api("lease.receipt", { scheduleId: s.scheduleId }).then(download).catch(showErr); }, "sm") : null; } }], l.schedules),
         h("div", { class: "actions", style: { marginTop: "12px" } }, btn(t("Transmettre un justificatif de paiement"), function () { pickFiles({ capture: "environment" }).then(function (f) { return uploadFiles(f, "LEASE", l.leaseId, "PAYMENT_PROOF"); }).then(function () { toast(t("Justificatif transmis. Il sera vérifié par votre gestionnaire."), "good"); }).catch(showErr); }, "primary"),
-          btn(t("Déclarer un incident"), function () { incidentDialog({ propertyId: l.propertyId }); }), l.documentId ? btn(t("Mon contrat"), function () { openDoc(l.documentId); }) : null))));
+          btn(t("Déclarer un incident"), function () { incidentDialog({ propertyId: l.propertyId }); }), l.documentId ? btn(t("Mon contrat"), function () { openDoc(l.documentId); }) : null),
+        (l.agentDocs || []).length || (l.inspections || []).length ? leaseDocsTable(l, function () { App.go("mylease"); }) : null)));
     });
+  });
+};
+
+/* =============================== Envois automatiques au locataire =============================== */
+STATUS_TONE.SENT = "good"; STATUS_TONE.SKIPPED = "warn"; STATUS_TONE.FINAL = "good";
+const RENT_MAIL_KINDS = { CALL: "Appel de loyer", REMINDER: "Relance", RECEIPT: "Quittance", DOCUMENT: "Document" };
+function rentMailLabel(m) { return t(RENT_MAIL_KINDS[m.kind] || m.kind) + (m.kind === "REMINDER" && m.level ? " " + m.level : ""); }
+/** Confirmation d'un envoi manuel au locataire, avec aperçu du PDF. kind : CALL | RECEIPT | REMINDER. */
+function rentMailConfirm(kind, args, l) {
+  const route = { CALL: "rent.sendCall", RECEIPT: "rent.sendReceipt", REMINDER: "rent.sendReminder" }[kind];
+  const label = kind === "CALL" ? t("Envoyer l'appel de loyer") : kind === "RECEIPT" ? t("Envoyer la quittance") : t("Envoyer une relance");
+  return new Promise(function (resolve) {
+    const err = h("div", { class: "alert bad hidden" });
+    const lvl = kind === "REMINDER" ? h("select", null, h("option", { value: "" }, t("Niveau automatique (selon le retard)")), h("option", { value: "1" }, t("Rappel de loyer")), h("option", { value: "2" }, t("Relance pour loyer impayé")), h("option", { value: "3" }, t("Dernière relance avant procédure"))) : null;
+    const body = h("div", null, h("p", null, l.tenantEmail ? t("Le PDF est joint à un e-mail adressé au locataire") + " : " : t("Le locataire n'a pas d'adresse e-mail : ajoutez-la dans « Locataires »."), l.tenantEmail ? h("b", null, l.tenantEmail) : null),
+      lvl ? h("div", { class: "field" }, h("label", null, t("Niveau de relance")), lvl) : null, err);
+    const a = function () { return Object.assign({}, args, lvl && lvl.value ? { level: Number(lvl.value) } : {}); };
+    const m = modal({ title: label, size: "sm", body: body, onClose: function () { resolve(false); }, buttons: [{ label: t("Aperçu PDF"), onClick: function (b) { b.disabled = true; api("rent.preview", Object.assign({ kind: kind }, a())).then(download).catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); }).then(function () { b.disabled = false; }); } },
+      { label: t("Envoyer"), primary: true, onClick: function (b) { if (!l.tenantEmail) return; b.disabled = true; b.textContent = t("Traitement…");
+        api(route, a()).then(function (r) { toast(t("Envoyé à") + " " + r.sentTo, "good"); resolve(true); m.close(); }).catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); b.disabled = false; b.textContent = t("Envoyer"); }); } }] });
+  });
+}
+function rentAutomationPanel(l, go) {
+  const a = l.automation, on = function (v) { return v ? tag(t("Activé"), "good") : tag(t("Désactivé"), ""); };
+  const days = (a.reminderDays || []).map(function (d) { return "J+" + d; }).join(", ");
+  const warn = [];
+  if (!a.tenantEmail) warn.push(t("Le locataire n'a pas d'adresse e-mail : aucun envoi n'est possible. Ajoutez-la dans « Locataires »."));
+  if (!(a.orgCall || a.orgReminders || a.orgReceipt)) warn.push(t("Les envois automatiques sont désactivés pour votre organisation : activez-les dans Paramètres › Paramètres de l'organisation (rent.autoCall, rent.autoReminders, rent.autoReceipt)."));
+  else if (!a.hasPaymentInstructions) warn.push(t("Conseil : renseignez vos modalités de paiement (paramètre rent.paymentInstructions) : elles figurent sur les appels de loyer et les relances."));
+  const body = h("div", null,
+    warn.map(function (w) { return h("div", { class: "alert warn", style: { marginBottom: "10px" } }, w); }),
+    kv([["Appels de loyer", h("span", null, on(a.orgCall && a.enabled), " ", a.orgCall ? t("envoyés") + " " + a.callDaysBefore + " " + t("jour(s) avant l'échéance") : "")],
+      ["Relances", h("span", null, on(a.orgReminders && a.enabled), " ", a.orgReminders ? days + " " + t("après l'échéance") : "")],
+      ["Quittances automatiques", h("span", null, on(a.orgReceipt && a.enabled), " ", a.orgReceipt ? t("dès que l'échéance est réglée") : "")],
+      ["Ce bail", a.enabled ? t("inclus dans les envois automatiques") : h("b", null, t("exclu des envois automatiques"))],
+      ["Prochain appel", a.nextCall ? fmtDate(a.nextCall) : "—"], ["Prochaine relance", a.nextReminder ? fmtDate(a.nextReminder) : "—"]]),
+    h("h4", { style: { margin: "16px 0 6px" } }, t("Historique des envois")),
+    table([{ l: "Date", dt: true, k: "at" }, { l: "Envoi", f: rentMailLabel }, { l: "Destinataire", k: "recipient" }, { l: "Statut", f: function (m) { return h("span", null, stTag(m.status), m.error ? h("div", { class: "small muted" }, m.error) : null); } },
+      { l: "Origine", f: function (m) { return m.trigger === "AUTO" ? t("Automatique") : t("Manuel"); } }, { l: "", f: function (m) { return m.documentId ? btn("PDF", function () { openDoc(m.documentId); }, "sm") : null; } }], l.mailings, { empty: "Aucun envoi pour ce bail." }));
+  const tools = [btn(t("Régler pour ce bail"), function () { leaseAutomationDialog(l).then(function (x) { if (x) go(); }); }, "sm")];
+  if (l.arrears > 0) tools.push(btn("✉ " + t("Relancer"), function () { rentMailConfirm("REMINDER", { leaseId: l.leaseId }, l).then(function (x) { if (x) go(); }); }, "sm"));
+  if (can("settings.manage")) tools.push(btn(t("Paramètres"), function () { NAV_HASH.v = "settings"; }, "sm"));
+  return panel("Envois automatiques au locataire", body, tools);
+}
+function leaseAutomationDialog(l) {
+  const c = l.automation.custom || {};
+  return formModal(t("Envois automatiques pour ce bail"), [{ k: "enabled", l: "Inclure ce bail dans les envois automatiques", t: "checkbox" },
+    { k: "callDaysBefore", l: "Appel de loyer : jours avant l'échéance", t: "number", min: 0, max: 31, help: "Vide = réglage de l'organisation." },
+    { k: "reminderDays", l: "Relances : jours après l'échéance", ph: "5, 15, 30", help: "Jusqu'à 3 relances de plus en plus fermes. Vide = réglage de l'organisation." }],
+    { enabled: c.enabled !== false, callDaysBefore: c.callDaysBefore === "" ? "" : c.callDaysBefore, reminderDays: (c.reminderDays || []).join(", ") },
+    function (v) { return api("lease.automation", { leaseId: l.leaseId, enabled: v.enabled, callDaysBefore: v.callDaysBefore, reminderDays: v.reminderDays }); },
+    { intro: t("Les appels de loyer, relances et quittances partent par e-mail au locataire, avec le PDF en pièce jointe, entre 8 h et 20 h. Une copie peut être adressée à votre comptabilité (paramètre rent.copyEmail)."), success: "Réglages enregistrés." });
+}
+
+/* =============================== Agent IA : bail, états des lieux, courriers =============================== */
+const LA_CLAUSE_LABELS = { INSURANCE_REQUIRED: "Assurance habitation obligatoire", SUBLET_FORBIDDEN: "Sous-location interdite sans accord écrit", PETS_ALLOWED: "Animaux acceptés", PETS_FORBIDDEN: "Animaux interdits",
+  NO_SMOKING: "Logement non-fumeur", GUARANTOR: "Caution solidaire (garant)", WORKS_AUTH_REQUIRED: "Travaux soumis à l'accord du bailleur" };
+const LA_LETTER_LABELS = { RENEWAL: "Proposition de renouvellement", RENT_REVISION: "Révision du loyer", DEPOSIT_RETURN: "Restitution du dépôt de garantie", FREE: "Courrier libre" };
+const LA_COND = [["", "—"], ["NEW", "Neuf"], ["GOOD", "Bon état"], ["WORN", "État d'usage"], ["BAD", "Mauvais état"], ["NA", "Sans objet"]];
+function laCondLabel(c) { const x = LA_COND.find(function (o) { return o[0] === c; }); return x && c ? t(x[1]) : "—"; }
+function laEngineTag(engine) { return engine && engine !== "MODELE" ? tag("✦ " + t("Rédigé par l'IA"), "info") : tag(t("Modèle intégré"), ""); }
+function laAgentIntro(ai) {
+  return ai ? t("L'agent IA rédige un premier jet que vous relisez et modifiez. Aucune donnée d'identité (nom, e-mail, téléphone, adresse, pièce d'identité) n'est transmise au service d'IA : elles sont ajoutées par ImmoPilot ensuite. Vos consignes et conditions particulières sont transmises telles quelles : n'y mettez pas de données personnelles.")
+    : t("L'IA n'est pas configurée : l'agent utilise les modèles intégrés, déjà adaptés à votre pays. Le document reste entièrement modifiable avant validation.");
+}
+function leaseDocsTable(l, go) {
+  const rows = (l.agentDocs || []).map(function (d) { return { kind: "doc", d: d, type: d.docType === "LEASE_CONTRACT" ? t("Contrat de bail") : t(LA_LETTER_LABELS[d.subtype] || "Courrier"), title: d.title, status: d.status, engine: d.engine, at: d.finalizedAt || d.updatedAt || d.createdAt, sentAt: d.sentAt }; })
+    .concat((l.inspections || []).map(function (r) { return { kind: "edl", d: r, type: r.type === "EXIT" ? t("État des lieux de sortie") : t("État des lieux d'entrée"), title: fmtDate(r.inspectionDate), status: r.status, engine: r.engine, at: r.finalizedAt || r.updatedAt || r.createdAt, sentAt: r.sentAt }; }))
+    .sort(function (a, b) { return String(b.at).localeCompare(String(a.at)); });
+  return table([{ l: "Document", f: function (x) { return h("div", null, h("b", null, x.type), h("div", { class: "small muted" }, x.title || "")); } }, { l: "Statut", f: function (x) { return stTag(x.status); } },
+    { l: "Rédaction", f: function (x) { return x.engine ? laEngineTag(x.engine) : "—"; } }, { l: "Mis à jour", dt: true, k: "at" }, { l: "Envoyé", f: function (x) { return x.sentAt ? fmtDT(x.sentAt) : "—"; } },
+    { l: "", f: function (x) { return h("span", { class: "actions" },
+      l.canManage && x.status === "DRAFT" ? btn(t("Ouvrir"), function () { if (x.kind === "doc") api("leasedoc.get", { leaseDocId: x.d.leaseDocId }).then(function (d) { leaseDocEditor(d, l, go); }).catch(showErr); else NAV_HASH.v = "inspection/" + x.d.inspectionId; }, "sm primary") : null,
+      x.kind === "edl" && x.status === "FINAL" && l.canManage ? btn(t("Voir"), function () { NAV_HASH.v = "inspection/" + x.d.inspectionId; }, "sm") : null,
+      btn("PDF", function () { api(x.kind === "doc" ? "leasedoc.pdf" : "inspection.pdf", x.kind === "doc" ? { leaseDocId: x.d.leaseDocId } : { inspectionId: x.d.inspectionId }).then(download).catch(showErr); }, "sm"),
+      l.canManage && x.status === "FINAL" ? btn("✉", function () { confirmBox(t("Envoyer ce document au locataire par e-mail (PDF joint) ?")).then(function (ok) { if (ok) api(x.kind === "doc" ? "leasedoc.send" : "inspection.send", x.kind === "doc" ? { leaseDocId: x.d.leaseDocId } : { inspectionId: x.d.inspectionId }).then(function (r) { toast(t("Envoyé à") + " " + r.sentTo, "good"); go(); }).catch(showErr); }); }, "sm") : null); } }],
+  rows, { empty: "Aucun document rédigé pour ce bail." });
+}
+function leaseAgentPanel(l, go) {
+  if (!l.canManage) return (l.agentDocs || []).length || (l.inspections || []).length ? panel("Documents du bail", leaseDocsTable(l, go)) : h("div");
+  const ai = l.agent && l.agent.ai;
+  const tools = [btn("✦ " + t("Rédiger le bail"), function () { contractAgentDialog(l); }, "sm primary"), btn(t("État des lieux d'entrée"), function () { inspectionStart(l, "ENTRY"); }, "sm"),
+    btn(t("État des lieux de sortie"), function () { inspectionStart(l, "EXIT"); }, "sm"), btn(t("Courrier au locataire"), function () { letterAgentDialog(l); }, "sm")];
+  return panel("Agent de rédaction (IA)", h("div", null, h("p", { class: "small muted", style: { margin: "0 0 10px" } }, h("b", null, ai ? "✦ " + t("IA activée") + " · " : t("Modèles intégrés") + " · "), laAgentIntro(ai)), leaseDocsTable(l, go)), tools);
+}
+function contractAgentDialog(l) {
+  return formModal(t("Rédiger le contrat de bail"), [{ k: "furnished", l: "Logement meublé", t: "checkbox" }, { k: "usage", l: "Usage", t: "select", req: true, opts: [["HABITATION", t("Habitation")], ["MIXED", t("Mixte : habitation et professionnel")]] },
+    { k: "clauses", l: "Clauses", t: "multi", opts: Object.keys(LA_CLAUSE_LABELS).map(function (k) { return [k, t(LA_CLAUSE_LABELS[k])]; }) },
+    { k: "instructions", l: "Consignes pour l'agent", t: "textarea", rows: 4, ph: t("Ex. : le jardin et la piscine sont entretenus par le bailleur ; place de parking n° 12 incluse.") }],
+    { furnished: !!(l.agent && l.agent.furnished), usage: "HABITATION", clauses: ["INSURANCE_REQUIRED", "SUBLET_FORBIDDEN"] },
+    function (v) { return api("leasedoc.draft", Object.assign({ leaseId: l.leaseId, docType: "LEASE_CONTRACT" }, v)).then(function (d) { setTimeout(function () { leaseDocEditor(d, l, function () { App.go("lease/" + l.leaseId); }); }, 50); }); },
+    { intro: laAgentIntro(l.agent && l.agent.ai) + " " + t("Les montants, dates et durées viennent du bail."), submitLabel: "✦ " + t("Rédiger") });
+}
+function letterAgentDialog(l) {
+  const is = function (k) { return function (v) { return [].concat(k).indexOf(v.subtype) >= 0; }; };
+  return formModal(t("Courrier au locataire"), [{ k: "subtype", l: "Type de courrier", t: "select", req: true, opts: Object.keys(LA_LETTER_LABELS).map(function (k) { return [k, t(LA_LETTER_LABELS[k])]; }) },
+    { k: "subject", l: "Objet", show: is("FREE") }, { k: "newRent", l: "Nouveau loyer", t: "number", min: 1, show: is(["RENEWAL", "RENT_REVISION"]), def: l.monthlyRent },
+    { k: "effectiveDate", l: "Date d'effet", t: "date", show: is("RENT_REVISION") }, { k: "newEndDate", l: "Nouvelle date de fin", t: "date", show: is("RENEWAL") },
+    { k: "deductions", l: "Retenues sur le dépôt de garantie", t: "number", min: 0, show: is("DEPOSIT_RETURN") }, { k: "deductionReason", l: "Motif des retenues", show: is("DEPOSIT_RETURN") },
+    { k: "instructions", l: "Consignes pour l'agent", t: "textarea", rows: 4 }], { subtype: "FREE" },
+    function (v) { return api("leasedoc.draft", Object.assign({ leaseId: l.leaseId, docType: "LETTER" }, v)).then(function (d) { setTimeout(function () { leaseDocEditor(d, l, function () { App.go("lease/" + l.leaseId); }); }, 50); }); },
+    { intro: laAgentIntro(l.agent && l.agent.ai), submitLabel: "✦ " + t("Rédiger") });
+}
+/** Éditeur d'un document rédigé : avertissements, titre et articles modifiables, aperçu, validation, envoi. */
+function leaseDocEditor(d, l, go) {
+  const err = h("div", { class: "alert bad hidden" }), list = h("div");
+  const title = h("input", { class: "in", value: d.title || "", maxlength: 200 });
+  const addSection = function (sec) {
+    const ti = h("input", { class: "in", value: sec.title || "", maxlength: 200, placeholder: t("Titre de l'article"), style: { flex: "1", minWidth: "0", fontWeight: "600" } }),
+      tx = h("textarea", { class: "in", rows: Math.min(14, Math.max(4, Math.ceil(String(sec.body || "").length / 70))), style: { marginTop: "6px" } }, sec.body || "");
+    const box = h("div", { class: "box-edit", style: { border: "1px solid var(--line)", borderRadius: "10px", padding: "10px", margin: "0 0 10px" } }, h("div", { style: { display: "flex", gap: "8px" } }, ti,
+      h("button", { type: "button", class: "btn sm ghost", title: t("Supprimer"), onclick: function () { box.remove(); } }, "×")), tx);
+    box.getVal = function () { return { title: ti.value.trim(), body: tx.value }; };
+    list.appendChild(box);
+  };
+  (d.sections || []).forEach(addSection);
+  const collect = function () { return { leaseDocId: d.leaseDocId, title: title.value.trim(), sections: Array.from(list.children).map(function (b) { return b.getVal(); }).filter(function (x) { return x.title || x.body.trim(); }) }; };
+  const fail = function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); };
+  const body = h("div", null,
+    h("div", { class: "actions", style: { marginBottom: "8px" } }, laEngineTag(d.engine), stTag(d.status)),
+    (d.warnings || []).length ? h("div", { class: "alert warn" }, h("b", null, t("Points à vérifier")), h("ul", { style: { margin: "6px 0 0", paddingLeft: "18px" } }, d.warnings.map(function (w) { return h("li", null, w); }))) : null,
+    err, h("div", { class: "field full" }, h("label", null, t("Titre du document")), title), list,
+    h("button", { type: "button", class: "btn sm", onclick: function () { addSection({ title: "", body: "" }); } }, "+ " + t("Ajouter un article")));
+  const m = modal({ title: d.docType === "LEASE_CONTRACT" ? t("Contrat de bail — brouillon") : t("Courrier — brouillon"), body: body, onClose: function () { if (go) go(); }, buttons: [
+    { label: t("Supprimer le brouillon"), danger: true, onClick: function () { confirmBox(t("Supprimer ce brouillon ?"), { danger: true }).then(function (ok) { if (ok) api("leasedoc.cancel", { leaseDocId: d.leaseDocId }).then(function () { m.close(); }).catch(fail); }); } },
+    { label: t("Aperçu PDF"), onClick: function (b) { b.disabled = true; api("leasedoc.update", collect()).then(function () { return api("leasedoc.pdf", { leaseDocId: d.leaseDocId }); }).then(download).catch(fail).then(function () { b.disabled = false; }); } },
+    { label: t("Enregistrer"), onClick: function (b) { b.disabled = true; api("leasedoc.update", collect()).then(function () { toast(t("Brouillon enregistré."), "good"); }).catch(fail).then(function () { b.disabled = false; }); } },
+    { label: t("Valider et générer le PDF"), primary: true, onClick: function (b) {
+      confirmBox(t("Valider ce document ? Il ne sera plus modifiable et sera rangé dans les documents du bail.")).then(function (ok) {
+        if (!ok) return; b.disabled = true;
+        api("leasedoc.update", collect()).then(function () { return api("leasedoc.finalize", { leaseDocId: d.leaseDocId }); }).then(function (out) {
+          download(out); m.close();
+          if (l.tenantEmail) confirmBox(t("Document validé. L'envoyer maintenant au locataire par e-mail (PDF joint) ?"), { confirmLabel: t("Envoyer") }).then(function (send) {
+            if (send) api("leasedoc.send", { leaseDocId: d.leaseDocId }).then(function (r) { toast(t("Envoyé à") + " " + r.sentTo, "good"); if (go) go(); }).catch(showErr); });
+        }).catch(function (e) { fail(e); b.disabled = false; });
+      }); } }] });
+  return m;
+}
+function inspectionStart(l, type) {
+  const draft = (l.inspections || []).find(function (r) { return r.type === type && r.status === "DRAFT"; });
+  if (draft) { NAV_HASH.v = "inspection/" + draft.inspectionId; return; }
+  if (type === "EXIT" && !(l.inspections || []).some(function (r) { return r.type === "ENTRY" && r.status === "FINAL"; })) toast(t("Aucun état des lieux d'entrée validé : la sortie ne pourra pas être comparée à l'entrée."), "warn");
+  api("inspection.create", { leaseId: l.leaseId, type: type }).then(function (r) { NAV_HASH.v = "inspection/" + r.inspectionId; }).catch(showErr);
+}
+/** État des lieux : relevé pièce par pièce (adapté au téléphone), photos, compteurs, clés, rédaction par l'agent, validation. */
+PAGES.inspection = function (el, id) {
+  return api("inspection.get", { inspectionId: id }).then(function (r) {
+    const exit = r.type === "EXIT", ro = r.status !== "DRAFT" || !r.canManage, st0 = JSON.parse(JSON.stringify(r));
+    $("page-title").textContent = exit ? t("État des lieux de sortie") : t("État des lieux d'entrée");
+    let dirty = false; const touch = function () { dirty = true; };
+    const payload = function () { return { inspectionId: id, inspectionDate: st0.inspectionDate, attendees: st0.attendees, rooms: st0.rooms, meters: st0.meters, keys: st0.keys, generalNote: st0.generalNote, summary: st0.summary || undefined }; };
+    const save = function (quiet) { return api("inspection.save", payload()).then(function (x) { dirty = false; if (!quiet) toast(t("État des lieux enregistré."), "good"); return x; }); };
+    const back = function () { NAV_HASH.v = "lease/" + r.leaseId; };
+    const A = [stTag(r.status), r.engine ? laEngineTag(r.engine) : null];
+    if (!ro) {
+      A.push(btn(t("Enregistrer"), function () { save().catch(showErr); }, "primary"));
+      A.push(btn("✦ " + t("Rédiger avec l'agent"), function (ev) { const b = ev.currentTarget; b.disabled = true; b.textContent = t("Rédaction…");
+        save(true).then(function () { return api("inspection.write", { inspectionId: id }); }).then(function (x) { if (x.warning) toast(x.warning, "warn"); App.go("inspection/" + id); }).catch(function (e) { showErr(e); b.disabled = false; b.textContent = "✦ " + t("Rédiger avec l'agent"); }); }));
+      A.push(btn(t("Aperçu PDF"), function () { save(true).then(function () { return api("inspection.pdf", { inspectionId: id }); }).then(download).catch(showErr); }));
+      A.push(btn(t("Valider"), function () { confirmBox(t("Valider l'état des lieux ? Il ne sera plus modifiable.")).then(function (ok) { if (!ok) return;
+        save(true).then(function () { return api("inspection.finalize", { inspectionId: id }); }).catch(function (e) {
+          if (/sans état/.test(errMsg(e))) return confirmBox(errMsg(e) + " " + t("Valider quand même ?")).then(function (go2) { if (go2) return api("inspection.finalize", { inspectionId: id, allowIncomplete: true }); throw null; });
+          throw e; }).then(function (out) { if (!out) return; download(out); App.go("inspection/" + id); }).catch(function (e) { if (e) showErr(e); }); }); }));
+      A.push(btn(t("Supprimer"), function () { confirmBox(t("Supprimer ce brouillon d'état des lieux ?"), { danger: true }).then(function (ok) { if (ok) api("inspection.cancel", { inspectionId: id }).then(back).catch(showErr); }); }, "danger"));
+    } else {
+      A.push(btn("PDF", function () { api("inspection.pdf", { inspectionId: id }).then(download).catch(showErr); }, "primary"));
+      if (r.canManage && r.status === "FINAL") A.push(btn("✉ " + t("Envoyer au locataire"), function () { api("inspection.send", { inspectionId: id }).then(function (x) { toast(t("Envoyé à") + " " + x.sentTo, "good"); }).catch(showErr); }));
+    }
+    A.push(btn("← " + t("Retour au bail"), function () { if (dirty && !ro) save(true).catch(function () {}).then(back); else back(); }));
+    el.appendChild(pageHead(exit ? t("État des lieux de sortie") : t("État des lieux d'entrée"), (r.propertyName || "") + " · " + (r.tenantName || "") + " · " + fmtDate(r.inspectionDate), A));
+    if (!ro) el.appendChild(h("p", { class: "small muted" }, t("Pour chaque élément, choisissez l'état et ajoutez une observation si besoin. Photos conseillées pour chaque pièce. L'agent rédige ensuite le compte rendu à partir de vos relevés."), r.ai ? " " + t("Aucune donnée d'identité n'est transmise au service d'IA.") : ""));
+    const inp = function (obj, key, attrs) { const i = h("input", Object.assign({ class: "in", value: obj[key] == null ? "" : obj[key], disabled: ro }, attrs || {})); i.addEventListener("input", function () { obj[key] = attrs && attrs.type === "number" ? (i.value === "" ? "" : Number(i.value)) : i.value; touch(); }); return i; };
+    const ta = function (obj, key, rows) { const i = h("textarea", { class: "in", rows: rows || 2, disabled: ro }, obj[key] || ""); i.addEventListener("input", function () { obj[key] = i.value; touch(); }); return i; };
+    const del = function (fn) { return ro ? h("span") : h("button", { type: "button", class: "btn sm ghost", title: t("Supprimer"), onclick: fn }, "×"); };
+    // Informations, compteurs, clés
+    st0.meters = st0.meters || {}; st0.keys = st0.keys || [];
+    const keysBox = h("div");
+    const drawKeys = function () {
+      clear(keysBox).appendChild(st0.keys.length ? h("div", { class: "rows-edit" }, st0.keys.map(function (k) {
+        return h("div", { class: "row" }, inp(k, "label", { maxlength: 80, placeholder: t("Désignation") }), inp(k, "count", { type: "number", min: 0, max: 99, placeholder: "0", title: exit ? t("Restituées") : t("Nombre"), "aria-label": exit ? t("Restituées") : t("Nombre"), style: { width: "84px" } }),
+          del(function () { st0.keys.splice(st0.keys.indexOf(k), 1); touch(); drawKeys(); }), exit ? h("div", { class: "ref" }, t("À l'entrée") + " : " + (k.entry === "" || k.entry == null ? "—" : String(k.entry))) : null); }))
+        : h("div", { class: "empty" }, t("Aucune clé.")));
+      if (!ro) keysBox.appendChild(btn("+ " + t("Clé ou badge"), function () { st0.keys.push({ label: "", count: "" }); drawKeys(); }, "sm")); };
+    drawKeys();
+    el.appendChild(h("div", { class: "grid c2" },
+      panel("Informations", h("div", { class: "form" }, h("div", { class: "field" }, h("label", null, t("Date")), inp(st0, "inspectionDate", { type: "date" })), h("div", { class: "field" }, h("label", null, t("Personnes présentes")), inp(st0, "attendees", { maxlength: 300, placeholder: t("Ex. : bailleur et locataire") })),
+        h("div", { class: "field" }, h("label", null, t("Électricité")), inp(st0.meters, "electricity", { maxlength: 40 })), h("div", { class: "field" }, h("label", null, t("Eau")), inp(st0.meters, "water", { maxlength: 40 })),
+        h("div", { class: "field" }, h("label", null, t("Gaz")), inp(st0.meters, "gas", { maxlength: 40 })), h("div", { class: "field" }, h("label", null, t("Autre compteur")), inp(st0.meters, "other", { maxlength: 120 })))),
+      panel("Clés et accès", keysBox)));
+    // Pièces
+    const roomsBox = h("div");
+    const drawRooms = function () {
+      clear(roomsBox);
+      st0.rooms.forEach(function (room, ri) {
+        room.items = room.items || []; room.photoDocIds = room.photoDocIds || [];
+        const photos = h("div", { class: "photo-grid", style: { display: "flex", gap: "8px", flexWrap: "wrap", margin: "8px 0" } }, room.photoDocIds.map(function (pid) {
+          return h("div", { style: { width: "110px", position: "relative" } }, docImg(pid), ro ? null : h("button", { type: "button", class: "btn sm ghost", style: { position: "absolute", top: "2px", right: "2px" }, onclick: function () { room.photoDocIds.splice(room.photoDocIds.indexOf(pid), 1); touch(); drawRooms(); } }, "×")); }));
+        const items = room.items.length ? h("div", { class: "rows-edit" }, room.items.map(function (i) {
+          const sel = h("select", { class: "in", disabled: ro, "aria-label": exit ? t("Sortie") : t("État") }, LA_COND.map(function (o) { return h("option", { value: o[0] }, t(o[1])); }));
+          sel.value = i.condition || ""; sel.addEventListener("change", function () { i.condition = sel.value; touch(); });
+          return h("div", { class: "row" }, inp(i, "name", { maxlength: 80, "aria-label": t("Élément") }), sel, del(function () { room.items.splice(room.items.indexOf(i), 1); touch(); drawRooms(); }),
+            exit ? h("div", { class: "ref" }, t("À l'entrée") + " : " + laCondLabel(i.entry) + (i.entryNote ? " — " + i.entryNote : "")) : null,
+            h("div", { class: "wide" }, inp(i, "note", { maxlength: 500, placeholder: t("Observation") }))); })) : h("div", { class: "empty" }, t("Aucun élément."));
+        const tools = ro ? null : [btn(t("Tout en bon état"), function () { room.items.forEach(function (i) { if (!i.condition) i.condition = "GOOD"; }); touch(); drawRooms(); }, "sm"),
+          btn("📷 " + t("Photos"), function () { pickFiles({ accept: "image/*", multiple: true, capture: "environment" }).then(function (f) { return f.length ? uploadFiles(f, "LEASE", r.leaseId, "INSPECTION") : []; }).then(function (ids) { room.photoDocIds = room.photoDocIds.concat(ids).slice(0, 12); touch(); drawRooms(); return save(true); }).catch(showErr); }, "sm"),
+          btn(t("Supprimer la pièce"), function () { confirmBox(t("Supprimer cette pièce de l'état des lieux ?"), { danger: true }).then(function (ok) { if (ok) { st0.rooms.splice(ri, 1); touch(); drawRooms(); } }); }, "sm ghost")];
+        const nameEl = ro ? room.name : inp(room, "name", { maxlength: 80, style: { fontWeight: "600" } });
+        roomsBox.appendChild(h("section", { class: "panel" }, h("div", { class: "panel-head" }, h("h3", null, nameEl), tools ? h("div", { class: "actions" }, tools) : null),
+          items, ro ? null : btn("+ " + t("Élément"), function () { room.items.push({ name: "", condition: "", note: "" }); drawRooms(); }, "sm"),
+          photos, h("div", { class: "field full" }, h("label", null, t("Observations sur la pièce")), ta(room, "note", 2))));
+      });
+      if (!ro) roomsBox.appendChild(btn("+ " + t("Ajouter une pièce"), function () { st0.rooms.push({ name: t("Nouvelle pièce"), items: [{ name: t("Sols"), condition: "", note: "" }, { name: t("Murs"), condition: "", note: "" }], note: "", photoDocIds: [] }); touch(); drawRooms(); }));
+    };
+    drawRooms();
+    el.appendChild(roomsBox);
+    el.appendChild(panel("Observations générales", ta(st0, "generalNote", 3)));
+    // Compte rendu rédigé par l'agent
+    if (st0.summary) {
+      const sm = st0.summary;
+      const box = h("div", null, h("div", { class: "field full" }, h("label", null, t("Introduction")), ta(sm, "intro", 3)),
+        (sm.rooms || []).map(function (x) { return h("div", { class: "field full" }, h("label", null, x.name), ta(x, "text", 3)); }),
+        exit ? h("div", null, h("h4", null, t("Écarts constatés par rapport à l'entrée")), table([{ l: "Pièce", k: "room" }, { l: "Élément", k: "item" }, { l: "Entrée", k: "entry" }, { l: "Sortie", k: "exit" }, { l: "Commentaire", f: function (d) { return inp(d, "comment", { maxlength: 600 }); } }], sm.differences || [], { empty: "Aucun écart." })) : null,
+        h("div", { class: "field full" }, h("label", null, t("Conclusion")), ta(sm, "conclusion", 3)));
+      el.appendChild(panel("Compte rendu de l'agent", box));
+    } else if (!ro) el.appendChild(h("div", { class: "alert info" }, t("Quand les relevés sont faits, cliquez sur « Rédiger avec l'agent » : il rédige le compte rendu (et, à la sortie, la liste des écarts par rapport à l'entrée).")));
   });
 };
 </script>

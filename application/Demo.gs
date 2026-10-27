@@ -696,7 +696,7 @@ var DEMO_VIEWS_ = [
   { id: "admin", label: "Super administrateur", who: function () { return DEMO_SPEC_.superAdmin; } }
 ];
 var DEMO_READ_RE_ = /\.(list|get|choices|orgChoices|calendar|today|history|summary|mine|kb|caps|availability|accounts|run|boot)$/;
-var DEMO_DOC_RE_ = /\.(pdf|orderPdf|reportPdf|contractPdf|sheet|receipt|export|policeForms)$/;
+var DEMO_DOC_RE_ = /\.(pdf|orderPdf|reportPdf|contractPdf|sheet|receipt|export|policeForms|preview)$/;
 function demoRouteAllowed_(route) {
   if (["me.logout", "assistant.ask", "meta.get", "me.get"].indexOf(route) >= 0) return true;
   if (["me.updateProfile", "admin.impersonate"].indexOf(route) >= 0) return false;

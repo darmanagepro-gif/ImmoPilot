@@ -194,7 +194,10 @@ function payRecord_(p, a) {
         status: "RECORDED", reconciled: false, note: safeText_(a.note, 500), idempotencyKey: safeText_(a.requestKey || "", 120), recordedBy: p.email, createdAt: nowIso_() });
       paymentRefresh_(pay);
       audit_("PAYMENT_RECORDED", "Payment", pay.paymentId, t.organizationId, { refType: refType, refId: a.refId, kind: kind, amount: amount });
-      return { ok: true, paymentId: pay.paymentId, id: pay.paymentId };
+      const out = { ok: true, paymentId: pay.paymentId, id: pay.paymentId };
+      // Loyer : quittance envoyée automatiquement au locataire dès que l'échéance est soldée (si activé) ; n'échoue jamais.
+      if (refType === "RENT_SCHEDULE") { const r = rentAfterPayment_(pay, p.email); if (r) out.receipt = r; }
+      return out;
     });
   });
 }

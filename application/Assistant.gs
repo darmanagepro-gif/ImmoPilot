@@ -87,9 +87,22 @@ var ASSISTANT_KB_ = [
     s: ["Ouvrez « Prestataires » › « + Prestataire » : nom, e-mail, téléphone, types de prestation, zones, mentions légales et coordonnées de paiement.", "Le compte du prestataire est invité automatiquement (rôle ménage et/ou artisan).", "Les propriétaires et agences le choisissent ensuite dans la liste selon le type de prestation."] },
   // ---------- Location longue durée ----------
   { id: "lease", t: "Créer un bail et générer le contrat", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "bail location longue durée louer année annuel mensuel locataire contrat loyer charges caution indexation créer bail إيجار",
-    s: ["Créez d'abord le locataire dans « Locataires ».", "« Locations longue durée » › « Nouveau bail » : bien, locataire, dates, loyer, charges, caution, jour d'échéance.", "« Activer le bail » génère l'échéancier des loyers ; « Encaisser la caution » enregistre le dépôt de garantie. « Générer le contrat » produit un modèle indicatif à faire valider."] },
+    s: ["Créez d'abord le locataire dans « Locataires » (avec son e-mail pour les envois automatiques).", "« Locations longue durée » › « Nouveau bail » : bien, locataire, dates, loyer, charges, caution, jour d'échéance.", "« Activer le bail » génère l'échéancier des loyers ; « Encaisser la caution » enregistre le dépôt de garantie. « ✦ Rédiger le bail » fait rédiger le contrat par l'agent, à relire avant signature."] },
   { id: "rent", t: "Encaisser un loyer, quittance et retards", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "loyer encaisser quittance retard impayé échéance relance locataire",
-    s: ["Ouvrez le bail › échéancier › « Payer » sur l'échéance : montant, date, mode.", "« Quittance » produit la quittance PDF d'une échéance payée.", "Les retards apparaissent dans le tableau de bord et l'analyse « Impayés »."] },
+    s: ["Ouvrez le bail › échéancier › « Paiement » sur l'échéance : montant, date, mode.", "« Quittance » produit la quittance PDF d'une échéance payée ; si les quittances automatiques sont activées, elle part aussitôt au locataire par e-mail.", "Les retards apparaissent dans le tableau de bord et l'analyse « Impayés » ; les relances peuvent partir automatiquement (voir « Appels de loyer, relances et quittances »)."] },
+  { id: "rent-auto", t: "Appels de loyer, relances et quittances envoyés automatiquement par e-mail", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "appel de loyer avis d'échéance relance automatique impayé quittance automatique email pdf locataire rappel mise en demeure envoi automatique",
+    s: ["Activez les envois dans « Paramètres » › « Paramètres de l'organisation » : rent.autoCall (appels de loyer), rent.autoReminders (relances), rent.autoReceipt (quittances). Ils sont désactivés par défaut.",
+      "Réglez les délais : rent.callDaysBefore (jours avant l'échéance, 7 par défaut) et rent.reminderDays (jours après l'échéance, par exemple 5, 15, 30 : rappel, relance, dernière relance). Ajoutez vos modalités de paiement (rent.paymentInstructions) et, si besoin, une adresse en copie (rent.copyEmail).",
+      "Chaque envoi part par e-mail au locataire avec le PDF en pièce jointe, entre 8 h et 20 h, sans doublon. Une relance regroupe toutes les échéances impayées du bail.",
+      "Quand vous enregistrez le paiement complet d'une échéance (bouton « Paiement »), la quittance part aussitôt au locataire.",
+      "Sur la fiche du bail, panneau « Envois automatiques au locataire » : réglages propres au bail (« Régler pour ce bail », ou exclure le bail), prochain envoi prévu, historique et PDF de chaque envoi. Les boutons « ✉ Appel », « ✉ » (quittance) et « Relancer » envoient à la demande, avec aperçu."] },
+  { id: "lease-agent", t: "Rédiger le bail ou un courrier avec l'agent IA", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "agent ia rédiger bail contrat de location modèle courrier révision loyer renouvellement restitution dépôt garantie intelligence artificielle",
+    s: ["Ouvrez le bail › « ✦ Rédiger le bail » (ou panneau « Agent de rédaction (IA) »).", "Choisissez meublé ou non, l'usage, les clauses, et écrivez vos consignes (sans données personnelles). Les montants, dates et durées viennent du bail.",
+      "L'agent rédige un brouillon : relisez les « Points à vérifier » (par exemple la règle de révision du loyer), modifiez les articles, puis « Valider et générer le PDF ».", "Le contrat validé devient le document du bail ; vous pouvez l'envoyer au locataire par e-mail.",
+      "« Courrier au locataire » : renouvellement, révision du loyer, restitution du dépôt de garantie ou courrier libre.", "Aucune donnée d'identité n'est transmise au service d'IA ; sans IA configurée, des modèles intégrés adaptés à votre pays sont utilisés. Faites relire les documents par un professionnel."] },
+  { id: "inspection", t: "Faire l'état des lieux d'entrée ou de sortie", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "état des lieux edl entrée sortie inventaire photos compteurs clés dégradations vétusté caution",
+    s: ["Ouvrez le bail › « État des lieux d'entrée » (ou « de sortie »). Les pièces du bien et les éléments à contrôler sont pré-remplis.", "Pour chaque élément choisissez l'état (neuf, bon état, état d'usage, mauvais état, sans objet), ajoutez une observation et des photos (📷). « Tout en bon état » accélère la saisie.",
+      "Relevez les compteurs et les clés remises, puis « ✦ Rédiger avec l'agent » : il rédige le compte rendu. À la sortie, il compare avec l'entrée et liste les écarts.", "« Valider » génère le PDF définitif, rangé dans les documents du bail ; « ✉ Envoyer au locataire » le lui adresse par e-mail."] },
   { id: "lease-end", t: "Préavis, renouvellement, fin de bail et caution", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "préavis renouveler fin de bail restitution caution résiliation",
     s: ["Dans le bail : « Préavis », « Renouveler » ou « Terminer le bail ».", "« Restituer la caution » : montant rendu et retenues éventuelles."] },
   { id: "tenant-space", t: "Espace locataire", r: ["TENANT"], go: "mylease", k: "locataire mon bail payer loyer quittance justificatif incident",
@@ -163,16 +176,17 @@ function assistantSystemPrompt_(p, lang, page) {
 }
 
 /** Appel du service d'IA (serveur uniquement). Retourne le texte de la réponse ou lève une erreur. */
-function aiCall_(cfg, system, messages) {
+function aiCall_(cfg, system, messages, maxTokens) {
+  const max = Math.max(100, Math.min(8000, Number(maxTokens) || AI_LIMITS_.maxTokens));
   let req;
   if (cfg.provider === "anthropic") {
     req = { url: "https://api.anthropic.com/v1/messages", method: "post", contentType: "application/json", muteHttpExceptions: true,
       headers: { "x-api-key": cfg.key, "anthropic-version": "2023-06-01" },
-      payload: JSON.stringify({ model: cfg.model, max_tokens: AI_LIMITS_.maxTokens, system: system, messages: messages }) };
+      payload: JSON.stringify({ model: cfg.model, max_tokens: max, system: system, messages: messages }) };
   } else {
     req = { url: "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(cfg.model) + ":generateContent", method: "post", contentType: "application/json", muteHttpExceptions: true,
       headers: { "x-goog-api-key": cfg.key },
-      payload: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: AI_LIMITS_.maxTokens, temperature: 0.2 },
+      payload: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: max, temperature: 0.2 },
         contents: messages.map(function (m) { return { role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }; }) }) };
   }
   const res = TEST_HOOKS_.aiFetch ? TEST_HOOKS_.aiFetch(req) : UrlFetchApp.fetch(req.url, req), code = res.getResponseCode();

@@ -37,6 +37,9 @@ function createRuntime(opts) {
     CREATE TABLE IF NOT EXISTS props (k TEXT PRIMARY KEY, v TEXT);
     CREATE TABLE IF NOT EXISTS outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, created TEXT, recipient TEXT, subject TEXT, body TEXT, html TEXT, sender TEXT, status TEXT, tries INTEGER DEFAULT 0, error TEXT, sent TEXT, next TEXT);
   `);
+  // Colonnes ajoutées en 2.2 (pièces jointes, copie cachée, adresse de réponse) : ajout sans perte sur une base existante.
+  const outboxCols = db.prepare("PRAGMA table_info(outbox)").all().map(function (c) { return c.name; });
+  ["attachments", "bcc", "replyto"].forEach(function (c) { if (outboxCols.indexOf(c) < 0) db.exec("ALTER TABLE outbox ADD COLUMN " + c + " TEXT"); });
   const state = { session: { active: "", effective: opts.adminEmail || "" }, triggers: [], cache: new Map(), held: false, logs: null };
   const spreadsheets = new Map(), files = new Map(), folders = new Map(), props = new Map();
   const dirty = { ss: new Set(), sheets: new Set(), rewrite: new Set(), rows: new Map(), files: new Set(), folders: new Set(), props: new Set() };
@@ -257,13 +260,17 @@ function createRuntime(opts) {
     releaseLock: function () { state.held = false; }, hasLock: function () { return state.held; } }; } };
   const Session = { getActiveUser: function () { return { getEmail: function () { return state.session.active; } }; }, getEffectiveUser: function () { return { getEmail: function () { return state.session.effective; } }; },
     getScriptTimeZone: function () { return opts.timezone; } };
-  const sentToday = db.prepare("SELECT COUNT(*) AS n FROM outbox WHERE created >= ?"), enqueue = db.prepare("INSERT INTO outbox (created, recipient, subject, body, html, sender, status) VALUES (?, ?, ?, ?, ?, ?, 'QUEUED')");
+  const sentToday = db.prepare("SELECT COUNT(*) AS n FROM outbox WHERE created >= ?"), enqueue = db.prepare("INSERT INTO outbox (created, recipient, subject, body, html, sender, status, attachments, bcc, replyto) VALUES (?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?)");
+  const mailAddr = function (v) { const a = String(v || "").trim(); if (a && !/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(a)) throw new Error("Adresse e-mail invalide : " + a); return a || null; };
   const MailApp = {
     sendEmail: function (o) {
       if (typeof o !== "object") o = { to: arguments[0], subject: arguments[1], body: arguments[2] };
       const to = String(o.to || "").trim();
       if (!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(to)) throw new Error("Adresse e-mail invalide : " + to);
-      enqueue.run(new Date().toISOString(), to, String(o.subject || "").slice(0, 250), String(o.body || ""), String(o.htmlBody || ""), String(o.name || opts.appName || "ImmoPilot"));
+      // Pièces jointes (PDF d'appel de loyer, quittance…) : conservées en base avec l'e-mail jusqu'à l'envoi SMTP.
+      const att = (o.attachments || []).map(function (b) { return { name: String(b.getName() || "piece-jointe"), type: String(b.getContentType() || "application/octet-stream"), base64: Buffer.from(b.getBytes()).toString("base64") }; });
+      enqueue.run(new Date().toISOString(), to, String(o.subject || "").slice(0, 250), String(o.body || ""), String(o.htmlBody || ""), String(o.name || opts.appName || "ImmoPilot"),
+        att.length ? JSON.stringify(att) : null, mailAddr(o.bcc), mailAddr(o.replyTo));
       if (opts.onMail) opts.onMail();
     },
     getRemainingDailyQuota: function () { const since = new Date(Date.now() - 86400000).toISOString(); return Math.max(0, opts.mailDailyQuota - Number(sentToday.get(since).n)); }

@@ -1198,3 +1198,155 @@ Quitter la démo|Leave the demo|الخروج من العرض التجريبي|Sa
 Gardien|Caretaker|الحارس|Conserje|Custode|Huisbewaarder
 Prestataire (ménage et travaux)|Service provider (cleaning and works)|مقدّم الخدمة (تنظيف وأشغال)|Proveedor (limpieza y obras)|Fornitore (pulizie e lavori)|Dienstverlener (schoonmaak en werken)
 Démonstration en lecture seule : cette action est désactivée. Vous pouvez parcourir toutes les pages et ouvrir les documents.|Read-only demo: this action is disabled. You can browse every page and open documents.|عرض تجريبي للقراءة فقط: هذا الإجراء معطّل. يمكنك تصفح جميع الصفحات وفتح المستندات.|Demo de solo lectura: esta acción está desactivada. Puede recorrer todas las páginas y abrir los documentos.|Demo in sola lettura: questa azione è disattivata. Puoi sfogliare tutte le pagine e aprire i documenti.|Demo alleen-lezen: deze actie is uitgeschakeld. U kunt alle pagina's bekijken en documenten openen.
+# --- 2.2 : envois automatiques au locataire, agent de rédaction (IA), états des lieux ---
+Agent de rédaction (IA)|Drafting agent (AI)|وكيل التحرير (الذكاء الاصطناعي)|Agente de redacción (IA)|Agente di redazione (IA)|Opstelagent (AI)
+Ajouter un article|Add a clause|إضافة بند|Añadir una cláusula|Aggiungi un articolo|Artikel toevoegen
+Ajouter une pièce|Add a room|إضافة غرفة|Añadir una estancia|Aggiungi un locale|Ruimte toevoegen
+Aperçu PDF|PDF preview|معاينة PDF|Vista previa PDF|Anteprima PDF|PDF-voorbeeld
+Appel|Notice|إشعار|Aviso|Avviso|Kennisgeving
+Appel de loyer : jours avant l'échéance|Rent notice: days before due date|إشعار الكراء: أيام قبل الاستحقاق|Aviso de alquiler: días antes del vencimiento|Avviso di canone: giorni prima della scadenza|Huurbericht: dagen vóór vervaldag
+Appels de loyer|Rent notices|إشعارات الكراء|Avisos de alquiler|Avvisi di canone|Huurberichten
+Appel de loyer|Rent notice|إشعار الكراء|Aviso de alquiler|Avviso di canone|Huurbericht
+Relance|Reminder|تذكير|Recordatorio|Sollecito|Aanmaning
+Courrier|Letter|رسالة|Carta|Lettera|Brief
+Aucun document rédigé pour ce bail.|No document drafted for this lease yet.|لم يُحرَّر أي مستند لهذا العقد بعد.|Aún no hay documentos redactados para este contrato.|Nessun documento redatto per questo contratto.|Nog geen documenten opgesteld voor dit huurcontract.
+Aucun envoi pour ce bail.|Nothing sent for this lease yet.|لم يُرسَل أي شيء لهذا العقد بعد.|Aún no hay envíos para este contrato.|Nessun invio per questo contratto.|Nog niets verzonden voor dit huurcontract.
+Aucun écart.|No difference.|لا يوجد فرق.|Ninguna diferencia.|Nessuna differenza.|Geen verschil.
+Aucun élément.|No item.|لا يوجد عنصر.|Ningún elemento.|Nessun elemento.|Geen onderdeel.
+Aucun état des lieux d'entrée validé : la sortie ne pourra pas être comparée à l'entrée.|No validated move-in inspection: the move-out cannot be compared with move-in.|لا يوجد محضر معاينة دخول معتمد: لن تمكن مقارنة الخروج بالدخول.|No hay inventario de entrada validado: la salida no podrá compararse con la entrada.|Nessun verbale di ingresso convalidato: l'uscita non potrà essere confrontata con l'ingresso.|Geen goedgekeurde intredeplaatsbeschrijving: de uittrede kan niet worden vergeleken met de intrede.
+Aucune clé.|No key.|لا توجد مفاتيح.|Ninguna llave.|Nessuna chiave.|Geen sleutel.
+Aucune donnée d'identité n'est transmise au service d'IA.|No identity data is sent to the AI service.|لا تُرسَل أي بيانات هوية إلى خدمة الذكاء الاصطناعي.|No se envía ningún dato de identidad al servicio de IA.|Nessun dato di identità viene inviato al servizio di IA.|Er worden geen identiteitsgegevens naar de AI-dienst gestuurd.
+Automatique|Automatic|تلقائي|Automático|Automatico|Automatisch
+Autre compteur|Other meter|عداد آخر|Otro contador|Altro contatore|Andere meter
+Brouillon enregistré.|Draft saved.|تم حفظ المسودة.|Borrador guardado.|Bozza salvata.|Concept opgeslagen.
+Ce bail|This lease|هذا العقد|Este contrato|Questo contratto|Dit huurcontract
+Clauses|Clauses|البنود|Cláusulas|Clausole|Clausules
+Clé ou badge|Key or badge|مفتاح أو شارة|Llave o tarjeta|Chiave o badge|Sleutel of badge
+Clés et accès|Keys and access|المفاتيح والولوج|Llaves y accesos|Chiavi e accessi|Sleutels en toegang
+Compte rendu de l'agent|Agent's report|تقرير الوكيل|Informe del agente|Resoconto dell'agente|Verslag van de agent
+Conclusion|Conclusion|خلاصة|Conclusión|Conclusione|Conclusie
+Conseil : renseignez vos modalités de paiement (paramètre rent.paymentInstructions) : elles figurent sur les appels de loyer et les relances.|Tip: enter your payment instructions (setting rent.paymentInstructions): they appear on rent notices and reminders.|نصيحة: أدخل طرق الأداء (الإعداد rent.paymentInstructions): تظهر في إشعارات الكراء والتذكيرات.|Consejo: indique sus modalidades de pago (parámetro rent.paymentInstructions): aparecen en los avisos y recordatorios.|Consiglio: indicate le modalità di pagamento (parametro rent.paymentInstructions): compaiono negli avvisi e nei solleciti.|Tip: vul uw betaalinstructies in (instelling rent.paymentInstructions): ze staan op huurberichten en aanmaningen.
+Consignes pour l'agent|Instructions for the agent|تعليمات للوكيل|Instrucciones para el agente|Istruzioni per l'agente|Instructies voor de agent
+Contrat de bail|Lease agreement|عقد الكراء|Contrato de arrendamiento|Contratto di locazione|Huurovereenkomst
+Contrat de bail — brouillon|Lease agreement — draft|عقد الكراء — مسودة|Contrato de arrendamiento — borrador|Contratto di locazione — bozza|Huurovereenkomst — concept
+Courrier au locataire|Letter to the tenant|رسالة إلى المكتري|Carta al inquilino|Lettera all'inquilino|Brief aan de huurder
+Courrier — brouillon|Letter — draft|رسالة — مسودة|Carta — borrador|Lettera — bozza|Brief — concept
+Date d'effet|Effective date|تاريخ السريان|Fecha de efecto|Data di decorrenza|Ingangsdatum
+Dernière relance avant procédure|Final reminder before legal action|آخر تذكير قبل الإجراءات|Último recordatorio antes de acciones legales|Ultimo sollecito prima di procedere|Laatste aanmaning vóór gerechtelijke stappen
+Destinataire|Recipient|المرسل إليه|Destinatario|Destinatario|Ontvanger
+Document validé. L'envoyer maintenant au locataire par e-mail (PDF joint) ?|Document validated. Send it to the tenant by email now (PDF attached)?|تم اعتماد المستند. هل تريد إرساله الآن إلى المكتري عبر البريد (PDF مرفق)؟|Documento validado. ¿Enviarlo ahora al inquilino por correo (PDF adjunto)?|Documento convalidato. Inviarlo ora all'inquilino via e-mail (PDF allegato)?|Document goedgekeurd. Nu per e-mail naar de huurder sturen (pdf als bijlage)?
+Documents du bail|Lease documents|مستندات العقد|Documentos del contrato|Documenti del contratto|Documenten van het huurcontract
+Désactivé|Disabled|معطل|Desactivado|Disattivato|Uitgeschakeld
+Eau|Water|الماء|Agua|Acqua|Water
+Envoi|Sending|الإرسال|Envío|Invio|Verzending
+Envois automatiques au locataire|Automatic emails to the tenant|الإرسال التلقائي إلى المكتري|Envíos automáticos al inquilino|Invii automatici all'inquilino|Automatische e-mails aan de huurder
+Envois automatiques pour ce bail|Automatic emails for this lease|الإرسال التلقائي لهذا العقد|Envíos automáticos para este contrato|Invii automatici per questo contratto|Automatische e-mails voor dit huurcontract
+Envoyer au locataire|Send to the tenant|إرسال إلى المكتري|Enviar al inquilino|Invia all'inquilino|Naar de huurder sturen
+Envoyer ce document au locataire par e-mail (PDF joint) ?|Send this document to the tenant by email (PDF attached)?|هل تريد إرسال هذا المستند إلى المكتري عبر البريد (PDF مرفق)؟|¿Enviar este documento al inquilino por correo (PDF adjunto)?|Inviare questo documento all'inquilino via e-mail (PDF allegato)?|Dit document per e-mail naar de huurder sturen (pdf als bijlage)?
+Envoyer l'appel de loyer|Send the rent notice|إرسال إشعار الكراء|Enviar el aviso de alquiler|Invia l'avviso di canone|Huurbericht versturen
+Envoyer la quittance|Send the receipt|إرسال وصل الكراء|Enviar el recibo|Invia la quietanza|Kwitantie versturen
+Envoyer une relance|Send a reminder|إرسال تذكير|Enviar un recordatorio|Invia un sollecito|Aanmaning versturen
+Envoyé|Sent|أُرسل|Enviado|Inviato|Verzonden
+Envoyé à|Sent to|أُرسل إلى|Enviado a|Inviato a|Verzonden naar
+Ex. : bailleur et locataire|E.g. landlord and tenant|مثال: المكري والمكتري|Ej.: arrendador e inquilino|Es.: locatore e inquilino|Bijv.: verhuurder en huurder
+Ex. : le jardin et la piscine sont entretenus par le bailleur ; place de parking n° 12 incluse.|E.g. the garden and pool are maintained by the landlord; parking space no. 12 included.|مثال: الحديقة والمسبح يتكفل بهما المكري؛ موقف السيارة رقم 12 مشمول.|Ej.: el jardín y la piscina los mantiene el arrendador; plaza de garaje n.º 12 incluida.|Es.: giardino e piscina sono curati dal locatore; posto auto n. 12 incluso.|Bijv.: tuin en zwembad worden onderhouden door de verhuurder; parkeerplaats nr. 12 inbegrepen.
+Gaz|Gas|الغاز|Gas|Gas|Gas
+Habitation|Residential|سكني|Vivienda|Abitativo|Bewoning
+Historique des envois|Sending history|سجل الإرسال|Historial de envíos|Cronologia degli invii|Verzendgeschiedenis
+IA activée|AI enabled|الذكاء الاصطناعي مفعّل|IA activada|IA attivata|AI ingeschakeld
+Inclure ce bail dans les envois automatiques|Include this lease in automatic emails|إدراج هذا العقد في الإرسال التلقائي|Incluir este contrato en los envíos automáticos|Includi questo contratto negli invii automatici|Dit huurcontract opnemen in automatische e-mails
+Introduction|Introduction|مقدمة|Introducción|Introduzione|Inleiding
+Jusqu'à 3 relances de plus en plus fermes. Vide = réglage de l'organisation.|Up to 3 increasingly firm reminders. Empty = organisation setting.|حتى 3 تذكيرات متزايدة الحزم. فارغ = إعداد المؤسسة.|Hasta 3 recordatorios cada vez más firmes. Vacío = ajuste de la organización.|Fino a 3 solleciti sempre più fermi. Vuoto = impostazione dell'organizzazione.|Tot 3 steeds strengere aanmaningen. Leeg = instelling van de organisatie.
+L'IA n'est pas configurée : l'agent utilise les modèles intégrés, déjà adaptés à votre pays. Le document reste entièrement modifiable avant validation.|AI is not configured: the agent uses built-in templates, already adapted to your country. The document stays fully editable before validation.|الذكاء الاصطناعي غير مُعدّ: يستخدم الوكيل النماذج المدمجة الملائمة لبلدك. يبقى المستند قابلاً للتعديل بالكامل قبل الاعتماد.|La IA no está configurada: el agente usa las plantillas integradas, ya adaptadas a su país. El documento sigue siendo totalmente editable antes de validarlo.|L'IA non è configurata: l'agente usa i modelli integrati, già adattati al vostro paese. Il documento resta interamente modificabile prima della convalida.|AI is niet ingesteld: de agent gebruikt ingebouwde sjablonen, al aangepast aan uw land. Het document blijft volledig bewerkbaar vóór goedkeuring.
+L'agent IA rédige un premier jet que vous relisez et modifiez. Aucune donnée d'identité (nom, e-mail, téléphone, adresse, pièce d'identité) n'est transmise au service d'IA : elles sont ajoutées par ImmoPilot ensuite. Vos consignes et conditions particulières sont transmises telles quelles : n'y mettez pas de données personnelles.|The AI agent writes a first draft that you review and edit. No identity data (name, email, phone, address, ID document) is sent to the AI service: ImmoPilot adds it afterwards. Your instructions and special conditions are sent as written: do not include personal data in them.|يحرر وكيل الذكاء الاصطناعي مسودة أولى تراجعها وتعدلها. لا تُرسَل أي بيانات هوية (الاسم، البريد، الهاتف، العنوان، بطاقة التعريف) إلى خدمة الذكاء الاصطناعي: يضيفها ImmoPilot لاحقاً. تُرسَل تعليماتك والشروط الخاصة كما هي: لا تضع فيها بيانات شخصية.|El agente de IA redacta un primer borrador que usted revisa y modifica. No se envía ningún dato de identidad (nombre, correo, teléfono, dirección, documento) al servicio de IA: ImmoPilot los añade después. Sus instrucciones y condiciones particulares se envían tal cual: no incluya datos personales.|L'agente IA redige una prima bozza che rileggete e modificate. Nessun dato di identità (nome, e-mail, telefono, indirizzo, documento) viene inviato al servizio di IA: ImmoPilot li aggiunge dopo. Le vostre istruzioni e condizioni particolari sono inviate così come sono: non inseritevi dati personali.|De AI-agent schrijft een eerste versie die u nakijkt en aanpast. Er worden geen identiteitsgegevens (naam, e-mail, telefoon, adres, identiteitsbewijs) naar de AI-dienst gestuurd: ImmoPilot voegt ze daarna toe. Uw instructies en bijzondere voorwaarden worden letterlijk doorgestuurd: zet er geen persoonsgegevens in.
+Le PDF est joint à un e-mail adressé au locataire|The PDF is attached to an email sent to the tenant|يُرفق ملف PDF برسالة إلى المكتري|El PDF se adjunta a un correo dirigido al inquilino|Il PDF è allegato a un'e-mail inviata all'inquilino|De pdf wordt als bijlage gemaild naar de huurder
+Le locataire n'a pas d'adresse e-mail : ajoutez-la dans « Locataires ».|The tenant has no email address: add it in "Tenants".|ليس للمكتري بريد إلكتروني: أضفه في «المكترون».|El inquilino no tiene correo: añádalo en «Inquilinos».|L'inquilino non ha un indirizzo e-mail: aggiungetelo in «Inquilini».|De huurder heeft geen e-mailadres: voeg het toe bij "Huurders".
+Le locataire n'a pas d'adresse e-mail : aucun envoi n'est possible. Ajoutez-la dans « Locataires ».|The tenant has no email address: nothing can be sent. Add it in "Tenants".|ليس للمكتري بريد إلكتروني: لا يمكن الإرسال. أضفه في «المكترون».|El inquilino no tiene correo: no se puede enviar nada. Añádalo en «Inquilinos».|L'inquilino non ha un indirizzo e-mail: nessun invio è possibile. Aggiungetelo in «Inquilini».|De huurder heeft geen e-mailadres: er kan niets worden verzonden. Voeg het toe bij "Huurders".
+Les appels de loyer, relances et quittances partent par e-mail au locataire, avec le PDF en pièce jointe, entre 8 h et 20 h. Une copie peut être adressée à votre comptabilité (paramètre rent.copyEmail).|Rent notices, reminders and receipts are emailed to the tenant with the PDF attached, between 8 am and 8 pm. A copy can go to your accounting (setting rent.copyEmail).|تُرسَل إشعارات الكراء والتذكيرات والوصولات إلى المكتري عبر البريد مع ملف PDF مرفق، بين الساعة 8 و20. يمكن إرسال نسخة إلى المحاسبة (الإعداد rent.copyEmail).|Los avisos, recordatorios y recibos se envían al inquilino por correo con el PDF adjunto, entre las 8 y las 20 h. Puede enviarse una copia a su contabilidad (parámetro rent.copyEmail).|Avvisi, solleciti e quietanze partono via e-mail all'inquilino con il PDF allegato, tra le 8 e le 20. Una copia può andare alla vostra contabilità (parametro rent.copyEmail).|Huurberichten, aanmaningen en kwitanties worden met de pdf als bijlage naar de huurder gemaild, tussen 8 en 20 uur. Een kopie kan naar uw boekhouding (instelling rent.copyEmail).
+Les envois automatiques sont désactivés pour votre organisation : activez-les dans Paramètres › Paramètres de l'organisation (rent.autoCall, rent.autoReminders, rent.autoReceipt).|Automatic emails are disabled for your organisation: enable them in Settings › Organisation settings (rent.autoCall, rent.autoReminders, rent.autoReceipt).|الإرسال التلقائي معطل لمؤسستك: فعّله في الإعدادات › إعدادات المؤسسة (rent.autoCall وrent.autoReminders وrent.autoReceipt).|Los envíos automáticos están desactivados para su organización: actívelos en Ajustes › Ajustes de la organización (rent.autoCall, rent.autoReminders, rent.autoReceipt).|Gli invii automatici sono disattivati per la vostra organizzazione: attivateli in Impostazioni › Impostazioni dell'organizzazione (rent.autoCall, rent.autoReminders, rent.autoReceipt).|Automatische e-mails zijn uitgeschakeld voor uw organisatie: schakel ze in via Instellingen › Instellingen van de organisatie (rent.autoCall, rent.autoReminders, rent.autoReceipt).
+Les montants, dates et durées viennent du bail.|Amounts, dates and durations come from the lease.|المبالغ والتواريخ والمدد مأخوذة من العقد.|Los importes, fechas y duraciones proceden del contrato.|Importi, date e durate provengono dal contratto.|Bedragen, data en looptijden komen uit het huurcontract.
+Logement meublé|Furnished home|سكن مفروش|Vivienda amueblada|Alloggio arredato|Gemeubelde woning
+Manuel|Manual|يدوي|Manual|Manuale|Handmatig
+Mis à jour|Updated|تم التحديث|Actualizado|Aggiornato|Bijgewerkt
+Mixte : habitation et professionnel|Mixed: residential and professional|مختلط: سكني ومهني|Mixto: vivienda y profesional|Misto: abitativo e professionale|Gemengd: bewoning en beroep
+Modèle intégré|Built-in template|نموذج مدمج|Plantilla integrada|Modello integrato|Ingebouwd sjabloon
+Modèles intégrés|Built-in templates|نماذج مدمجة|Plantillas integradas|Modelli integrati|Ingebouwde sjablonen
+Motif des retenues|Reason for deductions|سبب الاقتطاعات|Motivo de las retenciones|Motivo delle trattenute|Reden van de inhoudingen
+Murs|Walls|الجدران|Paredes|Pareti|Muren
+Niveau automatique (selon le retard)|Automatic level (based on delay)|مستوى تلقائي (حسب التأخير)|Nivel automático (según el retraso)|Livello automatico (in base al ritardo)|Automatisch niveau (volgens achterstand)
+Niveau de relance|Reminder level|مستوى التذكير|Nivel de recordatorio|Livello di sollecito|Niveau van aanmaning
+Nouvelle date de fin|New end date|تاريخ نهاية جديد|Nueva fecha de fin|Nuova data di fine|Nieuwe einddatum
+Nouvelle pièce|New room|غرفة جديدة|Nueva estancia|Nuovo locale|Nieuwe ruimte
+Observation|Remark|ملاحظة|Observación|Osservazione|Opmerking
+Observations générales|General remarks|ملاحظات عامة|Observaciones generales|Osservazioni generali|Algemene opmerkingen
+Observations sur la pièce|Remarks on the room|ملاحظات حول الغرفة|Observaciones sobre la estancia|Osservazioni sul locale|Opmerkingen over de ruimte
+Paiement enregistré, mais la quittance n'a pas pu être envoyée : nouvel essai automatique plus tard.|Payment recorded, but the receipt could not be sent: it will be retried automatically later.|سُجّل الأداء، لكن تعذر إرسال الوصل: ستُعاد المحاولة تلقائياً لاحقاً.|Pago registrado, pero no se pudo enviar el recibo: se reintentará automáticamente más tarde.|Pagamento registrato, ma la quietanza non è stata inviata: nuovo tentativo automatico più tardi.|Betaling geregistreerd, maar de kwitantie kon niet worden verzonden: later automatisch opnieuw geprobeerd.
+Personnes présentes|People present|الحاضرون|Personas presentes|Persone presenti|Aanwezigen
+Points à vérifier|Points to check|نقاط يجب التحقق منها|Puntos a verificar|Punti da verificare|Aandachtspunten
+Pour chaque élément, choisissez l'état et ajoutez une observation si besoin. Photos conseillées pour chaque pièce. L'agent rédige ensuite le compte rendu à partir de vos relevés.|For each item, choose its condition and add a remark if needed. Photos are recommended for each room. The agent then writes the report from your notes.|لكل عنصر، اختر حالته وأضف ملاحظة عند الحاجة. يُنصح بالصور لكل غرفة. يحرر الوكيل بعد ذلك التقرير انطلاقاً من ملاحظاتك.|Para cada elemento, elija el estado y añada una observación si es necesario. Se recomiendan fotos de cada estancia. El agente redacta luego el informe a partir de sus anotaciones.|Per ogni elemento scegliete lo stato e aggiungete un'osservazione se serve. Foto consigliate per ogni locale. L'agente redige poi il resoconto dai vostri rilievi.|Kies per onderdeel de staat en voeg zo nodig een opmerking toe. Foto's per ruimte aanbevolen. De agent schrijft daarna het verslag op basis van uw vaststellingen.
+Prochain appel|Next notice|الإشعار التالي|Próximo aviso|Prossimo avviso|Volgend bericht
+Prochaine relance|Next reminder|التذكير التالي|Próximo recordatorio|Prossimo sollecito|Volgende aanmaning
+Quand les relevés sont faits, cliquez sur « Rédiger avec l'agent » : il rédige le compte rendu (et, à la sortie, la liste des écarts par rapport à l'entrée).|When your notes are done, click "Draft with the agent": it writes the report (and, at move-out, the list of differences from move-in).|بعد الانتهاء من الملاحظات، انقر على «التحرير مع الوكيل»: يحرر التقرير (وعند الخروج، قائمة الفروق مقارنة بالدخول).|Cuando termine las anotaciones, pulse «Redactar con el agente»: redacta el informe (y, a la salida, la lista de diferencias respecto a la entrada).|Terminati i rilievi, cliccate su «Redigi con l'agente»: redige il resoconto (e, all'uscita, l'elenco delle differenze rispetto all'ingresso).|Klaar met de vaststellingen? Klik op "Opstellen met de agent": hij schrijft het verslag (en bij uittrede de lijst met verschillen tegenover de intrede).
+Quittance envoyée au locataire par e-mail|Receipt emailed to the tenant|أُرسل الوصل إلى المكتري عبر البريد|Recibo enviado al inquilino por correo|Quietanza inviata all'inquilino via e-mail|Kwitantie per e-mail naar de huurder gestuurd
+Quittances automatiques|Automatic receipts|وصولات تلقائية|Recibos automáticos|Quietanze automatiche|Automatische kwitanties
+Rappel de loyer|Rent reminder|تذكير بالكراء|Recordatorio de alquiler|Promemoria del canone|Huurherinnering
+Relance pour loyer impayé|Reminder for unpaid rent|تذكير بكراء غير مؤدى|Recordatorio de alquiler impagado|Sollecito per canone non pagato|Aanmaning voor onbetaalde huur
+Relancer|Send reminder|تذكير|Recordar|Sollecitare|Aanmanen
+Relances|Reminders|التذكيرات|Recordatorios|Solleciti|Aanmaningen
+Relances : jours après l'échéance|Reminders: days after due date|التذكيرات: أيام بعد الاستحقاق|Recordatorios: días después del vencimiento|Solleciti: giorni dopo la scadenza|Aanmaningen: dagen na vervaldag
+Retenues sur le dépôt de garantie|Deductions from the deposit|الاقتطاعات من الضمانة|Retenciones de la fianza|Trattenute sul deposito cauzionale|Inhoudingen op de waarborg
+Retour au bail|Back to the lease|العودة إلى العقد|Volver al contrato|Torna al contratto|Terug naar het huurcontract
+Rédaction|Drafting|التحرير|Redacción|Redazione|Opstelling
+Rédaction…|Drafting…|جارٍ التحرير…|Redactando…|Redazione…|Bezig met opstellen…
+Rédiger|Draft|حرّر|Redactar|Redigi|Opstellen
+Rédiger avec l'agent|Draft with the agent|التحرير مع الوكيل|Redactar con el agente|Redigi con l'agente|Opstellen met de agent
+Rédiger le bail|Draft the lease|تحرير العقد|Redactar el contrato|Redigi il contratto|Huurcontract opstellen
+Rédiger le contrat de bail|Draft the lease agreement|تحرير عقد الكراء|Redactar el contrato de arrendamiento|Redigi il contratto di locazione|Huurovereenkomst opstellen
+Rédigé par l'IA|Drafted by AI|حرره الذكاء الاصطناعي|Redactado por la IA|Redatto dall'IA|Opgesteld door AI
+Réglages enregistrés.|Settings saved.|تم حفظ الإعدادات.|Ajustes guardados.|Impostazioni salvate.|Instellingen opgeslagen.
+Régler pour ce bail|Settings for this lease|إعدادات هذا العقد|Ajustes de este contrato|Impostazioni per questo contratto|Instellingen voor dit huurcontract
+Supprimer|Delete|حذف|Eliminar|Elimina|Verwijderen
+Supprimer ce brouillon ?|Delete this draft?|هل تريد حذف هذه المسودة؟|¿Eliminar este borrador?|Eliminare questa bozza?|Dit concept verwijderen?
+Supprimer ce brouillon d'état des lieux ?|Delete this inspection draft?|هل تريد حذف مسودة محضر المعاينة هذه؟|¿Eliminar este borrador de inventario?|Eliminare questa bozza di verbale?|Dit concept van de plaatsbeschrijving verwijderen?
+Supprimer cette pièce de l'état des lieux ?|Remove this room from the inspection?|هل تريد حذف هذه الغرفة من محضر المعاينة؟|¿Quitar esta estancia del inventario?|Rimuovere questo locale dal verbale?|Deze ruimte uit de plaatsbeschrijving verwijderen?
+Supprimer la pièce|Remove room|حذف الغرفة|Quitar la estancia|Rimuovi il locale|Ruimte verwijderen
+Supprimer le brouillon|Delete draft|حذف المسودة|Eliminar el borrador|Elimina la bozza|Concept verwijderen
+Titre de l'article|Clause title|عنوان البند|Título de la cláusula|Titolo dell'articolo|Titel van het artikel
+Titre du document|Document title|عنوان المستند|Título del documento|Titolo del documento|Titel van het document
+Tout en bon état|All in good condition|الكل في حالة جيدة|Todo en buen estado|Tutto in buono stato|Alles in goede staat
+Type de courrier|Letter type|نوع الرسالة|Tipo de carta|Tipo di lettera|Soort brief
+Usage|Use|الاستعمال|Uso|Destinazione d'uso|Gebruik
+Valider ce document ? Il ne sera plus modifiable et sera rangé dans les documents du bail.|Validate this document? It can no longer be edited and will be filed with the lease documents.|هل تعتمد هذا المستند؟ لن يعود قابلاً للتعديل وسيُحفظ مع مستندات العقد.|¿Validar este documento? Ya no podrá modificarse y se archivará con los documentos del contrato.|Convalidare questo documento? Non sarà più modificabile e verrà archiviato tra i documenti del contratto.|Dit document goedkeuren? Het kan daarna niet meer worden gewijzigd en wordt bij de documenten van het huurcontract bewaard.
+Valider et générer le PDF|Validate and generate the PDF|اعتماد وإنشاء PDF|Validar y generar el PDF|Convalida e genera il PDF|Goedkeuren en pdf maken
+Valider l'état des lieux ? Il ne sera plus modifiable.|Validate the inspection? It can no longer be edited.|هل تعتمد محضر المعاينة؟ لن يعود قابلاً للتعديل.|¿Validar el inventario? Ya no podrá modificarse.|Convalidare il verbale? Non sarà più modificabile.|De plaatsbeschrijving goedkeuren? Ze kan daarna niet meer worden gewijzigd.
+Valider quand même ?|Validate anyway?|الاعتماد رغم ذلك؟|¿Validar de todos modos?|Convalidare comunque?|Toch goedkeuren?
+Vide = réglage de l'organisation.|Empty = organisation setting.|فارغ = إعداد المؤسسة.|Vacío = ajuste de la organización.|Vuoto = impostazione dell'organizzazione.|Leeg = instelling van de organisatie.
+après l'échéance|after the due date|بعد الاستحقاق|después del vencimiento|dopo la scadenza|na de vervaldag
+dès que l'échéance est réglée|as soon as the instalment is paid|بمجرد أداء الاستحقاق|en cuanto se paga el vencimiento|appena la scadenza è saldata|zodra de termijn betaald is
+envoyés|sent|تُرسَل|enviados|inviati|verzonden
+exclu des envois automatiques|excluded from automatic emails|مستثنى من الإرسال التلقائي|excluido de los envíos automáticos|escluso dagli invii automatici|uitgesloten van automatische e-mails
+inclus dans les envois automatiques|included in automatic emails|مدرج في الإرسال التلقائي|incluido en los envíos automáticos|incluso negli invii automatici|opgenomen in automatische e-mails
+jour(s) avant l'échéance|day(s) before the due date|يوم (أيام) قبل الاستحقاق|día(s) antes del vencimiento|giorno/i prima della scadenza|dag(en) vóór de vervaldag
+À l'entrée|At move-in|عند الدخول|A la entrada|All'ingresso|Bij intrede
+Restituées|Returned|المُرجعة|Devueltas|Restituite|Teruggegeven
+Écarts constatés par rapport à l'entrée|Differences from move-in|الفروق المسجلة مقارنة بالدخول|Diferencias respecto a la entrada|Differenze rispetto all'ingresso|Verschillen tegenover de intrede
+Électricité|Electricity|الكهرباء|Electricidad|Elettricità|Elektriciteit
+État des lieux d'entrée|Move-in inspection|محضر معاينة الدخول|Inventario de entrada|Verbale di ingresso|Plaatsbeschrijving bij intrede
+État des lieux de sortie|Move-out inspection|محضر معاينة الخروج|Inventario de salida|Verbale di uscita|Plaatsbeschrijving bij uittrede
+État des lieux enregistré.|Inspection saved.|تم حفظ محضر المعاينة.|Inventario guardado.|Verbale salvato.|Plaatsbeschrijving opgeslagen.
+Neuf|New|جديد|Nuevo|Nuovo|Nieuw
+Bon état|Good condition|حالة جيدة|Buen estado|Buono stato|Goede staat
+État d'usage|Normal wear|حالة استعمال عادي|Desgaste normal|Usura normale|Normale slijtage
+Mauvais état|Poor condition|حالة سيئة|Mal estado|Cattivo stato|Slechte staat
+Sans objet|Not applicable|لا ينطبق|No aplica|Non applicabile|Niet van toepassing
+Assurance habitation obligatoire|Home insurance required|تأمين السكن إلزامي|Seguro de hogar obligatorio|Assicurazione casa obbligatoria|Woonverzekering verplicht
+Sous-location interdite sans accord écrit|No subletting without written consent|يُمنع الكراء من الباطن دون موافقة كتابية|Subarriendo prohibido sin acuerdo escrito|Sublocazione vietata senza consenso scritto|Onderverhuur verboden zonder schriftelijke toestemming
+Animaux acceptés|Pets allowed|الحيوانات مقبولة|Se admiten mascotas|Animali ammessi|Huisdieren toegestaan
+Animaux interdits|No pets|الحيوانات ممنوعة|Mascotas prohibidas|Animali vietati|Geen huisdieren
+Logement non-fumeur|Non-smoking home|سكن لغير المدخنين|Vivienda para no fumadores|Alloggio non fumatori|Rookvrije woning
+Caution solidaire (garant)|Joint guarantor|كفيل متضامن|Avalista solidario|Garante solidale|Hoofdelijke borg
+Travaux soumis à l'accord du bailleur|Works require the landlord's consent|الأشغال تخضع لموافقة المكري|Obras sujetas a la conformidad del arrendador|Lavori soggetti al consenso del locatore|Werken vereisen toestemming van de verhuurder
+Proposition de renouvellement|Renewal proposal|اقتراح التجديد|Propuesta de renovación|Proposta di rinnovo|Verlengingsvoorstel
+Révision du loyer|Rent review|مراجعة الكراء|Revisión del alquiler|Revisione del canone|Huurherziening
+Restitution du dépôt de garantie|Deposit refund|إرجاع الضمانة|Devolución de la fianza|Restituzione del deposito cauzionale|Teruggave van de waarborg
+Courrier libre|Free-form letter|رسالة حرة|Carta libre|Lettera libera|Vrije brief

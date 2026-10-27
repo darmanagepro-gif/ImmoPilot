@@ -126,6 +126,15 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;overflow-wrap:anywhere}
 .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
 .field input,.field select,.field textarea{width:100%;border:1px solid var(--ctl-border);border-radius:var(--r-ctl);padding:8px 10px;background:var(--field-bg);min-height:38px}
 .field textarea{min-height:80px;resize:vertical}
+/* Saisie en lignes (état des lieux, éditeur de documents) : lisible au téléphone, sans tableau à faire défiler. */
+.in{width:100%;border:1px solid var(--ctl-border);border-radius:var(--r-ctl);padding:8px 10px;background:var(--field-bg);min-height:38px;color:inherit;font:inherit;box-sizing:border-box}
+textarea.in{min-height:70px;resize:vertical}
+.rows-edit .row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 8px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.rows-edit .row:first-child{border-top:0}
+.rows-edit .row .wide{grid-column:1/-1}
+.rows-edit .row .ref{grid-column:1/-1;font-size:12px;color:var(--muted)}
+.rows-edit .row select.in{width:auto;min-width:130px}
+.rows-edit .row input[type=number].in{width:84px}
 .field .help{font-size:11px;color:var(--muted);margin-top:3px}
 .field.check{display:flex;align-items:center;gap:8px}.field.check input{width:auto;min-height:0}.field.check label{margin:0;color:var(--ink);font-size:14px}
 .field .req{color:var(--clay)}
@@ -136,7 +145,9 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;overflow-wrap:anywhere}
 .modal header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
 .modal header h3{margin:0;font-size:17px}
 .modal .body{padding:18px 20px;max-height:70vh;overflow-y:auto}
-.modal footer{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--line)}
+.modal footer{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;padding:14px 20px;border-top:1px solid var(--line)}
+/* Fenêtre ouverte : le bouton d'aide Rubban s'efface pour ne pas masquer les boutons de la fenêtre (téléphone). */
+body:has(.modal-back) #rb-fab,body:has(.modal-back) .rb-hint{display:none}
 .x{border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:var(--muted)}
 .toasts{position:fixed;bottom:18px;inset-inline-end:18px;display:flex;flex-direction:column;gap:8px;z-index:200}
 .toast{background:var(--navy);color:#fff;padding:10px 14px;border-radius:8px;box-shadow:var(--shadow);max-width:380px}

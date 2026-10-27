@@ -13,6 +13,7 @@ const PORT = Number(process.argv[2] || 8787);
 const { ctx } = loadProject();
 vm.runInContext("var __env = testEnvSetup_(); var __T = testKit_([]); var __fx = testFixtures_(__T); TEST_HOOKS_.pbkdfIters = 50;", ctx);
 vm.runInContext(fs.readFileSync(path.join(__dirname, "demo-data.js"), "utf8"), ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, "demo-longterm.js"), "utf8"), ctx);
 // PUBLIC_DEMO=1 : reproduit le paquet « démo publique » (choix d'une vue sans compte sur l'écran de connexion).
 if (process.env.PUBLIC_DEMO) vm.runInContext("IMMO_PUBLIC_DEMO_ = true; demoBuild_(__fx.users.superA.email);", ctx);
 const tokens = vm.runInContext("__fx.tok", ctx);

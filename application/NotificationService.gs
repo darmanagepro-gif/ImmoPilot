@@ -3,7 +3,12 @@
  * Anti-doublon : chaque envoi porte une clé d'événement ; NotificationLogs garde (eventKey, canal, destinataire).
  * WhatsApp : ImmoPilot génère un lien qui OUVRE une conversation pré-remplie. Aucun message n'est envoyé automatiquement.
  */
-function sendMailSafe_(to, subject, body, eventKey, orgId) {
+/**
+ * opts (facultatif) : { attachments: [Blob] (PDF joints), bcc: "copie@…", replyTo: "…", senderName: "…", plain: true (pas de bouton
+ * « Ouvrir ImmoPilot » pour les liens : e-mails adressés à un locataire sans compte) }.
+ */
+function sendMailSafe_(to, subject, body, eventKey, orgId, opts) {
+  opts = opts || {};
   to = validateEmail_(to);
   const key = String(eventKey || "") ;
   if (key && dbAll_("NotificationLogs").some(function (l) { return l.eventKey === key && l.channel === "EMAIL" && l.recipient === to && l.status === "SENT"; })) return { ok: true, duplicate: true };
@@ -11,9 +16,14 @@ function sendMailSafe_(to, subject, body, eventKey, orgId) {
   try {
     const quota = TEST_HOOKS_.mailQuota !== null ? TEST_HOOKS_.mailQuota : MailApp.getRemainingDailyQuota();
     if (quota < 1) throw new Error("Quota quotidien MailApp épuisé.");
-    const text = String(body || "").slice(0, 20000), html = mailHtml_(text);
-    if (TEST_HOOKS_.mailSink) TEST_HOOKS_.mailSink.push({ to: to, subject: subject, body: text, htmlBody: html });
-    else MailApp.sendEmail({ to: to, subject: safeText_(subject, 200), body: text, htmlBody: html, name: IMMO_CONFIG.APP_NAME });
+    const text = String(body || "").slice(0, 20000), html = opts.plain ? mailHtmlPlain_(text) : mailHtml_(text);
+    const msg = { to: to, subject: safeText_(subject, 200), body: text, htmlBody: html, name: safeText_(opts.senderName || IMMO_CONFIG.APP_NAME, 80) };
+    if (opts.attachments && opts.attachments.length) msg.attachments = opts.attachments;
+    if (opts.bcc) msg.bcc = validateEmail_(opts.bcc);
+    if (opts.replyTo) msg.replyTo = validateEmail_(opts.replyTo);
+    if (TEST_HOOKS_.mailSink) TEST_HOOKS_.mailSink.push({ to: to, subject: subject, body: text, htmlBody: html, bcc: msg.bcc || "", replyTo: msg.replyTo || "", name: msg.name,
+      attachments: (msg.attachments || []).map(function (b) { return { name: b.getName(), mimeType: b.getContentType(), size: b.getBytes().length }; }) });
+    else MailApp.sendEmail(msg);
   } catch (e) { status = "FAILED"; error = String(e.message || e).slice(0, 300); }
   try { dbInsert_("NotificationLogs", { eventKey: key || newId_("evt"), channel: "EMAIL", recipient: to, type: "", status: status, sentAt: nowIso_(), error: error, organizationId: orgId || "" }); } catch (e2) { console.error(e2.message); }
   return status === "SENT" ? { ok: true } : { ok: false, error: error };
@@ -33,6 +43,15 @@ function mailHtml_(text) {
       "<br><span style=\"font-size:12px;color:#64748b\">Si le bouton ne fonctionne pas, copiez ce lien en entier dans la barre d'adresse de votre navigateur :<br><a href=\"" + url + "\" style=\"color:#2f4fd8;word-break:break-all\">" + url + "</a></span><br>";
   }).join("");
   return "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1d2b3a\">" + inner + "</div>";
+}
+
+/** Version HTML simple (texte échappé, liens cliquables tels quels) pour les e-mails adressés à des personnes sans compte. */
+function mailHtmlPlain_(text) {
+  const parts = String(text || "").split(/(https:\/\/[^\s<>"]+)/);
+  return "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1d2b3a\">" + parts.map(function (part, i) {
+    if (i % 2 === 0) return escapeHtml_(part).replace(/\n/g, "<br>");
+    const url = escapeHtml_(part); return "<a href=\"" + url + "\" style=\"color:#2f4fd8\">" + url + "</a>";
+  }).join("") + "</div>";
 }
 
 /**

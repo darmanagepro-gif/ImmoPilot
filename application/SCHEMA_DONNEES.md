@@ -1,4 +1,4 @@
-# Schéma des données — ImmoPilot 2.0.0
+# Schéma des données — ImmoPilot 2.2.0
 
 Généré à partir de `TABLES_SRC` (Config.gs), qui est la source unique du schéma : la migration v1 (`schema_sync`) crée chaque onglet et **ajoute** les colonnes manquantes à droite, sans jamais supprimer ni renommer une colonne existante. Les colonnes sont lues par **nom d'en-tête**, pas par position : un onglet peut contenir des colonnes supplémentaires (héritées), elles sont conservées et ignorées.
 
@@ -51,6 +51,9 @@ Conventions communes à toutes les tables :
 - [Tenants](#tenants)
 - [Leases](#leases)
 - [RentSchedules](#rentschedules)
+- [RentMailings](#rentmailings)
+- [LeaseDocs](#leasedocs)
+- [LeaseInspections](#leaseinspections)
 - [Expenses](#expenses)
 - [RevenueRecords](#revenuerecords)
 - [Documents](#documents)
@@ -1003,6 +1006,7 @@ Conventions communes à toutes les tables :
 | createdBy | texte |  |
 | updatedAt | horodatage ISO |  |
 | updatedBy | texte |  |
+| automationJson | JSON |  |
 
 ## RentSchedules
 
@@ -1025,6 +1029,98 @@ Conventions communes à toutes les tables :
 | status | texte | valeurs : OPEN, CANCELLED |
 | createdAt | horodatage ISO |  |
 | uniqueKey | texte |  |
+
+## RentMailings
+
+- Clé primaire : `mailingId` (préfixe `rml_`)
+- Organisation propriétaire : `organizationId`
+- Champs obligatoires : `leaseId`, `kind`
+- Relations : `organizationId` → Organizations · `propertyId` → Properties · `leaseId` → Leases · `scheduleId` → RentSchedules · `documentId` → Documents
+
+| Colonne | Type | Remarque |
+|---|---|---|
+| mailingId | texte | clé primaire |
+| organizationId | texte |  |
+| propertyId | texte |  |
+| leaseId | texte | obligatoire |
+| scheduleId | texte |  |
+| kind | texte | obligatoire · valeurs : CALL, REMINDER, RECEIPT, DOCUMENT |
+| level | nombre |  |
+| recipient | texte |  |
+| status | texte | valeurs : SENT, FAILED, SKIPPED |
+| trigger | texte | valeurs : AUTO, MANUAL |
+| documentId | texte |  |
+| subject | texte |  |
+| sentAt | horodatage ISO |  |
+| error | texte |  |
+| attempts | nombre |  |
+| uniqueKey | texte |  |
+| createdAt | horodatage ISO |  |
+| createdBy | texte |  |
+
+## LeaseDocs
+
+- Clé primaire : `leaseDocId` (préfixe `ldc_`)
+- Organisation propriétaire : `organizationId`
+- Champs obligatoires : `leaseId`, `docType`
+- Relations : `organizationId` → Organizations · `propertyId` → Properties · `leaseId` → Leases · `documentId` → Documents
+
+| Colonne | Type | Remarque |
+|---|---|---|
+| leaseDocId | texte | clé primaire |
+| organizationId | texte |  |
+| propertyId | texte |  |
+| leaseId | texte | obligatoire |
+| docType | texte | obligatoire · valeurs : LEASE_CONTRACT, LETTER |
+| subtype | texte |  |
+| status | texte | valeurs : DRAFT, FINAL, CANCELLED |
+| title | texte |  |
+| inputsJson | JSON |  |
+| sectionsJson | JSON |  |
+| warningsJson | JSON |  |
+| engine | texte |  |
+| documentId | texte |  |
+| createdAt | horodatage ISO |  |
+| createdBy | texte |  |
+| updatedAt | horodatage ISO |  |
+| updatedBy | texte |  |
+| finalizedAt | horodatage ISO |  |
+| finalizedBy | texte |  |
+| sentAt | horodatage ISO |  |
+| sentTo | texte |  |
+
+## LeaseInspections
+
+- Clé primaire : `inspectionId` (préfixe `edl_`)
+- Organisation propriétaire : `organizationId`
+- Champs obligatoires : `leaseId`, `type`
+- Relations : `organizationId` → Organizations · `propertyId` → Properties · `leaseId` → Leases · `documentId` → Documents
+
+| Colonne | Type | Remarque |
+|---|---|---|
+| inspectionId | texte | clé primaire |
+| organizationId | texte |  |
+| propertyId | texte |  |
+| leaseId | texte | obligatoire |
+| type | texte | obligatoire · valeurs : ENTRY, EXIT |
+| inspectionDate | date (AAAA-MM-JJ) |  |
+| status | texte | valeurs : DRAFT, FINAL, CANCELLED |
+| roomsJson | JSON |  |
+| metersJson | JSON |  |
+| keysJson | JSON |  |
+| generalNote | texte |  |
+| attendees | texte |  |
+| summaryJson | JSON |  |
+| engine | texte |  |
+| documentId | texte |  |
+| createdAt | horodatage ISO |  |
+| createdBy | texte |  |
+| updatedAt | horodatage ISO |  |
+| updatedBy | texte |  |
+| finalizedAt | horodatage ISO |  |
+| finalizedBy | texte |  |
+| sentAt | horodatage ISO |  |
+| sentTo | texte |  |
 
 ## Expenses
 
