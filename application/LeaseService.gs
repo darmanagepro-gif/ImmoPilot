@@ -94,7 +94,7 @@ function tenantList_(p, a) {
     .map(function (t) { const mg = hasOrgCap_(p, t.organizationId, "lease.manage");
       return { tenantId: t.tenantId, organizationId: t.organizationId, fullName: t.fullName, email: t.email, phone: t.phone, nationality: t.nationality, status: t.status, hasAccount: !!t.userId,
       idType: t.idType, idNumber: mg ? t.idNumber : (t.idNumber ? "•••" + String(t.idNumber).slice(-3) : ""), idExpiry: mg ? t.idExpiry : "", birthDate: mg ? t.birthDate : "", birthPlace: mg ? t.birthPlace : "", address: mg ? t.address : "",
-      idDocumentId: mg ? t.idDocumentId : "",
+      idDocumentId: mg ? t.idDocumentId : "", idDocumentBackId: mg ? t.idDocumentBackId : "",
       activeLeases: dbAll_("Leases").filter(function (l) { return String(l.tenantId) === String(t.tenantId) && ["ACTIVE", "NOTICE"].indexOf(l.status) >= 0; }).length }; });
   return pageOf_(rows, a);
 }
@@ -135,7 +135,12 @@ function tenantUpdate_(p, a) {
   if (a.nationality !== undefined) patch.nationality = safeText_(a.nationality, 60);
   if (a.status !== undefined) patch.status = oneOf_(a.status, ["ACTIVE", "INACTIVE"], "Statut");
   tenantIdentity_(a, patch);
-  if (a.idDocumentId !== undefined) { if (a.idDocumentId) { const d = dbGet_("Documents", safeText_(a.idDocumentId, 120)); assert_(d && d.ownerType === "TENANT" && String(d.ownerId) === String(t.tenantId) && d.status === "ACTIVE", "Pièce d'identité non rattachée à ce locataire."); } patch.idDocumentId = safeText_(a.idDocumentId, 120); }
+  // Recto (idDocumentId) et verso (idDocumentBackId) de la pièce : documents du dossier de CE locataire uniquement.
+  ["idDocumentId", "idDocumentBackId"].forEach(function (k) {
+    if (a[k] === undefined) return;
+    if (a[k]) { const d = dbGet_("Documents", safeText_(a[k], 120)); assert_(d && d.ownerType === "TENANT" && String(d.ownerId) === String(t.tenantId) && d.status === "ACTIVE", "Pièce d'identité non rattachée à ce locataire."); }
+    patch[k] = safeText_(a[k], 120);
+  });
   dbUpdate_("Tenants", t.tenantId, patch);
   audit_("TENANT_UPDATED", "Tenant", t.tenantId, t.organizationId, { fields: Object.keys(patch) });
   return { ok: true };

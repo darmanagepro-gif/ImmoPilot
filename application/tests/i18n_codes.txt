@@ -124,7 +124,7 @@ BOOKING|Booking.com|Booking.com|Booking.com|Booking.com|Booking.com|Booking.com
 EXPEDIA|Expedia|Expedia|Expedia|Expedia|Expedia|Expedia
 PHONE|Téléphone|Phone|الهاتف|Teléfono|Telefono|Telefoon
 WEBSITE|Site web|Website|الموقع|Sitio web|Sito web|Website
-CIN|CIN|National ID card|البطاقة الوطنية|CIN (DNI marroquí)|CIN (carta d'identità marocchina)|CIN (Marokkaanse identiteitskaart)
+CIN|CIN (Maroc)|CIN / CNIE (Morocco)|البطاقة الوطنية (المغرب)|CIN (Marruecos)|CIN (Marocco)|CIN (Marokko)
 PASSPORT|Passeport|Passport|جواز السفر|Pasaporte|Passaporto|Paspoort
 RESIDENCE_PERMIT|Titre de séjour|Residence permit|بطاقة الإقامة|Permiso de residencia|Permesso di soggiorno|Verblijfsvergunning
 DRIVING_LICENSE|Permis de conduire|Driving licence|رخصة السياقة|Permiso de conducir|Patente di guida|Rijbewijs
@@ -366,7 +366,7 @@ kpi.periodePrecedente|Période précédente|Previous period|الفترة الس�
 GARDENING|Jardinage|Gardening|البستنة|Jardinería|Giardinaggio|Tuinonderhoud
 POOL|Piscine|Pool maintenance|صيانة المسبح|Piscina|Piscina|Zwembadonderhoud
 set.contractors.platformOnly|Prestataires intégrés uniquement par l'administrateur|Providers added by the administrator only|مقدمو الخدمات يضيفهم المسؤول فقط|Proveedores incorporados solo por el administrador|Fornitori inseriti solo dall'amministratore|Dienstverleners alleen toegevoegd door de beheerder
-CNI|Carte nationale d'identité|National identity card|بطاقة التعريف الوطنية|Documento nacional de identidad|Carta d'identità|Identiteitskaart
+CNI|CNI (France)|National ID card (France)|بطاقة التعريف الوطنية (فرنسا)|DNI (Francia)|Carta d'identità (Francia)|Identiteitskaart (Frankrijk)
 POLICE_FORM|Fiche de police|Police registration form|استمارة الشرطة|Ficha de policía|Scheda di polizia|Politieformulier
 set.legal.publisherName|Éditeur (nom ou raison sociale)|Publisher (name or company)|الناشر (الاسم أو الاسم التجاري)|Editor (nombre o razón social)|Editore (nome o ragione sociale)|Uitgever (naam of bedrijfsnaam)
 set.legal.legalForm|Forme juridique et capital|Legal form and share capital|الشكل القانوني ورأس المال|Forma jurídica y capital|Forma giuridica e capitale|Rechtsvorm en kapitaal

@@ -620,52 +620,113 @@ function ocrLib() {
   ocrLib.p = new Promise(function (res, rej) { const s = document.createElement("script"); s.src = src; s.onload = function () { res(window.Tesseract); }; s.onerror = function () { ocrLib.p = null; rej(new Error(t("Module de lecture indisponible (connexion internet requise).") )); }; document.head.appendChild(s); });
   return ocrLib.p;
 }
-/** Image → canevas en niveaux de gris contrastés ; part : "all" | "bottom" ; rot : rotation (0 ou 180). */
-function ocrCanvas(img, part, rot) {
-  const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height, sy = part === "bottom" ? Math.round(h0 * 0.5) : 0, hh = h0 - sy;
+/** Image ou canevas → canevas en niveaux de gris contrastés ; part : "all" | "bottom" | "top" ; rot : rotation (0 ou 180) ; bin : seuil d'Otsu. */
+function ocrCanvas(img, part, rot, bin) {
+  const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
+  const sy = part === "bottom" ? Math.round(h0 * 0.5) : 0, hh = part === "all" ? h0 : Math.round(h0 * 0.5);
   const scale = Math.min(2.5, 2000 / w0), cv = document.createElement("canvas"); cv.width = Math.round(w0 * scale); cv.height = Math.round(hh * scale);
   const ctx = cv.getContext("2d");
   if (rot === 180) { ctx.translate(cv.width, cv.height); ctx.rotate(Math.PI); }
-  ctx.drawImage(img, 0, rot === 180 ? 0 : sy, w0, rot === 180 ? h0 - sy : hh, 0, 0, cv.width, cv.height);
+  ctx.drawImage(img, 0, sy, w0, hh, 0, 0, cv.width, cv.height);
   const d = ctx.getImageData(0, 0, cv.width, cv.height), px = d.data, hist = new Array(256).fill(0);
-  for (let i = 0; i < px.length; i += 4) { const g = Math.round(0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]); px[i] = g; hist[g]++; }
-  // Seuil d'Otsu : texte noir sur fond clair
-  let sum = 0, sumB = 0, wB = 0, best = 0, th = 128; const tot = px.length / 4;
-  for (let i = 0; i < 256; i++) sum += i * hist[i];
-  for (let i = 0; i < 256; i++) { wB += hist[i]; if (!wB) continue; const wF = tot - wB; if (!wF) break; sumB += i * hist[i]; const mB = sumB / wB, mF = (sum - sumB) / wF, v = wB * wF * (mB - mF) * (mB - mF); if (v > best) { best = v; th = i; } }
-  for (let i = 0; i < px.length; i += 4) { const v = px[i] > th ? 255 : 0; px[i] = px[i + 1] = px[i + 2] = v; }
+  for (let i = 0; i < px.length; i += 4) { const g = Math.round(0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]); px[i] = px[i + 1] = px[i + 2] = g; hist[g]++; }
+  if (bin !== false) {
+    // Seuil d'Otsu : texte noir sur fond clair
+    let sum = 0, sumB = 0, wB = 0, best = 0, th = 128; const tot = px.length / 4;
+    for (let i = 0; i < 256; i++) sum += i * hist[i];
+    for (let i = 0; i < 256; i++) { wB += hist[i]; if (!wB) continue; const wF = tot - wB; if (!wF) break; sumB += i * hist[i]; const mB = sumB / wB, mF = (sum - sumB) / wF, v = wB * wF * (mB - mF) * (mB - mF); if (v > best) { best = v; th = i; } }
+    for (let i = 0; i < px.length; i += 4) { const v = px[i] > th ? 255 : 0; px[i] = px[i + 1] = px[i + 2] = v; }
+  }
   ctx.putImageData(d, 0, 0);
   return cv;
 }
-/** Lit la bande MRZ d'une photo de pièce d'identité. onStep(texte) informe de l'avancement. Résultat : objet MRZ ou null. */
-function idScanRead(file, onStep) {
+/** Charge pdf.js (une seule fois) pour lire une pièce enregistrée en PDF. */
+function pdfLib() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (pdfLib.p) return pdfLib.p;
+  const o = window.IMMO_OCR || {}, src = o.pdfjs || "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+  pdfLib.p = new Promise(function (res, rej) { const s = document.createElement("script"); s.src = src;
+    s.onload = function () { window.pdfjsLib.GlobalWorkerOptions.workerSrc = o.pdfjsWorker || "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; res(window.pdfjsLib); };
+    s.onerror = function () { pdfLib.p = null; rej(new Error(t("Module de lecture indisponible (connexion internet requise)."))); }; document.head.appendChild(s); });
+  return pdfLib.p;
+}
+/** Fichier (photo de la galerie, appareil photo, ou PDF : 2 pages au plus) → images prêtes à lire. */
+function idSourceImages(file) {
+  if (file.type === "application/pdf" || /\.pdf$/i.test(file.name || "")) {
+    return file.arrayBuffer().then(function (buf) { return pdfLib().then(function (lib) { return lib.getDocument({ data: buf }).promise; }); }).then(function (pdf) {
+      const out = [], n = Math.min(2, pdf.numPages);
+      const page = function (i) { if (i > n) return out; return pdf.getPage(i).then(function (pg) { const vp = pg.getViewport({ scale: 2.2 }), cv = document.createElement("canvas"); cv.width = vp.width; cv.height = vp.height;
+        return pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise.then(function () { out.push(cv); return page(i + 1); }); }); };
+      return page(1);
+    });
+  }
+  if (!/^image\//.test(file.type)) return Promise.reject(new Error(t("Format non pris en charge : photo (JPEG, PNG) ou PDF.")));
+  const url = URL.createObjectURL(file), img = new Image();
+  return new Promise(function (res, rej) { img.onload = function () { res([img]); }; img.onerror = function () { rej(new Error(t("Image illisible."))); }; img.src = url; });
+}
+function ocrWorker(lang, onStep) {
+  const o = window.IMMO_OCR || {};
+  return ocrLib().then(function (T) {
+    return T.createWorker(lang, 1, Object.assign({ logger: function (m) { if (m.status === "recognizing text") onStep(t("Lecture de la pièce…") + " " + Math.round((m.progress || 0) * 100) + " %"); } },
+      o.workerPath ? { workerPath: o.workerPath } : {}, o.corePath ? { corePath: o.corePath } : {}, o.langPath ? { langPath: o.langPath } : {}));
+  });
+}
+/** Adresse imprimée (verso de la CNIE marocaine, verso de la CNI française) : ligne « Adresse / Domicile » et la suivante. */
+function idAddressFrom(text) {
+  const L = String(text || "").split(/\n/).map(function (l) { return l.replace(/[|_~^`"»«]/g, " ").replace(/\s+/g, " ").trim(); }).filter(Boolean);
+  for (let i = 0; i < L.length; i++) {
+    const m = L[i].match(/\b(adresse|domicile|address)\b\s*[:.\-]?\s*(.*)$/i);
+    if (!m) continue;
+    let v = m[2].replace(/^[^A-Za-zÀ-ÿ0-9]+/, "");
+    if (v.length < 14 && L[i + 1] && !/</.test(L[i + 1])) v = (v + " " + L[i + 1]).trim();
+    v = v.replace(/[^A-Za-zÀ-ÿ0-9 ,.'°\/-]/g, "").replace(/\s+/g, " ").trim();
+    if (v.length >= 6) return v.slice(0, 160);
+  }
+  return "";
+}
+/**
+ * Lecture d'une pièce (recto et verso, photo ou PDF) : bande MRZ sur l'un des côtés (contrôlée par ses chiffres de contrôle),
+ * puis adresse imprimée si elle figure sur la pièce. Résultat : { mrz, address, side } (mrz nul si aucune bande lisible).
+ */
+function idScanAnalyze(files, onStep) {
   onStep = onStep || function () {};
-  if (!/^image\//.test(file.type)) return Promise.reject(new Error(t("Photo attendue (JPEG ou PNG) pour la lecture automatique.")));
-  const url = URL.createObjectURL(file);
-  const img = new Image();
-  return new Promise(function (res, rej) { img.onload = res; img.onerror = function () { rej(new Error(t("Image illisible."))); }; img.src = url; })
-    .then(function () { onStep(t("Préparation de la lecture…")); return ocrLib(); })
-    .then(function (T) {
-      const o = window.IMMO_OCR || {};
-      return T.createWorker("eng", 1, Object.assign({ logger: function (m) { if (m.status === "recognizing text") onStep(t("Lecture de la pièce…") + " " + Math.round((m.progress || 0) * 100) + " %"); } },
-        o.workerPath ? { workerPath: o.workerPath } : {}, o.corePath ? { corePath: o.corePath } : {}, o.langPath ? { langPath: o.langPath } : {}));
-    })
-    .then(function (worker) {
-      return worker.setParameters({ tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<", tessedit_pageseg_mode: "6" }).then(function () {
-        const tries = [["bottom", 0], ["all", 0], ["bottom", 180]];
+  const sides = [];
+  return files.reduce(function (p, f) { return p.then(function () { return f ? idSourceImages(f.file).then(function (imgs) { imgs.forEach(function (im, k) { sides.push({ side: imgs.length > 1 ? (k === 0 ? "recto" : "verso") : f.side, img: im }); }); }) : null; }); }, Promise.resolve())
+    .then(function () { onStep(t("Préparation de la lecture…")); return ocrWorker("eng", onStep); })
+    .then(function (w) {
+      return w.setParameters({ tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<", tessedit_pageseg_mode: "6" }).then(function () {
+        const tries = []; sides.forEach(function (s) { [["bottom", 0], ["all", 0], ["top", 180]].forEach(function (x) { tries.push([s, x[0], x[1]]); }); });
         const next = function (i) {
           if (i >= tries.length) return null;
-          return worker.recognize(ocrCanvas(img, tries[i][0], tries[i][1])).then(function (r) { const m = MRZ.parse(r.data.text); return m || next(i + 1); });
+          return w.recognize(ocrCanvas(tries[i][0].img, tries[i][1], tries[i][2])).then(function (r) { const m = MRZ.parse(r.data.text); return m ? { mrz: m, side: tries[i][0].side } : next(i + 1); });
         };
-        return next(0).then(function (m) { worker.terminate(); return m; }, function (e) { worker.terminate(); throw e; });
+        return next(0).then(function (m) { w.terminate(); return m || { mrz: null, side: "" }; }, function (e) { w.terminate(); throw e; });
       });
     })
-    .then(function (m) { URL.revokeObjectURL(url); return m; }, function (e) { URL.revokeObjectURL(url); throw e; });
+    .then(function (res) {
+      // Adresse : lecture du texte en français (facultative ; une erreur n'empêche pas le résultat de la bande).
+      onStep(t("Recherche de l'adresse…"));
+      return ocrWorker("fra", onStep).then(function (w) {
+        return sides.reduce(function (p, s) { return p.then(function (found) { return found || w.recognize(ocrCanvas(s.img, "all", 0, false)).then(function (r) { return idAddressFrom(r.data.text); }); }); }, Promise.resolve(""))
+          .then(function (addr) { w.terminate(); res.address = addr; return res; }, function () { w.terminate(); return res; });
+      }).catch(function () { return res; });
+    });
+}
+/** Compatibilité : lecture d'une seule photo. */
+function idScanRead(file, onStep) { return idScanAnalyze([{ side: "recto", file: file }], onStep).then(function (r) { return r.mrz; }); }
+/** Nature de la pièce reconnue, en clair (distingue CNIE marocaine et CNI française). */
+function idKindLabel(m) {
+  const nat = NATIONALITIES[m.country] || m.country;
+  if (m.type === "PASSPORT") return t("Passeport") + " — " + (m.country === "MAR" ? t("Maroc") : m.country === "FRA" ? t("France") : nat);
+  if (m.type === "RESIDENCE_PERMIT") return t("Titre de séjour") + " (" + m.country + ")";
+  if (m.country === "MAR") return t("CNIE marocaine");
+  if (m.country === "FRA") return m.format === "CNI-FR" ? t("CNI française (ancien modèle)") : t("CNI française");
+  return t("Carte d'identité étrangère") + " (" + m.country + ")";
 }
 /** Champs du formulaire locataire déduits d'une bande MRZ. */
 function idScanFields(m) {
-  const fr = ED && ED.country === "FR", natId = fr ? "CNI" : "CIN", home = fr ? "FRA" : "MAR";
-  const idType = m.type === "PASSPORT" ? "PASSPORT" : (m.type === "RESIDENCE_PERMIT" ? "RESIDENCE_PERMIT" : (m.country === home ? (natId || "CIN") : "OTHER"));
+  // CNIE marocaine → CIN ; CNI française → CNI ; autres cartes d'identité → « Autre ».
+  const idType = m.type === "PASSPORT" ? "PASSPORT" : (m.type === "RESIDENCE_PERMIT" ? "RESIDENCE_PERMIT" : (m.country === "MAR" ? "CIN" : (m.country === "FRA" ? "CNI" : "OTHER")));
   return { fullName: [m.firstName, m.lastName].filter(Boolean).join(" "), nationality: NATIONALITIES[m.nationality] || m.nationality || "", idType: idType,
     idNumber: m.nationalId || m.docNumber || "", birthDate: m.birthDate || "", idExpiry: m.expiry || "" };
 }

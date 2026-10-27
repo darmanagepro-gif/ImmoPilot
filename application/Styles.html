@@ -243,4 +243,16 @@ mark.legal-missing{background:#FFE58A;color:#3A2E00;padding:0 4px;border-radius:
 .tour-menu button,.tour-menu label{display:flex;gap:8px;align-items:center;width:100%;padding:9px 10px;border:0;background:transparent;color:var(--ink);font:inherit;font-size:14px;text-align:start;cursor:pointer;border-radius:8px}
 .tour-menu button:hover,.tour-menu label:hover{background:var(--line)}
 body:has(.tour) #rb-fab .rb-hint{display:none}
+
+/* ---------- Pièce d'identité : recto / verso ---------- */
+.id-scan{border:1px dashed var(--line);border-radius:12px;padding:12px;margin-bottom:14px}
+.id-scan-title{font-weight:600;margin-bottom:8px}
+.id-slots{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.id-slot{border:1px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.id-slot-head{display:flex;justify-content:space-between;align-items:center;min-height:28px}
+.id-thumb{width:100%;height:96px;object-fit:contain;border-radius:8px;border:1px solid var(--line);background:var(--bg)}
+.id-thumb.empty,.id-thumb.pdf{display:flex;align-items:center;justify-content:center;font-size:30px;color:var(--muted)}
+.id-thumb.pdf{font-size:12px;padding:6px;overflow:hidden;text-align:center}
+.id-slot-btns{display:flex;flex-direction:column;gap:6px}
+.id-slot-btns .btn{width:100%;justify-content:center}
 </style>

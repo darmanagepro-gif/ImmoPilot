@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-10-27T12:26:21.840Z",
-  "durationMs": 14365,
+  "ranAt": "2026-10-27T12:52:02.045Z",
+  "durationMs": 14280,
   "node": "v22.23.4",
   "filesLoaded": [
     "Code.gs",
@@ -45,7 +45,7 @@
     "passed": 77,
     "failed": 0,
     "skipped": 0,
-    "ranAt": "2026-10-27T12:26:14.538Z"
+    "ranAt": "2026-10-27T12:51:54.667Z"
   },
   "results": [
     {
@@ -686,7 +686,7 @@
       {
         "name": "setupProject() crée la base, le dossier privé et le schéma",
         "status": "PASS",
-        "detail": "base ss_5ef957be07b43987d22777de2, 3 migrations"
+        "detail": "base ss_4aa54bdd941277d7a4acd32b2, 3 migrations"
       },
       {
         "name": "Avant déploiement : pas de lien envoyé, message explicite",

@@ -134,7 +134,8 @@ function TEST_GROUPS_() {
         T.call(fx.tok.ownerA, "property.update", { propertyId: fx.propA, registrationNumber: "7510112345678" });
         T.eq(T.call(fx.tok.ownerA, "property.get", { propertyId: fx.propA }).registrationNumber, "7510112345678", "n° d'enregistrement du meublé de tourisme");
         const r = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(900), checkOut: tDays_(903), guestName: "Hans Müller", guestCount: 3, idempotencyKey: T.key() });
-        T.fails(fx.tok.ownerA, "guest.save", { reservationId: r.reservationId, lastName: "Test", idType: "CIN", idRef: "AB12345" });
+        T.fails(fx.tok.ownerA, "guest.save", { reservationId: r.reservationId, lastName: "Test", idType: "INCONNU", idRef: "AB12345" });
+        T.ok(idTypes_().indexOf("CIN") > idTypes_().indexOf("CNI"), "CIN marocaine acceptée (voyageurs marocains), après la CNI");
         // Voyageur principal français : aucune fiche à établir
         const prim = T.call(fx.tok.ownerA, "guest.list", { reservationId: r.reservationId }).items[0];
         T.call(fx.tok.ownerA, "guest.save", { reservationId: r.reservationId, guestId: prim.guestId, lastName: "Dupont", firstName: "Marie", nationality: "Française", idType: "CNI", idRef: "X4RTBPFW4" });
@@ -1218,7 +1219,10 @@ function TEST_GROUPS_() {
         T.ok(bool_(dbGet_("Documents", d.documentId).sensitive) && !dbGet_("Documents", d.documentId).retainUntil, "pièce d'identité sensible, conservée pendant la location");
         const other = T.call(fx.tok.ownerA, "tenant.create", { propertyId: fx.propA2, fullName: "Autre Locataire" });
         T.fails(O.tok, "tenant.update", { tenantId: t.tenantId, idDocumentId: T.call(fx.tok.ownerA, "doc.upload", { ownerType: "TENANT", ownerId: other.tenantId, category: "ID_DOCUMENT", mimeType: "image/png", fileName: "x.png", base64: png }).documentId }, "VALIDATION");
-        T.call(O.tok, "tenant.update", { tenantId: t.tenantId, idDocumentId: d.documentId });
+        const back = T.call(O.tok, "doc.upload", { ownerType: "TENANT", ownerId: t.tenantId, category: "ID_DOCUMENT", mimeType: "image/png", fileName: "cnie-verso.png", base64: png });
+        T.call(O.tok, "tenant.update", { tenantId: t.tenantId, idDocumentId: d.documentId, idDocumentBackId: back.documentId });
+        T.eq(dbGet_("Tenants", t.tenantId).idDocumentBackId, back.documentId, "verso de la pièce rattaché");
+        T.ok(idTypes_().indexOf("CIN") >= 0 && idTypes_().indexOf("CNI") >= 0, "CIN (Maroc) et CNI (France) proposées dans les deux éditions");
         const row = T.call(O.tok, "tenant.list", {}).items.find(function (x) { return x.tenantId === t.tenantId; });
         T.ok(row.idNumber === "AB123456" && row.birthDate === "1990-01-15" && row.idDocumentId === d.documentId && row.address, "identité enregistrée (numéro en majuscules)");
         T.fails(fx.tok.ownerB, "doc.get", { documentId: d.documentId }, "FORBIDDEN");

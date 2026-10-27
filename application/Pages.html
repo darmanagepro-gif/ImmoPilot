@@ -779,7 +779,8 @@ PAGES.lease = function (el, id) {
 };
 PAGES.tenants = function (el) {
   el.appendChild(pageHead(t("Locataires"), "", [can("lease.manage") ? btn("+ " + t("Locataire"), function () { tenantDialog({}).then(function (x) { if (x) lv.reload(); }); }, "primary") : null]));
-  const lv = listView(el, { route: "tenant.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "INACTIVE"] }], columns: [{ l: "Nom", k: "fullName" }, { l: "E-mail", k: "email" }, { l: "Téléphone", k: "phone" }, { l: "Pièce", f: function (x) { return x.idType ? h("span", null, st(x.idType), x.idNumber ? " " + x.idNumber : "", x.idDocumentId ? h("button", { type: "button", class: "btn sm ghost", title: t("Voir la pièce"), onclick: function () { openDoc(x.idDocumentId); } }, "📎") : null) : "—"; } }, { l: "Baux actifs", num: true, k: "activeLeases" },
+  const lv = listView(el, { route: "tenant.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "INACTIVE"] }], columns: [{ l: "Nom", k: "fullName" }, { l: "E-mail", k: "email" }, { l: "Téléphone", k: "phone" }, { l: "Pièce", f: function (x) { return x.idType ? h("span", null, st(x.idType), x.idNumber ? " " + x.idNumber : "", x.idDocumentId ? h("button", { type: "button", class: "btn sm ghost", title: t("Recto"), onclick: function () { openDoc(x.idDocumentId); } }, "📎 " + t("Recto")) : null,
+      x.idDocumentBackId ? h("button", { type: "button", class: "btn sm ghost", title: t("Verso"), onclick: function () { openDoc(x.idDocumentBackId); } }, "📎 " + t("Verso")) : null) : "—"; } }, { l: "Baux actifs", num: true, k: "activeLeases" },
     { l: "Espace locataire", f: function (x) { return x.hasAccount ? tag(t("Activé"), "good") : (x.email && can("user.invite") ? btn(t("Inviter"), function () { inviteDialog({ email: x.email, displayName: x.fullName, organizationId: x.organizationId, role: "TENANT" }); }, "sm") : "—"); } },
     { l: "Statut", status: true, k: "status" }, { l: "", f: function (x) { return can("lease.manage") ? btn(t("Modifier"), function () { tenantDialog(x).then(function (r) { if (r) lv.reload(); }); }, "sm") : null; } }] });
 };
@@ -792,42 +793,62 @@ function tenantFieldDefs() {
     { k: "address", l: "Adresse actuelle", full: true }];
 }
 /**
- * Bloc « Scanner la pièce d'identité » : la photo est lue sur l'appareil (bande MRZ), les champs reconnus sont pré-remplis et
- * surlignés pour vérification ; le fichier est gardé pour être joint (document sensible) au dossier du locataire.
+ * Bloc « Pièce d'identité » : recto et verso, chacun pris en photo OU choisi dans la galerie / les fichiers (téléphone ou ordinateur,
+ * photo ou PDF). La lecture se fait sur l'appareil ; la nature de la pièce est reconnue (CNIE marocaine, CNI française, passeport…),
+ * les champs reconnus sont pré-remplis et surlignés ; les deux faces sont jointes au dossier du locataire (documents sensibles).
  */
 function idScanBox(form, state) {
-  const status = h("div", { class: "small muted", style: { marginTop: "6px" } }, t("Photo nette, à plat, bien éclairée : passeport (page photo) ou CNIE / CNI (côté avec les lignes « <<< »)."));
-  const thumb = h("div");
-  const go = function () {
-    pickFiles({ accept: "image/*,application/pdf", capture: "environment" }).then(function (files) {
-      const f = files[0]; if (!f) return;
-      state.file = f;
-      clear(thumb); if (/^image\//.test(f.type)) { const im = h("img", { alt: "", style: { maxWidth: "160px", maxHeight: "100px", borderRadius: "6px", border: "1px solid var(--line)", marginTop: "8px" } }); im.src = URL.createObjectURL(f); thumb.appendChild(im); }
-      if (!/^image\//.test(f.type)) { status.textContent = t("PDF joint au dossier. Lecture automatique possible uniquement sur une photo : complétez les champs à la main."); return; }
-      status.textContent = t("Lecture de la pièce…");
-      idScanRead(f, function (m) { status.textContent = m; }).then(function (m) {
-        if (!m) { status.textContent = t("Bande de lecture (lignes « <<< ») introuvable : la pièce sera jointe au dossier, complétez les champs à la main. Astuce : reprenez la photo de plus près."); return; }
-        const v = idScanFields(m), filled = [];
-        Object.keys(v).forEach(function (k) { const i = form.inputs[k]; if (!i || !v[k]) return; i.value = v[k]; i.style.background = "rgba(46,160,67,.12)"; filled.push(k); });
-        status.textContent = (m.valid ? "✓ " + t("Pièce lue, contrôles de la bande validés") : "⚠ " + t("Pièce lue, mais certains contrôles ont échoué : vérifiez attentivement")) + " — " + filled.length + " " + t("champ(s) pré-rempli(s) (surlignés). Complétez le reste à la main.");
-      }).catch(function (e) { status.textContent = errMsg(e) + " " + t("Complétez les champs à la main."); });
-    }).catch(showErr);
+  state.sides = state.sides || { recto: null, verso: null };
+  const status = h("div", { class: "small muted", style: { marginTop: "8px" } }, t("Ajoutez le recto et le verso : photo, image de la galerie ou PDF. Passeport : la page photo suffit."));
+  const kind = h("div", { style: { marginTop: "6px" } });
+  let seq = 0;
+  const analyze = function () {
+    const files = ["recto", "verso"].map(function (k) { return state.sides[k] ? { side: k, file: state.sides[k] } : null; }).filter(Boolean);
+    if (!files.length) return;
+    const my = ++seq; clear(kind); status.textContent = t("Lecture de la pièce…");
+    idScanAnalyze(files, function (m) { if (my === seq) status.textContent = m; }).then(function (r) {
+      if (my !== seq) return;
+      const filled = [];
+      const put = function (k, v) { const i = form.inputs[k]; if (!i || !v) return; i.value = v; i.style.background = "rgba(46,160,67,.12)"; filled.push(k); };
+      if (r.mrz) { const v = idScanFields(r.mrz); Object.keys(v).forEach(function (k) { put(k, v[k]); }); kind.appendChild(tag("🪪 " + idKindLabel(r.mrz) + " · " + t("bande lue au") + " " + t(r.side), r.mrz.valid ? "good" : "warn")); }
+      if (r.address && form.inputs.address && !form.inputs.address.value) put("address", r.address);
+      if (!r.mrz) { status.textContent = t("Bande de lecture (lignes « <<< ») introuvable : la pièce sera jointe au dossier, complétez les champs à la main. Astuce : reprenez la photo de plus près.") + (r.address ? " " + t("Adresse trouvée et pré-remplie.") : ""); return; }
+      status.textContent = (r.mrz.valid ? "✓ " + t("Pièce lue, contrôles de la bande validés") : "⚠ " + t("Pièce lue, mais certains contrôles ont échoué : vérifiez attentivement")) + " — " + filled.length + " " + t("champ(s) pré-rempli(s) (surlignés). Complétez le reste à la main.");
+    }).catch(function (e) { if (my === seq) status.textContent = errMsg(e) + " " + t("Complétez les champs à la main."); });
   };
-  return h("div", { class: "box", style: { border: "1px dashed var(--line)", borderRadius: "10px", padding: "12px", marginBottom: "14px" } },
-    h("button", { type: "button", class: "btn primary", onclick: go }, "📷 " + t("Scanner la pièce d'identité")), h("div", { class: "small", style: { marginTop: "6px" } }, t("La lecture se fait sur votre appareil : l'image n'est envoyée à aucun service de reconnaissance. Elle est ensuite jointe au dossier du locataire, en accès restreint.")),
-    status, thumb);
+  const slot = function (side, label) {
+    const box = h("div", { class: "id-slot" });
+    const draw = function () {
+      const f = state.sides[side];
+      clear(box).appendChild(h("div", { class: "id-slot-head" }, h("b", null, t(label)), f ? h("button", { type: "button", class: "btn sm ghost", title: t("Retirer"), onclick: function () { state.sides[side] = null; draw(); analyze(); } }, "×") : null));
+      if (f) {
+        if (/^image\//.test(f.type)) { const im = h("img", { alt: t(label), class: "id-thumb" }); im.src = URL.createObjectURL(f); box.appendChild(im); }
+        else box.appendChild(h("div", { class: "id-thumb pdf" }, "PDF · " + (f.name || "")));
+      } else box.appendChild(h("div", { class: "id-thumb empty" }, "🪪"));
+      const take = function (capture) { pickFiles(capture ? { accept: "image/*", capture: "environment" } : { accept: "image/*,application/pdf" }).then(function (fs) {
+        const f2 = fs[0]; if (!f2) return; state.sides[side] = f2; draw(); analyze(); }).catch(showErr); };
+      box.appendChild(h("div", { class: "id-slot-btns" }, h("button", { type: "button", class: "btn sm primary", onclick: function () { take(true); } }, "📷 " + t("Photo")),
+        h("button", { type: "button", class: "btn sm", onclick: function () { take(false); } }, "🖼 " + t("Galerie ou fichier"))));
+    };
+    draw(); return box;
+  };
+  return h("div", { class: "box id-scan" }, h("div", { class: "id-scan-title" }, "🪪 " + t("Pièce d'identité du locataire")),
+    h("div", { class: "id-slots" }, slot("recto", "Recto"), slot("verso", "Verso")), kind, status,
+    h("div", { class: "small", style: { marginTop: "6px" } }, t("La lecture se fait sur votre appareil : l'image n'est envoyée à aucun service de reconnaissance. Elle est ensuite jointe au dossier du locataire, en accès restreint.")));
 }
-/** Joint la pièce d'identité au dossier du locataire (document sensible) et la référence sur sa fiche. */
-function tenantAttachId(tenantId, file) {
-  if (!file) return Promise.resolve(null);
-  return uploadFiles([file], "TENANT", tenantId, "ID_DOCUMENT").then(function (ids) { return ids[0] ? api("tenant.update", { tenantId: tenantId, idDocumentId: ids[0] }) : null; });
+/** Joint le recto et le verso au dossier du locataire (documents sensibles) et les référence sur sa fiche. */
+function tenantAttachId(tenantId, state) {
+  const sides = (state && state.sides) || {}, patch = {};
+  return ["recto", "verso"].reduce(function (p, k) {
+    return p.then(function () { return sides[k] ? uploadFiles([sides[k]], "TENANT", tenantId, "ID_DOCUMENT").then(function (ids) { if (ids[0]) patch[k === "recto" ? "idDocumentId" : "idDocumentBackId"] = ids[0]; }) : null; });
+  }, Promise.resolve()).then(function () { return Object.keys(patch).length ? api("tenant.update", Object.assign({ tenantId: tenantId }, patch)) : null; });
 }
 function tenantDialog(x) {
   const isNew = !x.tenantId, state = {};
   const fields = (isNew ? [{ k: "propertyId", l: "Bien concerné (détermine l'organisation)", t: "select", req: true, opts: function () { return propChoices("lease.manage"); } }] : []).concat(tenantFieldDefs())
     .concat(isNew ? [] : [{ k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "INACTIVE"] }]);
   return scanFormModal(isNew ? t("Nouveau locataire") : t("Modifier le locataire"), fields, x, state, function (v) {
-    return (isNew ? api("tenant.create", v) : api("tenant.update", Object.assign(v, { tenantId: x.tenantId }))).then(function (r) { return tenantAttachId(isNew ? r.tenantId : x.tenantId, state.file).then(function () { return r; }); });
+    return (isNew ? api("tenant.create", v) : api("tenant.update", Object.assign(v, { tenantId: x.tenantId }))).then(function (r) { return tenantAttachId(isNew ? r.tenantId : x.tenantId, state).then(function () { return r; }); });
   }, { success: "Locataire enregistré." });
 }
 /** Modale de formulaire précédée du bloc de lecture de la pièce d'identité. */
@@ -856,7 +877,7 @@ function tenantOnboardDialog() {
   return scanFormModal(t("Intégrer un nouveau locataire"), fields, {}, state, function (v) {
     const tv = { propertyId: v.propertyId }; T_KEYS.forEach(function (k) { tv[k] = v[k]; });
     let tenantId;
-    return api("tenant.create", tv).then(function (r) { tenantId = r.tenantId; return tenantAttachId(tenantId, state.file); })
+    return api("tenant.create", tv).then(function (r) { tenantId = r.tenantId; return tenantAttachId(tenantId, state); })
       .then(function () { return api("lease.create", { propertyId: v.propertyId, tenantId: tenantId, startDate: v.startDate, endDate: v.endDate, monthlyRent: v.monthlyRent, charges: v.charges, deposit: v.deposit, dueDay: v.dueDay }); })
       .then(function (l) {
         if (v.invite && v.email && can("user.invite")) {
@@ -866,7 +887,7 @@ function tenantOnboardDialog() {
         setTimeout(function () { NAV_HASH.v = "lease/" + l.leaseId; }, 50);
         return l;
       });
-  }, { intro: t("Scannez la pièce d'identité : nom, nationalité, numéro, dates sont remplis automatiquement. Complétez le reste, puis le bail est créé en brouillon : vous pourrez ensuite le faire rédiger par l'agent et l'activer."),
+  }, { intro: t("Ajoutez la pièce d'identité (recto et verso, photo ou fichier) : nom, nationalité, numéro, dates sont remplis automatiquement. Complétez le reste, puis le bail est créé en brouillon : vous pourrez ensuite le faire rédiger par l'agent et l'activer."),
     submitLabel: t("Créer le locataire et le bail"), success: "Locataire et bail créés." });
 }
 PAGES.mylease = function (el) {

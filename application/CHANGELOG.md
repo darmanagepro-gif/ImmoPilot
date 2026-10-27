@@ -1,5 +1,11 @@
 # Journal des modifications
 
+## 2.3.1 — 27 octobre 2026 — pièce d'identité recto / verso, galerie et fichiers
+
+- Pièce d'identité du locataire : recto ET verso, chacun pris en photo ou choisi dans la galerie / les fichiers (téléphone ou ordinateur), photo ou PDF (un PDF de 2 pages = recto et verso).
+- Nature de la pièce reconnue et affichée : CNIE marocaine, CNI française (nouveau ou ancien modèle), passeport (pays), titre de séjour, carte étrangère ; type CIN (Maroc) ou CNI (France) choisi automatiquement, les deux étant proposés dans chaque édition.
+- Adresse imprimée au verso (CNIE marocaine, CNI française) lue et pré-remplie ; les deux faces sont jointes au dossier du locataire (documents sensibles) et consultables depuis « Locataires ».
+
 ## 2.3.0 — 27 octobre 2026 — tutoriel de première connexion et intégration d'un locataire par sa pièce d'identité
 
 - Tutoriel à la première connexion : petites fenêtres qui présentent chaque menu selon le rôle (propriétaire, agence, gardien, ménage, artisan, locataire, super administrateur), mise en évidence de l'élément, Suivant / Précédent / Passer, adapté au téléphone (le menu s'ouvre pendant la visite). Bouton 🎓 en haut à droite : revoir le tutoriel ou le désactiver au démarrage ; choix mémorisé sur le compte (me.tour) et sur l'appareil.

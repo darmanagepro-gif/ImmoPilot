@@ -1,5 +1,5 @@
 /**
- * ImmoPilot 2.3.0 — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
+ * ImmoPilot 2.3.1 — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
  * Contient les 36 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SubscriptionService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
  * À coller seul dans le projet Apps Script (aucun autre fichier .gs ne doit rester dans le projet).
  */
@@ -1655,7 +1655,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "d4be328d2265";
+var IMMO_BUILD_ = "e50caa0c3bfe";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -1670,7 +1670,7 @@ var EDITIONS_ = {
   MA: {
     code: "MA", country: "MA", countryName: "Maroc", currency: "MAD", timezone: "Africa/Casablanca", city: "Marrakech", mapCenter: [31.6295, -7.9811],
     phoneCountry: "212", localMobileRe: "^0[5-7]\\d{8}$", tagline: "Marrakech · Maroc", taglineKey: "La gestion locative, de l'arrivée du voyageur au dernier dirham.",
-    idTypes: ["CIN", "PASSPORT", "RESIDENCE_PERMIT", "DRIVING_LICENSE", "OTHER"], nationalId: "CIN",
+    idTypes: ["CIN", "CNI", "PASSPORT", "RESIDENCE_PERMIT", "DRIVING_LICENSE", "OTHER"], nationalId: "CIN",
     dataLaw: "loi 09-08 (CNDP)", dataAuthority: "CNDP", leaseLaw: "droit marocain (loi 67-12 notamment)",
     taxIdLabel: "Identifiant fiscal (ICE / IF)", invoiceLegal: "Mentions légales du prestataire (ICE, IF, RC, patente) à compléter dans sa fiche si elles n'apparaissent pas ci-dessus.",
     quoteLegal: "", policeForms: false, registrationNumber: false, plans: { ESSENTIEL: 199, PRO: 499, BUSINESS: 1299 }, logoSvg: ""
@@ -1678,7 +1678,7 @@ var EDITIONS_ = {
   FR: {
     code: "FR", country: "FR", countryName: "France", currency: "EUR", timezone: "Europe/Paris", city: "Paris", mapCenter: [48.8566, 2.3522],
     phoneCountry: "33", localMobileRe: "^0[1-9]\\d{8}$", tagline: "Paris · France", taglineKey: "La gestion locative, de l'arrivée du voyageur au dernier centime.",
-    idTypes: ["CNI", "PASSPORT", "RESIDENCE_PERMIT", "DRIVING_LICENSE", "OTHER"], nationalId: "CNI",
+    idTypes: ["CNI", "CIN", "PASSPORT", "RESIDENCE_PERMIT", "DRIVING_LICENSE", "OTHER"], nationalId: "CNI",
     dataLaw: "RGPD (règlement UE 2016/679) et loi Informatique et Libertés (CNIL)", dataAuthority: "CNIL", leaseLaw: "droit français (loi n° 89-462 du 6 juillet 1989, contrat type du décret n° 2015-587)",
     taxIdLabel: "SIRET / n° de TVA intracommunautaire",
     invoiceLegal: "Mentions obligatoires du prestataire à vérifier : raison sociale, SIRET, n° de TVA intracommunautaire (ou « TVA non applicable, art. 293 B du CGI »), date d'échéance, taux des pénalités de retard ; entre professionnels, indemnité forfaitaire pour frais de recouvrement de 40 € (art. L. 441-10 du Code de commerce).",
@@ -1693,8 +1693,8 @@ function cur_() { return edition_().currency; }
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
-  VERSION: "2.3.0",
-  SCHEMA_VERSION: 9,
+  VERSION: "2.3.1",
+  SCHEMA_VERSION: 10,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -1875,7 +1875,7 @@ var TABLES_SRC = {
     enums: { kind: ["RESERVATION", "DEPOSIT", "REFUND", "RENT", "INVOICE", "SUBSCRIPTION", "DEPOSIT_REFUND", "OTHER"], refType: ["RESERVATION", "RENT_SCHEDULE", "INVOICE", "SUBSCRIPTION", "LEASE", "EXPENSE"], direction: ["IN", "OUT"], status: ["RECORDED", "VOID"] },
     cols: "paymentId,organizationId,propertyId,kind,refType,refId,direction,amount#n,currency,method,paidAt#t,reference,proofDocId,status,reconciled#b,reconciledAt#t,reconciledBy,note,idempotencyKey,recordedBy,createdAt#t,voidedAt#t,voidedBy" },
   Tenants: { pk: "tenantId", idp: "tnt", org: "organizationId", req: "fullName", enums: { status: ["ACTIVE", "INACTIVE"] },
-    cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t|birthDate#d,birthPlace,idNumber,idExpiry#d,address,idDocumentId" },
+    cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t|birthDate#d,birthPlace,idNumber,idExpiry#d,address,idDocumentId,idDocumentBackId" },
   Leases: { pk: "leaseId", idp: "lea", org: "organizationId", req: "propertyId,tenantId,startDate,monthlyRent",
     enums: { status: ["DRAFT", "ACTIVE", "NOTICE", "ENDED", "RENEWED", "CANCELLED"] },
     cols: "leaseId,organizationId,propertyId,tenantId,startDate#d,endDate#d,durationMonths#n,monthlyRent#n,charges#n,deposit#n,dueDay#n,indexationRate#n,nextIndexationDate#d,terms,documentId,status,noticeDate#d,noticeBy,depositStatus,depositReturned#n,depositDeductions#n,renewedFromLeaseId,endReason,createdAt#t,createdBy,updatedAt#t,updatedBy|automationJson#j" },
@@ -5254,7 +5254,7 @@ function tenantList_(p, a) {
     .map(function (t) { const mg = hasOrgCap_(p, t.organizationId, "lease.manage");
       return { tenantId: t.tenantId, organizationId: t.organizationId, fullName: t.fullName, email: t.email, phone: t.phone, nationality: t.nationality, status: t.status, hasAccount: !!t.userId,
       idType: t.idType, idNumber: mg ? t.idNumber : (t.idNumber ? "•••" + String(t.idNumber).slice(-3) : ""), idExpiry: mg ? t.idExpiry : "", birthDate: mg ? t.birthDate : "", birthPlace: mg ? t.birthPlace : "", address: mg ? t.address : "",
-      idDocumentId: mg ? t.idDocumentId : "",
+      idDocumentId: mg ? t.idDocumentId : "", idDocumentBackId: mg ? t.idDocumentBackId : "",
       activeLeases: dbAll_("Leases").filter(function (l) { return String(l.tenantId) === String(t.tenantId) && ["ACTIVE", "NOTICE"].indexOf(l.status) >= 0; }).length }; });
   return pageOf_(rows, a);
 }
@@ -5295,7 +5295,12 @@ function tenantUpdate_(p, a) {
   if (a.nationality !== undefined) patch.nationality = safeText_(a.nationality, 60);
   if (a.status !== undefined) patch.status = oneOf_(a.status, ["ACTIVE", "INACTIVE"], "Statut");
   tenantIdentity_(a, patch);
-  if (a.idDocumentId !== undefined) { if (a.idDocumentId) { const d = dbGet_("Documents", safeText_(a.idDocumentId, 120)); assert_(d && d.ownerType === "TENANT" && String(d.ownerId) === String(t.tenantId) && d.status === "ACTIVE", "Pièce d'identité non rattachée à ce locataire."); } patch.idDocumentId = safeText_(a.idDocumentId, 120); }
+  // Recto (idDocumentId) et verso (idDocumentBackId) de la pièce : documents du dossier de CE locataire uniquement.
+  ["idDocumentId", "idDocumentBackId"].forEach(function (k) {
+    if (a[k] === undefined) return;
+    if (a[k]) { const d = dbGet_("Documents", safeText_(a[k], 120)); assert_(d && d.ownerType === "TENANT" && String(d.ownerId) === String(t.tenantId) && d.status === "ACTIVE", "Pièce d'identité non rattachée à ce locataire."); }
+    patch[k] = safeText_(a[k], 120);
+  });
   dbUpdate_("Tenants", t.tenantId, patch);
   audit_("TENANT_UPDATED", "Tenant", t.tenantId, t.organizationId, { fields: Object.keys(patch) });
   return { ok: true };
@@ -8307,7 +8312,8 @@ function TEST_GROUPS_() {
         T.call(fx.tok.ownerA, "property.update", { propertyId: fx.propA, registrationNumber: "7510112345678" });
         T.eq(T.call(fx.tok.ownerA, "property.get", { propertyId: fx.propA }).registrationNumber, "7510112345678", "n° d'enregistrement du meublé de tourisme");
         const r = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(900), checkOut: tDays_(903), guestName: "Hans Müller", guestCount: 3, idempotencyKey: T.key() });
-        T.fails(fx.tok.ownerA, "guest.save", { reservationId: r.reservationId, lastName: "Test", idType: "CIN", idRef: "AB12345" });
+        T.fails(fx.tok.ownerA, "guest.save", { reservationId: r.reservationId, lastName: "Test", idType: "INCONNU", idRef: "AB12345" });
+        T.ok(idTypes_().indexOf("CIN") > idTypes_().indexOf("CNI"), "CIN marocaine acceptée (voyageurs marocains), après la CNI");
         // Voyageur principal français : aucune fiche à établir
         const prim = T.call(fx.tok.ownerA, "guest.list", { reservationId: r.reservationId }).items[0];
         T.call(fx.tok.ownerA, "guest.save", { reservationId: r.reservationId, guestId: prim.guestId, lastName: "Dupont", firstName: "Marie", nationality: "Française", idType: "CNI", idRef: "X4RTBPFW4" });
@@ -9391,7 +9397,10 @@ function TEST_GROUPS_() {
         T.ok(bool_(dbGet_("Documents", d.documentId).sensitive) && !dbGet_("Documents", d.documentId).retainUntil, "pièce d'identité sensible, conservée pendant la location");
         const other = T.call(fx.tok.ownerA, "tenant.create", { propertyId: fx.propA2, fullName: "Autre Locataire" });
         T.fails(O.tok, "tenant.update", { tenantId: t.tenantId, idDocumentId: T.call(fx.tok.ownerA, "doc.upload", { ownerType: "TENANT", ownerId: other.tenantId, category: "ID_DOCUMENT", mimeType: "image/png", fileName: "x.png", base64: png }).documentId }, "VALIDATION");
-        T.call(O.tok, "tenant.update", { tenantId: t.tenantId, idDocumentId: d.documentId });
+        const back = T.call(O.tok, "doc.upload", { ownerType: "TENANT", ownerId: t.tenantId, category: "ID_DOCUMENT", mimeType: "image/png", fileName: "cnie-verso.png", base64: png });
+        T.call(O.tok, "tenant.update", { tenantId: t.tenantId, idDocumentId: d.documentId, idDocumentBackId: back.documentId });
+        T.eq(dbGet_("Tenants", t.tenantId).idDocumentBackId, back.documentId, "verso de la pièce rattaché");
+        T.ok(idTypes_().indexOf("CIN") >= 0 && idTypes_().indexOf("CNI") >= 0, "CIN (Maroc) et CNI (France) proposées dans les deux éditions");
         const row = T.call(O.tok, "tenant.list", {}).items.find(function (x) { return x.tenantId === t.tenantId; });
         T.ok(row.idNumber === "AB123456" && row.birthDate === "1990-01-15" && row.idDocumentId === d.documentId && row.address, "identité enregistrée (numéro en majuscules)");
         T.fails(fx.tok.ownerB, "doc.get", { documentId: d.documentId }, "FORBIDDEN");

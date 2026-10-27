@@ -21,7 +21,7 @@ var EDITIONS_ = {
   MA: {
     code: "MA", country: "MA", countryName: "Maroc", currency: "MAD", timezone: "Africa/Casablanca", city: "Marrakech", mapCenter: [31.6295, -7.9811],
     phoneCountry: "212", localMobileRe: "^0[5-7]\\d{8}$", tagline: "Marrakech · Maroc", taglineKey: "La gestion locative, de l'arrivée du voyageur au dernier dirham.",
-    idTypes: ["CIN", "PASSPORT", "RESIDENCE_PERMIT", "DRIVING_LICENSE", "OTHER"], nationalId: "CIN",
+    idTypes: ["CIN", "CNI", "PASSPORT", "RESIDENCE_PERMIT", "DRIVING_LICENSE", "OTHER"], nationalId: "CIN",
     dataLaw: "loi 09-08 (CNDP)", dataAuthority: "CNDP", leaseLaw: "droit marocain (loi 67-12 notamment)",
     taxIdLabel: "Identifiant fiscal (ICE / IF)", invoiceLegal: "Mentions légales du prestataire (ICE, IF, RC, patente) à compléter dans sa fiche si elles n'apparaissent pas ci-dessus.",
     quoteLegal: "", policeForms: false, registrationNumber: false, plans: { ESSENTIEL: 199, PRO: 499, BUSINESS: 1299 }, logoSvg: ""
@@ -29,7 +29,7 @@ var EDITIONS_ = {
   FR: {
     code: "FR", country: "FR", countryName: "France", currency: "EUR", timezone: "Europe/Paris", city: "Paris", mapCenter: [48.8566, 2.3522],
     phoneCountry: "33", localMobileRe: "^0[1-9]\\d{8}$", tagline: "Paris · France", taglineKey: "La gestion locative, de l'arrivée du voyageur au dernier centime.",
-    idTypes: ["CNI", "PASSPORT", "RESIDENCE_PERMIT", "DRIVING_LICENSE", "OTHER"], nationalId: "CNI",
+    idTypes: ["CNI", "CIN", "PASSPORT", "RESIDENCE_PERMIT", "DRIVING_LICENSE", "OTHER"], nationalId: "CNI",
     dataLaw: "RGPD (règlement UE 2016/679) et loi Informatique et Libertés (CNIL)", dataAuthority: "CNIL", leaseLaw: "droit français (loi n° 89-462 du 6 juillet 1989, contrat type du décret n° 2015-587)",
     taxIdLabel: "SIRET / n° de TVA intracommunautaire",
     invoiceLegal: "Mentions obligatoires du prestataire à vérifier : raison sociale, SIRET, n° de TVA intracommunautaire (ou « TVA non applicable, art. 293 B du CGI »), date d'échéance, taux des pénalités de retard ; entre professionnels, indemnité forfaitaire pour frais de recouvrement de 40 € (art. L. 441-10 du Code de commerce).",
@@ -44,8 +44,8 @@ function cur_() { return edition_().currency; }
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
-  VERSION: "2.3.0",
-  SCHEMA_VERSION: 9,
+  VERSION: "2.3.1",
+  SCHEMA_VERSION: 10,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -226,7 +226,7 @@ var TABLES_SRC = {
     enums: { kind: ["RESERVATION", "DEPOSIT", "REFUND", "RENT", "INVOICE", "SUBSCRIPTION", "DEPOSIT_REFUND", "OTHER"], refType: ["RESERVATION", "RENT_SCHEDULE", "INVOICE", "SUBSCRIPTION", "LEASE", "EXPENSE"], direction: ["IN", "OUT"], status: ["RECORDED", "VOID"] },
     cols: "paymentId,organizationId,propertyId,kind,refType,refId,direction,amount#n,currency,method,paidAt#t,reference,proofDocId,status,reconciled#b,reconciledAt#t,reconciledBy,note,idempotencyKey,recordedBy,createdAt#t,voidedAt#t,voidedBy" },
   Tenants: { pk: "tenantId", idp: "tnt", org: "organizationId", req: "fullName", enums: { status: ["ACTIVE", "INACTIVE"] },
-    cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t|birthDate#d,birthPlace,idNumber,idExpiry#d,address,idDocumentId" },
+    cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t|birthDate#d,birthPlace,idNumber,idExpiry#d,address,idDocumentId,idDocumentBackId" },
   Leases: { pk: "leaseId", idp: "lea", org: "organizationId", req: "propertyId,tenantId,startDate,monthlyRent",
     enums: { status: ["DRAFT", "ACTIVE", "NOTICE", "ENDED", "RENEWED", "CANCELLED"] },
     cols: "leaseId,organizationId,propertyId,tenantId,startDate#d,endDate#d,durationMonths#n,monthlyRent#n,charges#n,deposit#n,dueDay#n,indexationRate#n,nextIndexationDate#d,terms,documentId,status,noticeDate#d,noticeBy,depositStatus,depositReturned#n,depositDeductions#n,renewedFromLeaseId,endReason,createdAt#t,createdBy,updatedAt#t,updatedBy|automationJson#j" },
