@@ -1192,6 +1192,44 @@ function TEST_GROUPS_() {
         T.fails(fx.tok.ownerB, "inspection.get", { inspectionId: x.inspectionId }, "FORBIDDEN");
       }]
     ] },
+    { name: "Tutoriel et intégration d'un locataire", tests: [
+      ["Tutoriel : terminé ou désactivé, mémorisé sur le compte, conservé par la mise à jour du profil", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        T.ok(!(T.call(O.tok, "me.get", {}).notifPrefs.tour), "aucun état au départ : le tutoriel s'affiche");
+        T.call(O.tok, "me.tour", { done: true });
+        T.eq(T.call(O.tok, "me.get", {}).notifPrefs.tour.done, true, "tutoriel terminé");
+        T.call(O.tok, "me.updateProfile", { notifPrefs: { email: false, mutedTypes: [] } });
+        const pr = T.call(O.tok, "me.get", {}).notifPrefs;
+        T.ok(pr.tour && pr.tour.done === true && pr.email === false, "préférences e-mail modifiées sans perdre l'état du tutoriel");
+        T.call(O.tok, "me.tour", { off: true });
+        T.eq(T.call(O.tok, "me.get", {}).notifPrefs.tour.off, true, "désactivé depuis le bouton en haut à droite");
+        T.call(O.tok, "me.tour", { off: false });
+        T.eq(T.call(O.tok, "me.get", {}).notifPrefs.tour.off, false, "réactivé");
+      }],
+      ["Locataire : identité complète, pièce d'identité jointe (sensible), contrat avec le numéro de pièce", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const prop = T.call(O.tok, "property.create", { organizationId: O.org.organizationId, name: "Studio Onboarding", city: "Marrakech", rentalMode: "LONG_TERM" }).propertyId;
+        T.fails(O.tok, "tenant.create", { propertyId: prop, fullName: "X Y", idNumber: "AB 12;34" }, "VALIDATION");
+        T.fails(O.tok, "tenant.create", { propertyId: prop, fullName: "X Y", birthDate: tDays_(3) }, "VALIDATION");
+        const t = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Youssef El Alaoui", email: fx.mail("youssef"), nationality: "Marocaine", idType: IMMO_EDITION_ === "FR" ? "CNI" : "CIN",
+          idNumber: "ab123456", idExpiry: "2030-01-01", birthDate: "1990-01-15", birthPlace: "Fès", address: "12 rue de la Liberté, Marrakech" });
+        const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        const d = T.call(O.tok, "doc.upload", { ownerType: "TENANT", ownerId: t.tenantId, category: "ID_DOCUMENT", mimeType: "image/png", fileName: "cnie.png", base64: png });
+        T.ok(bool_(dbGet_("Documents", d.documentId).sensitive) && !dbGet_("Documents", d.documentId).retainUntil, "pièce d'identité sensible, conservée pendant la location");
+        const other = T.call(fx.tok.ownerA, "tenant.create", { propertyId: fx.propA2, fullName: "Autre Locataire" });
+        T.fails(O.tok, "tenant.update", { tenantId: t.tenantId, idDocumentId: T.call(fx.tok.ownerA, "doc.upload", { ownerType: "TENANT", ownerId: other.tenantId, category: "ID_DOCUMENT", mimeType: "image/png", fileName: "x.png", base64: png }).documentId }, "VALIDATION");
+        T.call(O.tok, "tenant.update", { tenantId: t.tenantId, idDocumentId: d.documentId });
+        const row = T.call(O.tok, "tenant.list", {}).items.find(function (x) { return x.tenantId === t.tenantId; });
+        T.ok(row.idNumber === "AB123456" && row.birthDate === "1990-01-15" && row.idDocumentId === d.documentId && row.address, "identité enregistrée (numéro en majuscules)");
+        T.fails(fx.tok.ownerB, "doc.get", { documentId: d.documentId }, "FORBIDDEN");
+        const l = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: tDays_(2), monthlyRent: 4000, dueDay: 5 });
+        TEST_HOOKS_.aiConfig = false;
+        const dr = T.call(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LEASE_CONTRACT" });
+        const fin = T.call(O.tok, "leasedoc.finalize", { leaseDocId: dr.leaseDocId });
+        const html = Utilities.newBlob(Utilities.base64Decode(fin.base64)).getDataAsString();
+        T.ok(html.indexOf("AB123456") >= 0 && html.indexOf("15/01/1990") >= 0 && html.indexOf("Fès") >= 0, "numéro de pièce et naissance dans le contrat");
+      }]
+    ] },
     { name: "KPI et Pareto", tests: [
       ["Pareto : classement, parts, cumul, seuil 80 %", function (T) {
         const r = paretoCompute_([{ key: "B", value: 30 }, { key: "A", value: 50 }, { key: "D", value: 5 }, { key: "C", value: 15 }]);

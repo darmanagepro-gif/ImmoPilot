@@ -91,13 +91,26 @@ function tenantList_(p, a) {
     if (a.status && t.status !== a.status) return false;
     return matchesQuery_(a.q, [t.fullName, t.email, t.phone]);
   }).sort(function (x, y) { return String(x.fullName).localeCompare(String(y.fullName)); })
-    .map(function (t) { return { tenantId: t.tenantId, organizationId: t.organizationId, fullName: t.fullName, email: t.email, phone: t.phone, nationality: t.nationality, status: t.status, hasAccount: !!t.userId,
+    .map(function (t) { const mg = hasOrgCap_(p, t.organizationId, "lease.manage");
+      return { tenantId: t.tenantId, organizationId: t.organizationId, fullName: t.fullName, email: t.email, phone: t.phone, nationality: t.nationality, status: t.status, hasAccount: !!t.userId,
+      idType: t.idType, idNumber: mg ? t.idNumber : (t.idNumber ? "•••" + String(t.idNumber).slice(-3) : ""), idExpiry: mg ? t.idExpiry : "", birthDate: mg ? t.birthDate : "", birthPlace: mg ? t.birthPlace : "", address: mg ? t.address : "",
+      idDocumentId: mg ? t.idDocumentId : "",
       activeLeases: dbAll_("Leases").filter(function (l) { return String(l.tenantId) === String(t.tenantId) && ["ACTIVE", "NOTICE"].indexOf(l.status) >= 0; }).length }; });
   return pageOf_(rows, a);
 }
 function tenantOrg_(p, a) {
   if (a.propertyId) { const prop = assertProp_(p, a.propertyId, "lease.manage"); return String(prop.organizationId); }
   const orgId = safeText_(a.organizationId, 120); assertOrgCap_(p, orgId, "lease.manage"); return orgId;
+}
+/** Identité du locataire (saisie ou lue sur la pièce d'identité, sur l'appareil de l'utilisateur) : champs facultatifs, contrôlés. */
+function tenantIdentity_(a, o) {
+  if (a.birthDate !== undefined) { o.birthDate = a.birthDate ? dateOnly_(a.birthDate, "Date de naissance") : ""; if (o.birthDate) assert_(o.birthDate < todayStr_() && o.birthDate > "1900-01-01", "Date de naissance invalide."); }
+  if (a.birthPlace !== undefined) o.birthPlace = safeText_(a.birthPlace, 80);
+  if (a.idNumber !== undefined) { const n = safeText_(a.idNumber, 30).toUpperCase().replace(/\s+/g, ""); assert_(!n || /^[A-Z0-9-]{3,30}$/.test(n), "Numéro de pièce invalide (lettres, chiffres et tirets)."); o.idNumber = n; }
+  if (a.idExpiry !== undefined) o.idExpiry = a.idExpiry ? dateOnly_(a.idExpiry, "Date d'expiration") : "";
+  if (a.address !== undefined) o.address = safeText_(a.address, 200);
+  if (a.idType !== undefined) o.idType = a.idType ? oneOf_(a.idType, idTypes_(), "Pièce") : "";
+  return o;
 }
 function tenantCreate_(p, a) {
   const orgId = tenantOrg_(p, a);
@@ -107,7 +120,9 @@ function tenantCreate_(p, a) {
   const t = dbInsert_("Tenants", { organizationId: orgId, userId: u && dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(u.userId) && r.role === "TENANT" && r.status === "ACTIVE"; }) ? u.userId : "",
     fullName: reqText_(a.fullName, "Nom complet", 2, 120), email: email, phone: safeText_(a.phone, 30), nationality: safeText_(a.nationality, 60), idType: a.idType ? oneOf_(a.idType, idTypes_(), "Pièce") : "",
     status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
-  audit_("TENANT_CREATED", "Tenant", t.tenantId, orgId, {});
+  const idf = tenantIdentity_(Object.assign({}, a, { idType: undefined }), {});
+  if (Object.keys(idf).length) dbUpdate_("Tenants", t.tenantId, idf);
+  audit_("TENANT_CREATED", "Tenant", t.tenantId, orgId, { identity: Object.keys(idf) });
   return { ok: true, tenantId: t.tenantId, id: t.tenantId };
 }
 function tenantUpdate_(p, a) {
@@ -119,6 +134,8 @@ function tenantUpdate_(p, a) {
   if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
   if (a.nationality !== undefined) patch.nationality = safeText_(a.nationality, 60);
   if (a.status !== undefined) patch.status = oneOf_(a.status, ["ACTIVE", "INACTIVE"], "Statut");
+  tenantIdentity_(a, patch);
+  if (a.idDocumentId !== undefined) { if (a.idDocumentId) { const d = dbGet_("Documents", safeText_(a.idDocumentId, 120)); assert_(d && d.ownerType === "TENANT" && String(d.ownerId) === String(t.tenantId) && d.status === "ACTIVE", "Pièce d'identité non rattachée à ce locataire."); } patch.idDocumentId = safeText_(a.idDocumentId, 120); }
   dbUpdate_("Tenants", t.tenantId, patch);
   audit_("TENANT_UPDATED", "Tenant", t.tenantId, t.organizationId, { fields: Object.keys(patch) });
   return { ok: true };

@@ -286,7 +286,9 @@ function leaseDocHtml_(c, d) {
     inner += "<h2>Entre les soussignés</h2><table><tr><th style='width:50%'>Le bailleur</th><th>Le locataire</th></tr><tr><td><b>" + escapeHtml_(org.name || "") + "</b><br>" +
       escapeHtml_([org.address, org.city].filter(String).join(", ") || "Adresse : ____________________") + "<br>" + escapeHtml_(org.phone ? "Tél. " + org.phone : "") + "</td><td><b>" + escapeHtml_(t.fullName || "") + "</b><br>" +
       (t.nationality ? "Nationalité : " + escapeHtml_(t.nationality) + "<br>" : "") + "Pièce d'identité : " + escapeHtml_(t.idType ? ({ CIN: "CIN", CNI: "CNI", PASSPORT: "Passeport", RESIDENCE_PERMIT: "Titre de séjour", DRIVING_LICENSE: "Permis de conduire" }[t.idType] || t.idType) : "____") +
-      " n° ____________________<br>" + escapeHtml_([t.email, t.phone].filter(String).join(" · ")) + "</td></tr></table><p>Logement : <b>" + escapeHtml_(prop.name || "") + "</b> — " + escapeHtml_(rentAddress_(prop)) + "</p>";
+      " n° " + (t.idNumber ? "<b>" + escapeHtml_(t.idNumber) + "</b>" + (t.idExpiry ? " (valable jusqu'au " + pdfDate_(t.idExpiry) + ")" : "") : "____________________") + "<br>" +
+      (t.birthDate ? "Né(e) le " + pdfDate_(t.birthDate) + (t.birthPlace ? " à " + escapeHtml_(t.birthPlace) : "") + "<br>" : "") + (t.address ? "Domicile actuel : " + escapeHtml_(t.address) + "<br>" : "") +
+      escapeHtml_([t.email, t.phone].filter(String).join(" · ")) + "</td></tr></table><p>Logement : <b>" + escapeHtml_(prop.name || "") + "</b> — " + escapeHtml_(rentAddress_(prop)) + "</p>";
   }
   sections.forEach(function (s) { inner += (s.title ? "<h2>" + escapeHtml_(s.title) + "</h2>" : "") + laParas_(s.body); });
   if (d.docType === "LEASE_CONTRACT") inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + (draft ? "____________" : pdfDate_(String(d.finalizedAt || todayStr_()).slice(0, 10))) + ", en deux exemplaires originaux" + (ma ? "." : ", dont un remis à chaque partie.") + "</p>" +

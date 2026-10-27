@@ -1,5 +1,12 @@
 # Journal des modifications
 
+## 2.3.0 — 27 octobre 2026 — tutoriel de première connexion et intégration d'un locataire par sa pièce d'identité
+
+- Tutoriel à la première connexion : petites fenêtres qui présentent chaque menu selon le rôle (propriétaire, agence, gardien, ménage, artisan, locataire, super administrateur), mise en évidence de l'élément, Suivant / Précédent / Passer, adapté au téléphone (le menu s'ouvre pendant la visite). Bouton 🎓 en haut à droite : revoir le tutoriel ou le désactiver au démarrage ; choix mémorisé sur le compte (me.tour) et sur l'appareil.
+- « 📷 Intégrer un locataire » (Locations longue durée) : photo du passeport ou de la CNIE / CNI, lecture de la bande MRZ SUR L'APPAREIL (Tesseract.js, aucune image envoyée à un service de reconnaissance), contrôle par les chiffres de contrôle ; nom, nationalité, type et numéro de pièce, naissance et expiration pré-remplis et surlignés ; le reste se saisit à la main ; le locataire, sa pièce (document sensible, accès restreint) et le bail en brouillon sont créés en une fois ; invitation facultative à l'espace locataire.
+- Fiche locataire : date et lieu de naissance, numéro et validité de la pièce, adresse actuelle, pièce jointe ; repris dans le contrat de bail rédigé par l'agent.
+- Schéma 9 (colonnes ajoutées sans perte à Tenants), 2 nouveaux tests (99 au total), aide Rubban et traductions dans les 6 langues.
+
 ## 2.2.0 — 27 octobre 2026 — envois automatiques au locataire et agent de rédaction
 
 - Location longue durée : appels de loyer (avis d'échéance) envoyés automatiquement par e-mail au locataire avec le PDF joint, rent.callDaysBefore jours avant l'échéance (7 par défaut), avec les arriérés éventuels et les modalités de paiement de l'organisation (rent.paymentInstructions).

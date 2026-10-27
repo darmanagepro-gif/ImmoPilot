@@ -538,4 +538,135 @@ function invalidate() { S.cache = {}; }
 function listOpts(name) { return ((S.me && S.me.lists && S.me.lists[name]) || []).map(function (x) { return [x, st(x)]; }); }
 function enumOpts(table, field) { return ((S.meta && S.meta.enums[table] && S.meta.enums[table][field]) || []).map(function (x) { return [x, st(x)]; }); }
 function myOrgs(roleList) { return (S.me.roles || []).filter(function (r) { return !roleList || roleList.indexOf(r.role) >= 0; }).map(function (r) { return [r.organizationId, r.organizationName]; }).filter(function (v, i, a) { return a.findIndex(function (x) { return x[0] === v[0]; }) === i; }); }
+
+/* ------------------------------ lecture d'une pièce d'identité (sur l'appareil) ------------------------------
+   La pièce est lue DANS LE NAVIGATEUR (reconnaissance de caractères Tesseract.js) : l'image n'est envoyée à aucun service
+   de lecture. Seule la bande MRZ est exploitée (les 2 ou 3 lignes codées « <<< » au bas du passeport ou au dos de la CNIE / CNI) :
+   ses chiffres de contrôle garantissent que les informations lues sont exactes. Sans bande lisible, la saisie reste manuelle. */
+const MRZ = (function () {
+  const W = [7, 3, 1];
+  const val = function (c) { return c === "<" ? 0 : (/[0-9]/.test(c) ? Number(c) : c.charCodeAt(0) - 55); };
+  const check = function (s) { let t = 0; for (let i = 0; i < s.length; i++) t += val(s[i]) * W[i % 3]; return t % 10; };
+  const digits = function (s) { return s.replace(/[OQDU]/g, "0").replace(/[IL]/g, "1").replace(/Z/g, "2").replace(/S/g, "5").replace(/B/g, "8").replace(/G/g, "6").replace(/T/g, "7"); };
+  const letters = function (s) { return s.replace(/0/g, "O").replace(/1/g, "I").replace(/5/g, "S").replace(/8/g, "B").replace(/2/g, "Z").replace(/6/g, "G"); };
+  const ok = function (field, chk) { return check(field) === Number(digits(chk)); };
+  const pad = function (l, n) { return l.length >= n ? l.slice(0, n) : l + "<".repeat(n - l.length); };
+  const yymmdd = function (s, past) {
+    s = digits(s); if (!/^\d{6}$/.test(s)) return "";
+    const yy = Number(s.slice(0, 2)), now = new Date().getFullYear() % 100, m = s.slice(2, 4), d = s.slice(4, 6);
+    if (Number(m) < 1 || Number(m) > 12 || Number(d) < 1 || Number(d) > 31) return "";
+    const y = past ? (yy > now ? 1900 + yy : 2000 + yy) : (yy < 70 ? 2000 + yy : 1900 + yy);
+    return y + "-" + m + "-" + d;
+  };
+  const names = function (s) { const p = s.replace(/^<+|<+$/g, "").split("<<"); const cap = function (x) { return x.replace(/</g, " ").trim().toLowerCase().replace(/(^|[\s-])\S/g, function (c) { return c.toUpperCase(); }); };
+    return { lastName: cap(letters(p[0] || "")), firstName: cap(letters(p.slice(1).join(" ") || "")) }; };
+  const clean = function (l) { return String(l || "").toUpperCase().replace(/[«‹(\[{]/g, "<").replace(/\s+/g, "").replace(/[^A-Z0-9<]/g, ""); };
+  /** Cherche une bande MRZ (passeport TD3, carte TD1, TD2, ancienne CNI française) dans un texte reconnu. */
+  function parse(text) {
+    const L = String(text || "").split(/\n/).map(clean).filter(function (l) { return l.length >= 26 && (l.match(/</g) || []).length >= 2; });
+    const near = function (l, n) { return Math.abs(l.length - n) <= 3; };
+    for (let i = 0; i < L.length; i++) {
+      const a = L[i], b = L[i + 1], c = L[i + 2];
+      if (b && /^P/.test(a) && near(a, 44) && near(b, 44)) { const r = td3(pad(a, 44), pad(b, 44)); if (r) return r; }
+      if (b && c && near(a, 30) && near(b, 30) && near(c, 30)) { const r = td1(pad(a, 30), pad(b, 30), pad(c, 30)); if (r) return r; }
+      if (b && near(a, 36) && near(b, 36)) { const r = /^IDFRA/.test(a) ? frOld(pad(a, 36), pad(b, 36)) : td2(pad(a, 36), pad(b, 36)); if (r) return r; }
+    }
+    return null;
+  }
+  function result(o) { o.checks = o.checks.filter(Boolean).length + "/" + o.checks.length; o.valid = o.checks.split("/")[0] === o.checks.split("/")[1]; return o; }
+  function td3(a, b) {
+    const doc = b.slice(0, 9), birth = b.slice(13, 19), exp = b.slice(21, 27), n = names(a.slice(5));
+    const r = result({ format: "TD3", type: "PASSPORT", country: letters(a.slice(2, 5)).replace(/</g, ""), docNumber: doc.replace(/</g, ""), nationality: letters(b.slice(10, 13)).replace(/</g, ""),
+      birthDate: yymmdd(birth, true), expiry: yymmdd(exp, false), lastName: n.lastName, firstName: n.firstName,
+      checks: [ok(doc, b[9]), ok(digits(birth), b[19]), ok(digits(exp), b[27])] });
+    return r.birthDate && (r.lastName || r.firstName) ? r : null;
+  }
+  function td1(a, b, c) {
+    const doc = a.slice(5, 14), opt = a.slice(15, 30), birth = b.slice(0, 6), exp = b.slice(8, 14), n = names(c);
+    const optId = opt.replace(/<+$/, "").replace(/</g, "");
+    const r = result({ format: "TD1", type: /^P/.test(a) ? "PASSPORT" : (/^(IR|AR|CR|RP)/.test(a) ? "RESIDENCE_PERMIT" : "ID"), country: letters(a.slice(2, 5)).replace(/</g, ""),
+      docNumber: doc.replace(/</g, ""), optional: optId, nationality: letters(b.slice(15, 18)).replace(/</g, ""), birthDate: yymmdd(birth, true), expiry: yymmdd(exp, false),
+      lastName: n.lastName, firstName: n.firstName, checks: [ok(digits(birth), b[6]), ok(digits(exp), b[14]), doc.indexOf("<") >= 0 && doc.slice(-1) !== "<" ? true : ok(doc, a[14])] });
+    // CNIE marocaine : le numéro de la carte nationale (ex. AB123456) figure dans la zone facultative.
+    if (/^[A-Z]{1,2}\d{3,7}$/.test(letters(optId.slice(0, 2)) + digits(optId.slice(2)))) r.nationalId = letters(optId.slice(0, 2)).replace(/[^A-Z]/g, "") + digits(optId.slice(optId.search(/\d/)));
+    return r.birthDate && (r.lastName || r.firstName) ? r : null;
+  }
+  function td2(a, b) {
+    const doc = b.slice(0, 9), birth = b.slice(13, 19), exp = b.slice(21, 27), n = names(a.slice(5));
+    const r = result({ format: "TD2", type: /^P/.test(a) ? "PASSPORT" : "ID", country: letters(a.slice(2, 5)).replace(/</g, ""), docNumber: doc.replace(/</g, ""),
+      nationality: letters(b.slice(10, 13)).replace(/</g, ""), birthDate: yymmdd(birth, true), expiry: yymmdd(exp, false), lastName: n.lastName, firstName: n.firstName,
+      checks: [ok(doc, b[9]), ok(digits(birth), b[19]), ok(digits(exp), b[27])] });
+    return r.birthDate && (r.lastName || r.firstName) ? r : null;
+  }
+  function frOld(a, b) {
+    const num = b.slice(0, 12), birth = b.slice(27, 33);
+    const last = names(a.slice(5, 30)).lastName, first = names(b.slice(13, 27).replace(/<</g, "<")).lastName;
+    const r = result({ format: "CNI-FR", type: "ID", country: "FRA", docNumber: digits(num).replace(/</g, ""), nationality: "FRA", birthDate: yymmdd(birth, true), expiry: "",
+      lastName: last, firstName: first, checks: [ok(digits(num), b[12]), ok(digits(birth), b[33])] });
+    return r.birthDate && r.lastName ? r : null;
+  }
+  return { parse: parse, check: check };
+})();
+const NATIONALITIES = { MAR: "Marocaine", FRA: "Française", ESP: "Espagnole", ITA: "Italienne", BEL: "Belge", NLD: "Néerlandaise", DEU: "Allemande", GBR: "Britannique", IRL: "Irlandaise", PRT: "Portugaise",
+  CHE: "Suisse", LUX: "Luxembourgeoise", AUT: "Autrichienne", SWE: "Suédoise", NOR: "Norvégienne", DNK: "Danoise", POL: "Polonaise", ROU: "Roumaine", USA: "Américaine", CAN: "Canadienne", BRA: "Brésilienne",
+  DZA: "Algérienne", TUN: "Tunisienne", LBY: "Libyenne", EGY: "Égyptienne", MRT: "Mauritanienne", SEN: "Sénégalaise", CIV: "Ivoirienne", MLI: "Malienne", CMR: "Camerounaise", GIN: "Guinéenne",
+  COD: "Congolaise (RDC)", COG: "Congolaise", GAB: "Gabonaise", NGA: "Nigériane", SAU: "Saoudienne", ARE: "Émirienne", QAT: "Qatarienne", KWT: "Koweïtienne", LBN: "Libanaise", TUR: "Turque",
+  RUS: "Russe", UKR: "Ukrainienne", CHN: "Chinoise", JPN: "Japonaise", IND: "Indienne", AUS: "Australienne", D: "Allemande" };
+/** Charge Tesseract.js (une seule fois). Chemins remplaçables par window.IMMO_OCR (tests, hébergement autonome). */
+function ocrLib() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (ocrLib.p) return ocrLib.p;
+  const src = (window.IMMO_OCR && window.IMMO_OCR.script) || "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+  ocrLib.p = new Promise(function (res, rej) { const s = document.createElement("script"); s.src = src; s.onload = function () { res(window.Tesseract); }; s.onerror = function () { ocrLib.p = null; rej(new Error(t("Module de lecture indisponible (connexion internet requise).") )); }; document.head.appendChild(s); });
+  return ocrLib.p;
+}
+/** Image → canevas en niveaux de gris contrastés ; part : "all" | "bottom" ; rot : rotation (0 ou 180). */
+function ocrCanvas(img, part, rot) {
+  const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height, sy = part === "bottom" ? Math.round(h0 * 0.5) : 0, hh = h0 - sy;
+  const scale = Math.min(2.5, 2000 / w0), cv = document.createElement("canvas"); cv.width = Math.round(w0 * scale); cv.height = Math.round(hh * scale);
+  const ctx = cv.getContext("2d");
+  if (rot === 180) { ctx.translate(cv.width, cv.height); ctx.rotate(Math.PI); }
+  ctx.drawImage(img, 0, rot === 180 ? 0 : sy, w0, rot === 180 ? h0 - sy : hh, 0, 0, cv.width, cv.height);
+  const d = ctx.getImageData(0, 0, cv.width, cv.height), px = d.data, hist = new Array(256).fill(0);
+  for (let i = 0; i < px.length; i += 4) { const g = Math.round(0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]); px[i] = g; hist[g]++; }
+  // Seuil d'Otsu : texte noir sur fond clair
+  let sum = 0, sumB = 0, wB = 0, best = 0, th = 128; const tot = px.length / 4;
+  for (let i = 0; i < 256; i++) sum += i * hist[i];
+  for (let i = 0; i < 256; i++) { wB += hist[i]; if (!wB) continue; const wF = tot - wB; if (!wF) break; sumB += i * hist[i]; const mB = sumB / wB, mF = (sum - sumB) / wF, v = wB * wF * (mB - mF) * (mB - mF); if (v > best) { best = v; th = i; } }
+  for (let i = 0; i < px.length; i += 4) { const v = px[i] > th ? 255 : 0; px[i] = px[i + 1] = px[i + 2] = v; }
+  ctx.putImageData(d, 0, 0);
+  return cv;
+}
+/** Lit la bande MRZ d'une photo de pièce d'identité. onStep(texte) informe de l'avancement. Résultat : objet MRZ ou null. */
+function idScanRead(file, onStep) {
+  onStep = onStep || function () {};
+  if (!/^image\//.test(file.type)) return Promise.reject(new Error(t("Photo attendue (JPEG ou PNG) pour la lecture automatique.")));
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  return new Promise(function (res, rej) { img.onload = res; img.onerror = function () { rej(new Error(t("Image illisible."))); }; img.src = url; })
+    .then(function () { onStep(t("Préparation de la lecture…")); return ocrLib(); })
+    .then(function (T) {
+      const o = window.IMMO_OCR || {};
+      return T.createWorker("eng", 1, Object.assign({ logger: function (m) { if (m.status === "recognizing text") onStep(t("Lecture de la pièce…") + " " + Math.round((m.progress || 0) * 100) + " %"); } },
+        o.workerPath ? { workerPath: o.workerPath } : {}, o.corePath ? { corePath: o.corePath } : {}, o.langPath ? { langPath: o.langPath } : {}));
+    })
+    .then(function (worker) {
+      return worker.setParameters({ tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<", tessedit_pageseg_mode: "6" }).then(function () {
+        const tries = [["bottom", 0], ["all", 0], ["bottom", 180]];
+        const next = function (i) {
+          if (i >= tries.length) return null;
+          return worker.recognize(ocrCanvas(img, tries[i][0], tries[i][1])).then(function (r) { const m = MRZ.parse(r.data.text); return m || next(i + 1); });
+        };
+        return next(0).then(function (m) { worker.terminate(); return m; }, function (e) { worker.terminate(); throw e; });
+      });
+    })
+    .then(function (m) { URL.revokeObjectURL(url); return m; }, function (e) { URL.revokeObjectURL(url); throw e; });
+}
+/** Champs du formulaire locataire déduits d'une bande MRZ. */
+function idScanFields(m) {
+  const fr = ED && ED.country === "FR", natId = fr ? "CNI" : "CIN", home = fr ? "FRA" : "MAR";
+  const idType = m.type === "PASSPORT" ? "PASSPORT" : (m.type === "RESIDENCE_PERMIT" ? "RESIDENCE_PERMIT" : (m.country === home ? (natId || "CIN") : "OTHER"));
+  return { fullName: [m.firstName, m.lastName].filter(Boolean).join(" "), nationality: NATIONALITIES[m.nationality] || m.nationality || "", idType: idType,
+    idNumber: m.nationalId || m.docNumber || "", birthDate: m.birthDate || "", idExpiry: m.expiry || "" };
+}
 </script>

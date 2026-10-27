@@ -20,7 +20,7 @@ function resolveHandler_(name) {
   return fn;
 }
 function routes_() { return {
-  "me.get": function (p) { return meBootstrap_(p); }, "me.logout": "meLogout_", "me.logoutAll": "meLogoutAll_", "me.changePassword": "meChangePassword_", "me.updateProfile": "meUpdateProfile_", "me.requestDeletion": "meRequestDeletion_",
+  "me.get": function (p) { return meBootstrap_(p); }, "me.logout": "meLogout_", "me.logoutAll": "meLogoutAll_", "me.changePassword": "meChangePassword_", "me.updateProfile": "meUpdateProfile_", "me.tour": "meTour_", "me.requestDeletion": "meRequestDeletion_",
   "meta.get": function (p) { return metaGet_(p); }, "me.boot": function (p) { return { me: meBootstrap_(p), meta: metaGet_(p) }; },
   "admin.accounts": "adminAccounts_", "admin.impersonate": "impersonateStart_", "me.endImpersonation": "impersonateEnd_",
   "org.list": "orgList_", "org.create": "orgCreate_", "org.update": "orgUpdate_", "org.setStatus": "orgSetStatus_",

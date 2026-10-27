@@ -1,5 +1,5 @@
 /**
- * ImmoPilot 2.2.0 — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
+ * ImmoPilot 2.3.0 — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
  * Contient les 36 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SubscriptionService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
  * À coller seul dans le projet Apps Script (aucun autre fichier .gs ne doit rester dans le projet).
  */
@@ -359,6 +359,12 @@ var ASSISTANT_KB_ = [
     s: ["Créez d'abord le locataire dans « Locataires » (avec son e-mail pour les envois automatiques).", "« Locations longue durée » › « Nouveau bail » : bien, locataire, dates, loyer, charges, caution, jour d'échéance.", "« Activer le bail » génère l'échéancier des loyers ; « Encaisser la caution » enregistre le dépôt de garantie. « ✦ Rédiger le bail » fait rédiger le contrat par l'agent, à relire avant signature."] },
   { id: "rent", t: "Encaisser un loyer, quittance et retards", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "loyer encaisser quittance retard impayé échéance relance locataire",
     s: ["Ouvrez le bail › échéancier › « Paiement » sur l'échéance : montant, date, mode.", "« Quittance » produit la quittance PDF d'une échéance payée ; si les quittances automatiques sont activées, elle part aussitôt au locataire par e-mail.", "Les retards apparaissent dans le tableau de bord et l'analyse « Impayés » ; les relances peuvent partir automatiquement (voir « Appels de loyer, relances et quittances »)."] },
+  { id: "tenant-onboard", t: "Intégrer un nouveau locataire en scannant sa pièce d'identité", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "intégrer locataire scanner pièce identité cin cnie passeport photo lecture automatique nouveau locataire onboarding mrz",
+    s: ["« Locations longue durée » › « 📷 Intégrer un locataire » (ou « Locataires » › « + Locataire »).", "« Scanner la pièce d'identité » : prenez en photo le passeport (page photo) ou la CNIE / CNI côté lignes « <<< ». Nom, nationalité, numéro, dates de naissance et d'expiration se remplissent (surlignés en vert).",
+      "Vérifiez, puis complétez à la main l'e-mail, le téléphone, l'adresse, le logement, le loyer et les dates.", "« Créer le locataire et le bail » : la pièce est jointe au dossier (accès restreint), le bail est créé en brouillon ; faites-le rédiger par l'agent puis activez-le.",
+      "La lecture se fait sur votre appareil : l'image n'est envoyée à aucun service de reconnaissance. Sans lignes « <<< » lisibles, saisissez simplement les champs à la main."] },
+  { id: "tour", t: "Tutoriel : revoir ou désactiver la visite guidée", r: ["*"], go: "", k: "tutoriel visite guidée tuto aide démarrage première connexion désactiver revoir 🎓",
+    s: ["À la première connexion, de petites fenêtres présentent chaque menu de votre espace.", "Bouton 🎓 en haut à droite : « Revoir le tutoriel », ou décochez « Tutoriel au démarrage » pour ne plus l'afficher.", "Pendant la visite : « Suivant », « Précédent », « Passer » (ou la touche Échap)."] },
   { id: "rent-auto", t: "Appels de loyer, relances et quittances envoyés automatiquement par e-mail", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "appel de loyer avis d'échéance relance automatique impayé quittance automatique email pdf locataire rappel mise en demeure envoi automatique",
     s: ["Activez les envois dans « Paramètres » › « Paramètres de l'organisation » : rent.autoCall (appels de loyer), rent.autoReminders (relances), rent.autoReceipt (quittances). Ils sont désactivés par défaut.",
       "Réglez les délais : rent.callDaysBefore (jours avant l'échéance, 7 par défaut) et rent.reminderDays (jours après l'échéance, par exemple 5, 15, 30 : rappel, relance, dernière relance). Ajoutez vos modalités de paiement (rent.paymentInstructions) et, si besoin, une adresse en copie (rent.copyEmail).",
@@ -786,6 +792,18 @@ function meChangePassword_(p, a) {
   audit_("PASSWORD_CHANGED", "User", p.userId, "");
   return { ok: true };
 }
+/** Tutoriel de première connexion : terminé, ou désactivé / réactivé par l'utilisateur (bouton 🎓 en haut à droite). */
+function meTour_(p, a) {
+  if (p.impersonator) return { ok: true, skipped: true };
+  const u = dbGet_("Users", p.userId), prefs = parseJson_(u && u.notifPrefsJson, { email: true, mutedTypes: [] }) || {};
+  const tour = Object.assign({}, prefs.tour || {});
+  if (a.done !== undefined) tour.done = bool_(a.done);
+  if (a.off !== undefined) tour.off = bool_(a.off);
+  tour.at = nowIso_();
+  prefs.tour = tour;
+  dbUpdate_("Users", p.userId, { notifPrefsJson: prefs, updatedAt: nowIso_() });
+  return { ok: true, tour: tour };
+}
 function meUpdateProfile_(p, a) {
   const patch = { updatedAt: nowIso_() };
   if (a.displayName !== undefined) patch.displayName = reqText_(a.displayName, "Nom", 2, 100);
@@ -793,7 +811,8 @@ function meUpdateProfile_(p, a) {
   if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
   if (a.notifPrefs !== undefined) {
     const np = a.notifPrefs || {};
-    patch.notifPrefsJson = { email: np.email !== false, inApp: true, mutedTypes: Array.isArray(np.mutedTypes) ? np.mutedTypes.slice(0, 40).map(function (x) { return safeText_(x, 60); }) : [] };
+    const prev = parseJson_((dbGet_("Users", p.userId) || {}).notifPrefsJson, {}) || {};
+    patch.notifPrefsJson = { email: np.email !== false, inApp: true, mutedTypes: Array.isArray(np.mutedTypes) ? np.mutedTypes.slice(0, 40).map(function (x) { return safeText_(x, 60); }) : [], tour: prev.tour || undefined };
   }
   dbUpdate_("Users", p.userId, patch);
   audit_("PROFILE_UPDATED", "User", p.userId, "", { fields: Object.keys(patch) });
@@ -1396,7 +1415,7 @@ function resolveHandler_(name) {
   return fn;
 }
 function routes_() { return {
-  "me.get": function (p) { return meBootstrap_(p); }, "me.logout": "meLogout_", "me.logoutAll": "meLogoutAll_", "me.changePassword": "meChangePassword_", "me.updateProfile": "meUpdateProfile_", "me.requestDeletion": "meRequestDeletion_",
+  "me.get": function (p) { return meBootstrap_(p); }, "me.logout": "meLogout_", "me.logoutAll": "meLogoutAll_", "me.changePassword": "meChangePassword_", "me.updateProfile": "meUpdateProfile_", "me.tour": "meTour_", "me.requestDeletion": "meRequestDeletion_",
   "meta.get": function (p) { return metaGet_(p); }, "me.boot": function (p) { return { me: meBootstrap_(p), meta: metaGet_(p) }; },
   "admin.accounts": "adminAccounts_", "admin.impersonate": "impersonateStart_", "me.endImpersonation": "impersonateEnd_",
   "org.list": "orgList_", "org.create": "orgCreate_", "org.update": "orgUpdate_", "org.setStatus": "orgSetStatus_",
@@ -1636,7 +1655,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "a9327b6245e9";
+var IMMO_BUILD_ = "d4be328d2265";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -1674,8 +1693,8 @@ function cur_() { return edition_().currency; }
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
-  VERSION: "2.2.0",
-  SCHEMA_VERSION: 8,
+  VERSION: "2.3.0",
+  SCHEMA_VERSION: 9,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -1856,7 +1875,7 @@ var TABLES_SRC = {
     enums: { kind: ["RESERVATION", "DEPOSIT", "REFUND", "RENT", "INVOICE", "SUBSCRIPTION", "DEPOSIT_REFUND", "OTHER"], refType: ["RESERVATION", "RENT_SCHEDULE", "INVOICE", "SUBSCRIPTION", "LEASE", "EXPENSE"], direction: ["IN", "OUT"], status: ["RECORDED", "VOID"] },
     cols: "paymentId,organizationId,propertyId,kind,refType,refId,direction,amount#n,currency,method,paidAt#t,reference,proofDocId,status,reconciled#b,reconciledAt#t,reconciledBy,note,idempotencyKey,recordedBy,createdAt#t,voidedAt#t,voidedBy" },
   Tenants: { pk: "tenantId", idp: "tnt", org: "organizationId", req: "fullName", enums: { status: ["ACTIVE", "INACTIVE"] },
-    cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t" },
+    cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t|birthDate#d,birthPlace,idNumber,idExpiry#d,address,idDocumentId" },
   Leases: { pk: "leaseId", idp: "lea", org: "organizationId", req: "propertyId,tenantId,startDate,monthlyRent",
     enums: { status: ["DRAFT", "ACTIVE", "NOTICE", "ENDED", "RENEWED", "CANCELLED"] },
     cols: "leaseId,organizationId,propertyId,tenantId,startDate#d,endDate#d,durationMonths#n,monthlyRent#n,charges#n,deposit#n,dueDay#n,indexationRate#n,nextIndexationDate#d,terms,documentId,status,noticeDate#d,noticeBy,depositStatus,depositReturned#n,depositDeductions#n,renewedFromLeaseId,endReason,createdAt#t,createdBy,updatedAt#t,updatedBy|automationJson#j" },
@@ -4871,7 +4890,9 @@ function leaseDocHtml_(c, d) {
     inner += "<h2>Entre les soussignés</h2><table><tr><th style='width:50%'>Le bailleur</th><th>Le locataire</th></tr><tr><td><b>" + escapeHtml_(org.name || "") + "</b><br>" +
       escapeHtml_([org.address, org.city].filter(String).join(", ") || "Adresse : ____________________") + "<br>" + escapeHtml_(org.phone ? "Tél. " + org.phone : "") + "</td><td><b>" + escapeHtml_(t.fullName || "") + "</b><br>" +
       (t.nationality ? "Nationalité : " + escapeHtml_(t.nationality) + "<br>" : "") + "Pièce d'identité : " + escapeHtml_(t.idType ? ({ CIN: "CIN", CNI: "CNI", PASSPORT: "Passeport", RESIDENCE_PERMIT: "Titre de séjour", DRIVING_LICENSE: "Permis de conduire" }[t.idType] || t.idType) : "____") +
-      " n° ____________________<br>" + escapeHtml_([t.email, t.phone].filter(String).join(" · ")) + "</td></tr></table><p>Logement : <b>" + escapeHtml_(prop.name || "") + "</b> — " + escapeHtml_(rentAddress_(prop)) + "</p>";
+      " n° " + (t.idNumber ? "<b>" + escapeHtml_(t.idNumber) + "</b>" + (t.idExpiry ? " (valable jusqu'au " + pdfDate_(t.idExpiry) + ")" : "") : "____________________") + "<br>" +
+      (t.birthDate ? "Né(e) le " + pdfDate_(t.birthDate) + (t.birthPlace ? " à " + escapeHtml_(t.birthPlace) : "") + "<br>" : "") + (t.address ? "Domicile actuel : " + escapeHtml_(t.address) + "<br>" : "") +
+      escapeHtml_([t.email, t.phone].filter(String).join(" · ")) + "</td></tr></table><p>Logement : <b>" + escapeHtml_(prop.name || "") + "</b> — " + escapeHtml_(rentAddress_(prop)) + "</p>";
   }
   sections.forEach(function (s) { inner += (s.title ? "<h2>" + escapeHtml_(s.title) + "</h2>" : "") + laParas_(s.body); });
   if (d.docType === "LEASE_CONTRACT") inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + (draft ? "____________" : pdfDate_(String(d.finalizedAt || todayStr_()).slice(0, 10))) + ", en deux exemplaires originaux" + (ma ? "." : ", dont un remis à chaque partie.") + "</p>" +
@@ -5230,13 +5251,26 @@ function tenantList_(p, a) {
     if (a.status && t.status !== a.status) return false;
     return matchesQuery_(a.q, [t.fullName, t.email, t.phone]);
   }).sort(function (x, y) { return String(x.fullName).localeCompare(String(y.fullName)); })
-    .map(function (t) { return { tenantId: t.tenantId, organizationId: t.organizationId, fullName: t.fullName, email: t.email, phone: t.phone, nationality: t.nationality, status: t.status, hasAccount: !!t.userId,
+    .map(function (t) { const mg = hasOrgCap_(p, t.organizationId, "lease.manage");
+      return { tenantId: t.tenantId, organizationId: t.organizationId, fullName: t.fullName, email: t.email, phone: t.phone, nationality: t.nationality, status: t.status, hasAccount: !!t.userId,
+      idType: t.idType, idNumber: mg ? t.idNumber : (t.idNumber ? "•••" + String(t.idNumber).slice(-3) : ""), idExpiry: mg ? t.idExpiry : "", birthDate: mg ? t.birthDate : "", birthPlace: mg ? t.birthPlace : "", address: mg ? t.address : "",
+      idDocumentId: mg ? t.idDocumentId : "",
       activeLeases: dbAll_("Leases").filter(function (l) { return String(l.tenantId) === String(t.tenantId) && ["ACTIVE", "NOTICE"].indexOf(l.status) >= 0; }).length }; });
   return pageOf_(rows, a);
 }
 function tenantOrg_(p, a) {
   if (a.propertyId) { const prop = assertProp_(p, a.propertyId, "lease.manage"); return String(prop.organizationId); }
   const orgId = safeText_(a.organizationId, 120); assertOrgCap_(p, orgId, "lease.manage"); return orgId;
+}
+/** Identité du locataire (saisie ou lue sur la pièce d'identité, sur l'appareil de l'utilisateur) : champs facultatifs, contrôlés. */
+function tenantIdentity_(a, o) {
+  if (a.birthDate !== undefined) { o.birthDate = a.birthDate ? dateOnly_(a.birthDate, "Date de naissance") : ""; if (o.birthDate) assert_(o.birthDate < todayStr_() && o.birthDate > "1900-01-01", "Date de naissance invalide."); }
+  if (a.birthPlace !== undefined) o.birthPlace = safeText_(a.birthPlace, 80);
+  if (a.idNumber !== undefined) { const n = safeText_(a.idNumber, 30).toUpperCase().replace(/\s+/g, ""); assert_(!n || /^[A-Z0-9-]{3,30}$/.test(n), "Numéro de pièce invalide (lettres, chiffres et tirets)."); o.idNumber = n; }
+  if (a.idExpiry !== undefined) o.idExpiry = a.idExpiry ? dateOnly_(a.idExpiry, "Date d'expiration") : "";
+  if (a.address !== undefined) o.address = safeText_(a.address, 200);
+  if (a.idType !== undefined) o.idType = a.idType ? oneOf_(a.idType, idTypes_(), "Pièce") : "";
+  return o;
 }
 function tenantCreate_(p, a) {
   const orgId = tenantOrg_(p, a);
@@ -5246,7 +5280,9 @@ function tenantCreate_(p, a) {
   const t = dbInsert_("Tenants", { organizationId: orgId, userId: u && dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(u.userId) && r.role === "TENANT" && r.status === "ACTIVE"; }) ? u.userId : "",
     fullName: reqText_(a.fullName, "Nom complet", 2, 120), email: email, phone: safeText_(a.phone, 30), nationality: safeText_(a.nationality, 60), idType: a.idType ? oneOf_(a.idType, idTypes_(), "Pièce") : "",
     status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
-  audit_("TENANT_CREATED", "Tenant", t.tenantId, orgId, {});
+  const idf = tenantIdentity_(Object.assign({}, a, { idType: undefined }), {});
+  if (Object.keys(idf).length) dbUpdate_("Tenants", t.tenantId, idf);
+  audit_("TENANT_CREATED", "Tenant", t.tenantId, orgId, { identity: Object.keys(idf) });
   return { ok: true, tenantId: t.tenantId, id: t.tenantId };
 }
 function tenantUpdate_(p, a) {
@@ -5258,6 +5294,8 @@ function tenantUpdate_(p, a) {
   if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
   if (a.nationality !== undefined) patch.nationality = safeText_(a.nationality, 60);
   if (a.status !== undefined) patch.status = oneOf_(a.status, ["ACTIVE", "INACTIVE"], "Statut");
+  tenantIdentity_(a, patch);
+  if (a.idDocumentId !== undefined) { if (a.idDocumentId) { const d = dbGet_("Documents", safeText_(a.idDocumentId, 120)); assert_(d && d.ownerType === "TENANT" && String(d.ownerId) === String(t.tenantId) && d.status === "ACTIVE", "Pièce d'identité non rattachée à ce locataire."); } patch.idDocumentId = safeText_(a.idDocumentId, 120); }
   dbUpdate_("Tenants", t.tenantId, patch);
   audit_("TENANT_UPDATED", "Tenant", t.tenantId, t.organizationId, { fields: Object.keys(patch) });
   return { ok: true };
@@ -9325,6 +9363,44 @@ function TEST_GROUPS_() {
         const g = T.call(O.tok, "lease.get", { leaseId: l.leaseId });
         T.eq(g.inspections.length, 2, "états des lieux listés sur le bail");
         T.fails(fx.tok.ownerB, "inspection.get", { inspectionId: x.inspectionId }, "FORBIDDEN");
+      }]
+    ] },
+    { name: "Tutoriel et intégration d'un locataire", tests: [
+      ["Tutoriel : terminé ou désactivé, mémorisé sur le compte, conservé par la mise à jour du profil", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        T.ok(!(T.call(O.tok, "me.get", {}).notifPrefs.tour), "aucun état au départ : le tutoriel s'affiche");
+        T.call(O.tok, "me.tour", { done: true });
+        T.eq(T.call(O.tok, "me.get", {}).notifPrefs.tour.done, true, "tutoriel terminé");
+        T.call(O.tok, "me.updateProfile", { notifPrefs: { email: false, mutedTypes: [] } });
+        const pr = T.call(O.tok, "me.get", {}).notifPrefs;
+        T.ok(pr.tour && pr.tour.done === true && pr.email === false, "préférences e-mail modifiées sans perdre l'état du tutoriel");
+        T.call(O.tok, "me.tour", { off: true });
+        T.eq(T.call(O.tok, "me.get", {}).notifPrefs.tour.off, true, "désactivé depuis le bouton en haut à droite");
+        T.call(O.tok, "me.tour", { off: false });
+        T.eq(T.call(O.tok, "me.get", {}).notifPrefs.tour.off, false, "réactivé");
+      }],
+      ["Locataire : identité complète, pièce d'identité jointe (sensible), contrat avec le numéro de pièce", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const prop = T.call(O.tok, "property.create", { organizationId: O.org.organizationId, name: "Studio Onboarding", city: "Marrakech", rentalMode: "LONG_TERM" }).propertyId;
+        T.fails(O.tok, "tenant.create", { propertyId: prop, fullName: "X Y", idNumber: "AB 12;34" }, "VALIDATION");
+        T.fails(O.tok, "tenant.create", { propertyId: prop, fullName: "X Y", birthDate: tDays_(3) }, "VALIDATION");
+        const t = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Youssef El Alaoui", email: fx.mail("youssef"), nationality: "Marocaine", idType: IMMO_EDITION_ === "FR" ? "CNI" : "CIN",
+          idNumber: "ab123456", idExpiry: "2030-01-01", birthDate: "1990-01-15", birthPlace: "Fès", address: "12 rue de la Liberté, Marrakech" });
+        const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        const d = T.call(O.tok, "doc.upload", { ownerType: "TENANT", ownerId: t.tenantId, category: "ID_DOCUMENT", mimeType: "image/png", fileName: "cnie.png", base64: png });
+        T.ok(bool_(dbGet_("Documents", d.documentId).sensitive) && !dbGet_("Documents", d.documentId).retainUntil, "pièce d'identité sensible, conservée pendant la location");
+        const other = T.call(fx.tok.ownerA, "tenant.create", { propertyId: fx.propA2, fullName: "Autre Locataire" });
+        T.fails(O.tok, "tenant.update", { tenantId: t.tenantId, idDocumentId: T.call(fx.tok.ownerA, "doc.upload", { ownerType: "TENANT", ownerId: other.tenantId, category: "ID_DOCUMENT", mimeType: "image/png", fileName: "x.png", base64: png }).documentId }, "VALIDATION");
+        T.call(O.tok, "tenant.update", { tenantId: t.tenantId, idDocumentId: d.documentId });
+        const row = T.call(O.tok, "tenant.list", {}).items.find(function (x) { return x.tenantId === t.tenantId; });
+        T.ok(row.idNumber === "AB123456" && row.birthDate === "1990-01-15" && row.idDocumentId === d.documentId && row.address, "identité enregistrée (numéro en majuscules)");
+        T.fails(fx.tok.ownerB, "doc.get", { documentId: d.documentId }, "FORBIDDEN");
+        const l = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: tDays_(2), monthlyRent: 4000, dueDay: 5 });
+        TEST_HOOKS_.aiConfig = false;
+        const dr = T.call(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LEASE_CONTRACT" });
+        const fin = T.call(O.tok, "leasedoc.finalize", { leaseDocId: dr.leaseDocId });
+        const html = Utilities.newBlob(Utilities.base64Decode(fin.base64)).getDataAsString();
+        T.ok(html.indexOf("AB123456") >= 0 && html.indexOf("15/01/1990") >= 0 && html.indexOf("Fès") >= 0, "numéro de pièce et naissance dans le contrat");
       }]
     ] },
     { name: "KPI et Pareto", tests: [

@@ -237,6 +237,18 @@ function meChangePassword_(p, a) {
   audit_("PASSWORD_CHANGED", "User", p.userId, "");
   return { ok: true };
 }
+/** Tutoriel de première connexion : terminé, ou désactivé / réactivé par l'utilisateur (bouton 🎓 en haut à droite). */
+function meTour_(p, a) {
+  if (p.impersonator) return { ok: true, skipped: true };
+  const u = dbGet_("Users", p.userId), prefs = parseJson_(u && u.notifPrefsJson, { email: true, mutedTypes: [] }) || {};
+  const tour = Object.assign({}, prefs.tour || {});
+  if (a.done !== undefined) tour.done = bool_(a.done);
+  if (a.off !== undefined) tour.off = bool_(a.off);
+  tour.at = nowIso_();
+  prefs.tour = tour;
+  dbUpdate_("Users", p.userId, { notifPrefsJson: prefs, updatedAt: nowIso_() });
+  return { ok: true, tour: tour };
+}
 function meUpdateProfile_(p, a) {
   const patch = { updatedAt: nowIso_() };
   if (a.displayName !== undefined) patch.displayName = reqText_(a.displayName, "Nom", 2, 100);
@@ -244,7 +256,8 @@ function meUpdateProfile_(p, a) {
   if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
   if (a.notifPrefs !== undefined) {
     const np = a.notifPrefs || {};
-    patch.notifPrefsJson = { email: np.email !== false, inApp: true, mutedTypes: Array.isArray(np.mutedTypes) ? np.mutedTypes.slice(0, 40).map(function (x) { return safeText_(x, 60); }) : [] };
+    const prev = parseJson_((dbGet_("Users", p.userId) || {}).notifPrefsJson, {}) || {};
+    patch.notifPrefsJson = { email: np.email !== false, inApp: true, mutedTypes: Array.isArray(np.mutedTypes) ? np.mutedTypes.slice(0, 40).map(function (x) { return safeText_(x, 60); }) : [], tour: prev.tour || undefined };
   }
   dbUpdate_("Users", p.userId, patch);
   audit_("PROFILE_UPDATED", "User", p.userId, "", { fields: Object.keys(patch) });

@@ -228,4 +228,19 @@ mark.legal-missing{background:#FFE58A;color:#3A2E00;padding:0 4px;border-radius:
 .imp-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:9px 28px;background:#B4432F;color:#fff;font-size:13.5px}
 .imp-banner .btn{background:#fff;color:#7a2416;border-color:#fff;font-weight:600}
 .imp-banner b{color:#fff}
+
+/* ---------- Tutoriel ---------- */
+.tour-btn{background:transparent;border:1px solid var(--line);border-radius:999px;width:36px;height:36px;font-size:17px;cursor:pointer;line-height:1}
+.tour{position:fixed;inset:0;z-index:9500;pointer-events:none}
+.tour-veil{position:fixed;inset:0;background:rgba(10,22,40,.55);pointer-events:auto}
+.tour-spot{position:fixed;border-radius:10px;box-shadow:0 0 0 9999px rgba(10,22,40,.55),0 0 0 3px #e9b341;transition:all .2s ease;pointer-events:none}
+.tour-bubble{position:fixed;background:var(--surface);color:var(--ink);border-radius:14px;padding:14px 16px;box-shadow:0 18px 50px rgba(0,0,0,.35);pointer-events:auto;transition:top .2s,left .2s}
+.tour-bubble h4{margin:2px 0 6px;font-size:16px}.tour-bubble p{margin:0 0 12px;font-size:14px;line-height:1.5}
+.tour-count{font-size:11px;color:var(--muted);font-weight:600}
+.tour-actions{display:flex;gap:6px;align-items:center}
+.tour-off{display:flex;gap:6px;align-items:center;margin-top:10px;color:var(--muted)}
+.tour-menu{position:fixed;z-index:9600;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.2);padding:6px;min-width:230px}
+.tour-menu button,.tour-menu label{display:flex;gap:8px;align-items:center;width:100%;padding:9px 10px;border:0;background:transparent;color:var(--ink);font:inherit;font-size:14px;text-align:start;cursor:pointer;border-radius:8px}
+.tour-menu button:hover,.tour-menu label:hover{background:var(--line)}
+body:has(.tour) #rb-fab .rb-hint{display:none}
 </style>

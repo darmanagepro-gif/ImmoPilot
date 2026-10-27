@@ -72,7 +72,7 @@ const App = window.App = {
   renderLogin: function (msg) { Public.login(msg); },
   enter: function () {
     if (!lstore("ip_lang") && S.me.locale) setLang(S.me.locale);
-    const show = function () { App.shell(); App.go(location.hash.replace(/^#/, "") || "dashboard"); };
+    const show = function () { App.shell(); App.go(location.hash.replace(/^#/, "") || "dashboard"); Tour.maybeStart(); };
     if (S.meta) { show(); return; }
     api("meta.get").then(function (m) { S.meta = m; show(); }).catch(showErr);
   },
@@ -98,7 +98,7 @@ const App = window.App = {
     const bell = h("button", { class: "bell", type: "button", "aria-label": t("Notifications"), onclick: function () { NAV_HASH.v = "notifications"; } }, "🔔", S.me.unreadNotifications ? h("span", { class: "dot" }, String(S.me.unreadNotifications)) : null);
     const top = h("header", { class: "topbar" }, h("button", { class: "menu-btn", type: "button", "aria-label": t("Menu"), onclick: function () {
       sidebar.classList.add("open"); document.body.appendChild(h("div", { class: "scrim", onclick: function (e) { sidebar.classList.remove("open"); e.target.remove(); } }));
-    } }, "☰"), h("h1", { id: "page-title" }, ""), h("div", { class: "spacer" }), themeButton(), langSel, bell,
+    } }, "☰"), h("h1", { id: "page-title" }, ""), h("div", { class: "spacer" }), Tour.button(), themeButton(), langSel, bell,
       h("button", { class: "user-chip", type: "button", onclick: function () { NAV_HASH.v = "settings"; } }, h("div", { class: "avatar" }, (S.me.displayName || "?").slice(0, 1).toUpperCase()), h("div", null, h("span", { class: "uname" }, S.me.displayName), h("small", null, roleTxt))));
     const imp = S.me.impersonator ? h("div", { class: "imp-banner", role: "status" },
       h("span", null, "👁 ", t("Vous êtes dans l'espace de"), " ", h("b", null, S.me.displayName), " (", S.me.email, ") — ", t("chaque action est enregistrée à votre nom") + " (" + S.me.impersonator.email + ")."),
@@ -437,6 +437,121 @@ PAGES.audit = function (el) {
 };
 
 /* =============================== Démarrage =============================== */
+
+/* =============================== Tutoriel de première connexion =============================== *
+ * Petites fenêtres qui présentent, menu par menu, ce que l'utilisateur peut faire selon son rôle. Affiché automatiquement à la
+ * première connexion ; bouton 🎓 en haut à droite pour le revoir ou le désactiver. Mémorisé sur le compte (me.tour) et sur l'appareil. */
+const TOUR_TEXT = {
+  dashboard: { M: "Vos indicateurs en temps réel : occupation, revenus, loyers impayés, alertes. Choisissez la période en haut de la page.", X: "Votre page d'accueil : ce qui vous attend aujourd'hui, en un coup d'œil." },
+  finance: { M: "Revenus, dépenses, impayés et rentabilité par bien. Export CSV pour votre comptable." },
+  properties: { M: "Vos biens : ajoutez-les (courte durée, longue durée ou mixte), avec photos, documents, consignes d'accès et équipes.", G: "Les biens dont vous avez la charge." },
+  calendar: { M: "Le calendrier de toutes les réservations ; bloquez des dates (travaux, séjour du propriétaire).", G: "Les arrivées et départs à venir, jour par jour." },
+  leases: { M: "Location longue durée : baux, échéancier, paiements. L'agent rédige le bail, les états des lieux et les courriers ; appels de loyer, relances et quittances partent tout seuls par e-mail." },
+  tenants: { M: "Vos locataires. « Intégrer un locataire » : scannez sa pièce d'identité, les informations se remplissent toutes seules, et le bail est créé en brouillon." },
+  agencies: { M: "Confiez un bien à une agence et choisissez précisément ses droits (réservations, opérations, finances). Retirez l'accès en un clic." },
+  reservations: { M: "Réservations courte durée : création, paiements et acomptes, fiche PDF, lien voyageur pour qu'il complète ses informations." },
+  guests: { M: "Les voyageurs et leurs pièces d'identité, supprimées automatiquement après le séjour." },
+  checkin: { M: "Arrivées et départs du jour : check-in et check-out avec photos et signature.", G: "Votre poste : les arrivées et départs du jour. Faites le check-in et le check-out avec la liste, les photos et la signature du voyageur." },
+  cleaning: { M: "Ménage : une mission est créée après chaque départ ; le prestataire a 2 heures pour accepter. Rapport avec photos avant / après.", C: "Vos missions de ménage : acceptez-les dans le délai, puis pièce par pièce cochez les tâches et ajoutez les photos avant / après. Signalez toute anomalie." },
+  incidents: { M: "Signalez une panne, demandez un devis à un artisan vérifié et suivez l'intervention jusqu'à la facture.", X: "Signalez ici une panne ou un problème, avec des photos : le gestionnaire est prévenu aussitôt." },
+  contractors: { M: "L'annuaire des prestataires vérifiés par ImmoPilot : ménage, plomberie, électricité, climatisation…" },
+  quotes: { M: "Les devis demandés aux artisans : acceptez ou refusez en un clic.", A: "Les demandes de devis : saisissez vos lignes, la TVA et le délai ; le client accepte en ligne." },
+  workorders: { M: "Les interventions en cours : planification, compte rendu, contrôle.", A: "Vos interventions : acceptez, planifiez, démarrez puis terminez avec compte rendu et photos." },
+  invoices: { M: "Les factures des artisans : approuvez-les puis enregistrez le paiement.", A: "Transmettez vos factures après chaque intervention et suivez leur paiement." },
+  mylease: { T: "Votre bail : échéances, quittances, documents (contrat, états des lieux). Transmettez un justificatif de paiement ou signalez un incident." },
+  notifications: { M: "Toutes vos notifications : retards, nouvelles missions, paiements, devis…" },
+  users: { M: "Invitez vos collaborateurs, gardiens et équipes ; chacun ne voit que ce qui le concerne." },
+  subscriptions: { M: "Votre abonnement, vos factures d'abonnement et votre contrat." },
+  settings: { M: "Votre profil (langue, mot de passe, notifications) et les réglages de votre organisation : horaires, annulation, envois automatiques au locataire…", X: "Votre profil : langue, mot de passe, préférences de notifications." },
+  accounts: { M: "Les comptes de vos clients : entrez dans leur espace pour les aider (chaque action est journalisée)." },
+  admin: { M: "Administration de la plateforme : organisations, diagnostic, erreurs, tâches planifiées, sauvegardes." }
+};
+const TOUR_ORDER = ["dashboard", "properties", "agencies", "calendar", "reservations", "guests", "checkin", "cleaning", "incidents", "contractors", "quotes", "workorders", "invoices", "leases", "tenants", "mylease", "finance", "users", "subscriptions", "accounts", "admin", "settings"];
+const Tour = window.Tour = {
+  key: function () { return "ip_tour_" + ((S.me && S.me.userId) || ""); },
+  local: function () { try { return JSON.parse(localStorage.getItem(Tour.key()) || "{}") || {}; } catch (e) { return {}; } },
+  pref: function () { const srv = (S.me && S.me.notifPrefs && S.me.notifPrefs.tour) || {}, loc = Tour.local(); return { off: loc.off !== undefined ? loc.off : !!srv.off, done: !!(srv.done || loc.done) }; },
+  save: function (patch) {
+    try { localStorage.setItem(Tour.key(), JSON.stringify(Object.assign(Tour.local(), patch))); } catch (e) { /* stockage indisponible */ }
+    S.me.notifPrefs = S.me.notifPrefs || {}; S.me.notifPrefs.tour = Object.assign({}, S.me.notifPrefs.tour || {}, patch);
+    if (!S.me.impersonator && !S.me.demoView) api("me.tour", patch).catch(function () {});
+  },
+  group: function () {
+    const roles = (S.me.roles || []).map(function (r) { return r.role; });
+    if (S.me.isSuper || roles.some(function (r) { return ["OWNER", "AGENCY_ADMIN", "AGENCY_USER"].indexOf(r) >= 0; })) return "M";
+    if (roles.indexOf("GUARD") >= 0) return "G"; if (roles.indexOf("CLEANER") >= 0) return "C"; if (roles.indexOf("ARTISAN") >= 0) return "A"; if (roles.indexOf("TENANT") >= 0) return "T"; return "M";
+  },
+  steps: function () {
+    const g = Tour.group(), out = [{ title: t("Bienvenue sur ImmoPilot") + (S.me.displayName ? ", " + S.me.displayName : "") + " !", text: t("Quelques petites fenêtres pour découvrir l'essentiel de votre espace. Vous pouvez passer à tout moment et revoir ce tutoriel avec le bouton 🎓 en haut à droite.") }];
+    TOUR_ORDER.forEach(function (r) {
+      const el = document.querySelector('.nav a[data-r="' + r + '"]'), tx = TOUR_TEXT[r]; if (!el || !tx) return;
+      const text = tx[g] || (g === "M" ? tx.M : tx.X) || (g !== "M" ? null : tx.M); if (!text) return;
+      out.push({ sel: '.nav a[data-r="' + r + '"]', title: t(TITLES[r] || r), text: t(text) });
+    });
+    if (document.querySelector(".topbar .bell")) out.push({ sel: ".topbar .bell", title: t("Notifications"), text: t("La cloche affiche vos alertes non lues. Réglez les e-mails dans Paramètres › Mon profil.") });
+    if (document.getElementById("rb-fab")) out.push({ sel: "#rb-fab", title: "Rubban", text: t("Votre assistant, disponible 24 h/24 : posez une question, il vous guide pas à pas et ouvre la bonne page.") });
+    out.push({ sel: ".topbar .tour-btn", title: t("Tutoriel"), text: t("Revoyez ce tutoriel quand vous voulez, ou désactivez-le, depuis ce bouton.") });
+    return out;
+  },
+  maybeStart: function () {
+    if (!S.me || S.me.impersonator) return;
+    const p = Tour.pref(); if (p.off || p.done) return;
+    setTimeout(function () { if (!document.querySelector(".modal-back")) Tour.start(); }, 900);
+  },
+  start: function () {
+    Tour.stop();
+    const steps = Tour.steps(); let i = 0;
+    const veil = h("div", { class: "tour-veil" }), spot = h("div", { class: "tour-spot" }), bub = h("div", { class: "tour-bubble", role: "dialog", "aria-live": "polite" });
+    const root = h("div", { class: "tour", id: "tour" }, veil, spot, bub);
+    document.body.appendChild(root);
+    const sidebar = document.querySelector(".sidebar"), narrow = function () { return window.innerWidth <= 860; };
+    const finish = function () { Tour.save({ done: true }); Tour.stop(); };
+    const draw = function () {
+      const st = steps[i], el = st.sel ? document.querySelector(st.sel) : null;
+      if (sidebar) sidebar.classList.toggle("open", !!(el && narrow() && sidebar.contains(el)));
+      clear(bub).appendChild(h("div", null,
+        h("div", { class: "tour-count" }, (i + 1) + " / " + steps.length), h("h4", null, st.title), h("p", null, st.text),
+        h("div", { class: "tour-actions" },
+          h("button", { type: "button", class: "btn sm ghost", onclick: finish }, t("Passer")), h("span", { style: { flex: "1" } }),
+          i > 0 ? h("button", { type: "button", class: "btn sm", onclick: function () { i--; draw(); } }, "← " + t("Précédent")) : null,
+          h("button", { type: "button", class: "btn sm primary", onclick: function () { if (i < steps.length - 1) { i++; draw(); } else finish(); } }, i < steps.length - 1 ? t("Suivant") + " →" : t("Terminer"))),
+        i === 0 ? h("label", { class: "tour-off small" }, h("input", { type: "checkbox", onchange: function (e) { Tour.save({ off: e.target.checked }); } }), " " + t("Ne plus afficher le tutoriel au démarrage")) : null));
+      setTimeout(function () {
+        const r = el ? el.getBoundingClientRect() : null, vw = window.innerWidth, vh = window.innerHeight, bw = Math.min(340, vw - 24);
+        bub.style.width = bw + "px";
+        if (!r || !r.width) { spot.style.display = "none"; veil.style.display = "block"; bub.style.left = Math.round((vw - bw) / 2) + "px"; bub.style.top = Math.round(vh * 0.22) + "px"; return; }
+        veil.style.display = "none"; spot.style.display = "block";
+        const pad = 6; spot.style.left = (r.left - pad) + "px"; spot.style.top = (r.top - pad) + "px"; spot.style.width = (r.width + pad * 2) + "px"; spot.style.height = (r.height + pad * 2) + "px";
+        const bh = bub.offsetHeight || 180;
+        let left = r.right + 14, top = r.top - 8;
+        if (left + bw > vw - 12) { left = Math.min(Math.max(12, r.left + r.width / 2 - bw / 2), vw - bw - 12); top = r.bottom + 14 + bh > vh ? r.top - bh - 14 : r.bottom + 14; }
+        bub.style.left = Math.round(left) + "px"; bub.style.top = Math.round(Math.max(12, Math.min(top, vh - bh - 12))) + "px";
+      }, narrow() ? 230 : 20);
+    };
+    Tour.onKey = function (e) { if (e.key === "Escape") finish(); if (e.key === "ArrowRight" && i < steps.length - 1) { i++; draw(); } if (e.key === "ArrowLeft" && i > 0) { i--; draw(); } };
+    Tour.onResize = function () { draw(); };
+    document.addEventListener("keydown", Tour.onKey); window.addEventListener("resize", Tour.onResize);
+    draw();
+  },
+  stop: function () {
+    const r = document.getElementById("tour"); if (r) r.remove();
+    const sb = document.querySelector(".sidebar"); if (sb && window.innerWidth <= 860 && !document.querySelector(".scrim")) sb.classList.remove("open");
+    if (Tour.onKey) document.removeEventListener("keydown", Tour.onKey); if (Tour.onResize) window.removeEventListener("resize", Tour.onResize);
+  },
+  /** Bouton 🎓 de la barre du haut : revoir le tutoriel, l'activer ou le désactiver au démarrage. */
+  button: function () {
+    return h("button", { type: "button", class: "tour-btn", title: t("Tutoriel"), "aria-label": t("Tutoriel"), onclick: function (ev) {
+      ev.stopPropagation();
+      const old = document.getElementById("tour-menu"); if (old) { old.remove(); return; }
+      const off = Tour.pref().off, r = ev.currentTarget.getBoundingClientRect();
+      const menu = h("div", { class: "tour-menu", id: "tour-menu", style: { top: (r.bottom + 6) + "px", right: Math.max(8, window.innerWidth - r.right) + "px" } },
+        h("button", { type: "button", onclick: function () { menu.remove(); Tour.start(); } }, "▶ " + t("Revoir le tutoriel")),
+        h("label", null, h("input", { type: "checkbox", checked: !off, onchange: function (e) { Tour.save({ off: !e.target.checked }); toast(e.target.checked ? t("Tutoriel activé au démarrage.") : t("Tutoriel désactivé : il ne s'affichera plus au démarrage."), "good"); } }), " " + t("Tutoriel au démarrage")));
+      document.body.appendChild(menu);
+      setTimeout(function () { document.addEventListener("click", function close(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener("click", close); } }); }, 0);
+    } }, "🎓");
+  }
+};
 document.addEventListener("DOMContentLoaded", function () { App.start(); });
 if (document.readyState !== "loading") App.start();
 </script>

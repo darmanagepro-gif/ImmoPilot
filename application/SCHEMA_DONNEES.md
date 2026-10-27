@@ -1,4 +1,4 @@
-# Schéma des données — ImmoPilot 2.2.0
+# Schéma des données — ImmoPilot 2.3.0
 
 Généré à partir de `TABLES_SRC` (Config.gs), qui est la source unique du schéma : la migration v1 (`schema_sync`) crée chaque onglet et **ajoute** les colonnes manquantes à droite, sans jamais supprimer ni renommer une colonne existante. Les colonnes sont lues par **nom d'en-tête**, pas par position : un onglet peut contenir des colonnes supplémentaires (héritées), elles sont conservées et ignorées.
 
@@ -969,6 +969,12 @@ Conventions communes à toutes les tables :
 | createdAt | horodatage ISO |  |
 | createdBy | texte |  |
 | updatedAt | horodatage ISO |  |
+| birthDate | date (AAAA-MM-JJ) |  |
+| birthPlace | texte |  |
+| idNumber | texte |  |
+| idExpiry | date (AAAA-MM-JJ) |  |
+| address | texte |  |
+| idDocumentId | texte |  |
 
 ## Leases
 

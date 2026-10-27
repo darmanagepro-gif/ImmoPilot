@@ -44,8 +44,8 @@ function cur_() { return edition_().currency; }
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
-  VERSION: "2.2.0",
-  SCHEMA_VERSION: 8,
+  VERSION: "2.3.0",
+  SCHEMA_VERSION: 9,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -226,7 +226,7 @@ var TABLES_SRC = {
     enums: { kind: ["RESERVATION", "DEPOSIT", "REFUND", "RENT", "INVOICE", "SUBSCRIPTION", "DEPOSIT_REFUND", "OTHER"], refType: ["RESERVATION", "RENT_SCHEDULE", "INVOICE", "SUBSCRIPTION", "LEASE", "EXPENSE"], direction: ["IN", "OUT"], status: ["RECORDED", "VOID"] },
     cols: "paymentId,organizationId,propertyId,kind,refType,refId,direction,amount#n,currency,method,paidAt#t,reference,proofDocId,status,reconciled#b,reconciledAt#t,reconciledBy,note,idempotencyKey,recordedBy,createdAt#t,voidedAt#t,voidedBy" },
   Tenants: { pk: "tenantId", idp: "tnt", org: "organizationId", req: "fullName", enums: { status: ["ACTIVE", "INACTIVE"] },
-    cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t" },
+    cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t|birthDate#d,birthPlace,idNumber,idExpiry#d,address,idDocumentId" },
   Leases: { pk: "leaseId", idp: "lea", org: "organizationId", req: "propertyId,tenantId,startDate,monthlyRent",
     enums: { status: ["DRAFT", "ACTIVE", "NOTICE", "ENDED", "RENEWED", "CANCELLED"] },
     cols: "leaseId,organizationId,propertyId,tenantId,startDate#d,endDate#d,durationMonths#n,monthlyRent#n,charges#n,deposit#n,dueDay#n,indexationRate#n,nextIndexationDate#d,terms,documentId,status,noticeDate#d,noticeBy,depositStatus,depositReturned#n,depositDeductions#n,renewedFromLeaseId,endReason,createdAt#t,createdBy,updatedAt#t,updatedBy|automationJson#j" },
