@@ -465,6 +465,7 @@ function demoHistory_(actorEmail, opts) {
   counts.Payments += rent.length; counts.Leases = 1; counts.RentSchedules = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(leaseId); }).length;
   demoAs_(sp);
   counts.extras = demoExtras_(sp, ownerOrg, agencyOrg, props, provU, start, today);
+  try { counts.longTerm = demoLongTerm_(); } catch (e) { counts.longTerm = "ERREUR : " + e.message; }
   audit_("DEMO_HISTORY_BUILT", "System", "demo-history", orgId, counts);
   return { ok: true, already: false, from: start, to: today, counts: counts };
 }
@@ -717,9 +718,53 @@ function demoPublicViews_() {
   const views = demoViewList_();
   return { views: views, ready: views.length > 0, note: views.length ? "" : "La démonstration n'est pas encore créée : exécutez creerEnvironnementDemo puis creerHistoriqueDemo dans l'éditeur." };
 }
+/**
+ * Location longue durée de démonstration (version 2.2) : envois automatiques activés pour le propriétaire de démonstration,
+ * historique d'appels de loyer, relances et quittance (PDF enregistrés, AUCUN e-mail envoyé), contrat rédigé par l'agent
+ * (modèle intégré) et état des lieux d'entrée validé. Idempotent : ne fait rien si le bail de démonstration a déjà ses documents.
+ */
+function demoLongTerm_() {
+  const owner = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === normalizeEmail_(DEMO_SPEC_.owner.email); });
+  if (!owner) return "pas de propriétaire de démonstration";
+  const p = buildPrincipal_(owner), orgIds = p.roles.filter(function (r) { return r.role === "OWNER"; }).map(function (r) { return String(r.organizationId); });
+  const l = dbAll_("Leases").filter(function (x) { return orgIds.indexOf(String(x.organizationId)) >= 0 && ["ACTIVE", "NOTICE"].indexOf(x.status) >= 0; })[0];
+  if (!l) return "pas de bail de démonstration";
+  if (dbAll_("LeaseDocs").some(function (d) { return String(d.leaseId) === String(l.leaseId); })) return "déjà créé";
+  const prev = CTX_.principal; demoAs_(p); RENT_MAIL_DRY_RUN_ = true;
+  try {
+    [["rent.autoCall", true], ["rent.autoReminders", true], ["rent.autoReceipt", true],
+     ["rent.paymentInstructions", "Virement bancaire au compte du bailleur (coordonnées de démonstration), en indiquant la référence de l'avis."]]
+      .forEach(function (x) { setSetting_(x[0], x[1], l.organizationId, owner.email); });
+    const t = dbGet_("Tenants", l.tenantId);
+    if (t && !t.email) dbUpdate_("Tenants", t.tenantId, { email: "locataire.demo@example.test", updatedAt: nowIso_() });
+    const prop = dbGet_("Properties", l.propertyId);
+    if (prop && !parseJson_(prop.roomsJson, []).length) dbUpdate_("Properties", prop.propertyId, { roomsJson: ["Entrée", "Séjour", "Cuisine", "Chambre", "Salle de bain"], updatedAt: nowIso_() });
+    const job = rentAutomationJob_({ force: true, batch: 30 });
+    const half = rentOpenSchedules_(l.leaseId).filter(function (s) { return s.paid > 0 && s.remaining > 0; })[0];
+    if (half) payRecord_(p, { refType: "RENT_SCHEDULE", refId: half.scheduleId, kind: "RENT", amount: half.remaining, method: "TRANSFER", reference: "Loyer " + half.period + " (solde)", note: "Donnée de démonstration" });
+    const d = leaseDocDraft_(p, { leaseId: l.leaseId, docType: "LEASE_CONTRACT", furnished: true, usage: "HABITATION", clauses: ["INSURANCE_REQUIRED", "SUBLET_FORBIDDEN", "NO_SMOKING"], useAi: false });
+    leaseDocFinalize_(p, { leaseDocId: d.leaseDocId });
+    const e = inspectionCreate_(p, { leaseId: l.leaseId, type: "ENTRY", inspectionDate: l.startDate });
+    e.rooms.forEach(function (r, ri) { r.items.forEach(function (i, ii) { i.condition = (ri + ii) % 6 === 2 ? "WORN" : "GOOD"; if (i.condition === "WORN" && i.name === "Murs") i.note = "Légères traces"; }); });
+    inspectionSave_(p, { inspectionId: e.inspectionId, rooms: e.rooms, meters: { electricity: "045812", water: "01337" }, keys: [{ label: "Clés de la porte d'entrée", count: 3 }, { label: "Badges ou télécommandes", count: 1 }],
+      attendees: "Le bailleur et le locataire" });
+    inspectionWrite_(p, { inspectionId: e.inspectionId, useAi: false });
+    inspectionFinalize_(p, { inspectionId: e.inspectionId });
+    return { mails: job, contract: d.leaseDocId, inspection: e.inspectionId };
+  } finally { RENT_MAIL_DRY_RUN_ = false; CTX_.principal = prev; }
+}
+/** Démo publique déjà en ligne : ajoute une fois la location longue durée 2.2 (sans bloquer l'entrée en cas d'erreur). */
+function demoEnsureLongTerm_() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    if (props.getProperty("IMMO_DEMO_LONGTERM") === "2.2") return;
+    withLock_(function () { if (props.getProperty("IMMO_DEMO_LONGTERM") === "2.2") return; demoLongTerm_(); props.setProperty("IMMO_DEMO_LONGTERM", "2.2"); }, 30000);
+  } catch (e) { console.error("Démo longue durée : " + e.message); }
+}
 function demoEnter_(a) {
   if (!IMMO_PUBLIC_DEMO_) throw new AppError("NOT_FOUND", "Fonction inconnue.");
   rateLimit_("demo-enter", 900, 3600);
+  demoEnsureLongTerm_();
   const v = DEMO_VIEWS_.find(function (x) { return x.id === String(a && a.view || ""); });
   assert_(v, "Vue inconnue.");
   const x = demoViewUser_(v);

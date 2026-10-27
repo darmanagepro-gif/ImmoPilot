@@ -11,6 +11,7 @@
 - IA facultative (IMMO_AI_PROVIDER, IMMO_AI_API_KEY, modèle IMMO_AI_DOC_MODEL facultatif) : aucune donnée d'identité (nom, e-mail, téléphone, adresse, pièce d'identité) n'est transmise ; le serveur remplace ensuite les marqueurs [BAILLEUR], [LOCATAIRE], [ADRESSE_DU_BIEN]. Sans IA ou en cas d'erreur : modèles intégrés Maroc (loi 67-12) et France (loi 89-462).
 - États des lieux : pièces et éléments pré-remplis selon le bien (cuisine, salle de bain, chambres, extérieur, inventaire du mobilier si meublé), état et observation par élément, photos par pièce, compteurs, clés ; saisie adaptée au téléphone ; la sortie reprend l'état d'entrée et liste les écarts (dégradations, sans chiffrage automatique des retenues).
 - E-mails : pièces jointes, copie cachée et adresse de réponse (Apps Script et serveur dédié : colonnes ajoutées sans perte à la file d'envoi).
+- Édition France et démo France mises à jour (paquets dist-fr et dist-fr-demo) : modèles de bail et courriers selon la loi n° 89-462. Démonstrations : location longue durée prête à consulter (historique d'envois, contrat, état des lieux) créée sans envoyer d'e-mail ; la démo France publique la complète automatiquement à la première visite. Les organisations de démonstration ne reçoivent jamais d'envoi automatique réel.
 - Nouvelles tables RentMailings, LeaseDocs, LeaseInspections et colonne Leases.automationJson (migration additive, schéma 8). 6 nouveaux tests (97 au total), aide Rubban et traductions dans les 6 langues.
 
 ## 2.1.0 — 19 octobre 2026 — ImmoPilot France et serveur dédié

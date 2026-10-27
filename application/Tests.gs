@@ -579,6 +579,14 @@ function TEST_GROUPS_() {
         const h = demoHistory_(fx.users.superA.email);
         T.ok(!h.already && h.counts.Reservations >= 40 && h.counts.CleaningMissions >= 25 && h.counts.Invoices >= 9 && h.counts.RentSchedules === 12, "volumes : " + JSON.stringify(h.counts));
         T.ok(demoHistory_(fx.users.superA.email).already, "deuxième exécution : rien n'est ajouté");
+        // Location longue durée 2.2 : documents et journal d'envois créés, aucun e-mail réellement envoyé, idempotent.
+        T.ok(h.counts.longTerm && h.counts.longTerm.contract && h.counts.longTerm.inspection, "longue durée de démonstration : " + JSON.stringify(h.counts.longTerm));
+        const dl = dbAll_("Leases").filter(function (x) { return dbAll_("LeaseDocs").some(function (d) { return d.leaseId === x.leaseId && d.status === "FINAL"; }); })[0];
+        T.ok(dl && rentMailingsOf_(dl.leaseId).some(function (m) { return m.status === "SENT"; }), "historique d'envois de démonstration");
+        T.eq(TEST_HOOKS_.mailSink.filter(function (m) { return m.to === "locataire.demo@example.test"; }).length, 0, "aucun e-mail envoyé au locataire fictif");
+        T.eq(demoLongTerm_(), "déjà créé", "pas de doublon");
+        const mb = TEST_HOOKS_.mailSink.length; rentAutomationJob_({ batch: 50, force: false });
+        T.eq(TEST_HOOKS_.mailSink.filter(function (m, i) { return i >= mb && m.to === "locataire.demo@example.test"; }).length, 0, "tâche planifiée : aucun envoi pour une organisation de démonstration");
         const props = dbAll_("Properties").filter(function (p) { return /^DÉMO – /.test(p.name); });
         T.ok(props.every(function (p) { return p.currency === cur_(); }) && props.some(function (p) { return Number(p.nightlyPrice) === demoNightly_({ eur: 120 }); }), "prix dans la devise de l'édition (120 €)");
         const ids = props.map(function (p) { return p.propertyId; });

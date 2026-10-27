@@ -1636,7 +1636,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "89a355430dc0";
+var IMMO_BUILD_ = "a9327b6245e9";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -3120,6 +3120,7 @@ function demoHistory_(actorEmail, opts) {
   counts.Payments += rent.length; counts.Leases = 1; counts.RentSchedules = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(leaseId); }).length;
   demoAs_(sp);
   counts.extras = demoExtras_(sp, ownerOrg, agencyOrg, props, provU, start, today);
+  try { counts.longTerm = demoLongTerm_(); } catch (e) { counts.longTerm = "ERREUR : " + e.message; }
   audit_("DEMO_HISTORY_BUILT", "System", "demo-history", orgId, counts);
   return { ok: true, already: false, from: start, to: today, counts: counts };
 }
@@ -3372,9 +3373,53 @@ function demoPublicViews_() {
   const views = demoViewList_();
   return { views: views, ready: views.length > 0, note: views.length ? "" : "La démonstration n'est pas encore créée : exécutez creerEnvironnementDemo puis creerHistoriqueDemo dans l'éditeur." };
 }
+/**
+ * Location longue durée de démonstration (version 2.2) : envois automatiques activés pour le propriétaire de démonstration,
+ * historique d'appels de loyer, relances et quittance (PDF enregistrés, AUCUN e-mail envoyé), contrat rédigé par l'agent
+ * (modèle intégré) et état des lieux d'entrée validé. Idempotent : ne fait rien si le bail de démonstration a déjà ses documents.
+ */
+function demoLongTerm_() {
+  const owner = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === normalizeEmail_(DEMO_SPEC_.owner.email); });
+  if (!owner) return "pas de propriétaire de démonstration";
+  const p = buildPrincipal_(owner), orgIds = p.roles.filter(function (r) { return r.role === "OWNER"; }).map(function (r) { return String(r.organizationId); });
+  const l = dbAll_("Leases").filter(function (x) { return orgIds.indexOf(String(x.organizationId)) >= 0 && ["ACTIVE", "NOTICE"].indexOf(x.status) >= 0; })[0];
+  if (!l) return "pas de bail de démonstration";
+  if (dbAll_("LeaseDocs").some(function (d) { return String(d.leaseId) === String(l.leaseId); })) return "déjà créé";
+  const prev = CTX_.principal; demoAs_(p); RENT_MAIL_DRY_RUN_ = true;
+  try {
+    [["rent.autoCall", true], ["rent.autoReminders", true], ["rent.autoReceipt", true],
+     ["rent.paymentInstructions", "Virement bancaire au compte du bailleur (coordonnées de démonstration), en indiquant la référence de l'avis."]]
+      .forEach(function (x) { setSetting_(x[0], x[1], l.organizationId, owner.email); });
+    const t = dbGet_("Tenants", l.tenantId);
+    if (t && !t.email) dbUpdate_("Tenants", t.tenantId, { email: "locataire.demo@example.test", updatedAt: nowIso_() });
+    const prop = dbGet_("Properties", l.propertyId);
+    if (prop && !parseJson_(prop.roomsJson, []).length) dbUpdate_("Properties", prop.propertyId, { roomsJson: ["Entrée", "Séjour", "Cuisine", "Chambre", "Salle de bain"], updatedAt: nowIso_() });
+    const job = rentAutomationJob_({ force: true, batch: 30 });
+    const half = rentOpenSchedules_(l.leaseId).filter(function (s) { return s.paid > 0 && s.remaining > 0; })[0];
+    if (half) payRecord_(p, { refType: "RENT_SCHEDULE", refId: half.scheduleId, kind: "RENT", amount: half.remaining, method: "TRANSFER", reference: "Loyer " + half.period + " (solde)", note: "Donnée de démonstration" });
+    const d = leaseDocDraft_(p, { leaseId: l.leaseId, docType: "LEASE_CONTRACT", furnished: true, usage: "HABITATION", clauses: ["INSURANCE_REQUIRED", "SUBLET_FORBIDDEN", "NO_SMOKING"], useAi: false });
+    leaseDocFinalize_(p, { leaseDocId: d.leaseDocId });
+    const e = inspectionCreate_(p, { leaseId: l.leaseId, type: "ENTRY", inspectionDate: l.startDate });
+    e.rooms.forEach(function (r, ri) { r.items.forEach(function (i, ii) { i.condition = (ri + ii) % 6 === 2 ? "WORN" : "GOOD"; if (i.condition === "WORN" && i.name === "Murs") i.note = "Légères traces"; }); });
+    inspectionSave_(p, { inspectionId: e.inspectionId, rooms: e.rooms, meters: { electricity: "045812", water: "01337" }, keys: [{ label: "Clés de la porte d'entrée", count: 3 }, { label: "Badges ou télécommandes", count: 1 }],
+      attendees: "Le bailleur et le locataire" });
+    inspectionWrite_(p, { inspectionId: e.inspectionId, useAi: false });
+    inspectionFinalize_(p, { inspectionId: e.inspectionId });
+    return { mails: job, contract: d.leaseDocId, inspection: e.inspectionId };
+  } finally { RENT_MAIL_DRY_RUN_ = false; CTX_.principal = prev; }
+}
+/** Démo publique déjà en ligne : ajoute une fois la location longue durée 2.2 (sans bloquer l'entrée en cas d'erreur). */
+function demoEnsureLongTerm_() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    if (props.getProperty("IMMO_DEMO_LONGTERM") === "2.2") return;
+    withLock_(function () { if (props.getProperty("IMMO_DEMO_LONGTERM") === "2.2") return; demoLongTerm_(); props.setProperty("IMMO_DEMO_LONGTERM", "2.2"); }, 30000);
+  } catch (e) { console.error("Démo longue durée : " + e.message); }
+}
 function demoEnter_(a) {
   if (!IMMO_PUBLIC_DEMO_) throw new AppError("NOT_FOUND", "Fonction inconnue.");
   rateLimit_("demo-enter", 900, 3600);
+  demoEnsureLongTerm_();
   const v = DEMO_VIEWS_.find(function (x) { return x.id === String(a && a.view || ""); });
   assert_(v, "Vue inconnue.");
   const x = demoViewUser_(v);
@@ -6974,6 +7019,8 @@ function propertyStaffRevoke_(p, a) {
  *  - Une échéance n'est jamais considérée payée sans paiement enregistré (voir LeaseService.gs).
  */
 var RENT_MAIL_BATCH_ = 12, RENT_MAIL_HOURS_ = [8, 20], RENT_MAIL_MAX_ATTEMPTS_ = 3;
+/** Construction des données de démonstration uniquement : documents et journal créés, AUCUN e-mail réellement envoyé. */
+var RENT_MAIL_DRY_RUN_ = false;
 var RENT_REMINDER_TITLES_ = ["Rappel de loyer", "Relance pour loyer impayé", "Dernière relance avant procédure"];
 
 /** Jours de relance : entiers de 1 à 120, sans doublon, triés, 5 au plus. */
@@ -7008,7 +7055,8 @@ function rentCtx_(leaseOrId) {
   return { l: l, prop: prop, t: t, org: org, cfg: rentAutoCfg_(l) };
 }
 function rentIssuer_(org) {
-  return { name: org.name || "Bailleur", lines: [org.address, [org.city].filter(String).join(" "), org.phone ? "Tél. " + org.phone : "", org.billingEmail || ""].filter(function (x) { return x; }) };
+  // Organisation de démonstration : aucune adresse e-mail réelle sur les documents consultables publiquement.
+  return { name: org.name || "Bailleur", lines: [org.address, [org.city].filter(String).join(" "), org.phone ? "Tél. " + org.phone : "", bool_(org.isDemo) ? "" : (org.billingEmail || "")].filter(function (x) { return x; }) };
 }
 function rentAddress_(prop) { return [prop.address, prop.building, prop.doorNumber ? "porte " + prop.doorNumber : "", prop.city].filter(function (x) { return x; }).join(", "); }
 function rentPeriodLabel_(s) {
@@ -7136,7 +7184,8 @@ function rentDeliver_(o) {
   } catch (e) { error = "Document : " + String(e.message || e).slice(0, 250); }
   const txt = typeof o.mail === "function" ? o.mail() : o.mail;
   let res = { ok: false, error: error };
-  if (!error) res = sendMailSafe_(to, txt.subject, txt.body, "rentmail:" + base.uniqueKey + ":" + (prev ? num_(prev.attempts) + 1 : 1), c.l.organizationId,
+  if (!error && RENT_MAIL_DRY_RUN_) res = { ok: true };
+  else if (!error) res = sendMailSafe_(to, txt.subject, txt.body, "rentmail:" + base.uniqueKey + ":" + (prev ? num_(prev.attempts) + 1 : 1), c.l.organizationId,
     { attachments: [blob], bcc: c.cfg.copyEmail || "", replyTo: c.org.billingEmail || "", senderName: c.org.name || IMMO_CONFIG.APP_NAME, plain: true });
   const patch = { status: res.ok ? "SENT" : "FAILED", sentAt: res.ok ? nowIso_() : "", error: res.ok ? "" : String(res.error || error).slice(0, 300), documentId: docId, subject: safeText_(txt.subject, 200) };
   let row;
@@ -7203,6 +7252,8 @@ function rentAutomationJob_(opts) {
   for (let i = 0; i < leases.length && quotaOk(); i++) {
     const l = leases[i], cfg = rentAutoCfg_(l);
     if (!cfg.leaseEnabled || !(cfg.call || cfg.reminders)) continue;
+    // Organisations de démonstration : jamais d'envoi automatique réel (adresses fictives).
+    if (!opts.force && bool_((dbGet_("Organizations", l.organizationId) || {}).isDemo)) continue;
     let c = null; const ctx = function () { return c || (c = rentCtx_(l)); };
     if (!String((dbGet_("Tenants", l.tenantId) || {}).email || "").trim()) {
       // Sans e-mail du locataire : rien n'est envoyé ; les gestionnaires sont prévenus une seule fois.
@@ -8663,6 +8714,14 @@ function TEST_GROUPS_() {
         const h = demoHistory_(fx.users.superA.email);
         T.ok(!h.already && h.counts.Reservations >= 40 && h.counts.CleaningMissions >= 25 && h.counts.Invoices >= 9 && h.counts.RentSchedules === 12, "volumes : " + JSON.stringify(h.counts));
         T.ok(demoHistory_(fx.users.superA.email).already, "deuxième exécution : rien n'est ajouté");
+        // Location longue durée 2.2 : documents et journal d'envois créés, aucun e-mail réellement envoyé, idempotent.
+        T.ok(h.counts.longTerm && h.counts.longTerm.contract && h.counts.longTerm.inspection, "longue durée de démonstration : " + JSON.stringify(h.counts.longTerm));
+        const dl = dbAll_("Leases").filter(function (x) { return dbAll_("LeaseDocs").some(function (d) { return d.leaseId === x.leaseId && d.status === "FINAL"; }); })[0];
+        T.ok(dl && rentMailingsOf_(dl.leaseId).some(function (m) { return m.status === "SENT"; }), "historique d'envois de démonstration");
+        T.eq(TEST_HOOKS_.mailSink.filter(function (m) { return m.to === "locataire.demo@example.test"; }).length, 0, "aucun e-mail envoyé au locataire fictif");
+        T.eq(demoLongTerm_(), "déjà créé", "pas de doublon");
+        const mb = TEST_HOOKS_.mailSink.length; rentAutomationJob_({ batch: 50, force: false });
+        T.eq(TEST_HOOKS_.mailSink.filter(function (m, i) { return i >= mb && m.to === "locataire.demo@example.test"; }).length, 0, "tâche planifiée : aucun envoi pour une organisation de démonstration");
         const props = dbAll_("Properties").filter(function (p) { return /^DÉMO – /.test(p.name); });
         T.ok(props.every(function (p) { return p.currency === cur_(); }) && props.some(function (p) { return Number(p.nightlyPrice) === demoNightly_({ eur: 120 }); }), "prix dans la devise de l'édition (120 €)");
         const ids = props.map(function (p) { return p.propertyId; });

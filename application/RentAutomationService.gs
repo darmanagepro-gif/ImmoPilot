@@ -13,6 +13,8 @@
  *  - Une échéance n'est jamais considérée payée sans paiement enregistré (voir LeaseService.gs).
  */
 var RENT_MAIL_BATCH_ = 12, RENT_MAIL_HOURS_ = [8, 20], RENT_MAIL_MAX_ATTEMPTS_ = 3;
+/** Construction des données de démonstration uniquement : documents et journal créés, AUCUN e-mail réellement envoyé. */
+var RENT_MAIL_DRY_RUN_ = false;
 var RENT_REMINDER_TITLES_ = ["Rappel de loyer", "Relance pour loyer impayé", "Dernière relance avant procédure"];
 
 /** Jours de relance : entiers de 1 à 120, sans doublon, triés, 5 au plus. */
@@ -47,7 +49,8 @@ function rentCtx_(leaseOrId) {
   return { l: l, prop: prop, t: t, org: org, cfg: rentAutoCfg_(l) };
 }
 function rentIssuer_(org) {
-  return { name: org.name || "Bailleur", lines: [org.address, [org.city].filter(String).join(" "), org.phone ? "Tél. " + org.phone : "", org.billingEmail || ""].filter(function (x) { return x; }) };
+  // Organisation de démonstration : aucune adresse e-mail réelle sur les documents consultables publiquement.
+  return { name: org.name || "Bailleur", lines: [org.address, [org.city].filter(String).join(" "), org.phone ? "Tél. " + org.phone : "", bool_(org.isDemo) ? "" : (org.billingEmail || "")].filter(function (x) { return x; }) };
 }
 function rentAddress_(prop) { return [prop.address, prop.building, prop.doorNumber ? "porte " + prop.doorNumber : "", prop.city].filter(function (x) { return x; }).join(", "); }
 function rentPeriodLabel_(s) {
@@ -175,7 +178,8 @@ function rentDeliver_(o) {
   } catch (e) { error = "Document : " + String(e.message || e).slice(0, 250); }
   const txt = typeof o.mail === "function" ? o.mail() : o.mail;
   let res = { ok: false, error: error };
-  if (!error) res = sendMailSafe_(to, txt.subject, txt.body, "rentmail:" + base.uniqueKey + ":" + (prev ? num_(prev.attempts) + 1 : 1), c.l.organizationId,
+  if (!error && RENT_MAIL_DRY_RUN_) res = { ok: true };
+  else if (!error) res = sendMailSafe_(to, txt.subject, txt.body, "rentmail:" + base.uniqueKey + ":" + (prev ? num_(prev.attempts) + 1 : 1), c.l.organizationId,
     { attachments: [blob], bcc: c.cfg.copyEmail || "", replyTo: c.org.billingEmail || "", senderName: c.org.name || IMMO_CONFIG.APP_NAME, plain: true });
   const patch = { status: res.ok ? "SENT" : "FAILED", sentAt: res.ok ? nowIso_() : "", error: res.ok ? "" : String(res.error || error).slice(0, 300), documentId: docId, subject: safeText_(txt.subject, 200) };
   let row;
@@ -242,6 +246,8 @@ function rentAutomationJob_(opts) {
   for (let i = 0; i < leases.length && quotaOk(); i++) {
     const l = leases[i], cfg = rentAutoCfg_(l);
     if (!cfg.leaseEnabled || !(cfg.call || cfg.reminders)) continue;
+    // Organisations de démonstration : jamais d'envoi automatique réel (adresses fictives).
+    if (!opts.force && bool_((dbGet_("Organizations", l.organizationId) || {}).isDemo)) continue;
     let c = null; const ctx = function () { return c || (c = rentCtx_(l)); };
     if (!String((dbGet_("Tenants", l.tenantId) || {}).email || "").trim()) {
       // Sans e-mail du locataire : rien n'est envoyé ; les gestionnaires sont prévenus une seule fois.
