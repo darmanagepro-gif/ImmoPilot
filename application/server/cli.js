@@ -8,6 +8,8 @@
  *                                           viderCache, backupNow, mettreDemoEnVeille, reveillerDemo, testerAssistantIA
  *   node cli.js set <PROPRIETE> <valeur>    ex. IMMO_AI_PROVIDER anthropic | IMMO_AI_API_KEY … | IMMO_ADMIN_EMAILS a@b.fr
  *   node cli.js mails                       état de la file d'envoi des e-mails
+ *   node cli.js encrypt-data                chiffre au repos tout ce qui est encore en clair (exige DATA_KEY_FILE ; faites d'abord une sauvegarde)
+ *   node cli.js verify-data                 contrôle : tout se déchiffre-t-il, reste-t-il du clair ?
  */
 "use strict";
 const http = require("http");
@@ -39,6 +41,8 @@ function print(r) {
     if (cmd === "setup") return print(await call({ fn: "setupProject", args: [] }));
     if (cmd === "run" && rest[0]) return print(await call({ fn: rest[0], args: rest.slice(1) }));
     if (cmd === "set" && rest[0]) return print(await call({ fn: "setProperty", key: rest[0], value: rest.slice(1).join(" ") }));
+    if (cmd === "encrypt-data") return print(await call({ fn: "encryptData" }));
+    if (cmd === "verify-data") { const r = await call({ fn: "verifyData" }); print(r); if (r.ok && r.result && !r.result.ok) process.exitCode = 2; return; }
     if (cmd === "mails") {
       const { DatabaseSync } = require("node:sqlite");
       const db = new DatabaseSync(require("path").join(C.dataDir, "immopilot.db"), { readOnly: true });

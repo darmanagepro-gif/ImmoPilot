@@ -26,6 +26,7 @@ function config() {
     bundleDir: E.BUNDLE_DIR ? path.resolve(E.BUNDLE_DIR) : path.join(root, edition === "ma" ? "dist" : "dist-" + edition),
     editionsDir: path.join(root, "editions"),
     dataDir: path.resolve(E.DATA_DIR || "/var/lib/immopilot"),
+    dataKeyFile: E.DATA_KEY_FILE ? path.resolve(E.DATA_KEY_FILE) : "", // chiffrement au repos (facultatif) : fichier contenant 32 octets en base64 ou en hexadécimal
     host: E.HOST || "127.0.0.1", port: Number(E.PORT || 8080),
     adminEmail: String(E.ADMIN_EMAIL || "").trim().toLowerCase(), adminToken: E.ADMIN_TOKEN || "",
     smtpHost: E.SMTP_HOST || "", smtpPort: Number(E.SMTP_PORT || 587), smtpSecure: /^(1|true|yes)$/i.test(E.SMTP_SECURE || ""), smtpUser: E.SMTP_USER || "", smtpPass: E.SMTP_PASS || "",
@@ -34,4 +35,13 @@ function config() {
     maxBody: Number(E.MAX_BODY_MB || 12) * 1024 * 1024, ratePerSec: Number(E.RATE_PER_SEC || 15), rateBurst: Number(E.RATE_BURST || 60)
   };
 }
-module.exports = { loadEnv: loadEnv, config: config };
+/** Lit la clé de chiffrement au repos. Fichier indiqué mais illisible ou invalide = arrêt (jamais de repli silencieux vers le clair). */
+function loadDataKey(file) {
+  if (!file) return null;
+  let raw; try { raw = fs.readFileSync(file, "utf8").trim(); } catch (e) { throw new Error("DATA_KEY_FILE illisible (" + file + ") : " + e.message); }
+  const key = /^[0-9a-fA-F]{64}$/.test(raw) ? Buffer.from(raw, "hex") : Buffer.from(raw, "base64");
+  if (key.length !== 32) throw new Error("DATA_KEY_FILE : la clé doit faire 32 octets (44 caractères en base64 ou 64 en hexadécimal).");
+  try { if (fs.statSync(file).mode & 0o007) console.warn("Attention : " + file + " est lisible par tout le monde (chmod 0640 root:immopilot recommandé)."); } catch (e) { /* sans importance */ }
+  return key;
+}
+module.exports = { loadEnv: loadEnv, config: config, loadDataKey: loadDataKey };

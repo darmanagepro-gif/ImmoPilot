@@ -1,6 +1,6 @@
 {
   "name": "immopilot-server",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "ImmoPilot sur serveur dédié (VPS) : même code que la version Google Apps Script, données SQLite, e-mails SMTP, PDF Chromium.",
   "main": "server.js",

@@ -1,5 +1,12 @@
 # Journal des modifications
 
+## Serveur dédié 2.1.0 — 31 octobre 2026 — chiffrement au repos
+
+- Chiffrement AES-256-GCM facultatif des données sur le serveur : lignes de la base (dont numéros de pièces d'identité), scans de CIN / CNI / passeports et tous les fichiers, propriétés sensibles (clé IA), pièces jointes et corps des e-mails en file. Activé par `DATA_KEY_FILE` ; sans ce réglage, rien ne change.
+- Migration en une commande (`encrypt-data`), contrôle (`verify-data`) et script `server/deploy/encrypt-at-rest.sh` (sauvegarde, clé, activation, migration, vérification).
+- Chaque valeur a son IV et une donnée associée (ligne, propriété, fichier) : une valeur déplacée ou altérée est détectée. Données chiffrées sans clé = erreur franche, jamais de lecture vide.
+- Le code applicatif (Apps Script) n'est pas modifié. Tests : `server/crypto-test.js` (17 contrôles) ; suite complète rejouée avec `SMOKE_ENCRYPT=1` (mêmes résultats qu'en clair).
+
 ## 2.3.1 — 27 octobre 2026 — pièce d'identité recto / verso, galerie et fichiers
 
 - Pièce d'identité du locataire : recto ET verso, chacun pris en photo ou choisi dans la galerie / les fichiers (téléphone ou ordinateur), photo ou PDF (un PDF de 2 pages = recto et verso).

@@ -9,7 +9,7 @@
 "use strict";
 process.removeAllListeners("warning"); // avertissement « SQLite expérimental » de Node 22
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
-const { loadEnv, config } = require("./config");
+const { loadEnv, config, loadDataKey } = require("./config");
 loadEnv();
 const C = config();
 const { createRuntime } = require("./gas-runtime");
@@ -17,7 +17,7 @@ const { createRuntime } = require("./gas-runtime");
 let nodemailer = null;
 try { nodemailer = require("nodemailer"); } catch (e) { nodemailer = null; }
 
-const rt = createRuntime({ dataDir: C.dataDir, bundleDir: C.bundleDir, publicUrl: C.publicUrl, adminEmail: C.adminEmail, chromium: C.chromium, mailDailyQuota: C.mailDailyQuota,
+const rt = createRuntime({ dataKey: loadDataKey(C.dataKeyFile), dataDir: C.dataDir, bundleDir: C.bundleDir, publicUrl: C.publicUrl, adminEmail: C.adminEmail, chromium: C.chromium, mailDailyQuota: C.mailDailyQuota,
   appName: "ImmoPilot", timezone: "UTC", onMail: function () { setTimeout(mailTick, 200); } });
 const TZ = rt.ctx.IMMO_CONFIG.TIMEZONE, EDITION = rt.ctx.IMMO_EDITION_;
 
@@ -137,6 +137,10 @@ const server = http.createServer(async function (req, res) {
           rt.commit();
           return send(res, 200, "application/json; charset=utf-8", JSON.stringify({ ok: true, key: body.key }));
         }
+        if (body.fn === "encryptData" || body.fn === "verifyData") { // chiffrement au repos (voir DEPLOIEMENT / deploy/encrypt-at-rest.sh)
+          const r = body.fn === "encryptData" ? rt.encryptAll() : rt.verifyData();
+          return send(res, 200, "application/json; charset=utf-8", JSON.stringify({ ok: true, result: r, logs: [] }));
+        }
         if (ADMIN_FUNCTIONS.indexOf(body.fn) < 0) return send(res, 400, "text/plain; charset=utf-8", "Fonction non autorisée.");
         const out = rt.call(body.fn, body.args || [], true);
         return send(res, 200, "application/json; charset=utf-8", JSON.stringify({ ok: true, result: out === undefined ? null : out, logs: rt.state.logs }));
@@ -177,6 +181,7 @@ async function mailTick() {
     const rows = rt.db.prepare("SELECT * FROM outbox WHERE status = 'QUEUED' AND (next IS NULL OR next <= ?) ORDER BY id LIMIT 20").all(now);
     for (const m of rows) {
       try {
+        m.body = rt.vault.untext(m.body, "mail:body"); m.html = rt.vault.untext(m.html, "mail:html"); m.attachments = rt.vault.untext(m.attachments, "mail:att");
         let attachments; try { attachments = m.attachments ? JSON.parse(m.attachments).map(function (a) { return { filename: a.name, contentType: a.type, content: Buffer.from(a.base64, "base64") }; }) : undefined; } catch (e) { attachments = undefined; }
         await transport.sendMail({ from: { name: m.sender || "ImmoPilot", address: C.mailFrom }, to: m.recipient, bcc: m.bcc || undefined, replyTo: m.replyto || undefined,
           subject: m.subject, text: m.body, html: m.html || undefined, attachments: attachments });

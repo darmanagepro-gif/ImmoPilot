@@ -23,7 +23,38 @@ const DATE_KEY = "$d";
 function encodeRow(row) { return JSON.stringify(row.map(function (v) { return v instanceof Date ? { [DATE_KEY]: v.toISOString() } : v; })); }
 function decodeRow(s) { return JSON.parse(s).map(function (v) { return v && typeof v === "object" && v[DATE_KEY] ? new Date(v[DATE_KEY]) : v; }); }
 
+/**
+ * Chiffrement au repos FACULTATIF (AES-256-GCM) : actif seulement si une clé de 32 octets est fournie (opts.dataKey, lue par
+ * server.js dans DATA_KEY_FILE). Sans clé, rien ne change. Chaque valeur a son propre IV aléatoire et une donnée associée
+ * (ligne, propriété, fichier, e-mail) : une valeur recopiée ailleurs ne se déchiffre pas. Les données déjà en clair restent lisibles
+ * jusqu'à la migration (commande encrypt-data) ; des données chiffrées SANS clé provoquent une erreur franche (jamais de lecture vide).
+ */
+const ENC_TAG = "enc1:", FILE_MAGIC = Buffer.from("IMMOENC1");
+function makeVault(key) {
+  const on = Buffer.isBuffer(key) && key.length === 32;
+  function seal(buf, aad) { const iv = crypto.randomBytes(12), c = crypto.createCipheriv("aes-256-gcm", key, iv); c.setAAD(Buffer.from(aad, "utf8")); const ct = Buffer.concat([c.update(buf), c.final()]); return Buffer.concat([iv, c.getAuthTag(), ct]); }
+  function open(blob, aad) {
+    if (!on) throw new Error("Données chiffrées : clé de chiffrement manquante (DATA_KEY_FILE).");
+    if (blob.length < 28) throw new Error("Donnée chiffrée tronquée (" + aad + ").");
+    const d = crypto.createDecipheriv("aes-256-gcm", key, blob.subarray(0, 12)); d.setAuthTag(blob.subarray(12, 28)); d.setAAD(Buffer.from(aad, "utf8"));
+    try { return Buffer.concat([d.update(blob.subarray(28)), d.final()]); } catch (e) { throw new Error("Déchiffrement impossible (mauvaise clé ou donnée altérée) : " + aad); }
+  }
+  return {
+    on: on,
+    /** Texte → texte (préfixe enc1:). Les valeurs vides et nulles restent telles quelles. */
+    text: function (s, aad) { return !on || s === null || s === undefined || s === "" ? s : ENC_TAG + seal(Buffer.from(String(s), "utf8"), aad).toString("base64"); },
+    untext: function (s, aad) { return typeof s === "string" && s.slice(0, 5) === ENC_TAG ? open(Buffer.from(s.slice(5), "base64"), aad).toString("utf8") : s; },
+    isSealedText: function (s) { return typeof s === "string" && s.slice(0, 5) === ENC_TAG; },
+    /** Octets → octets (en-tête IMMOENC1). */
+    bytes: function (buf, aad) { return on ? Buffer.concat([FILE_MAGIC, seal(buf, aad)]) : buf; },
+    unbytes: function (buf, aad) { return isSealedBytes(buf) ? open(buf.subarray(8), aad) : buf; },
+    isSealedBytes: isSealedBytes
+  };
+}
+function isSealedBytes(buf) { return Buffer.isBuffer(buf) && buf.length >= 8 && buf.subarray(0, 8).equals(FILE_MAGIC); }
+
 function createRuntime(opts) {
+  const vault = makeVault(opts.dataKey || null);
   const DATA = opts.dataDir, FILES = path.join(DATA, "files");
   fs.mkdirSync(FILES, { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path.join(DATA, "immopilot.db"));
@@ -131,12 +162,12 @@ function createRuntime(opts) {
     if (bytes) {
       const buf = toBuf(bytes), p = filePath(id);
       fs.mkdirSync(path.dirname(p), { recursive: true, mode: 0o700 });
-      fs.writeFileSync(p + ".tmp", buf, { mode: 0o600 }); fs.renameSync(p + ".tmp", p);
+      fs.writeFileSync(p + ".tmp", vault.bytes(buf, "file:" + id), { mode: 0o600 }); fs.renameSync(p + ".tmp", p);
       f.size = buf.length;
     }
     files.set(id, f); dirty.files.add(f); return f;
   }
-  const readBytes = function (f) { try { return fs.readFileSync(filePath(f.id)); } catch (e) { return Buffer.alloc(0); } };
+  const readBytes = function (f) { let raw; try { raw = fs.readFileSync(filePath(f.id)); } catch (e) { return Buffer.alloc(0); } return vault.unbytes(raw, "file:" + f.id); };
   function FileObj(f) { this.f = f; }
   FileObj.prototype.getId = function () { return this.f.id; };
   FileObj.prototype.getName = function () { return this.f.name; };
@@ -269,8 +300,8 @@ function createRuntime(opts) {
       if (!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(to)) throw new Error("Adresse e-mail invalide : " + to);
       // Pièces jointes (PDF d'appel de loyer, quittance…) : conservées en base avec l'e-mail jusqu'à l'envoi SMTP.
       const att = (o.attachments || []).map(function (b) { return { name: String(b.getName() || "piece-jointe"), type: String(b.getContentType() || "application/octet-stream"), base64: Buffer.from(b.getBytes()).toString("base64") }; });
-      enqueue.run(new Date().toISOString(), to, String(o.subject || "").slice(0, 250), String(o.body || ""), String(o.htmlBody || ""), String(o.name || opts.appName || "ImmoPilot"),
-        att.length ? JSON.stringify(att) : null, mailAddr(o.bcc), mailAddr(o.replyTo));
+      enqueue.run(new Date().toISOString(), to, String(o.subject || "").slice(0, 250), vault.text(String(o.body || ""), "mail:body"), vault.text(String(o.htmlBody || ""), "mail:html"), String(o.name || opts.appName || "ImmoPilot"),
+        att.length ? vault.text(JSON.stringify(att), "mail:att") : null, mailAddr(o.bcc), mailAddr(o.replyTo));
       if (opts.onMail) opts.onMail();
     },
     getRemainingDailyQuota: function () { const since = new Date(Date.now() - 86400000).toISOString(); return Math.max(0, opts.mailDailyQuota - Number(sentToday.get(since).n)); }
@@ -323,7 +354,7 @@ function createRuntime(opts) {
 
   /* ------------------------------ Persistance ------------------------------ */
   function load() {
-    db.prepare("SELECT k, v FROM props").all().forEach(function (r) { props.set(r.k, r.v); });
+    db.prepare("SELECT k, v FROM props").all().forEach(function (r) { props.set(r.k, vault.untext(r.v, "prop:" + r.k)); });
     db.prepare("SELECT * FROM folders").all().forEach(function (r) { folders.set(r.id, { id: r.id, name: r.name, parent: r.parent, sharing: r.sharing, trashed: !!r.trashed }); });
     db.prepare("SELECT * FROM files").all().forEach(function (r) { files.set(r.id, { id: r.id, name: r.name, mime: r.mime, parent: r.parent, sharing: r.sharing, trashed: !!r.trashed, created: r.created, size: r.size, ssid: r.ssid || "" }); });
     db.prepare("SELECT * FROM spreadsheets").all().forEach(function (r) { const ss = new Spreadsheet(r.name, r.id); ss.tz = r.tz || ""; ss.trashed = !!r.trashed; });
@@ -331,7 +362,7 @@ function createRuntime(opts) {
     db.prepare("SELECT * FROM sheets ORDER BY ssid, pos").all().forEach(function (r) {
       const ss = spreadsheets.get(r.ssid); if (!ss) return;
       const sh = new Sheet(ss, r.name, r.uid); sh.maxCols = r.maxcols || 26;
-      rowsStmt.all(r.uid).forEach(function (x) { sh.rows[x.n - 1] = decodeRow(x.data); });
+      rowsStmt.all(r.uid).forEach(function (x) { sh.rows[x.n - 1] = decodeRow(vault.untext(x.data, "row:" + r.uid + ":" + x.n)); });
       for (let i = 0; i < sh.rows.length; i++) if (!sh.rows[i]) sh.rows[i] = [];
       ss.sheets.push(sh);
     });
@@ -363,18 +394,18 @@ function createRuntime(opts) {
       dirty.rewrite.forEach(function (s) {
         if (s.deleted || s.ss.trashed) return;
         st.rowsDel.run(s.uid);
-        s.rows.forEach(function (r, i) { if (r && r.length) st.row.run(s.uid, i + 1, encodeRow(r)); });
+        s.rows.forEach(function (r, i) { if (r && r.length) st.row.run(s.uid, i + 1, vault.text(encodeRow(r), "row:" + s.uid + ":" + (i + 1))); });
         dirty.rows.delete(s.uid);
       });
       dirty.rows.forEach(function (set, uid) {
         let sh = null; spreadsheets.forEach(function (ss) { if (!sh) sh = ss.sheets.find(function (x) { return x.uid === uid; }) || null; });
         if (!sh || sh.ss.trashed) return;
-        set.forEach(function (r) { const row = sh.rows[r - 1]; if (row) st.row.run(uid, r, encodeRow(row)); });
+        set.forEach(function (r) { const row = sh.rows[r - 1]; if (row) st.row.run(uid, r, vault.text(encodeRow(row), "row:" + uid + ":" + r)); });
         st.rowsTail.run(uid, sh.rows.length);
       });
       dirty.files.forEach(function (f) { st.file.run(f.id, f.name, f.mime, f.parent || null, f.sharing, f.trashed ? 1 : 0, f.created, f.size, f.ssid || ""); if (f.trashed && !f.ssid) { try { fs.rmSync(filePath(f.id), { force: true }); } catch (e) { /* déjà supprimé */ } } });
       dirty.folders.forEach(function (d) { st.folder.run(d.id, d.name, d.parent || null, d.sharing, d.trashed ? 1 : 0); });
-      dirty.props.forEach(function (k) { if (props.has(k)) st.prop.run(k, props.get(k)); else st.propDel.run(k); });
+      dirty.props.forEach(function (k) { if (props.has(k)) st.prop.run(k, vault.text(props.get(k), "prop:" + k)); else st.propDel.run(k); });
       db.exec("COMMIT");
     } catch (e) { db.exec("ROLLBACK"); throw e; }
     Object.keys(dirty).forEach(function (k) { dirty[k].clear(); });
@@ -406,6 +437,44 @@ function createRuntime(opts) {
       ids.forEach(function (id) { const ss = spreadsheets.get(id); if (ss.trashed) return; h.update(id);
         ss.sheets.forEach(function (sh) { h.update(sh.name); const last = sh.getLastRow(); for (let r = 0; r < last; r++) h.update(encodeRow((sh.rows[r] || []).slice(0, sh.getLastColumn()).concat())); }); });
       return { spreadsheets: ids.length, files: files.size, hash: h.digest("hex").slice(0, 16) };
+    },
+    vault: vault,
+    /** Chiffre tout ce qui est encore en clair (lignes, propriétés, fichiers, e-mails en file) : relançable sans risque. Exige la clé. */
+    encryptAll: function () {
+      if (!vault.on) throw new Error("Aucune clé de chiffrement : renseignez DATA_KEY_FILE puis redémarrez le service.");
+      const out = { feuilles: 0, lignes: 0, proprietes: 0, fichiers: 0, emails: 0 };
+      spreadsheets.forEach(function (ss) { if (ss.trashed) return; dirty.ss.add(ss); ss.sheets.forEach(function (sh) { dirty.rewrite.add(sh); out.feuilles++; out.lignes += sh.rows.filter(function (r) { return r && r.length; }).length; }); });
+      props.forEach(function (v, k) { dirty.props.add(k); out.proprietes++; });
+      commit();
+      files.forEach(function (f) {
+        const p = filePath(f.id); let raw; try { raw = fs.readFileSync(p); } catch (e) { return; }
+        if (vault.isSealedBytes(raw)) return;
+        fs.writeFileSync(p + ".tmp", vault.bytes(raw, "file:" + f.id), { mode: 0o600 }); fs.renameSync(p + ".tmp", p); out.fichiers++;
+      });
+      const up = db.prepare("UPDATE outbox SET body = ?, html = ?, attachments = ? WHERE id = ?");
+      db.exec("BEGIN");
+      try {
+        db.prepare("SELECT id, body, html, attachments FROM outbox").all().forEach(function (m) {
+          if (vault.isSealedText(m.body) || vault.isSealedText(m.html) || vault.isSealedText(m.attachments)) return;
+          up.run(vault.text(m.body, "mail:body"), vault.text(m.html, "mail:html"), vault.text(m.attachments, "mail:att"), m.id); out.emails++;
+        });
+        db.exec("COMMIT");
+      } catch (e) { db.exec("ROLLBACK"); throw e; }
+      db.exec("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;"); // efface les anciennes pages en clair de la base
+      return out;
+    },
+    /** Contrôle sans rien modifier : tout se déchiffre-t-il ? reste-t-il du clair ? */
+    verifyData: function () {
+      const out = { cle: vault.on, lignes: { chiffrees: 0, en_clair: 0 }, proprietes: { chiffrees: 0, en_clair: 0 }, fichiers: { chiffres: 0, en_clair: 0 }, emails: { chiffres: 0, en_clair: 0 }, erreurs: [] };
+      const bad = function (e) { if (out.erreurs.length < 10) out.erreurs.push(e.message); };
+      db.prepare("SELECT uid, n, data FROM rows").all().forEach(function (r) { if (vault.isSealedText(r.data)) { try { vault.untext(r.data, "row:" + r.uid + ":" + r.n); out.lignes.chiffrees++; } catch (e) { bad(e); } } else out.lignes.en_clair++; });
+      db.prepare("SELECT k, v FROM props").all().forEach(function (r) { if (vault.isSealedText(r.v)) { try { vault.untext(r.v, "prop:" + r.k); out.proprietes.chiffrees++; } catch (e) { bad(e); } } else if (r.v !== "") out.proprietes.en_clair++; });
+      files.forEach(function (f) { let raw; try { raw = fs.readFileSync(filePath(f.id)); } catch (e) { return; } if (vault.isSealedBytes(raw)) { try { vault.unbytes(raw, "file:" + f.id); out.fichiers.chiffres++; } catch (e) { bad(e); } } else out.fichiers.en_clair++; });
+      db.prepare("SELECT id, body, html, attachments FROM outbox").all().forEach(function (m) {
+        [["body", "mail:body"], ["html", "mail:html"], ["attachments", "mail:att"]].forEach(function (c) { const v = m[c[0]]; if (v === null || v === "") return; if (vault.isSealedText(v)) { try { vault.untext(v, c[1]); out.emails.chiffres++; } catch (e) { bad(e); } } else out.emails.en_clair++; });
+      });
+      out.ok = out.erreurs.length === 0 && (!out.cle || (out.lignes.en_clair + out.proprietes.en_clair + out.fichiers.en_clair + out.emails.en_clair === 0));
+      return out;
     },
     close: function () { try { commit(); } finally { db.close(); } }
   };

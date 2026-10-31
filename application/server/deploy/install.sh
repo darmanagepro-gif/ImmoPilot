@@ -81,6 +81,8 @@ SMTP_USER=
 SMTP_PASS=
 MAIL_FROM=no-reply@$DOMAIN
 MAIL_DAILY_QUOTA=2000
+# Chiffrement au repos (facultatif, recommandé avec de vraies pièces d'identité) : voir server/deploy/encrypt-at-rest.sh
+# DATA_KEY_FILE=/etc/immopilot/data-immopilot.key
 ENV
 fi
 chown root:immopilot /etc/immopilot/immopilot.env; chmod 0640 /etc/immopilot/immopilot.env
