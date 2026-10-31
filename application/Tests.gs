@@ -303,6 +303,60 @@ function TEST_GROUPS_() {
         const from = addDaysStr_(todayStr_(), -1);
         T.eq(dbTailSince_("ActivityLogs", "timestamp", from, 7).length, dbAll_("ActivityLogs").filter(function (l) { return String(l.timestamp) >= from; }).length, "lecture des journaux récents seulement");
       }],
+      ["Inscription en ligne (SaaS) : fermée par défaut, essai gratuit, activation par e-mail, sans doublon", function (T, fx) {
+        const P = PropertiesService.getScriptProperties(), savedOpen = P.getProperty("IMMO_SIGNUP_OPEN"), savedDays = P.getProperty("IMMO_SIGNUP_TRIAL_DAYS"), savedDemo = IMMO_PUBLIC_DEMO_;
+        try {
+          P.deleteProperty("IMMO_SIGNUP_OPEN");
+          T.fails(null, "signup.create", { email: fx.mail("closed"), displayName: "Fermé", acceptTerms: true }, "NOT_FOUND");
+          T.eq(editionPublic_().signupOpen, false, "bouton masqué quand l'inscription est fermée");
+          P.setProperty("IMMO_SIGNUP_OPEN", "1"); P.deleteProperty("IMMO_SIGNUP_TRIAL_DAYS");
+          T.eq(editionPublic_().signupOpen, true, "bouton visible");
+          const info = T.pub("signup.info", {});
+          T.eq(info.trialDays, 60, "essai de 2 mois par défaut");
+          T.ok(info.plans.length >= 3 && info.plans[0].planCode === "ESSENTIEL", "forfaits proposés");
+          const email = fx.mail("signup-owner");
+          T.fails(null, "signup.create", { email: email, displayName: "Karim Test", planCode: "PRO" }, "VALIDATION");
+          const r = T.pub("signup.create", { email: email, displayName: "Karim Test", phone: "0612345678", planCode: "PRO", accountType: "OWNER_ORG", acceptTerms: true });
+          T.ok(r.ok && /e-mail/.test(r.message), "message de confirmation");
+          const org = dbAll_("Organizations").find(function (o) { return o.createdBy === "inscription:" + email; });
+          T.ok(org && org.type === "OWNER_ORG" && org.status === "ACTIVE", "organisation propriétaire créée");
+          const sub = dbAll_("Subscriptions").find(function (x) { return String(x.organizationId) === String(org.organizationId); });
+          T.eq([sub.status, sub.planCode, sub.trialEnd], ["TRIAL", "PRO", addDaysStr_(todayStr_(), 60)], "abonnement Pro en essai 60 jours");
+          T.ok(!dbAll_("Users").some(function (u) { return u.email === email; }), "aucun compte avant activation");
+          const firstToken = T.tokenFrom(T.lastMailTo(email).body, "accept");
+          T.pub("signup.create", { email: email, displayName: "Karim Test", planCode: "PRO", acceptTerms: true });
+          T.eq(dbAll_("Organizations").filter(function (o) { return o.createdBy === "inscription:" + email; }).length, 1, "pas de doublon si on réinscrit la même adresse");
+          const token = T.tokenFrom(T.lastMailTo(email).body, "accept");
+          T.ok(token && token !== firstToken, "nouveau lien envoyé (e-mail perdu)");
+          T.fails(null, "invite.info", { token: firstToken }, "AUTH");
+          T.ok(token, "lien d'activation dans l'e-mail");
+          T.eq(T.pub("invite.info", { token: token }).role, "OWNER", "rôle propriétaire");
+          T.pub("invite.accept", { token: token, password: "Inscrit-Pass1", displayName: "Karim Test" });
+          const tok = T.pub("auth.login", { email: email, password: "Inscrit-Pass1" }).token;
+          T.ok(T.call(tok, "property.create", { organizationId: org.organizationId, name: "Riad inscrit", city: "Marrakech" }).propertyId, "le nouveau client crée son premier bien");
+          T.pub("signup.create", { email: email, displayName: "Autre", acceptTerms: true });
+          T.eq(T.lastMailTo(email).subject, "Votre compte ImmoPilot existe déjà", "compte existant : simple e-mail, rien de créé");
+          const ag = fx.mail("signup-agency");
+          P.setProperty("IMMO_SIGNUP_TRIAL_DAYS", "0");
+          T.pub("signup.create", { email: ag, displayName: "Sara Agence", organizationName: "Conciergerie Atlas", accountType: "AGENCY", acceptTerms: true });
+          const ao = dbAll_("Organizations").find(function (o) { return o.createdBy === "inscription:" + ag; });
+          T.eq([ao.type, ao.name], ["AGENCY", "Conciergerie Atlas"], "agence créée avec son nom");
+          T.eq(dbAll_("Subscriptions").find(function (x) { return String(x.organizationId) === String(ao.organizationId); }).status, "PAST_DUE", "sans essai : en attente de paiement");
+          T.eq(dbAll_("Invitations").find(function (i) { return i.email === ag; }).role, "AGENCY_ADMIN", "rôle responsable d'agence");
+          T.pub("signup.create", { email: fx.mail("bot"), displayName: "Robot", acceptTerms: true, website: "http://spam" });
+          T.ok(!dbAll_("Organizations").some(function (o) { return o.createdBy === "inscription:" + fx.mail("bot"); }), "champ piège : robot ignoré");
+          dbUpdate_("Organizations", ao.organizationId, { createdAt: new Date(Date.now() - 15 * 86400000).toISOString() });
+          T.ok(signupCleanupJob_() >= 1, "nettoyage des inscriptions non activées");
+          T.eq(dbGet_("Organizations", ao.organizationId).status, "INACTIVE", "inscription jamais activée désactivée après 14 jours");
+          T.eq(dbGet_("Organizations", org.organizationId).status, "ACTIVE", "compte activé conservé");
+          IMMO_PUBLIC_DEMO_ = true;
+          T.fails(null, "signup.info", {}, "NOT_FOUND");
+        } finally {
+          IMMO_PUBLIC_DEMO_ = savedDemo;
+          if (savedOpen === null) P.deleteProperty("IMMO_SIGNUP_OPEN"); else P.setProperty("IMMO_SIGNUP_OPEN", savedOpen);
+          if (savedDays === null) P.deleteProperty("IMMO_SIGNUP_TRIAL_DAYS"); else P.setProperty("IMMO_SIGNUP_TRIAL_DAYS", savedDays);
+        }
+      }],
       ["Invitation valide → compte activé → connexion", function (T, fx) {
         const email = fx.mail("newcleaner");
         T.call(fx.tok.ownerA, "invite.create", { email: email, organizationId: fx.orgA.organizationId, role: "CLEANER", displayName: "Nouvelle Équipe" });

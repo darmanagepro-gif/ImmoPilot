@@ -63,7 +63,7 @@ function routes_() { return {
 }; }
 function publicRoutes_() { return {
   "auth.login": "authLogin_", "assistant.kb": "assistantKbPublic_", "auth.requestReset": "authRequestReset_", "auth.resetPassword": "authResetPassword_",
-  "invite.info": "inviteInfo_", "invite.accept": "inviteAccept_", "legal.get": "legalGet_", "demo.views": "demoPublicViews_", "demo.enter": "demoEnter_",
+  "invite.info": "inviteInfo_", "invite.accept": "inviteAccept_", "legal.get": "legalGet_", "demo.views": "demoPublicViews_", "demo.enter": "demoEnter_", "signup.info": "signupInfo_", "signup.create": "signupCreate_",
   "guest.portal.get": "guestPortalGet_", "guest.portal.save": "guestPortalSave_", "guest.portal.upload": "guestPortalUpload_", "guest.portal.incident": "guestPortalIncident_"
 }; }
 
@@ -73,7 +73,7 @@ function publicRoutes_() { return {
  */
 var INSTALL_HTML_FILES_ = ["Index", "Styles", "Components", "I18n", "Login", "Dashboard", "Pages", "Scripts", "Assistant"];
 /* Première et dernière fonction de chaque fichier : détecte un fichier absent ET un fichier collé incomplètement. */
-var INSTALL_GS_SENTINELS_ = { Admin: ["assertEditor_", "auditList_"], Legal: ["legalGet_", "legalValues_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], LeaseAgentService: ["laFill_", "inspectionCancel_"], RentAutomationService: ["rentReminderDays_", "rentMailingsOf_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SubscriptionService: ["planOut_", "subscriptionJob_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
+var INSTALL_GS_SENTINELS_ = { Admin: ["assertEditor_", "auditList_"], Legal: ["legalGet_", "legalValues_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], LeaseAgentService: ["laFill_", "inspectionCancel_"], RentAutomationService: ["rentReminderDays_", "rentMailingsOf_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SignupService: ["signupProp_", "signupCleanupJob_"], SubscriptionService: ["planOut_", "subscriptionJob_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
 function installCheck_() {
   const g = typeof globalThis !== "undefined" ? globalThis : this;
   const missingGs = Object.keys(INSTALL_GS_SENTINELS_).filter(function (f) { return INSTALL_GS_SENTINELS_[f].some(function (n) { return typeof g[n] !== "function"; }); });
@@ -142,7 +142,7 @@ function editionPublic_() {
   const e = edition_();
   return { code: e.code, country: e.country, countryName: e.countryName, currency: e.currency, timezone: e.timezone, city: e.city, mapCenter: e.mapCenter, phoneCountry: e.phoneCountry,
     localMobileRe: e.localMobileRe, tagline: e.tagline, taglineKey: e.taglineKey, logoSvg: e.logoSvg, policeForms: e.policeForms, registrationNumber: e.registrationNumber,
-    dataAuthority: e.dataAuthority, taxIdLabel: e.taxIdLabel, publicDemo: !!IMMO_PUBLIC_DEMO_ };
+    dataAuthority: e.dataAuthority, taxIdLabel: e.taxIdLabel, publicDemo: !!IMMO_PUBLIC_DEMO_, signupOpen: signupOpen_(), signupTrialDays: signupTrialDays_(), signupUrl: signupExternalUrl_() };
 }
 /** Contrôle d'installation mémorisé 6 h par version installée : l'ouverture de l'application ne relit pas tous les fichiers à chaque fois. */
 function installCheckCached_() {
@@ -157,7 +157,7 @@ function doGet(e) {
   const check = installCheckCached_();
   if (!check.ok) return installErrorPage_(check);
   const prm = (e && e.parameter) || {};
-  const action = ["accept", "reset", "guest", "legal"].indexOf(String(prm.action || "")) >= 0 ? String(prm.action) : "app";
+  const action = ["accept", "reset", "guest", "legal", "signup"].indexOf(String(prm.action || "")) >= 0 ? String(prm.action) : "app";
   const doc = /^[a-z]{2,20}$/.test(String(prm.doc || "")) ? String(prm.doc) : "";
   const token = /^[a-f0-9]{64}$/.test(String(prm.token || "")) ? String(prm.token) : "";
   const t = HtmlService.createTemplateFromFile("Index");

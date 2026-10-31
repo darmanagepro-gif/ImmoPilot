@@ -231,6 +231,7 @@ mark.legal-missing{background:#FFE58A;color:#3A2E00;padding:0 4px;border-radius:
 .demo-banner select{background:#fff;color:#13233d;border:0;border-radius:8px;padding:5px 8px;font:inherit;max-width:100%}
 .demo-banner .btn{background:transparent;color:#fff;border-color:rgba(255,255,255,.6);margin-left:auto}
 .demo-picker{border:1px solid var(--line);background:var(--surface-2);border-radius:14px;padding:14px 16px;margin:0 0 18px}
+.signup-cta{display:flex;flex-direction:column;gap:8px;align-items:stretch;border-top:1px solid var(--line);margin-top:18px;padding-top:16px}.signup-cta .btn{justify-content:center}
 .demo-picker p{margin:4px 0 10px}.demo-views{display:flex;flex-direction:column;gap:8px}
 .demo-views .btn{justify-content:flex-start;text-align:left;width:100%}
 .imp-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:9px 28px;background:#B4432F;color:#fff;font-size:13.5px}
@@ -1098,7 +1099,46 @@ const Public = {
       }).catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); go.disabled = false; go.textContent = t("Se connecter"); });
     });
     const forgot = h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.forgot(); } }, t("Mot de passe oublié ou compte à activer ?"));
-    Public.frame(t("Connexion"), t("Accédez à votre espace ImmoPilot."), h("div", null, ED.publicDemo ? Public.demoPicker() : null, err, f.el, h("p", { class: "small", style: { marginTop: "16px" } }, forgot), Public.legalLinks()));
+    const signup = ED.signupOpen ? h("div", { class: "signup-cta" }, h("span", { class: "small muted" }, t("Pas encore de compte ?")),
+      btn(ED.signupTrialDays ? t("Créer mon compte — essai gratuit") : t("Créer mon compte"), function () { Public.signup(); }, "")) :
+      ED.signupUrl ? h("div", { class: "signup-cta" }, h("span", { class: "small muted" }, t("Convaincu ? Créez votre vrai compte :")),
+        h("a", { class: "btn primary", href: ED.signupUrl, target: "_top", rel: "noopener" }, t("Créer mon compte — essai gratuit"))) : null;
+    Public.frame(t("Connexion"), t("Accédez à votre espace ImmoPilot."), h("div", null, ED.publicDemo ? Public.demoPicker() : null, err, f.el, h("p", { class: "small", style: { marginTop: "16px" } }, forgot), signup, Public.legalLinks()));
+  },
+  /** Inscription en ligne (mode SaaS) : organisation + essai gratuit + e-mail d'activation. Visible seulement si l'inscription est ouverte. */
+  signup: function (planHint) {
+    Public.frame(t("Créer mon compte"), "", h("div", { class: "loading" }, t("Chargement…")));
+    apiP("signup.info", {}).then(function (info) {
+      const plans = info.plans.map(function (p) { return [p.planCode, p.name + " — " + fmtMoney(p.price) + " / " + t("mois") + " · " + p.maxProperties + " " + t("logements")]; });
+      const hint = String(planHint || "").toUpperCase(), def = info.plans.some(function (p) { return p.planCode === hint; }) ? hint : (info.plans[0] || {}).planCode;
+      const f = buildForm([
+        { k: "accountType", l: "Vous êtes", t: "select", req: true, opts: [["OWNER_ORG", t("Propriétaire")], ["AGENCY", t("Agence / conciergerie")]] },
+        { k: "displayName", l: "Votre nom et prénom", req: true, ac: "name", maxlength: 100 },
+        { k: "organizationName", l: "Nom de votre agence", show: function (v) { return v.accountType === "AGENCY"; }, maxlength: 120 },
+        { k: "email", l: "E-mail", t: "email", req: true, ac: "email" },
+        { k: "phone", l: "Téléphone (WhatsApp)", t: "tel", ac: "tel", maxlength: 30 },
+        { k: "planCode", l: "Forfait", t: "select", req: true, opts: plans, full: true },
+        { k: "acceptTerms", l: "J'accepte les conditions générales et la politique de confidentialité", t: "checkbox", full: true }
+      ], { planCode: def });
+      const trap = h("input", { type: "text", name: "website", tabindex: "-1", autocomplete: "off", "aria-hidden": "true", style: { position: "absolute", left: "-9999px", width: "1px", height: "1px" } });
+      f.el.appendChild(trap);
+      const err = h("div", { class: "alert bad hidden" });
+      const go = h("button", { class: "btn primary lg", type: "submit", style: { width: "100%", justifyContent: "center", marginTop: "14px" } }, t("Créer mon compte"));
+      f.el.appendChild(h("div", { class: "full" }, go));
+      f.el.addEventListener("submit", function (ev) {
+        ev.preventDefault(); const v = f.get(); let m = f.validate();
+        if (!m && !v.acceptTerms) m = t("Veuillez accepter les conditions générales et la politique de confidentialité.");
+        if (m) { err.textContent = m; err.classList.remove("hidden"); return; }
+        err.classList.add("hidden"); go.disabled = true; go.textContent = t("Création de votre espace…");
+        apiP("signup.create", { accountType: v.accountType, displayName: v.displayName, organizationName: v.accountType === "AGENCY" ? v.organizationName : "", email: v.email, phone: v.phone,
+          planCode: v.planCode, acceptTerms: v.acceptTerms === true, locale: S.lang, website: trap.value }).then(function (r) {
+          Public.frame(t("Vérifiez votre boîte mail"), "", h("div", null, h("div", { class: "alert good" }, r.message), btn("← " + t("Retour à la connexion"), function () { Public.login(); })));
+        }).catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); go.disabled = false; go.textContent = t("Créer mon compte"); });
+      });
+      const offer = info.trialDays ? h("div", { class: "alert good", style: { marginBottom: "14px" } }, t("Essai gratuit") + " : " + info.trialDays + " " + t("jours") + ". " + t("Aucune carte bancaire demandée pour commencer.")) : null;
+      Public.frame(t("Créer mon compte"), t("ImmoPilot") + " " + info.country + " · " + t("votre espace est prêt en 2 minutes."),
+        h("div", null, offer, err, f.el, h("p", { class: "small", style: { marginTop: "16px" } }, h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.login(); } }, t("J'ai déjà un compte : se connecter"))), Public.legalLinks()));
+    }).catch(function (e) { Public.frame(t("Créer mon compte"), "", h("div", null, h("div", { class: "alert bad" }, errMsg(e)), btn("← " + t("Retour"), function () { Public.login(); }))); });
   },
   forgot: function () {
     formModal(t("Mot de passe oublié"), [{ k: "email", l: "E-mail", t: "email", req: true }], {}, function (v) {
@@ -2675,6 +2715,7 @@ const App = window.App = {
     if (b.mode === "reset" && b.token) return Public.reset(b.token);
     if (b.mode === "guest" && b.token) return Public.guest(b.token);
     if (b.mode === "legal") return Public.legal(b.doc || "mentions");
+    if (b.mode === "signup" && ED.signupOpen && !store("ip_token")) return Public.signup(b.doc);
     S.token = store("ip_token");
     if (!S.token) return Public.login();
     clear($("app")).appendChild(h("div", { class: "loading" }, t("Chargement…")));

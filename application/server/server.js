@@ -26,6 +26,10 @@ const TZ = rt.ctx.IMMO_CONFIG.TIMEZONE, EDITION = rt.ctx.IMMO_EDITION_;
   const P = rt.ctx.PropertiesService.getScriptProperties();
   if (!P.getProperty("IMMO_APP_URL")) P.setProperty("IMMO_APP_URL", C.publicUrl);
   if (!P.getProperty("IMMO_ADMIN_EMAILS") && C.adminEmail) P.setProperty("IMMO_ADMIN_EMAILS", C.adminEmail);
+  // Mode SaaS : inscription en ligne et durée d'essai pilotées par le fichier .env (SIGNUP_OPEN, SIGNUP_TRIAL_DAYS), jamais en démonstration.
+  if (C.signupOpen !== null) { if (C.signupOpen && !C.demo) P.setProperty("IMMO_SIGNUP_OPEN", "1"); else P.deleteProperty("IMMO_SIGNUP_OPEN"); }
+  if (C.signupTrialDays !== null) P.setProperty("IMMO_SIGNUP_TRIAL_DAYS", C.signupTrialDays);
+  if (process.env.SIGNUP_URL !== undefined) { if (process.env.SIGNUP_URL) P.setProperty("IMMO_SIGNUP_URL", process.env.SIGNUP_URL); else P.deleteProperty("IMMO_SIGNUP_URL"); }
   rt.commit();
 })();
 
@@ -105,7 +109,7 @@ function sameOrigin(req) {
 }
 const ADMIN_FUNCTIONS = ["setupProject", "createFirstSuperAdmin", "verifierInstallation", "healthCheck", "mesurerPerformance", "viderCache", "creerEnvironnementDemo", "creerHistoriqueDemo",
   "mettreDemoEnVeille", "reveillerDemo", "testerAssistantIA", "backupNow", "restoreFromBackup", "jobFrequent", "jobDaily"];
-const ADMIN_PROPS = ["IMMO_ADMIN_EMAILS", "IMMO_APP_URL", "IMMO_AI_PROVIDER", "IMMO_AI_API_KEY", "IMMO_AI_MODEL", "IMMO_EMBED_ORIGINS", "IMMO_PBKDF_ITERATIONS"];
+const ADMIN_PROPS = ["IMMO_SIGNUP_OPEN", "IMMO_SIGNUP_TRIAL_DAYS", "IMMO_ADMIN_EMAILS", "IMMO_APP_URL", "IMMO_AI_PROVIDER", "IMMO_AI_API_KEY", "IMMO_AI_MODEL", "IMMO_EMBED_ORIGINS", "IMMO_PBKDF_ITERATIONS"];
 function adminOk(req) {
   const local = /^(127\.|::1|::ffff:127\.)/.test(req.socket.remoteAddress || "");
   const tok = String(req.headers["x-admin-token"] || ""), want = String(C.adminToken || "");
@@ -146,6 +150,7 @@ const server = http.createServer(async function (req, res) {
     }
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "text/plain; charset=utf-8", "Méthode non autorisée.");
     if (LEGAL_PATHS[url.pathname]) return send(res, 302, "text/plain; charset=utf-8", "", { Location: "/?action=legal&doc=" + LEGAL_PATHS[url.pathname] });
+    if (url.pathname === "/inscription") return send(res, 302, "text/plain; charset=utf-8", "", { Location: "/?action=signup" + (/^[a-z]{2,20}$/.test(url.searchParams.get("forfait") || "") ? "&doc=" + url.searchParams.get("forfait") : "") });
     if (url.pathname === "/manifest.webmanifest") return send(res, 200, "application/manifest+json; charset=utf-8", manifest(), { "Cache-Control": "public, max-age=3600" });
     if (url.pathname === "/robots.txt") return send(res, 200, "text/plain; charset=utf-8", "User-agent: *\nAllow: /$\nDisallow: /rpc\n");
     const icon = /^\/icons\/([a-z0-9-]+\.png)$/.exec(url.pathname);
