@@ -127,7 +127,7 @@ function installDiagnosticScenario() {
   step("Projet complet : l'application s'affiche normalement", function () {
     const { ctx } = loadProject();
     const r = vm.runInContext("verifierInstallation()", ctx);
-    ok(r.ok && r.expected.gs === 36 && r.expected.html === 9, JSON.stringify(r));
+    ok(r.ok && r.expected.gs === 37 && r.expected.html === 9, JSON.stringify(r));
     ok(/<!DOCTYPE html>/i.test(vm.runInContext("doGet({parameter:{}}).getContent()", ctx)) && vm.runInContext("doGet({parameter:{}}).getContent()", ctx).indexOf("installation incomplète") < 0, "page normale attendue");
   });
   step("Fichier HTML « Components » absent et fichier « Pareto » manquant : page explicative", function () {

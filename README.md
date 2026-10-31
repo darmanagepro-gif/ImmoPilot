@@ -6,6 +6,10 @@ Coquille installable (PWA) de l'application ImmoPilot. Les données sont héberg
 - Politique de confidentialité : https://darmanagepro-gif.github.io/ImmoPilot/politique-confidentialite.html
 - Suppression de compte : https://darmanagepro-gif.github.io/ImmoPilot/suppression-compte.html
 
+## Mode SaaS (serveur dédié)
+
+Les 4 versions (Maroc, France, démo Maroc, démo France) sur un seul serveur, avec vitrine, inscription en ligne et essai gratuit : voir [application/server/deploy/saas/GUIDE-SAAS.md](application/server/deploy/saas/GUIDE-SAAS.md).
+
 ## Icône et écran de démarrage
 
 - **Icône** (écran d'accueil iPhone et Android, favicon) : fichiers `icons/immopilot-*.png` (`immopilot-180.png` pour iPhone, `immopilot-192.png`, `immopilot-512.png` et `immopilot-maskable-512.png` pour Android, `immopilot-32.png` pour l'onglet), référencés par `index.html` et `manifest.webmanifest`. Les fichiers `icons/apple-touch-icon.png`, `icon-*.png` et `favicon-32.png` (mêmes images) servent aux autres pages du site. Si l'icône est remplacée un jour, **changer aussi le nom des fichiers** (par exemple `immopilot-2-180.png`) : iPhone et Android gardent sinon l'ancienne icône en mémoire, et il faut supprimer puis recréer le raccourci (iPhone : Safari › Partager › « Sur l'écran d'accueil »).

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ImmoPilot — la gestion locative, de l'arrivée du voyageur au dernier dirham</title>
+<meta name="description" content="ImmoPilot réunit réservations, ménage, maintenance, baux, loyers et finances pour les propriétaires, les agences et leurs équipes de terrain. Maroc et France. Essai gratuit.">
+<meta name="theme-color" content="#13233d">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{--ink:#13233d;--ink-2:#22417a;--blue:#3d4fd1;--blue-2:#3f6fe0;--soft:#eceefc;--paper:#f7f7f4;--line:#e4e4de;--muted:#5f6878;--good:#127a4b;--warm:#c8553d;--r:18px}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;font-family:Inter,"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;color:var(--ink);background:var(--paper);line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.wrap{max-width:1160px;margin:0 auto;padding:0 22px}
+header.top{position:sticky;top:0;z-index:20;background:rgba(247,247,244,.88);backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:18px;height:66px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:800;font-size:19px;letter-spacing:-.3px}
+.brand img{width:34px;height:34px;border-radius:9px}
+nav.links{display:flex;gap:22px;margin-left:auto;font-size:15px}
+nav.links a{text-decoration:none;color:var(--muted)}nav.links a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border-radius:12px;font-weight:650;font-size:15px;text-decoration:none;border:1.5px solid transparent;cursor:pointer;transition:transform .12s,box-shadow .12s,background .12s;white-space:nowrap}
+.btn:hover{transform:translateY(-1px)}
+.btn.primary{background:var(--blue);color:#fff;box-shadow:0 8px 22px -10px rgba(61,79,209,.8)}
+.btn.primary:hover{background:#3243c2}
+.btn.ghost{border-color:var(--line);background:#fff}
+.btn.light{background:#fff;color:var(--ink)}
+.btn.outline-light{border-color:rgba(255,255,255,.35);color:#fff}
+.btn.sm{padding:9px 14px;font-size:14px;border-radius:10px}
+/* Sélecteur de pays */
+.country{display:inline-flex;background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px}
+.country button{border:0;background:transparent;font:inherit;font-weight:650;font-size:14px;padding:8px 16px;border-radius:999px;cursor:pointer;color:var(--muted)}
+.country button[aria-pressed="true"]{background:var(--ink);color:#fff}
+/* Hero */
+.hero{padding:72px 0 56px;position:relative;overflow:hidden}
+.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--blue);background:var(--soft);padding:6px 12px;border-radius:999px}
+h1{font-size:clamp(36px,5vw,58px);line-height:1.04;letter-spacing:-1.6px;margin:18px 0 18px;font-weight:850}
+h1 em{font-style:normal;color:var(--blue)}
+.lead{font-size:19px;color:var(--muted);max-width:560px;margin:0 0 28px}
+.cta{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.reassure{margin-top:18px;font-size:14px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 18px}
+.reassure span::before{content:"✓ ";color:var(--good);font-weight:800}
+/* Maquette de l'application */
+.mock{background:var(--ink);border-radius:26px;padding:18px;box-shadow:0 40px 80px -30px rgba(19,35,61,.55);color:#fff;transform:rotate(-1.2deg)}
+.mock .bar{display:flex;gap:6px;margin-bottom:14px}.mock .bar i{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.22)}
+.mock .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.kpi{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px}
+.kpi small{display:block;font-size:11px;opacity:.65}.kpi b{font-size:22px;letter-spacing:-.5px}
+.feed{margin-top:12px;background:#fff;color:var(--ink);border-radius:16px;padding:6px 14px}
+.feed div{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px}.feed div:last-child{border:0}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}.feed .when{margin-left:auto;color:var(--muted);font-size:12px}
+/* Sections */
+section{padding:72px 0}
+.sec-head{max-width:720px;margin:0 0 36px}
+h2{font-size:clamp(28px,3.4vw,40px);letter-spacing:-1px;line-height:1.1;margin:0 0 12px;font-weight:820}
+.sec-head p{color:var(--muted);font-size:17px;margin:0}
+.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:24px}
+.card h3{margin:10px 0 6px;font-size:18px;letter-spacing:-.2px}.card p{margin:0;color:var(--muted);font-size:15px}
+.ico{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:21px;background:var(--soft)}
+.band{background:var(--ink);color:#fff;border-radius:28px;padding:48px;display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center}
+.band h2{color:#fff}.band p{color:rgba(255,255,255,.75)}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.steps li{display:flex;gap:14px;align-items:flex-start;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:14px 16px;border-radius:14px;font-size:15px}
+.steps b.n{flex:none;width:28px;height:28px;border-radius:50%;background:var(--blue-2);display:grid;place-items:center;font-size:13px}
+/* Tarifs */
+.pricing-top{display:flex;align-items:end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:28px}
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.plan{background:#fff;border:1px solid var(--line);border-radius:22px;padding:28px;display:flex;flex-direction:column}
+.plan.best{border:2px solid var(--blue);position:relative;box-shadow:0 24px 50px -30px rgba(61,79,209,.55)}
+.plan.best::before{content:"Le plus choisi";position:absolute;top:-13px;left:24px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px}
+.plan h3{margin:0;font-size:20px}.plan .for{color:var(--muted);font-size:14px;margin:4px 0 18px}
+.price{font-size:44px;font-weight:850;letter-spacing:-1.5px;line-height:1}.price small{font-size:15px;font-weight:600;color:var(--muted);letter-spacing:0}
+.plan ul{list-style:none;padding:0;margin:20px 0 24px;display:grid;gap:9px;font-size:14.5px}
+.plan li::before{content:"✓";color:var(--good);font-weight:800;margin-right:9px}
+.plan .btn{margin-top:auto}
+.offer{display:flex;gap:14px;align-items:center;background:#fff7e8;border:1px solid #f2d9a6;color:#7a4b00;padding:14px 18px;border-radius:14px;font-size:15px;margin-top:18px}
+.note{font-size:13.5px;color:var(--muted);margin-top:14px}
+/* Démo */
+.demo{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.demo .card{display:flex;flex-direction:column;gap:14px}
+.demo .card .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto}
+.flag{font-size:28px}
+footer{border-top:1px solid var(--line);padding:36px 0 48px;color:var(--muted);font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:16px 28px;align-items:center;justify-content:space-between}
+footer nav{display:flex;flex-wrap:wrap;gap:8px 18px}footer a{text-decoration:none}footer a:hover{color:var(--ink)}
+@media (max-width:900px){.hero .wrap,.band{grid-template-columns:1fr}.roles,.plans{grid-template-columns:1fr}.demo{grid-template-columns:1fr}nav.links{display:none}.mock{transform:none}.band{padding:30px}section{padding:52px 0}.hero{padding:44px 0 30px}}
+@media (max-width:520px){.top .btn.ghost{display:none}.mock .grid{grid-template-columns:1fr 1fr}.mock .grid .kpi:last-child{display:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="logo.png" alt="">ImmoPilot</a>
+    <nav class="links"><a href="#fonctions">Fonctions</a><a href="#tarifs">Tarifs</a><a href="#demo">Démo</a></nav>
+    <a class="btn ghost sm" data-link="login" href="#">Se connecter</a>
+    <a class="btn primary sm" data-link="signup" href="#">Essai gratuit</a>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">Maroc · France</span>
+      <h1>La gestion locative, <em>de l'arrivée du voyageur</em> <span data-c="lastword">au dernier dirham</span>.</h1>
+      <p class="lead">Réservations, ménage, maintenance, baux, loyers et finances réunis dans une seule application, pour les propriétaires, les agences et toutes leurs équipes de terrain.</p>
+      <div class="cta">
+        <a class="btn primary" data-link="signup" href="#">Créer mon compte gratuit</a>
+        <a class="btn ghost" data-link="demo" href="#">Voir la démo sans inscription</a>
+      </div>
+      <div class="reassure"><span data-c="trial">2 mois offerts</span><span>Sans engagement</span><span>Sans carte bancaire pour commencer</span></div>
+    </div>
+    <div class="mock" aria-hidden="true">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <div class="grid">
+        <div class="kpi"><small>Taux d'occupation</small><b>87 %</b></div>
+        <div class="kpi"><small>Revenus du mois</small><b data-c="kpi">48 600 DH</b></div>
+        <div class="kpi"><small>Ménages à venir</small><b>6</b></div>
+      </div>
+      <div class="feed">
+        <div><span class="dot" style="background:#127a4b"></span>Arrivée enregistrée par le gardien — Riad Atlas<span class="when">10:42</span></div>
+        <div><span class="dot" style="background:#3d4fd1"></span>Mission ménage acceptée — photos à la fin<span class="when">10:15</span></div>
+        <div><span class="dot" style="background:#c8553d"></span>Fuite signalée par le locataire → plombier<span class="when">09:58</span></div>
+        <div><span class="dot" style="background:#7a4b00"></span>Quittance de loyer envoyée automatiquement<span class="when">08:00</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="fonctions">
+  <div class="wrap">
+    <div class="sec-head"><h2>Tout le monde au même endroit</h2><p>Chacun a son espace et ne voit que ce qui le concerne. Moins d'appels, moins de déplacements, tout est tracé.</p></div>
+    <div class="roles">
+      <div class="card"><div class="ico">🏠</div><h3>Propriétaires</h3><p>Vos biens, vos revenus et vos dépenses en temps réel. Comparez les agences qui gèrent vos logements.</p></div>
+      <div class="card"><div class="ico">🏢</div><h3>Agences et conciergeries</h3><p>Planning des réservations, équipes, missions et rapports pour tous les logements que vous gérez.</p></div>
+      <div class="card"><div class="ico">🔑</div><h3>Gardiens et accueil</h3><p>Arrivées et départs enregistrés depuis le téléphone, pièces d'identité des voyageurs protégées.</p></div>
+      <div class="card"><div class="ico">🧹</div><h3>Ménage</h3><p>Missions envoyées automatiquement après chaque départ, rapport photo horodaté à la fin.</p></div>
+      <div class="card"><div class="ico">🛠️</div><h3>Artisans</h3><p>Devis, bon de commande, facture et paiement en ligne. Réseau d'artisans vérifiés par ImmoPilot.</p></div>
+      <div class="card"><div class="ico">📄</div><h3>Location longue durée</h3><p>Bail et état des lieux rédigés par l'agent IA, appels de loyer, relances et quittances PDF envoyés tout seuls.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="band">
+      <div><h2>Votre espace prêt en 2 minutes</h2><p>Pas d'installation, pas de rendez-vous. ImmoPilot fonctionne sur ordinateur, tablette et téléphone, et s'installe comme une application.</p>
+        <div class="cta" style="margin-top:22px"><a class="btn light" data-link="signup" href="#">Commencer gratuitement</a><a class="btn outline-light" data-link="demo" href="#">Essayer la démo</a></div></div>
+      <ol class="steps">
+        <li><b class="n">1</b><span>Choisissez votre pays et votre forfait, puis indiquez votre nom et votre e-mail.</span></li>
+        <li><b class="n">2</b><span>Ouvrez le lien reçu par e-mail et choisissez votre mot de passe.</span></li>
+        <li><b class="n">3</b><span>Ajoutez vos biens et invitez votre agence, votre gardien et votre équipe de ménage.</span></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<section id="tarifs">
+  <div class="wrap">
+    <div class="pricing-top">
+      <div class="sec-head" style="margin:0"><h2>Des tarifs simples, sans engagement</h2><p>Abonnement mensuel, résiliable à tout moment. Assistance en ligne 24 h/24 incluse.</p></div>
+      <div class="country" role="group" aria-label="Pays"><button type="button" data-country="ma" aria-pressed="true">🇲🇦 Maroc</button><button type="button" data-country="fr" aria-pressed="false">🇫🇷 France</button></div>
+    </div>
+    <div class="plans">
+      <div class="plan"><h3>Essentiel</h3><div class="for">Propriétaire avec quelques biens</div>
+        <div class="price"><span data-price="ESSENTIEL"></span> <small>/ mois</small></div>
+        <ul><li>Jusqu'à 5 logements</li><li>3 utilisateurs</li><li>Réservations, arrivées et départs</li><li>Ménage et incidents</li><li>Finances de base</li></ul>
+        <a class="btn ghost" data-link="signup" data-plan="essentiel" href="#">Essayer gratuitement</a></div>
+      <div class="plan best"><h3>Pro</h3><div class="for">Propriétaires actifs et petites agences</div>
+        <div class="price"><span data-price="PRO"></span> <small>/ mois</small></div>
+        <ul><li>Jusqu'à 25 logements</li><li>15 utilisateurs</li><li>Baux, loyers et quittances automatiques</li><li>Réseau d'artisans et paiements</li><li>Rapports, analyses et portail voyageur</li></ul>
+        <a class="btn primary" data-link="signup" data-plan="pro" href="#">Essayer gratuitement</a></div>
+      <div class="plan"><h3>Business</h3><div class="for">Agences et conciergeries</div>
+        <div class="price"><span data-price="BUSINESS"></span> <small>/ mois</small></div>
+        <ul><li>Jusqu'à 200 logements</li><li>100 utilisateurs</li><li>Tout le forfait Pro</li><li>Plusieurs agences par bien</li><li>Exports illimités</li></ul>
+        <a class="btn ghost" data-link="signup" data-plan="business" href="#">Essayer gratuitement</a></div>
+    </div>
+    <div class="offer"><span style="font-size:22px">🎁</span><span><b>Offre de lancement :</b> <span data-c="trial">2 mois offerts</span> sur tous les forfaits, sans carte bancaire. Vous ne payez qu'à la fin de l'essai, si vous continuez.</span></div>
+    <p class="note">Prix <span data-c="tax">TTC</span>. Missions d'artisans payées en ligne : frais de service de 6 % pour le commanditaire, assurance RC Pro incluse.</p>
+  </div>
+</section>
+
+<section id="demo">
+  <div class="wrap">
+    <div class="sec-head"><h2>Essayez avant de vous inscrire</h2><p>La démo s'ouvre sans compte, avec des données fictives. Choisissez une vue — propriétaire, agence, gardien, artisan — et parcourez toute l'application.</p></div>
+    <div class="demo">
+      <div class="card"><div class="flag">🇲🇦</div><h3>ImmoPilot Maroc</h3><p>Dirham, CIN et passeports, droit marocain (loi 67-12), données protégées selon la loi 09-08.</p>
+        <div class="row"><a class="btn primary" data-host="demo-maroc" href="#">Ouvrir la démo Maroc</a><a class="btn ghost" data-host="maroc" data-path="/inscription" href="#">S'inscrire</a></div></div>
+      <div class="card"><div class="flag">🇫🇷</div><h3>ImmoPilot France</h3><p>Euro, fiches de police, numéro d'enregistrement meublé, bail type loi de 1989, conforme RGPD.</p>
+        <div class="row"><a class="btn primary" data-host="demo-france" href="#">Ouvrir la démo France</a><a class="btn ghost" data-host="france" data-path="/inscription" href="#">S'inscrire</a></div></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div><b style="color:var(--ink)">ImmoPilot</b> · édité par Darmanagepro · <a href="mailto:darmanagepro@gmail.com">darmanagepro@gmail.com</a></div>
+    <nav><a data-link="legal" data-doc="/mentions-legales" href="#">Mentions légales</a><a data-link="legal" data-doc="/cgv" href="#">Conditions générales</a><a data-link="legal" data-doc="/confidentialite" href="#">Confidentialité</a><a data-host="maroc" href="#">Connexion Maroc</a><a data-host="france" href="#">Connexion France</a></nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // Les 4 versions sont des sous-domaines de l'adresse de cette page (maroc., france., demo-maroc., demo-france.).
+  var base = location.hostname.replace(/^www\./, "");
+  var C = {
+    ma: { host: "maroc", demo: "demo-maroc", prices: { ESSENTIEL: "199 DH", PRO: "499 DH", BUSINESS: "1 299 DH" }, lastword: "au dernier dirham", kpi: "48 600 DH", tax: "TTC" },
+    fr: { host: "france", demo: "demo-france", prices: { ESSENTIEL: "29 €", PRO: "59 €", BUSINESS: "149 €" }, lastword: "au dernier centime", kpi: "6 420 €", tax: "TTC" }
+  };
+  function url(sub, path) { return "https://" + sub + "." + base + (path || "/"); }
+  function apply(code) {
+    var c = C[code];
+    try { localStorage.setItem("ip_country", code); } catch (e) {}
+    document.querySelectorAll("[data-country]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-country") === code)); });
+    document.querySelectorAll("[data-price]").forEach(function (el) { el.textContent = c.prices[el.getAttribute("data-price")]; });
+    ["lastword", "kpi", "tax"].forEach(function (k) { document.querySelectorAll('[data-c="' + k + '"]').forEach(function (el) { el.textContent = c[k]; }); });
+    document.querySelectorAll("[data-link]").forEach(function (a) {
+      var kind = a.getAttribute("data-link"), plan = a.getAttribute("data-plan");
+      if (kind === "signup") a.href = url(c.host, "/inscription" + (plan ? "?forfait=" + plan : ""));
+      else if (kind === "login") a.href = url(c.host);
+      else if (kind === "demo") a.href = url(c.demo);
+      else if (kind === "legal") a.href = url(c.host, a.getAttribute("data-doc"));
+    });
+  }
+  document.querySelectorAll("[data-host]").forEach(function (a) { a.href = url(a.getAttribute("data-host"), a.getAttribute("data-path")); });
+  document.querySelectorAll("[data-country]").forEach(function (b) { b.addEventListener("click", function () { apply(b.getAttribute("data-country")); }); });
+  var saved = null; try { saved = localStorage.getItem("ip_country"); } catch (e) {}
+  var guess = /^fr/i.test(navigator.language || "") && !/MA/i.test(navigator.language || "") && (Intl.DateTimeFormat().resolvedOptions().timeZone || "").indexOf("Europe/") === 0 ? "fr" : "ma";
+  apply(C[saved] ? saved : guess);
+})();
+</script>
+</body>
+</html>

@@ -17,13 +17,18 @@ function findChromium() {
   const cands = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/snap/bin/chromium", "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable"];
   return cands.find(function (c) { return fs.existsSync(c); }) || "chromium";
 }
+// Éditions : ma (Maroc), fr (France) et leurs démonstrations publiques ma-demo, fr-demo (paquets construits par tests/build-bundle.js).
+const BUNDLES = { "ma": "dist", "fr": "dist-fr", "ma-demo": "dist-demo", "fr-demo": "dist-fr-demo" };
 function config() {
   const E = process.env, edition = String(E.IMMO_EDITION || "fr").toLowerCase();
+  if (!BUNDLES[edition]) throw new Error("IMMO_EDITION inconnue : " + edition + " (attendu : " + Object.keys(BUNDLES).join(", ") + ")");
   const root = path.resolve(__dirname, "..");
   const publicUrl = String(E.PUBLIC_URL || "http://localhost:" + (E.PORT || 8080) + "/").replace(/\/?$/, "/");
   return {
     edition: edition, publicUrl: publicUrl,
-    bundleDir: E.BUNDLE_DIR ? path.resolve(E.BUNDLE_DIR) : path.join(root, edition === "ma" ? "dist" : "dist-" + edition),
+    bundleDir: E.BUNDLE_DIR ? path.resolve(E.BUNDLE_DIR) : path.join(root, BUNDLES[edition]), demo: /-demo$/.test(edition),
+    signupOpen: E.SIGNUP_OPEN === undefined ? null : /^(1|true|yes|oui)$/i.test(E.SIGNUP_OPEN), signupTrialDays: E.SIGNUP_TRIAL_DAYS === undefined ? null : String(parseInt(E.SIGNUP_TRIAL_DAYS, 10) || 0),
+    portalUrl: E.PORTAL_URL || "",
     editionsDir: path.join(root, "editions"),
     dataDir: path.resolve(E.DATA_DIR || "/var/lib/immopilot"),
     host: E.HOST || "127.0.0.1", port: Number(E.PORT || 8080),

@@ -1,0 +1,55 @@
+# ImmoPilot SaaS — une adresse par version, HTTPS automatique (certificats Let's Encrypt renouvelés par Caddy).
+# {{DOMAIN}} est remplacé par install-saas.sh (votre domaine, ou l'adresse automatique en .sslip.io).
+
+(commun) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	request_body {
+		max_size 13MB
+	}
+}
+
+(app) {
+	import commun
+	reverse_proxy 127.0.0.1:{args[0]} {
+		header_up X-Forwarded-For {remote_host}
+	}
+	log {
+		output file /var/log/caddy/immopilot-{args[1]}.log {
+			roll_size 20MiB
+			roll_keep 10
+		}
+	}
+}
+
+# Vitrine : présentation, tarifs, choix du pays, démo et inscription
+{{DOMAIN}} {
+	import commun
+	root * /opt/immopilot/src/application/server/portail
+	header Content-Security-Policy "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'"
+	header X-Content-Type-Options nosniff
+	file_server
+}
+
+www.{{DOMAIN}} {
+	redir https://{{DOMAIN}}{uri} permanent
+}
+
+maroc.{{DOMAIN}} {
+	import app 8081 maroc
+}
+
+france.{{DOMAIN}} {
+	import app 8082 france
+}
+
+demo-maroc.{{DOMAIN}} {
+	import app 8083 demo-maroc
+}
+
+demo-france.{{DOMAIN}} {
+	import app 8084 demo-france
+}

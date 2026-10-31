@@ -1,0 +1,35 @@
+[Unit]
+Description=ImmoPilot SaaS — version %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=immopilot
+Group=immopilot
+EnvironmentFile=/etc/immopilot/smtp.env
+EnvironmentFile=/etc/immopilot/%i.env
+Environment=HOME=/var/lib/immopilot/%i
+Environment=NODE_ENV=production
+WorkingDirectory=/opt/immopilot/src/application/server
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+# Durcissement : lecture seule partout sauf les données de CETTE version ; /tmp privé (impressions PDF)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/immopilot/%i
+UMask=0077
+MemoryMax=1500M
+
+[Install]
+WantedBy=multi-user.target

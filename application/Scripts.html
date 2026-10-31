@@ -64,6 +64,7 @@ const App = window.App = {
     if (b.mode === "reset" && b.token) return Public.reset(b.token);
     if (b.mode === "guest" && b.token) return Public.guest(b.token);
     if (b.mode === "legal") return Public.legal(b.doc || "mentions");
+    if (b.mode === "signup" && ED.signupOpen && !store("ip_token")) return Public.signup(b.doc);
     S.token = store("ip_token");
     if (!S.token) return Public.login();
     clear($("app")).appendChild(h("div", { class: "loading" }, t("Chargement…")));

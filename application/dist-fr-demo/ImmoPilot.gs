@@ -1,6 +1,6 @@
 /**
  * ImmoPilot 2.3.1 (édition FR) — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
- * Contient les 36 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SubscriptionService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
+ * Contient les 37 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SignupService.gs, SubscriptionService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
  * À coller seul dans le projet Apps Script (aucun autre fichier .gs ne doit rester dans le projet).
  */
 
@@ -1458,7 +1458,7 @@ function routes_() { return {
 }; }
 function publicRoutes_() { return {
   "auth.login": "authLogin_", "assistant.kb": "assistantKbPublic_", "auth.requestReset": "authRequestReset_", "auth.resetPassword": "authResetPassword_",
-  "invite.info": "inviteInfo_", "invite.accept": "inviteAccept_", "legal.get": "legalGet_", "demo.views": "demoPublicViews_", "demo.enter": "demoEnter_",
+  "invite.info": "inviteInfo_", "invite.accept": "inviteAccept_", "legal.get": "legalGet_", "demo.views": "demoPublicViews_", "demo.enter": "demoEnter_", "signup.info": "signupInfo_", "signup.create": "signupCreate_",
   "guest.portal.get": "guestPortalGet_", "guest.portal.save": "guestPortalSave_", "guest.portal.upload": "guestPortalUpload_", "guest.portal.incident": "guestPortalIncident_"
 }; }
 
@@ -1468,7 +1468,7 @@ function publicRoutes_() { return {
  */
 var INSTALL_HTML_FILES_ = ["Index", "Styles", "Components", "I18n", "Login", "Dashboard", "Pages", "Scripts", "Assistant"];
 /* Première et dernière fonction de chaque fichier : détecte un fichier absent ET un fichier collé incomplètement. */
-var INSTALL_GS_SENTINELS_ = { Admin: ["assertEditor_", "auditList_"], Legal: ["legalGet_", "legalValues_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], LeaseAgentService: ["laFill_", "inspectionCancel_"], RentAutomationService: ["rentReminderDays_", "rentMailingsOf_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SubscriptionService: ["planOut_", "subscriptionJob_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
+var INSTALL_GS_SENTINELS_ = { Admin: ["assertEditor_", "auditList_"], Legal: ["legalGet_", "legalValues_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], LeaseAgentService: ["laFill_", "inspectionCancel_"], RentAutomationService: ["rentReminderDays_", "rentMailingsOf_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SignupService: ["signupProp_", "signupCleanupJob_"], SubscriptionService: ["planOut_", "subscriptionJob_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
 function installCheck_() {
   const g = typeof globalThis !== "undefined" ? globalThis : this;
   const missingGs = Object.keys(INSTALL_GS_SENTINELS_).filter(function (f) { return INSTALL_GS_SENTINELS_[f].some(function (n) { return typeof g[n] !== "function"; }); });
@@ -1537,7 +1537,7 @@ function editionPublic_() {
   const e = edition_();
   return { code: e.code, country: e.country, countryName: e.countryName, currency: e.currency, timezone: e.timezone, city: e.city, mapCenter: e.mapCenter, phoneCountry: e.phoneCountry,
     localMobileRe: e.localMobileRe, tagline: e.tagline, taglineKey: e.taglineKey, logoSvg: e.logoSvg, policeForms: e.policeForms, registrationNumber: e.registrationNumber,
-    dataAuthority: e.dataAuthority, taxIdLabel: e.taxIdLabel, publicDemo: !!IMMO_PUBLIC_DEMO_ };
+    dataAuthority: e.dataAuthority, taxIdLabel: e.taxIdLabel, publicDemo: !!IMMO_PUBLIC_DEMO_, signupOpen: signupOpen_(), signupTrialDays: signupTrialDays_(), signupUrl: signupExternalUrl_() };
 }
 /** Contrôle d'installation mémorisé 6 h par version installée : l'ouverture de l'application ne relit pas tous les fichiers à chaque fois. */
 function installCheckCached_() {
@@ -1552,7 +1552,7 @@ function doGet(e) {
   const check = installCheckCached_();
   if (!check.ok) return installErrorPage_(check);
   const prm = (e && e.parameter) || {};
-  const action = ["accept", "reset", "guest", "legal"].indexOf(String(prm.action || "")) >= 0 ? String(prm.action) : "app";
+  const action = ["accept", "reset", "guest", "legal", "signup"].indexOf(String(prm.action || "")) >= 0 ? String(prm.action) : "app";
   const doc = /^[a-z]{2,20}$/.test(String(prm.doc || "")) ? String(prm.doc) : "";
   const token = /^[a-f0-9]{64}$/.test(String(prm.token || "")) ? String(prm.token) : "";
   const t = HtmlService.createTemplateFromFile("Index");
@@ -1655,7 +1655,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "4ea4088bd1d0";
+var IMMO_BUILD_ = "f4aa9b07388f";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -7929,6 +7929,153 @@ function resvSheet_(p, a) {
 }
 
 /* ======================================================================
+ * SignupService.gs
+ * ====================================================================== */
+/**
+ * ImmoPilot — inscription en ligne (mode SaaS).
+ *
+ * Un propriétaire ou une agence crée seul son compte depuis l'écran de connexion : organisation, abonnement en période
+ * d'essai et e-mail d'activation (lien à usage unique pour choisir le mot de passe, qui prouve aussi que l'adresse est la sienne).
+ * Aucun compte utilisateur n'existe tant que le lien n'a pas été ouvert ; les inscriptions jamais activées sont désactivées
+ * automatiquement après 14 jours (tâche quotidienne).
+ *
+ * Réglages (propriétés du script, ou « immopilot set … » sur le serveur) :
+ *   IMMO_SIGNUP_OPEN        "1" pour ouvrir l'inscription (fermée par défaut ; jamais dans un paquet de démonstration)
+ *   IMMO_SIGNUP_TRIAL_DAYS  durée de l'essai gratuit en jours (60 par défaut : offre de lancement « 2 mois offerts »)
+ */
+var SIGNUP_CREATOR_PREFIX_ = "inscription:";
+var SIGNUP_ACCOUNT_TYPES_ = { OWNER_ORG: "OWNER", AGENCY: "AGENCY_ADMIN" };
+
+function signupProp_(k) { try { return PropertiesService.getScriptProperties().getProperty(k); } catch (e) { return null; } }
+function signupOpen_() { return !IMMO_PUBLIC_DEMO_ && String(signupProp_("IMMO_SIGNUP_OPEN") || "") === "1"; }
+function signupTrialDays_() {
+  const raw = signupProp_("IMMO_SIGNUP_TRIAL_DAYS"), n = parseInt(raw, 10);
+  return raw === null || raw === "" || isNaN(n) ? 60 : Math.max(0, Math.min(365, n));
+}
+/** Démonstration : adresse de l'inscription sur la version officielle (IMMO_SIGNUP_URL), pour le bouton « Créer mon compte ». */
+function signupExternalUrl_() {
+  if (!IMMO_PUBLIC_DEMO_) return "";
+  const m = String(signupProp_("IMMO_SIGNUP_URL") || "").trim().match(/^https:\/\/[a-z0-9.-]+(:\d+)?(\/[^\s"'<>]*)?$/i);
+  return m ? m[0] : "";
+}
+function signupAssertOpen_() { if (!signupOpen_()) throw new AppError("NOT_FOUND", "L'inscription en ligne n'est pas ouverte. Contactez ImmoPilot pour créer votre compte."); }
+
+/** Forfaits proposés à l'inscription (aucune donnée client). */
+function signupInfo_() {
+  signupAssertOpen_();
+  const plans = dbAll_("SubscriptionPlans").filter(function (pl) { return pl.status === "ACTIVE"; })
+    .sort(function (a, b) { return (Number(a.sortOrder) || 9) - (Number(b.sortOrder) || 9); })
+    .map(function (pl) { return { planCode: pl.planCode, name: pl.name, price: num_(pl.price), currency: pl.currency || cur_(), maxProperties: pl.maxProperties, maxUsers: pl.maxUsers }; });
+  return { open: true, trialDays: signupTrialDays_(), plans: plans, currency: cur_(), country: edition_().countryName };
+}
+
+function signupCreate_(a) {
+  signupAssertOpen_();
+  a = a || {};
+  rateLimit_("signup-global", 60, 3600);
+  const email = validateEmail_(a.email);
+  rateLimit_("signup:" + email, 5, 86400);
+  const done = { ok: true, email: email, message: "Merci ! Un e-mail vient d'être envoyé à " + email + ". Ouvrez le lien qu'il contient pour choisir votre mot de passe et activer votre compte " +
+    "(pensez à regarder dans les courriers indésirables). Le lien est valable " + inviteDays_() + " jours." };
+  if (a.website) return done; // champ piège invisible : rempli seulement par les robots
+  const displayName = reqText_(a.displayName, "Votre nom", 2, 100);
+  const type = oneOf_(String(a.accountType || "OWNER_ORG"), Object.keys(SIGNUP_ACCOUNT_TYPES_), "Type de compte");
+  const orgName = safeText_(a.organizationName, 120) || displayName;
+  assert_(orgName.length >= 2, "Nom de votre structure trop court.");
+  const phone = safeText_(a.phone, 30);
+  assert_(a.acceptTerms === true, "Veuillez accepter les conditions générales et la politique de confidentialité.");
+  const plan = dbGet_("SubscriptionPlans", safeText_(a.planCode || "ESSENTIEL", 30));
+  assert_(plan && plan.status === "ACTIVE", "Forfait introuvable.");
+
+  // Compte déjà existant : on ne crée rien et on prévient la personne par e-mail (la réponse reste identique, sans révéler qui est inscrit).
+  const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });
+  if (user && user.passwordHash) {
+    sendMailSafe_(email, "Votre compte ImmoPilot existe déjà", "Bonjour,\n\nUne inscription a été demandée avec votre adresse, mais vous avez déjà un compte ImmoPilot.\n\n" +
+      "Connectez-vous ici : " + appUrl_() + "\nMot de passe oublié ? Utilisez le lien « Mot de passe oublié » de l'écran de connexion.\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\nImmoPilot",
+      "signup-exists:" + email + ":" + todayStr_());
+    return done;
+  }
+  const now = Date.now(), base = appUrl_(); // adresse vérifiée AVANT toute création (sinon l'espace existerait sans e-mail d'activation)
+  // Inscription déjà en attente d'activation (e-mail perdu, lien expiré…) : nouveau lien pour le même espace, sans doublon.
+  const pending = dbAll_("Invitations").filter(function (i) { return normalizeEmail_(i.email) === email && ["PENDING", "EMAIL_FAILED", "EXPIRED"].indexOf(i.status) >= 0 && String(i.createdBy) === SIGNUP_CREATOR_PREFIX_ + email; })
+    .filter(function (i) { const o = dbGet_("Organizations", i.organizationId); return o && o.status === "ACTIVE"; })
+    .sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); })[0];
+  if (pending) {
+    const fresh = randomToken_();
+    dbUpdate_("Invitations", pending.invitationId, { tokenHash: sha256Hex_(fresh), status: "PENDING", expiresAt: new Date(now + inviteDays_() * 86400000).toISOString() });
+    const o = dbGet_("Organizations", pending.organizationId);
+    const r = sendMailSafe_(email, "Activez votre compte ImmoPilot", signupMailBody_(pending.displayName, o.name, "", "", base + "?action=accept&token=" + fresh), "signup:" + pending.invitationId + ":" + fresh.slice(0, 8));
+    if (!r.ok) throw new AppError("INTERNAL", "L'e-mail d'activation n'a pas pu partir. Réessayez dans quelques minutes ou contactez ImmoPilot.");
+    return done;
+  }
+
+  const trialDays = signupTrialDays_(), token = randomToken_(), role = SIGNUP_ACCOUNT_TYPES_[type];
+  const made = withLock_(function () {
+    const names = {}; dbAll_("Organizations").forEach(function (o) { if (o.status !== "INACTIVE") names[String(o.name).toLowerCase()] = true; });
+    let name = orgName, k = 2; while (names[name.toLowerCase()]) name = orgName + " (" + (k++) + ")";
+    const org = dbInsert_("Organizations", { name: name, status: "ACTIVE", type: type, city: edition_().city, country: edition_().country, timezone: tz_(), locale: oneOf_(IMMO_LANGS_.indexOf(a.locale) >= 0 ? a.locale : "fr", IMMO_LANGS_, "Langue"),
+      billingEmail: email, phone: phone, contactName: displayName, createdAt: nowIso_(), createdBy: SIGNUP_CREATOR_PREFIX_ + email, updatedAt: nowIso_() });
+    const start = todayStr_(), trial = trialDays > 0, trialEnd = trial ? addDaysStr_(start, trialDays) : "";
+    const sub = dbInsert_("Subscriptions", { organizationId: org.organizationId, planCode: plan.planCode, status: trial ? "TRIAL" : "PAST_DUE", startDate: start, nextDueDate: trial ? trialEnd : start,
+      periodEnd: trial ? trialEnd : start, trialEnd: trialEnd, price: plan.price, agencyOptionPrice: num_(plan.agencyOptionPrice), currency: plan.currency || cur_(), periodicity: plan.periodicity,
+      cancelAtPeriodEnd: false, createdAt: nowIso_(), createdBy: SIGNUP_CREATOR_PREFIX_ + email, updatedAt: nowIso_(), updatedBy: SIGNUP_CREATOR_PREFIX_ + email });
+    dbUpdate_("Organizations", org.organizationId, { planCode: plan.planCode });
+    const inv = dbInsert_("Invitations", { email: email, displayName: displayName, organizationId: org.organizationId, role: role, tokenHash: sha256Hex_(token), status: "PENDING",
+      expiresAt: new Date(now + inviteDays_() * 86400000).toISOString(), createdAt: nowIso_(), createdBy: SIGNUP_CREATOR_PREFIX_ + email, acceptedAt: "", revokedAt: "", permissionsJson: "[]", propertyId: "" });
+    auditAs_(email, "", "SIGNUP_CREATED", "Organization", org.organizationId, org.organizationId, { planCode: plan.planCode, type: type, trialDays: trialDays, subscriptionId: sub.subscriptionId });
+    return { org: org, inv: inv, trialEnd: trialEnd };
+  });
+
+  const body = signupMailBody_(displayName, made.org.name, plan.name, made.trialEnd, base + "?action=accept&token=" + token);
+  const sent = sendMailSafe_(email, "Activez votre compte ImmoPilot", body, "signup:" + made.inv.invitationId);
+  if (!sent.ok) {
+    dbUpdate_("Invitations", made.inv.invitationId, { status: "EMAIL_FAILED" });
+    throw new AppError("INTERNAL", "Votre espace est créé, mais l'e-mail d'activation n'a pas pu partir. Réessayez dans quelques minutes ou contactez ImmoPilot.");
+  }
+  signupNotifyAdmins_(made.org, plan, email, displayName, phone, type, made.trialEnd);
+  return done;
+}
+
+function signupMailBody_(displayName, orgName, planName, trialEnd, url) {
+  return "Bonjour " + displayName + ",\n\nBienvenue sur ImmoPilot " + edition_().countryName + " !\n\nVotre espace « " + orgName + " » est prêt" +
+    (trialEnd ? ", avec le forfait " + planName + " offert jusqu'au " + trialEnd + " (aucun paiement demandé pendant l'essai)" : "") + ".\n\n" +
+    "Pour l'activer, choisissez votre mot de passe avec ce lien personnel, à usage unique, valable " + inviteDays_() + " jours :\n" + url +
+    "\n\nSi vous n'êtes pas à l'origine de cette inscription, ignorez ce message : sans activation, rien ne sera conservé.\n\nL'équipe ImmoPilot";
+}
+/** Prévient les super administrateurs de chaque nouvelle inscription (sans bloquer l'inscription en cas d'échec). */
+function signupNotifyAdmins_(org, plan, email, displayName, phone, type, trialEnd) {
+  try {
+    const admins = String(signupProp_(IMMO_CONFIG.ADMIN_EMAILS_PROPERTY) || "").split(/[,;\s]+/).filter(function (x) { return /@/.test(x); }).slice(0, 5);
+    admins.forEach(function (to) {
+      sendMailSafe_(to, "Nouvelle inscription ImmoPilot " + edition_().code + " : " + org.name,
+        "Nouvelle inscription en ligne.\n\nStructure : " + org.name + " (" + (type === "AGENCY" ? "agence" : "propriétaire") + ")\nContact : " + displayName + " — " + email + (phone ? " — " + phone : "") +
+        "\nForfait : " + plan.name + (trialEnd ? " (essai jusqu'au " + trialEnd + ")" : "") + "\n\nLe compte sera actif dès que la personne aura choisi son mot de passe.\n" + appUrl_(),
+        "signup-admin:" + org.organizationId, org.organizationId);
+    });
+  } catch (e) { console.error("Alerte inscription : " + e.message); }
+}
+
+/** Tâche quotidienne : désactive les inscriptions jamais activées (aucun utilisateur actif) au-delà de 14 jours. */
+function signupCleanupJob_() {
+  const limit = Date.now() - 14 * 86400000;
+  const activeOrgs = {}; dbAll_("UserRoles").forEach(function (r) { if (r.status === "ACTIVE") activeOrgs[String(r.organizationId)] = true; });
+  let n = 0;
+  dbAll_("Organizations").filter(function (o) {
+    return o.status === "ACTIVE" && String(o.createdBy).indexOf(SIGNUP_CREATOR_PREFIX_) === 0 && !activeOrgs[String(o.organizationId)] && parseTs_(o.createdAt) && parseTs_(o.createdAt).getTime() < limit;
+  }).forEach(function (o) {
+    withLock_(function () {
+      dbUpdate_("Organizations", o.organizationId, { status: "INACTIVE", suspensionReason: "Inscription jamais activée", updatedAt: nowIso_() });
+      dbAll_("Subscriptions").filter(function (s) { return String(s.organizationId) === String(o.organizationId) && ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0; })
+        .forEach(function (s) { dbUpdate_("Subscriptions", s.subscriptionId, { status: "CANCELLED", canceledAt: nowIso_(), updatedAt: nowIso_(), updatedBy: "inscription-expiree" }); });
+      dbAll_("Invitations").filter(function (i) { return String(i.organizationId) === String(o.organizationId) && ["PENDING", "EMAIL_FAILED"].indexOf(i.status) >= 0; })
+        .forEach(function (i) { dbUpdate_("Invitations", i.invitationId, { status: "EXPIRED", tokenHash: "" }); });
+    });
+    n++;
+  });
+  return n;
+}
+
+/* ======================================================================
  * SubscriptionService.gs
  * ====================================================================== */
 /**
@@ -8480,6 +8627,60 @@ function TEST_GROUPS_() {
         dbReset_();
         const from = addDaysStr_(todayStr_(), -1);
         T.eq(dbTailSince_("ActivityLogs", "timestamp", from, 7).length, dbAll_("ActivityLogs").filter(function (l) { return String(l.timestamp) >= from; }).length, "lecture des journaux récents seulement");
+      }],
+      ["Inscription en ligne (SaaS) : fermée par défaut, essai gratuit, activation par e-mail, sans doublon", function (T, fx) {
+        const P = PropertiesService.getScriptProperties(), savedOpen = P.getProperty("IMMO_SIGNUP_OPEN"), savedDays = P.getProperty("IMMO_SIGNUP_TRIAL_DAYS"), savedDemo = IMMO_PUBLIC_DEMO_;
+        try {
+          P.deleteProperty("IMMO_SIGNUP_OPEN");
+          T.fails(null, "signup.create", { email: fx.mail("closed"), displayName: "Fermé", acceptTerms: true }, "NOT_FOUND");
+          T.eq(editionPublic_().signupOpen, false, "bouton masqué quand l'inscription est fermée");
+          P.setProperty("IMMO_SIGNUP_OPEN", "1"); P.deleteProperty("IMMO_SIGNUP_TRIAL_DAYS");
+          T.eq(editionPublic_().signupOpen, true, "bouton visible");
+          const info = T.pub("signup.info", {});
+          T.eq(info.trialDays, 60, "essai de 2 mois par défaut");
+          T.ok(info.plans.length >= 3 && info.plans[0].planCode === "ESSENTIEL", "forfaits proposés");
+          const email = fx.mail("signup-owner");
+          T.fails(null, "signup.create", { email: email, displayName: "Karim Test", planCode: "PRO" }, "VALIDATION");
+          const r = T.pub("signup.create", { email: email, displayName: "Karim Test", phone: "0612345678", planCode: "PRO", accountType: "OWNER_ORG", acceptTerms: true });
+          T.ok(r.ok && /e-mail/.test(r.message), "message de confirmation");
+          const org = dbAll_("Organizations").find(function (o) { return o.createdBy === "inscription:" + email; });
+          T.ok(org && org.type === "OWNER_ORG" && org.status === "ACTIVE", "organisation propriétaire créée");
+          const sub = dbAll_("Subscriptions").find(function (x) { return String(x.organizationId) === String(org.organizationId); });
+          T.eq([sub.status, sub.planCode, sub.trialEnd], ["TRIAL", "PRO", addDaysStr_(todayStr_(), 60)], "abonnement Pro en essai 60 jours");
+          T.ok(!dbAll_("Users").some(function (u) { return u.email === email; }), "aucun compte avant activation");
+          const firstToken = T.tokenFrom(T.lastMailTo(email).body, "accept");
+          T.pub("signup.create", { email: email, displayName: "Karim Test", planCode: "PRO", acceptTerms: true });
+          T.eq(dbAll_("Organizations").filter(function (o) { return o.createdBy === "inscription:" + email; }).length, 1, "pas de doublon si on réinscrit la même adresse");
+          const token = T.tokenFrom(T.lastMailTo(email).body, "accept");
+          T.ok(token && token !== firstToken, "nouveau lien envoyé (e-mail perdu)");
+          T.fails(null, "invite.info", { token: firstToken }, "AUTH");
+          T.ok(token, "lien d'activation dans l'e-mail");
+          T.eq(T.pub("invite.info", { token: token }).role, "OWNER", "rôle propriétaire");
+          T.pub("invite.accept", { token: token, password: "Inscrit-Pass1", displayName: "Karim Test" });
+          const tok = T.pub("auth.login", { email: email, password: "Inscrit-Pass1" }).token;
+          T.ok(T.call(tok, "property.create", { organizationId: org.organizationId, name: "Riad inscrit", city: "Marrakech" }).propertyId, "le nouveau client crée son premier bien");
+          T.pub("signup.create", { email: email, displayName: "Autre", acceptTerms: true });
+          T.eq(T.lastMailTo(email).subject, "Votre compte ImmoPilot existe déjà", "compte existant : simple e-mail, rien de créé");
+          const ag = fx.mail("signup-agency");
+          P.setProperty("IMMO_SIGNUP_TRIAL_DAYS", "0");
+          T.pub("signup.create", { email: ag, displayName: "Sara Agence", organizationName: "Conciergerie Atlas", accountType: "AGENCY", acceptTerms: true });
+          const ao = dbAll_("Organizations").find(function (o) { return o.createdBy === "inscription:" + ag; });
+          T.eq([ao.type, ao.name], ["AGENCY", "Conciergerie Atlas"], "agence créée avec son nom");
+          T.eq(dbAll_("Subscriptions").find(function (x) { return String(x.organizationId) === String(ao.organizationId); }).status, "PAST_DUE", "sans essai : en attente de paiement");
+          T.eq(dbAll_("Invitations").find(function (i) { return i.email === ag; }).role, "AGENCY_ADMIN", "rôle responsable d'agence");
+          T.pub("signup.create", { email: fx.mail("bot"), displayName: "Robot", acceptTerms: true, website: "http://spam" });
+          T.ok(!dbAll_("Organizations").some(function (o) { return o.createdBy === "inscription:" + fx.mail("bot"); }), "champ piège : robot ignoré");
+          dbUpdate_("Organizations", ao.organizationId, { createdAt: new Date(Date.now() - 15 * 86400000).toISOString() });
+          T.ok(signupCleanupJob_() >= 1, "nettoyage des inscriptions non activées");
+          T.eq(dbGet_("Organizations", ao.organizationId).status, "INACTIVE", "inscription jamais activée désactivée après 14 jours");
+          T.eq(dbGet_("Organizations", org.organizationId).status, "ACTIVE", "compte activé conservé");
+          IMMO_PUBLIC_DEMO_ = true;
+          T.fails(null, "signup.info", {}, "NOT_FOUND");
+        } finally {
+          IMMO_PUBLIC_DEMO_ = savedDemo;
+          if (savedOpen === null) P.deleteProperty("IMMO_SIGNUP_OPEN"); else P.setProperty("IMMO_SIGNUP_OPEN", savedOpen);
+          if (savedDays === null) P.deleteProperty("IMMO_SIGNUP_TRIAL_DAYS"); else P.setProperty("IMMO_SIGNUP_TRIAL_DAYS", savedDays);
+        }
       }],
       ["Invitation valide → compte activé → connexion", function (T, fx) {
         const email = fx.mail("newcleaner");
@@ -9693,7 +9894,7 @@ function jobSummary_(r) { return { ok: !!(r && r.ok), skipped: !!(r && r.skipped
 /** Chaque jour : baux, abonnements, devis expirés, alertes incidents, rétention, arrivées imminentes, sauvegarde. */
 function jobDaily() {
   return jobSummary_(runJob_("jobDaily", { leases: leaseJob_, subscriptions: subscriptionJob_, quotes: quoteExpireJob_, incidents: incidentAlertsJob_, retention: purgeExpiredDocuments_,
-    arrivals: upcomingArrivalsJob_, guestTokens: guestTokenExpireJob_, backup: function () { return backupDatabase_("quotidien").name; } }));
+    arrivals: upcomingArrivalsJob_, guestTokens: guestTokenExpireJob_, signups: signupCleanupJob_, backup: function () { return backupDatabase_("quotidien").name; } }));
 }
 
 /** Arrivées non enregistrées et départs dépassés (une alerte par réservation). */
