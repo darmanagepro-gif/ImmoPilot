@@ -56,7 +56,7 @@ function routes_() { return {
   "leasedoc.draft": "leaseDocDraft_", "leasedoc.get": "leaseDocGet_", "leasedoc.update": "leaseDocUpdate_", "leasedoc.pdf": "leaseDocPdf_", "leasedoc.finalize": "leaseDocFinalize_",
   "leasedoc.send": "leaseDocSend_", "leasedoc.cancel": "leaseDocCancel_",
   "inspection.create": "inspectionCreate_", "inspection.get": "inspectionGet_", "inspection.save": "inspectionSave_", "inspection.write": "inspectionWrite_", "inspection.pdf": "inspectionPdf_",
-  "inspection.finalize": "inspectionFinalize_", "inspection.send": "inspectionSend_", "inspection.cancel": "inspectionCancel_",
+  "inspection.finalize": "inspectionFinalize_", "inspection.send": "inspectionSend_", "inspection.cancel": "inspectionCancel_", "inspection.sign": "inspectionSign_", "inspection.depositLetter": "inspectionDepositLetter_",
   "plan.list": "planList_", "plan.save": "planSave_", "sub.assign": "subAssign_", "sub.recordPayment": "subRecordPayment_", "sub.setStatus": "subSetStatus_", "sub.list": "subList_",
   "sub.mine": function (p) { return subMine_(p); }, "sub.requestChange": "subRequestChange_", "sub.cardSetup": "subCardSetup_", "template.info": "templateInfo_", "template.preview": "templatePreview_", "sub.signStart": "subSignStart_", "sub.signConfirm": "subSignConfirm_", "sub.cardConfirm": "subCardConfirm_", "sub.cardRemove": "subCardRemove_", "sub.chargeNow": "subChargeNow_", "sub.contractPdf": "subContractPdf_", "assistant.kb": "assistantKb_", "assistant.ask": "assistantAsk_",
   "dash.get": "dashGet_", "pareto.run": "paretoRun_", "pareto.export": "paretoExport_", "report.run": "reportRun_", "report.export": "reportExport_"

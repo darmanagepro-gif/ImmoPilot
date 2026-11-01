@@ -1516,3 +1516,28 @@ bailleur à gauche, locataire à droite|landlord on the left, tenant on the righ
 coupon de paiement|payment slip|قسيمة الأداء|cupón de pago|cedolino di pagamento|betaalstrook
 détail du logement|property details|تفاصيل السكن|detalle de la vivienda|dettaglio dell'alloggio|details van de woning
 tableau des sommes|table of amounts|جدول المبالغ|tabla de importes|tabella degli importi|tabel van de bedragen
+Adresse où le locataire déménage|Address the tenant is moving to|العنوان الذي ينتقل إليه المكتري|Dirección a la que se muda el inquilino|Indirizzo in cui si trasferisce l'inquilino|Adres waar de huurder naartoe verhuist
+Ajouter une photo de cet élément|Add a photo of this item|إضافة صورة لهذا العنصر|Añadir una foto de este elemento|Aggiungi una foto di questo elemento|Foto van dit element toevoegen
+Aucune retenue : indiquez un coût de remise en état sur les éléments dégradés (ils apparaissent quand l'état de sortie est moins bon qu'à l'entrée).|No deduction: enter a repair cost on damaged items (they appear when the exit condition is worse than at entry).|لا اقتطاع: أدخل تكلفة الإصلاح على العناصر المتضررة (تظهر عندما تكون حالة الخروج أسوأ من الدخول).|Sin retención: indique un coste de reparación en los elementos dañados (aparecen cuando el estado de salida es peor que el de entrada).|Nessuna trattenuta: indica un costo di ripristino sugli elementi danneggiati (compaiono quando lo stato in uscita è peggiore che in entrata).|Geen inhouding: vul een herstelkost in bij beschadigde elementen (ze verschijnen als de staat bij vertrek slechter is dan bij intrek).
+Dégradation|Damage|ضرر|Daño|Danno|Schade
+Dépôt de garantie : retenues et restitution|Security deposit: deductions and refund|الضمانة: الاقتطاعات والإرجاع|Fianza: retenciones y devolución|Deposito cauzionale: trattenute e restituzione|Waarborg: inhoudingen en terugbetaling
+Indiquez le nom du signataire.|Enter the signer's name.|أدخل اسم الموقّع.|Indique el nombre del firmante.|Indica il nome del firmatario.|Vul de naam van de ondertekenaar in.
+Nom du signataire|Signer's name|اسم الموقّع|Nombre del firmante|Nome del firmatario|Naam van de ondertekenaar
+Nom et prénom du signataire|Signer's full name|الاسم الكامل للموقّع|Nombre y apellidos del firmante|Nome e cognome del firmatario|Volledige naam van de ondertekenaar
+Non signé sur l'écran (signature sur papier).|Not signed on screen (paper signature).|غير موقّع على الشاشة (توقيع على الورق).|No firmado en pantalla (firma en papel).|Non firmato sullo schermo (firma su carta).|Niet op het scherm ondertekend (handtekening op papier).
+Nouvelle adresse du locataire|Tenant's new address|العنوان الجديد للمكتري|Nueva dirección del inquilino|Nuovo indirizzo dell'inquilino|Nieuw adres van de huurder
+Photos à l'entrée|Photos at entry|صور عند الدخول|Fotos a la entrada|Foto all'ingresso|Foto's bij intrek
+Préparer la lettre de restitution du dépôt|Prepare the deposit refund letter|إعداد رسالة إرجاع الضمانة|Preparar la carta de devolución de la fianza|Prepara la lettera di restituzione del deposito|Brief voor terugbetaling van de waarborg opstellen
+Relevés à l'entrée|Readings at entry|القراءات عند الدخول|Lecturas a la entrada|Letture all'ingresso|Meterstanden bij intrek
+Relisez l'état des lieux avec le locataire, puis faites signer chacun du doigt sur l'écran. Toute modification après signature efface les signatures. À la validation, la copie signée est envoyée par e-mail au locataire.|Review the inspection report with the tenant, then have each party sign with a finger on the screen. Any change after signing clears the signatures. On validation, the signed copy is emailed to the tenant.|راجع محضر المعاينة مع المكتري، ثم اطلب من كل طرف التوقيع بإصبعه على الشاشة. أي تعديل بعد التوقيع يمحو التوقيعات. عند المصادقة تُرسل النسخة الموقّعة إلى المكتري عبر البريد الإلكتروني.|Revise el acta con el inquilino y haga firmar a cada parte con el dedo en la pantalla. Cualquier cambio tras la firma borra las firmas. Al validar, la copia firmada se envía por correo al inquilino.|Rileggi il verbale con l'inquilino, poi fai firmare ciascuno con il dito sullo schermo. Ogni modifica dopo la firma cancella le firme. Alla convalida, la copia firmata viene inviata via e-mail all'inquilino.|Overloop de plaatsbeschrijving met de huurder en laat elke partij met de vinger op het scherm tekenen. Elke wijziging na ondertekening wist de handtekeningen. Bij validatie wordt de getekende kopie naar de huurder gemaild.
+Retenue|Deduction|اقتطاع|Retención|Trattenuta|Inhouding
+Retenues|Deductions|الاقتطاعات|Retenciones|Trattenute|Inhoudingen
+Signature enregistrée.|Signature saved.|تم حفظ التوقيع.|Firma guardada.|Firma salvata.|Handtekening opgeslagen.
+Signatures|Signatures|التوقيعات|Firmas|Firme|Handtekeningen
+Signer à nouveau|Sign again|التوقيع من جديد|Firmar de nuevo|Firma di nuovo|Opnieuw ondertekenen
+Signez dans le cadre.|Sign inside the box.|وقّع داخل الإطار.|Firme dentro del recuadro.|Firma nel riquadro.|Teken in het kader.
+Valider la signature|Confirm signature|تأكيد التوقيع|Validar la firma|Conferma la firma|Handtekening bevestigen
+Vétusté|Wear and tear|التقادم|Desgaste|Vetustà|Slijtage
+coût de remise en état|repair cost|تكلفة الإصلاح|coste de reparación|costo di ripristino|herstelkost
+vétusté|wear|التقادم|desgaste|vetustà|slijtage
+À restituer|To refund|المبلغ المسترجع|A devolver|Da restituire|Terug te betalen

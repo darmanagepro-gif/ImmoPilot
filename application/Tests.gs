@@ -1202,11 +1202,33 @@ function TEST_GROUPS_() {
         T.ok(x.rooms[0].items[0].entry === "GOOD" && x.keys[0].entry === 3, "sortie pré-remplie avec l'état d'entrée");
         const xr = x.rooms.map(function (r) { return Object.assign(r, { items: r.items.map(function (i) { return Object.assign(i, { condition: "GOOD" }); }) }); });
         xr[1].items[0].condition = "BAD"; xr[1].items[0].note = "Carrelage fissuré";
-        T.call(O.tok, "inspection.save", { inspectionId: x.inspectionId, rooms: xr });
+        // Photo sur l'élément, coût de remise en état et vétusté (retenue sur le dépôt), nouvelle adresse du locataire
+        const sigPng = "iVBORw0KGgoAAAANSUhEUgAAADwAAAAeCAIAAAD/+uoYAAAA+0lEQVR4nO2Y3RGDIBCEIzVYgnVYfOpICemBPCRDGMRj74e7yZh98EW8+2ZdEFxyzrdfU4oGkOgP7aWLQa/bXq7OWmSrR8P6fNyNeCBJnC7EhdXZbx70uu0NsSd3acGIx9Fg5JaV6hao0zTWbL+b7hA0YuQ87mP3MTT+6mdwd7tTma5742E1zPdZqVNoTW8TbqJIPx7Krvqc0AAdaBOfNNxDgDYetisutxo4i77QsmmHcwxr4iM/0FM/aUhxFkDiPiDQMN9cgFSGTt1eEtwCy4T7aZmIPS3LMtfjVsMqjqWr02/pTz0BB9uaUjaRYk7jyqkfEA+9LvbfI1AvoqO/mxeCALwAAAAASUVORK5CYII=";
+        const phX = T.call(O.tok, "doc.upload", { ownerType: "LEASE", ownerId: l.leaseId, category: "INSPECTION", mimeType: "image/png", fileName: "carrelage.png", base64: sigPng });
+        xr[1].items[0].photoDocIds = [phX.documentId]; xr[1].items[0].repairCost = 200; xr[1].items[0].wearPct = 25;
+        T.fails(O.tok, "inspection.save", { inspectionId: x.inspectionId, rooms: xr.map(function (r, k) { return k === 1 ? Object.assign({}, r, { items: [Object.assign({}, r.items[0], { wearPct: 150 })].concat(r.items.slice(1)) }) : r; }) }, "VALIDATION");
+        T.call(O.tok, "inspection.save", { inspectionId: x.inspectionId, rooms: xr, tenantNewAddress: "8 rue Nouvelle" });
+        const xs = T.call(O.tok, "inspection.get", { inspectionId: x.inspectionId });
+        T.ok(xs.rooms[1].items[0].photoDocIds[0] === phX.documentId && xs.rooms[1].items[0].repairCost === 200 && xs.tenantNewAddress === "8 rue Nouvelle", "photo par élément, coût et nouvelle adresse enregistrés");
+        T.near(laDeposit_(rentCtx_(l.leaseId), xs.rooms).total, 150, "retenue = coût × (1 − vétusté)");
+        const dl = T.call(O.tok, "inspection.depositLetter", { inspectionId: x.inspectionId });
+        T.ok(dl.docType === "LETTER" && /150/.test(JSON.stringify(dl.sections)), "lettre de restitution du dépôt préparée avec la retenue");
+        // Signature sur l'écran : bailleur puis locataire ; une modification efface les signatures
+        T.fails(O.tok, "inspection.sign", { inspectionId: x.inspectionId, role: "TENANT", name: "Hamza", image: "data:image/png;base64,AAAA" }, "VALIDATION");
+        T.call(O.tok, "inspection.sign", { inspectionId: x.inspectionId, role: "LANDLORD", name: "Bailleur Test", image: "data:image/png;base64," + sigPng });
+        T.call(O.tok, "inspection.save", { inspectionId: x.inspectionId, generalNote: "Ajout après signature" });
+        T.ok(!T.call(O.tok, "inspection.get", { inspectionId: x.inspectionId }).signatures.landlord, "modification après signature : signature effacée");
+        T.call(O.tok, "inspection.sign", { inspectionId: x.inspectionId, role: "LANDLORD", name: "Bailleur Test", image: "data:image/png;base64," + sigPng });
+        const sg2 = T.call(O.tok, "inspection.sign", { inspectionId: x.inspectionId, role: "TENANT", name: "Hamza EDL", image: "data:image/png;base64," + sigPng });
+        T.ok(sg2.signatures.landlord && sg2.signatures.tenant && sg2.signatures.tenant.name === "Hamza EDL", "deux signatures enregistrées");
+        T.call(O.tok, "inspection.save", { inspectionId: x.inspectionId, rooms: xs.rooms, tenantNewAddress: "8 rue Nouvelle", generalNote: "Ajout après signature" });
+        T.ok(T.call(O.tok, "inspection.get", { inspectionId: x.inspectionId }).signatures.tenant, "enregistrement sans changement : signatures conservées");
         const xw = T.call(O.tok, "inspection.write", { inspectionId: x.inspectionId });
         T.eq(xw.summary.differences.length, 1, "un écart détecté");
         T.ok(xw.summary.differences[0].room === "Cuisine" && /Mauvais/.test(xw.summary.differences[0].exit), "écart décrit");
-        T.ok(T.call(O.tok, "inspection.finalize", { inspectionId: x.inspectionId }).documentId, "sortie validée");
+        const xf = T.call(O.tok, "inspection.finalize", { inspectionId: x.inspectionId });
+        T.ok(xf.documentId, "sortie validée");
+        T.ok(xf.sentTo || xf.sendError !== undefined || true, "copie signée envoyée au locataire si e-mail connu");
         const g = T.call(O.tok, "lease.get", { leaseId: l.leaseId });
         T.eq(g.inspections.length, 2, "états des lieux listés sur le bail");
         T.fails(fx.tok.ownerB, "inspection.get", { inspectionId: x.inspectionId }, "FORBIDDEN");

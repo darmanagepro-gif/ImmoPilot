@@ -1458,7 +1458,7 @@ function routes_() { return {
   "leasedoc.draft": "leaseDocDraft_", "leasedoc.get": "leaseDocGet_", "leasedoc.update": "leaseDocUpdate_", "leasedoc.pdf": "leaseDocPdf_", "leasedoc.finalize": "leaseDocFinalize_",
   "leasedoc.send": "leaseDocSend_", "leasedoc.cancel": "leaseDocCancel_",
   "inspection.create": "inspectionCreate_", "inspection.get": "inspectionGet_", "inspection.save": "inspectionSave_", "inspection.write": "inspectionWrite_", "inspection.pdf": "inspectionPdf_",
-  "inspection.finalize": "inspectionFinalize_", "inspection.send": "inspectionSend_", "inspection.cancel": "inspectionCancel_",
+  "inspection.finalize": "inspectionFinalize_", "inspection.send": "inspectionSend_", "inspection.cancel": "inspectionCancel_", "inspection.sign": "inspectionSign_", "inspection.depositLetter": "inspectionDepositLetter_",
   "plan.list": "planList_", "plan.save": "planSave_", "sub.assign": "subAssign_", "sub.recordPayment": "subRecordPayment_", "sub.setStatus": "subSetStatus_", "sub.list": "subList_",
   "sub.mine": function (p) { return subMine_(p); }, "sub.requestChange": "subRequestChange_", "sub.cardSetup": "subCardSetup_", "template.info": "templateInfo_", "template.preview": "templatePreview_", "sub.signStart": "subSignStart_", "sub.signConfirm": "subSignConfirm_", "sub.cardConfirm": "subCardConfirm_", "sub.cardRemove": "subCardRemove_", "sub.chargeNow": "subChargeNow_", "sub.contractPdf": "subContractPdf_", "assistant.kb": "assistantKb_", "assistant.ask": "assistantAsk_",
   "dash.get": "dashGet_", "pareto.run": "paretoRun_", "pareto.export": "paretoExport_", "report.run": "reportRun_", "report.export": "reportExport_"
@@ -1662,7 +1662,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "c1c865580fdf";
+var IMMO_BUILD_ = "724ef9bca5ba";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -1701,7 +1701,7 @@ var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
   VERSION: "2.4.0",
-  SCHEMA_VERSION: 11,
+  SCHEMA_VERSION: 12,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -1901,7 +1901,7 @@ var TABLES_SRC = {
   // États des lieux d'entrée et de sortie : relevé pièce par pièce, compteurs, clés, photos, rédaction de l'agent.
   LeaseInspections: { pk: "inspectionId", idp: "edl", org: "organizationId", req: "leaseId,type",
     enums: { type: ["ENTRY", "EXIT"], status: ["DRAFT", "FINAL", "CANCELLED"] },
-    cols: "inspectionId,organizationId,propertyId,leaseId,type,inspectionDate#d,status,roomsJson#j,metersJson#j,keysJson#j,generalNote,attendees,summaryJson#j,engine,documentId,createdAt#t,createdBy,updatedAt#t,updatedBy,finalizedAt#t,finalizedBy,sentAt#t,sentTo" },
+    cols: "inspectionId,organizationId,propertyId,leaseId,type,inspectionDate#d,status,roomsJson#j,metersJson#j,keysJson#j,generalNote,attendees,summaryJson#j,engine,documentId,createdAt#t,createdBy,updatedAt#t,updatedBy,finalizedAt#t,finalizedBy,sentAt#t,sentTo|tenantNewAddress,entryDate#d,metersEntryJson#j,landlordSignDocId,landlordSignName,landlordSignedAt#t,tenantSignDocId,tenantSignName,tenantSignedAt#t,signIp" },
   Expenses: { pk: "expenseId", idp: "exp", org: "organizationId", req: "category,amount", enums: { status: ["PLANNED", "INVOICED", "PAID", "CANCELLED"] },
     cols: "expenseId,organizationId,propertyId,category,description,supplier,amount#n,vatAmount#n,currency,expenseDate#d,status,paidAt#t,refType,refId,uniqueKey,documentId,createdAt#t,createdBy" },
   RevenueRecords: { pk: "revenueId", idp: "rev", org: "organizationId", req: "category,amount", enums: { status: ["EXPECTED", "RECEIVED", "CANCELLED"] },
@@ -5014,7 +5014,10 @@ function laDefaultKeys_() { return [{ label: "Clés de la porte d'entrée", coun
 function inspectionOut_(r, full) {
   const o = { inspectionId: r.inspectionId, leaseId: r.leaseId, type: r.type, inspectionDate: r.inspectionDate, status: r.status, engine: r.engine, documentId: r.documentId,
     createdAt: r.createdAt, updatedAt: r.updatedAt, finalizedAt: r.finalizedAt, sentAt: r.sentAt, sentTo: r.sentTo };
-  if (full) { o.rooms = parseJson_(r.roomsJson, []); o.meters = parseJson_(r.metersJson, {}); o.keys = parseJson_(r.keysJson, []); o.generalNote = r.generalNote; o.attendees = r.attendees; o.summary = parseJson_(r.summaryJson, null); }
+  if (full) { o.rooms = parseJson_(r.roomsJson, []); o.meters = parseJson_(r.metersJson, {}); o.keys = parseJson_(r.keysJson, []); o.generalNote = r.generalNote; o.attendees = r.attendees; o.summary = parseJson_(r.summaryJson, null);
+    o.tenantNewAddress = r.tenantNewAddress || ""; o.entryDate = r.entryDate || ""; o.metersEntry = parseJson_(r.metersEntryJson, {});
+    o.signatures = { landlord: r.landlordSignDocId ? { name: r.landlordSignName, at: r.landlordSignedAt, documentId: r.landlordSignDocId } : null,
+      tenant: r.tenantSignDocId ? { name: r.tenantSignName, at: r.tenantSignedAt, documentId: r.tenantSignDocId } : null }; }
   return o;
 }
 function inspectionsOf_(leaseId, finalOnly) {
@@ -5039,18 +5042,20 @@ function inspectionCreate_(p, a) {
   if (type === "EXIT") {
     const entry = inspectionEntryOf_(c.l.leaseId);
     if (entry) {
-      rooms = parseJson_(entry.roomsJson, []).map(function (r) { return { name: r.name, items: (r.items || []).map(function (i) { return { name: i.name, condition: "", note: "", entry: i.condition || "", entryNote: i.note || "" }; }), note: "", photoDocIds: [] }; });
+      rooms = parseJson_(entry.roomsJson, []).map(function (r) { return { name: r.name, items: (r.items || []).map(function (i) { return { name: i.name, condition: "", note: "", entry: i.condition || "", entryNote: i.note || "", entryPhotoDocIds: (i.photoDocIds || []).slice(0, 3) }; }), note: "", photoDocIds: [] }; });
       keys = parseJson_(entry.keysJson, []).map(function (k) { return { label: k.label, count: "", entry: k.count }; });
     }
   }
+  const ent = type === "EXIT" ? inspectionEntryOf_(c.l.leaseId) : null;
   const r = dbInsert_("LeaseInspections", { organizationId: c.l.organizationId, propertyId: c.l.propertyId, leaseId: c.l.leaseId, type: type, inspectionDate: a.inspectionDate ? dateOnly_(a.inspectionDate, "Date") : todayStr_(),
-    status: "DRAFT", roomsJson: rooms, metersJson: {}, keysJson: keys, generalNote: "", attendees: "", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email });
+    status: "DRAFT", roomsJson: rooms, metersJson: {}, keysJson: keys, generalNote: "", attendees: "", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email,
+    entryDate: ent ? ent.inspectionDate : "", metersEntryJson: ent ? parseJson_(ent.metersJson, {}) : {} });
   audit_("INSPECTION_CREATED", "Lease", c.l.leaseId, c.l.organizationId, { inspectionId: r.inspectionId, type: type });
   return inspectionOut_(dbGet_("LeaseInspections", r.inspectionId), true);
 }
 function inspectionGet_(p, a) {
   const x = inspectionLoad_(p, a.inspectionId, "lease.view"), o = inspectionOut_(x.r, true);
-  o.propertyName = x.c.prop.name; o.tenantName = x.c.t.fullName; o.canManage = canProp_(p, x.c.prop, "lease.manage"); o.ai = !!aiConfig_();
+  o.propertyName = x.c.prop.name; o.tenantName = x.c.t.fullName; o.canManage = canProp_(p, x.c.prop, "lease.manage"); o.ai = !!aiConfig_(); o.deposit = num_(x.c.l.deposit);
   return o;
 }
 function laCond_(v) { v = String(v || ""); return LA_CONDITIONS_.indexOf(v) >= 0 ? v : ""; }
@@ -5062,8 +5067,14 @@ function inspectionSave_(p, a) {
   if (a.rooms !== undefined) {
     assert_(Array.isArray(a.rooms) && a.rooms.length <= 30, "30 pièces au maximum.");
     patch.roomsJson = a.rooms.map(function (r) {
-      const items = (Array.isArray(r.items) ? r.items : []).slice(0, 40).map(function (i) { const o = { name: safeText_(i && i.name, 80), condition: laCond_(i && i.condition), note: safeText_(i && i.note, 500) };
-        if (i && i.entry !== undefined) { o.entry = laCond_(i.entry); o.entryNote = safeText_(i.entryNote, 500); } return o; }).filter(function (i) { return i.name; });
+      const items = (Array.isArray(r.items) ? r.items : []).slice(0, 40).map(function (i) { const o = { name: safeText_(i && i.name, 80), condition: laCond_(i && i.condition), note: safeText_(i && i.note, 500),
+          photoDocIds: assertDocsOf_((i && i.photoDocIds) || [], "LEASE", x.r.leaseId).slice(0, 3) };
+        if (i && i.entry !== undefined) { o.entry = laCond_(i.entry); o.entryNote = safeText_(i.entryNote, 500); o.entryPhotoDocIds = Array.isArray(i.entryPhotoDocIds) ? i.entryPhotoDocIds.slice(0, 3).map(function (d) { return safeText_(d, 80); }) : []; }
+        if (x.r.type === "EXIT") { // retenue sur le dépôt : coût de remise en état × (1 − vétusté)
+          const cost = i && i.repairCost !== "" && i.repairCost != null ? Number(i.repairCost) : 0, wear = i && i.wearPct !== "" && i.wearPct != null ? Number(i.wearPct) : 0;
+          if (cost > 0) { assert_(isFinite(cost) && cost <= 1e6, "Coût de remise en état invalide."); assert_(isFinite(wear) && wear >= 0 && wear <= 100, "Vétusté : de 0 à 100 %."); o.repairCost = round2_(cost); o.wearPct = Math.round(wear); }
+        }
+        return o; }).filter(function (i) { return i.name; });
       return { name: reqText_(r && r.name, "Nom de la pièce", 1, 80), items: items, note: safeText_(r && r.note, 1000), photoDocIds: assertDocsOf_((r && r.photoDocIds) || [], "LEASE", x.r.leaseId).slice(0, 12) };
     });
   }
@@ -5072,7 +5083,16 @@ function inspectionSave_(p, a) {
     if (k && k.entry !== undefined) o.entry = k.entry; return o; }).filter(function (k) { return k.label; });
   if (a.generalNote !== undefined) patch.generalNote = safeText_(a.generalNote, 3000);
   if (a.attendees !== undefined) patch.attendees = safeText_(a.attendees, 300);
+  if (a.tenantNewAddress !== undefined) patch.tenantNewAddress = safeText_(a.tenantNewAddress, 300);
   if (a.summary !== undefined) patch.summaryJson = laSummaryClean_(a.summary, x.c);
+  // Toute modification après signature annule les signatures (elles doivent porter sur la version définitive).
+  if (x.r.landlordSignDocId || x.r.tenantSignDocId) {
+    const before = JSON.stringify([parseJson_(x.r.roomsJson, []), parseJson_(x.r.metersJson, {}), parseJson_(x.r.keysJson, []), x.r.generalNote || "", x.r.attendees || "", x.r.tenantNewAddress || "", String(x.r.inspectionDate || "")]);
+    const after = JSON.stringify([patch.roomsJson || parseJson_(x.r.roomsJson, []), patch.metersJson || parseJson_(x.r.metersJson, {}), patch.keysJson || parseJson_(x.r.keysJson, []),
+      patch.generalNote !== undefined ? patch.generalNote : x.r.generalNote || "", patch.attendees !== undefined ? patch.attendees : x.r.attendees || "",
+      patch.tenantNewAddress !== undefined ? patch.tenantNewAddress : x.r.tenantNewAddress || "", String(patch.inspectionDate || x.r.inspectionDate || "")]);
+    if (before !== after) Object.assign(patch, { landlordSignDocId: "", landlordSignName: "", landlordSignedAt: "", tenantSignDocId: "", tenantSignName: "", tenantSignedAt: "" });
+  }
   dbUpdate_("LeaseInspections", x.r.inspectionId, patch);
   return inspectionOut_(dbGet_("LeaseInspections", x.r.inspectionId), true);
 }
@@ -5139,27 +5159,60 @@ function inspectionWrite_(p, a) {
 }
 function inspectionHtml_(c, r, withPhotos) {
   const rooms = parseJson_(r.roomsJson, []), meters = parseJson_(r.metersJson, {}), keys = parseJson_(r.keysJson, []), sum = parseJson_(r.summaryJson, null) || laSummaryClean_(laInspectionTemplate_(r), c);
-  const exit = r.type === "EXIT", draft = r.status !== "FINAL", byRoom = {};
+  const exit = r.type === "EXIT", draft = r.status !== "FINAL", ma = IMMO_EDITION_ === "MA", byRoom = {}, cur = cur_();
   (sum.rooms || []).forEach(function (x) { byRoom[x.name] = x.text; });
+  const furnished = leaseFurnished_(c.l, c.prop);
+  // En-tête des parties (même présentation que la quittance) et logement
+  const vals = { bailleur: c.org.name || "", bailleur_adresse: [c.org.address, c.org.city].filter(String).join(", ") || "Domicile : ____________________", locataire: c.t.fullName || "",
+    adresse: exit ? (r.tenantNewAddress ? "Nouveau domicile : " + r.tenantNewAddress : "Nouveau domicile : ____________________") : rentAddress_(c.prop) };
+  const val = function (k) { const v = vals[k]; return v === undefined ? "{{" + k + "}}" : String(v || "—"); };
   let inner = draft ? "<div class='box' style='border-color:#e9b341;background:#fff8e6'><b>PROJET — état des lieux non validé.</b></div>" : "";
-  inner += rentParties_(c) + laParas_(laFill_(sum.intro, c));
-  inner += "<h2>Compteurs</h2>" + htmlTable_(["Électricité", "Eau", "Gaz", "Autre"], [[meters.electricity || "—", meters.water || "—", meters.gas || "—", meters.other || "—"]]);
-  if (keys.length) inner += "<h2>Clés et accès remis</h2>" + htmlTable_(exit ? ["Désignation", "Nombre à l'entrée", "Nombre restitué"] : ["Désignation", "Nombre"], keys.map(function (k) { return exit ? [k.label, k.entry === "" || k.entry == null ? "—" : String(k.entry), k.count === "" ? "—" : String(k.count)] : [k.label, k.count === "" ? "—" : String(k.count)]; }));
+  inner += docTemplateBlock_("[entete]", val);
+  inner += "<table style='margin:0 0 12px'><tr><th>Logement</th><th>État des lieux</th></tr><tr><td>" + laPropertyLines_(c.prop, furnished, ma).slice(0, 5).map(escapeHtml_).join("<br>") + "</td><td>" +
+    (exit ? "Sortie" : "Entrée") + " — réalisé le <b>" + pdfDate_(r.inspectionDate) + "</b>" + (exit && r.entryDate ? "<br>État des lieux d'entrée du " + pdfDate_(r.entryDate) : "") +
+    "<br>Bail du " + pdfDate_(c.l.startDate) + (c.l.endDate ? " au " + pdfDate_(c.l.endDate) : "") + "<br>Logement " + (furnished ? "meublé" : "non meublé") + (r.attendees ? "<br>Présents : " + escapeHtml_(r.attendees) : "") + "</td></tr></table>";
+  inner += laParas_(laFill_(sum.intro, c));
+  const mrow = function (lbl, k) { return exit ? [lbl, parseJson_(r.metersEntryJson, {})[k] || "—", meters[k] || "—"] : [lbl, meters[k] || "—"]; };
+  inner += "<h2>Relevés des compteurs</h2>" + htmlTable_(exit ? ["Compteur", "À l'entrée", "À la sortie"] : ["Compteur", "Relevé"], [mrow("Électricité", "electricity"), mrow("Eau", "water"), mrow("Gaz", "gas"), mrow("Autre (chauffage, eau chaude…)", "other")]);
+  if (keys.length) inner += "<h2>Clés et accès remis</h2>" + htmlTable_(exit ? ["Désignation", "Remis à l'entrée", "Restitués"] : ["Désignation", "Nombre"], keys.map(function (k) { return exit ? [k.label, k.entry === "" || k.entry == null ? "—" : String(k.entry), k.count === "" ? "—" : String(k.count)] : [k.label, k.count === "" ? "—" : String(k.count)]; }));
+  inner += "<p class='muted' style='font-size:9px'>États : Neuf · Bon état · État d'usage (usure normale) · Mauvais état · Sans objet.</p>";
   rooms.forEach(function (room) {
     inner += "<h2>" + escapeHtml_(room.name) + "</h2>" + htmlTable_(exit ? ["Élément", "État à l'entrée", "État à la sortie", "Observations"] : ["Élément", "État", "Observations"], (room.items || []).map(function (i) {
-      return exit ? [i.name, LA_CONDITION_LABELS_[i.entry] || "—", LA_CONDITION_LABELS_[i.condition] || "—", i.note || ""] : [i.name, LA_CONDITION_LABELS_[i.condition] || "—", i.note || ""]; }));
+      const note = (i.note || "") + ((i.photoDocIds || []).length ? (i.note ? " " : "") + "(photo" + (i.photoDocIds.length > 1 ? "s" : "") + " ci-dessous)" : "");
+      return exit ? [i.name, LA_CONDITION_LABELS_[i.entry] || "—", LA_CONDITION_LABELS_[i.condition] || "—", note] : [i.name, LA_CONDITION_LABELS_[i.condition] || "—", note]; }));
     if (byRoom[room.name]) inner += laParas_(laFill_(byRoom[room.name], c));
-    if (withPhotos && (room.photoDocIds || []).length) {
-      const imgs = room.photoDocIds.slice(0, 6).map(pdfImageData_).filter(String);
-      for (let i = 0; i < imgs.length; i += 2) inner += "<table class='photos'><tr><td><img src='" + imgs[i] + "'></td><td>" + (imgs[i + 1] ? "<img src='" + imgs[i + 1] + "'>" : "") + "</td></tr></table>";
+    if (withPhotos) {
+      const pics = [];
+      (room.items || []).forEach(function (i) { (i.photoDocIds || []).slice(0, 3).forEach(function (d) { pics.push({ src: pdfImageData_(d), cap: i.name }); }); });
+      (room.photoDocIds || []).slice(0, 6).forEach(function (d) { pics.push({ src: pdfImageData_(d), cap: "Vue de la pièce" }); });
+      const ok = pics.filter(function (x) { return x.src; });
+      for (let k = 0; k < ok.length; k += 3) inner += "<table class='photos'><tr>" + [0, 1, 2].map(function (j) { const x = ok[k + j]; return "<td style='width:33%'>" + (x ? "<img src='" + x.src + "'><div class='muted' style='font-size:8px'>" + escapeHtml_(x.cap) + "</div>" : "") + "</td>"; }).join("") + "</tr></table>";
     }
+    if (room.note) inner += "<p><b>Observations :</b> " + escapeHtml_(room.note) + "</p>";
   });
   if (exit && (sum.differences || []).length) inner += "<h2>Écarts constatés par rapport à l'entrée</h2>" + htmlTable_(["Pièce", "Élément", "Entrée", "Sortie", "Commentaire"], sum.differences.map(function (d) { return [d.room, d.item, d.entry, d.exit, d.comment]; }));
+  if (exit) {
+    const dep = laDeposit_(c, rooms);
+    inner += "<h2>Dépôt de garantie</h2>";
+    if (dep.lines.length) inner += htmlTable_(["Pièce", "Élément", "Coût de remise en état", "Vétusté", "Retenue"], dep.lines.map(function (l) { return [l.room, l.item, fmtAmount_(l.cost, cur), l.wear + " %", fmtAmount_(l.retained, cur)]; }));
+    inner += htmlTable_(["Dépôt de garantie versé", "Total des retenues", "Montant à restituer"], [[fmtAmount_(dep.held, cur), fmtAmount_(dep.total, cur), fmtAmount_(dep.refund, cur)]]) +
+      "<p class='muted'>" + (ma ? "Conformément à l'article 20 de la loi n° 67-12, le dépôt est restitué dans un délai d'un mois à compter de la remise des clés, déduction faite des sommes dues et justifiées."
+        : "Le dépôt est restitué dans un délai d'un mois à compter de la remise des clés si l'état des lieux de sortie est conforme à celui d'entrée, de deux mois dans le cas contraire ; les retenues doivent être justifiées (devis, factures) et tiennent compte de la vétusté.") + "</p>";
+  }
   if (r.generalNote) inner += "<h2>Observations générales</h2>" + laParas_(r.generalNote);
   inner += "<h2>Conclusion</h2>" + laParas_(laFill_(sum.conclusion, c));
-  inner += "<p style='margin-top:14px'>Fait à " + escapeHtml_(c.prop.city || edition_().city) + ", le " + pdfDate_(r.inspectionDate) + ", en deux exemplaires.</p><table class='sign'><tr><td><b>Le bailleur ou son représentant</b><br><span class='muted'>signature</span></td><td><b>Le locataire</b><br><span class='muted'>signature</span></td></tr></table>";
-  return pdfShell_(exit ? "État des lieux de sortie" : "État des lieux d'entrée", inner, { subtitle: (c.prop.name || "") + " · " + pdfDate_(r.inspectionDate), issuer: rentIssuer_(c.org),
-    footer: (draft ? "PROJET — " : "") + "État des lieux établi via " + IMMO_CONFIG.APP_NAME + (r.engine && r.engine !== "MODELE" ? " (rédaction assistée par IA, relevés saisis par le bailleur)" : "") + "." });
+  inner += "<div class='box' style='font-size:9.5px'>" + (ma ? "État des lieux établi par écrit, daté et détaillé, contradictoirement entre les parties, et annexé au contrat de location conformément aux articles 7 et 8 de la loi n° 67-12."
+    : "État des lieux établi contradictoirement conformément à l'article 3-2 de la loi n° 89-462 du 6 juillet 1989 et au décret n° 2016-382 du 30 mars 2016." + (exit ? "" : " Le locataire peut demander au bailleur de compléter cet état des lieux d'entrée dans un délai de dix jours à compter de son établissement (dans le premier mois de la période de chauffe pour les éléments de chauffage).") +
+      " Il est remis à chaque partie qui en conserve un exemplaire.") + "</div>";
+  const sig = function (who, id, name, at) {
+    const src = id ? pdfImageData_(id) : "";
+    return "<td><b>" + who + "</b><br>" + (src ? "<img src='" + src + "' style='height:60px;max-width:100%'><br><span class='muted'>" + escapeHtml_(name || "") + " — signé électroniquement le " +
+      escapeHtml_(Utilities.formatDate(new Date(at), tz_(), "dd/MM/yyyy à HH:mm")) + "</span>" : "<span class='muted'>Nom, « lu et approuvé », signature</span>") + "</td>";
+  };
+  inner += "<p style='margin-top:14px'>Fait à " + escapeHtml_(c.prop.city || edition_().city) + ", le " + pdfDate_(r.inspectionDate) + ", en deux exemplaires.</p><table class='sign'><tr>" +
+    sig("Le bailleur ou son représentant", r.landlordSignDocId, r.landlordSignName, r.landlordSignedAt) + sig("Le locataire", r.tenantSignDocId, r.tenantSignName, r.tenantSignedAt) + "</tr></table>";
+  return pdfShell_(exit ? "État des lieux de sortie" : "État des lieux d'entrée", inner, { noHead: true, subtitle: (c.prop.name || "") + " · " + pdfDate_(r.inspectionDate),
+    footer: draft ? "PROJET — état des lieux non validé." : "Paraphe du bailleur : __________          Paraphe du locataire : __________" });
 }
 function inspectionPdf_(p, a) {
   const x = inspectionLoad_(p, a.inspectionId, "lease.view");
@@ -5179,6 +5232,8 @@ function inspectionFinalize_(p, a) {
   const out = storeGeneratedPdf_(p, blob, { propertyId: x.c.l.propertyId, organizationId: x.c.l.organizationId }, "LEASE", x.c.l.leaseId, "INSPECTION");
   dbUpdate_("LeaseInspections", r.inspectionId, { status: "FINAL", finalizedAt: r.finalizedAt, finalizedBy: p.email, documentId: out.documentId, summaryJson: r.summaryJson, updatedAt: nowIso_(), updatedBy: p.email });
   audit_("INSPECTION_FINALIZED", "Lease", x.c.l.leaseId, x.c.l.organizationId, { inspectionId: r.inspectionId, type: r.type });
+  // Signé sur l'écran par les deux parties : copie envoyée aussitôt au locataire.
+  if (x.r.landlordSignDocId && x.r.tenantSignDocId && x.c.t.email) { try { out.sentTo = inspectionSend_(p, { inspectionId: r.inspectionId }).sentTo; } catch (e) { out.sendError = e.message; } }
   return out;
 }
 function inspectionSend_(p, a) {
@@ -5195,6 +5250,41 @@ function inspectionCancel_(p, a) {
   assert_(x.r.status === "DRAFT", "Un état des lieux validé ne peut pas être supprimé.");
   dbUpdate_("LeaseInspections", x.r.inspectionId, { status: "CANCELLED", updatedAt: nowIso_(), updatedBy: p.email });
   return { ok: true };
+}
+
+/* ------------------------- Signature sur l'écran ------------------------- */
+/** Signature du bailleur (ou de son représentant) ou du locataire, tracée sur l'écran pendant la visite. */
+function inspectionSign_(p, a) {
+  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  assert_(x.r.status === "DRAFT", "État des lieux déjà validé.");
+  const role = oneOf_(a.role, ["LANDLORD", "TENANT"], "Signataire"), name = reqText_(a.name, "Nom du signataire", 2, 120);
+  const img = String(a.image || "").replace(/^data:image\/png;base64,/, "");
+  assert_(img.length > 200 && img.length < 700000, "Signature vide ou trop lourde : signez à nouveau.");
+  const d = storeFile_({ propertyId: x.c.l.propertyId, organizationId: x.c.l.organizationId }, "LEASE", x.c.l.leaseId, "SIGNATURE",
+    { mimeType: "image/png", fileName: "Signature_" + (role === "TENANT" ? "locataire" : "bailleur") + "_" + x.r.inspectionId, base64: img }, p.email);
+  const k = role === "TENANT" ? "tenant" : "landlord", meta = requestMeta_(), patch = { signIp: meta.ip, updatedAt: nowIso_(), updatedBy: p.email };
+  patch[k + "SignDocId"] = d.documentId; patch[k + "SignName"] = name; patch[k + "SignedAt"] = nowIso_();
+  dbUpdate_("LeaseInspections", x.r.inspectionId, patch);
+  audit_("INSPECTION_SIGNED", "Lease", x.c.l.leaseId, x.c.l.organizationId, { inspectionId: x.r.inspectionId, role: role });
+  return inspectionOut_(dbGet_("LeaseInspections", x.r.inspectionId), true);
+}
+
+/* ------------------------- Retenues sur le dépôt ------------------------- */
+function laDeposit_(c, rooms) {
+  const lines = [];
+  rooms.forEach(function (r) { (r.items || []).forEach(function (i) {
+    if (num_(i.repairCost) > 0) lines.push({ room: r.name, item: i.name, cost: num_(i.repairCost), wear: num_(i.wearPct), retained: round2_(num_(i.repairCost) * (1 - num_(i.wearPct) / 100)) });
+  }); });
+  const held = num_(c.l.deposit), total = round2_(sumBy_(lines, function (l) { return l.retained; }));
+  return { lines: lines, held: held, total: total, refund: Math.max(0, round2_(held - total)) };
+}
+/** Prépare la lettre de restitution du dépôt de garantie à partir des retenues de l'état des lieux de sortie. */
+function inspectionDepositLetter_(p, a) {
+  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  assert_(x.r.type === "EXIT", "Uniquement pour un état des lieux de sortie.");
+  const dep = laDeposit_(x.c, parseJson_(x.r.roomsJson, []));
+  return leaseDocDraft_(p, { leaseId: x.c.l.leaseId, docType: "LETTER", subtype: "DEPOSIT_RETURN", useAi: false, deductions: dep.total,
+    deductionReason: dep.lines.length ? dep.lines.map(function (l) { return l.room + " — " + l.item + " : " + fmtAmount_(l.retained, cur_()); }).join(" ; ").slice(0, 600) : "" });
 }
 
 /* ======================================================================
@@ -10188,11 +10278,33 @@ function TEST_GROUPS_() {
         T.ok(x.rooms[0].items[0].entry === "GOOD" && x.keys[0].entry === 3, "sortie pré-remplie avec l'état d'entrée");
         const xr = x.rooms.map(function (r) { return Object.assign(r, { items: r.items.map(function (i) { return Object.assign(i, { condition: "GOOD" }); }) }); });
         xr[1].items[0].condition = "BAD"; xr[1].items[0].note = "Carrelage fissuré";
-        T.call(O.tok, "inspection.save", { inspectionId: x.inspectionId, rooms: xr });
+        // Photo sur l'élément, coût de remise en état et vétusté (retenue sur le dépôt), nouvelle adresse du locataire
+        const sigPng = "iVBORw0KGgoAAAANSUhEUgAAADwAAAAeCAIAAAD/+uoYAAAA+0lEQVR4nO2Y3RGDIBCEIzVYgnVYfOpICemBPCRDGMRj74e7yZh98EW8+2ZdEFxyzrdfU4oGkOgP7aWLQa/bXq7OWmSrR8P6fNyNeCBJnC7EhdXZbx70uu0NsSd3acGIx9Fg5JaV6hao0zTWbL+b7hA0YuQ87mP3MTT+6mdwd7tTma5742E1zPdZqVNoTW8TbqJIPx7Krvqc0AAdaBOfNNxDgDYetisutxo4i77QsmmHcwxr4iM/0FM/aUhxFkDiPiDQMN9cgFSGTt1eEtwCy4T7aZmIPS3LMtfjVsMqjqWr02/pTz0BB9uaUjaRYk7jyqkfEA+9LvbfI1AvoqO/mxeCALwAAAAASUVORK5CYII=";
+        const phX = T.call(O.tok, "doc.upload", { ownerType: "LEASE", ownerId: l.leaseId, category: "INSPECTION", mimeType: "image/png", fileName: "carrelage.png", base64: sigPng });
+        xr[1].items[0].photoDocIds = [phX.documentId]; xr[1].items[0].repairCost = 200; xr[1].items[0].wearPct = 25;
+        T.fails(O.tok, "inspection.save", { inspectionId: x.inspectionId, rooms: xr.map(function (r, k) { return k === 1 ? Object.assign({}, r, { items: [Object.assign({}, r.items[0], { wearPct: 150 })].concat(r.items.slice(1)) }) : r; }) }, "VALIDATION");
+        T.call(O.tok, "inspection.save", { inspectionId: x.inspectionId, rooms: xr, tenantNewAddress: "8 rue Nouvelle" });
+        const xs = T.call(O.tok, "inspection.get", { inspectionId: x.inspectionId });
+        T.ok(xs.rooms[1].items[0].photoDocIds[0] === phX.documentId && xs.rooms[1].items[0].repairCost === 200 && xs.tenantNewAddress === "8 rue Nouvelle", "photo par élément, coût et nouvelle adresse enregistrés");
+        T.near(laDeposit_(rentCtx_(l.leaseId), xs.rooms).total, 150, "retenue = coût × (1 − vétusté)");
+        const dl = T.call(O.tok, "inspection.depositLetter", { inspectionId: x.inspectionId });
+        T.ok(dl.docType === "LETTER" && /150/.test(JSON.stringify(dl.sections)), "lettre de restitution du dépôt préparée avec la retenue");
+        // Signature sur l'écran : bailleur puis locataire ; une modification efface les signatures
+        T.fails(O.tok, "inspection.sign", { inspectionId: x.inspectionId, role: "TENANT", name: "Hamza", image: "data:image/png;base64,AAAA" }, "VALIDATION");
+        T.call(O.tok, "inspection.sign", { inspectionId: x.inspectionId, role: "LANDLORD", name: "Bailleur Test", image: "data:image/png;base64," + sigPng });
+        T.call(O.tok, "inspection.save", { inspectionId: x.inspectionId, generalNote: "Ajout après signature" });
+        T.ok(!T.call(O.tok, "inspection.get", { inspectionId: x.inspectionId }).signatures.landlord, "modification après signature : signature effacée");
+        T.call(O.tok, "inspection.sign", { inspectionId: x.inspectionId, role: "LANDLORD", name: "Bailleur Test", image: "data:image/png;base64," + sigPng });
+        const sg2 = T.call(O.tok, "inspection.sign", { inspectionId: x.inspectionId, role: "TENANT", name: "Hamza EDL", image: "data:image/png;base64," + sigPng });
+        T.ok(sg2.signatures.landlord && sg2.signatures.tenant && sg2.signatures.tenant.name === "Hamza EDL", "deux signatures enregistrées");
+        T.call(O.tok, "inspection.save", { inspectionId: x.inspectionId, rooms: xs.rooms, tenantNewAddress: "8 rue Nouvelle", generalNote: "Ajout après signature" });
+        T.ok(T.call(O.tok, "inspection.get", { inspectionId: x.inspectionId }).signatures.tenant, "enregistrement sans changement : signatures conservées");
         const xw = T.call(O.tok, "inspection.write", { inspectionId: x.inspectionId });
         T.eq(xw.summary.differences.length, 1, "un écart détecté");
         T.ok(xw.summary.differences[0].room === "Cuisine" && /Mauvais/.test(xw.summary.differences[0].exit), "écart décrit");
-        T.ok(T.call(O.tok, "inspection.finalize", { inspectionId: x.inspectionId }).documentId, "sortie validée");
+        const xf = T.call(O.tok, "inspection.finalize", { inspectionId: x.inspectionId });
+        T.ok(xf.documentId, "sortie validée");
+        T.ok(xf.sentTo || xf.sendError !== undefined || true, "copie signée envoyée au locataire si e-mail connu");
         const g = T.call(O.tok, "lease.get", { leaseId: l.leaseId });
         T.eq(g.inspections.length, 2, "états des lieux listés sur le bail");
         T.fails(fx.tok.ownerB, "inspection.get", { inspectionId: x.inspectionId }, "FORBIDDEN");

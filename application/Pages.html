@@ -1047,13 +1047,51 @@ function inspectionStart(l, type) {
   if (type === "EXIT" && !(l.inspections || []).some(function (r) { return r.type === "ENTRY" && r.status === "FINAL"; })) toast(t("Aucun état des lieux d'entrée validé : la sortie ne pourra pas être comparée à l'entrée."), "warn");
   api("inspection.create", { leaseId: l.leaseId, type: type }).then(function (r) { NAV_HASH.v = "inspection/" + r.inspectionId; }).catch(showErr);
 }
+/** Signature du doigt (ou de la souris) sur l'écran, pour le bailleur et le locataire, pendant la visite. */
+function signPad(onDone) {
+  const cv = h("canvas", { style: { width: "100%", height: "170px", border: "1px dashed #94a3b8", borderRadius: "10px", background: "#fff", touchAction: "none", cursor: "crosshair" } });
+  let ctx = null, drawing = false, empty = true, last = null;
+  const setup = function () { const r = cv.getBoundingClientRect(), k = window.devicePixelRatio || 1; cv.width = Math.max(300, r.width * k); cv.height = 170 * k; ctx = cv.getContext("2d"); ctx.scale(k, k); ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#13233d"; };
+  const pos = function (e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  cv.addEventListener("pointerdown", function (e) { if (!ctx) setup(); drawing = true; last = pos(e); cv.setPointerCapture(e.pointerId); e.preventDefault(); });
+  cv.addEventListener("pointermove", function (e) { if (!drawing) return; const p = pos(e); ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke(); last = p; empty = false; e.preventDefault(); });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(function (ev) { cv.addEventListener(ev, function () { drawing = false; }); });
+  return { el: cv, clear: function () { if (ctx) ctx.clearRect(0, 0, cv.width, cv.height); empty = true; }, isEmpty: function () { return empty; }, data: function () { return cv.toDataURL("image/png"); } };
+}
+function signBox(r, id, ro, save) {
+  const box = h("div");
+  if (r.status === "DRAFT" && r.canManage) box.appendChild(h("p", { class: "small muted", style: { marginTop: 0 } }, t("Relisez l'état des lieux avec le locataire, puis faites signer chacun du doigt sur l'écran. Toute modification après signature efface les signatures. À la validation, la copie signée est envoyée par e-mail au locataire.")));
+  const one = function (role, label, cur, defName) {
+    const col = h("div", { class: "panel", style: { padding: "10px" } }, h("h4", { style: { margin: "0 0 6px" } }, t(label)));
+    if (cur) col.appendChild(h("div", null, h("div", { style: { maxWidth: "260px" } }, docImg(cur.documentId)), h("p", { class: "small" }, "✓ " + cur.name + " — " + fmtDT(cur.at))));
+    if (r.status === "DRAFT" && r.canManage) {
+      const pad = signPad(), name = h("input", { class: "in", value: cur ? cur.name : (defName || ""), maxlength: 120, placeholder: t("Nom et prénom du signataire") });
+      const err = h("div", { class: "alert bad hidden" });
+      col.appendChild(h("div", { class: "field" }, h("label", null, t("Nom du signataire")), name));
+      col.appendChild(pad.el);
+      col.appendChild(h("div", { class: "actions", style: { marginTop: "6px" } }, btn(t("Effacer"), function () { pad.clear(); }, "sm"),
+        btn("✍ " + (cur ? t("Signer à nouveau") : t("Valider la signature")), function (ev) {
+          const b = ev.currentTarget;
+          if (pad.isEmpty()) { err.textContent = t("Signez dans le cadre."); err.classList.remove("hidden"); return; }
+          if (String(name.value).trim().length < 2) { err.textContent = t("Indiquez le nom du signataire."); err.classList.remove("hidden"); return; }
+          b.disabled = true;
+          save(true).then(function () { return api("inspection.sign", { inspectionId: id, role: role, name: name.value.trim(), image: pad.data() }); })
+            .then(function () { toast(t("Signature enregistrée."), "good"); App.go("inspection/" + id); }).catch(function (e) { b.disabled = false; err.textContent = errMsg(e); err.classList.remove("hidden"); });
+        }, "sm primary")), err);
+    } else if (!cur) col.appendChild(h("p", { class: "small muted" }, t("Non signé sur l'écran (signature sur papier).")));
+    return col;
+  };
+  const s = r.signatures || {};
+  box.appendChild(h("div", { class: "grid c2" }, one("LANDLORD", "Le bailleur ou son représentant", s.landlord, S.me.displayName), one("TENANT", "Le locataire", s.tenant, r.tenantName)));
+  return box;
+}
 /** État des lieux : relevé pièce par pièce (adapté au téléphone), photos, compteurs, clés, rédaction par l'agent, validation. */
 PAGES.inspection = function (el, id) {
   return api("inspection.get", { inspectionId: id }).then(function (r) {
     const exit = r.type === "EXIT", ro = r.status !== "DRAFT" || !r.canManage, st0 = JSON.parse(JSON.stringify(r));
     $("page-title").textContent = exit ? t("État des lieux de sortie") : t("État des lieux d'entrée");
     let dirty = false; const touch = function () { dirty = true; };
-    const payload = function () { return { inspectionId: id, inspectionDate: st0.inspectionDate, attendees: st0.attendees, rooms: st0.rooms, meters: st0.meters, keys: st0.keys, generalNote: st0.generalNote, summary: st0.summary || undefined }; };
+    const payload = function () { return { inspectionId: id, inspectionDate: st0.inspectionDate, attendees: st0.attendees, rooms: st0.rooms, meters: st0.meters, keys: st0.keys, generalNote: st0.generalNote, summary: st0.summary || undefined, tenantNewAddress: st0.tenantNewAddress || "" }; };
     const save = function (quiet) { return api("inspection.save", payload()).then(function (x) { dirty = false; if (!quiet) toast(t("État des lieux enregistré."), "good"); return x; }); };
     const back = function () { NAV_HASH.v = "lease/" + r.leaseId; };
     const A = [stTag(r.status), r.engine ? laEngineTag(r.engine) : null];
@@ -1090,10 +1128,48 @@ PAGES.inspection = function (el, id) {
     el.appendChild(h("div", { class: "grid c2" },
       panel("Informations", h("div", { class: "form" }, h("div", { class: "field" }, h("label", null, t("Date")), inp(st0, "inspectionDate", { type: "date" })), h("div", { class: "field" }, h("label", null, t("Personnes présentes")), inp(st0, "attendees", { maxlength: 300, placeholder: t("Ex. : bailleur et locataire") })),
         h("div", { class: "field" }, h("label", null, t("Électricité")), inp(st0.meters, "electricity", { maxlength: 40 })), h("div", { class: "field" }, h("label", null, t("Eau")), inp(st0.meters, "water", { maxlength: 40 })),
-        h("div", { class: "field" }, h("label", null, t("Gaz")), inp(st0.meters, "gas", { maxlength: 40 })), h("div", { class: "field" }, h("label", null, t("Autre compteur")), inp(st0.meters, "other", { maxlength: 120 })))),
+        h("div", { class: "field" }, h("label", null, t("Gaz")), inp(st0.meters, "gas", { maxlength: 40 })), h("div", { class: "field" }, h("label", null, t("Autre compteur")), inp(st0.meters, "other", { maxlength: 120 })),
+        exit ? h("div", { class: "field full" }, h("label", null, t("Nouvelle adresse du locataire")), inp(st0, "tenantNewAddress", { maxlength: 300, placeholder: t("Adresse où le locataire déménage") })) : null,
+        exit && st0.metersEntry && Object.keys(st0.metersEntry).length ? h("p", { class: "small muted full" }, t("Relevés à l'entrée") + " : " + [["electricity", "Électricité"], ["water", "Eau"], ["gas", "Gaz"], ["other", "Autre"]].map(function (m) { return t(m[1]) + " " + (st0.metersEntry[m[0]] || "—"); }).join(" · ")) : null)),
       panel("Clés et accès", keysBox)));
     // Pièces
     const roomsBox = h("div");
+    // Photos par élément (3 au plus)
+    const itemPhotos = function (i) {
+      i.photoDocIds = i.photoDocIds || [];
+      const box = h("div", { class: "wide", style: { display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" } },
+        i.photoDocIds.map(function (pid) { return h("div", { style: { width: "72px", position: "relative" } }, docImg(pid), ro ? null : h("button", { type: "button", class: "btn sm ghost", style: { position: "absolute", top: "0", right: "0", padding: "0 4px" }, onclick: function () { i.photoDocIds.splice(i.photoDocIds.indexOf(pid), 1); touch(); drawRooms(); } }, "×")); }),
+        (i.entryPhotoDocIds || []).length ? h("span", { class: "small muted" }, t("Photos à l'entrée") + " :") : null, (i.entryPhotoDocIds || []).map(function (pid) { return h("div", { style: { width: "56px", opacity: ".8" } }, docImg(pid)); }),
+        ro || i.photoDocIds.length >= 3 ? null : h("button", { type: "button", class: "btn sm ghost", title: t("Ajouter une photo de cet élément"), onclick: function () {
+          pickFiles({ accept: "image/*", multiple: true, capture: "environment" }).then(function (f) { return f.length ? uploadFiles(f, "LEASE", r.leaseId, "INSPECTION") : []; })
+            .then(function (ids) { i.photoDocIds = i.photoDocIds.concat(ids).slice(0, 3); touch(); drawRooms(); return save(true); }).catch(showErr); } }, "📷"));
+      return box;
+    };
+    // Sortie : coût de remise en état et vétusté (retenue sur le dépôt de garantie)
+    const RANK = { NEW: 0, GOOD: 1, WORN: 2, BAD: 3 };
+    const repairBox = function (i) {
+      const worse = RANK[i.condition] !== undefined && RANK[i.entry] !== undefined && RANK[i.condition] > RANK[i.entry];
+      if (!worse && !(Number(i.repairCost) > 0)) return null;
+      const upd = function () { touch(); drawDeposit(); };
+      const cost = inp(i, "repairCost", { type: "number", min: 0, step: "0.01", placeholder: t("Coût"), style: { width: "110px" } }), wear = inp(i, "wearPct", { type: "number", min: 0, max: 100, placeholder: "0", style: { width: "80px" } });
+      cost.addEventListener("input", upd); wear.addEventListener("input", upd);
+      return h("div", { class: "wide small", style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", background: "var(--soft, #f6f8fb)", padding: "6px", borderRadius: "8px" } },
+        h("span", null, "⚠ " + t("Dégradation") + " — " + t("coût de remise en état")), cost, h("span", null, t("vétusté") + " %"), wear,
+        h("span", { class: "muted" }, t("Retenue") + " : " + fmtMoney(Math.max(0, (Number(i.repairCost) || 0) * (1 - (Number(i.wearPct) || 0) / 100)))));
+    };
+    const depositBox = h("div");
+    const drawDeposit = function () {
+      if (!exit) return;
+      const lines = []; st0.rooms.forEach(function (rm) { (rm.items || []).forEach(function (i) { if (Number(i.repairCost) > 0) lines.push({ room: rm.name, item: i.name, cost: Number(i.repairCost), wear: Number(i.wearPct) || 0, retained: Math.round(Number(i.repairCost) * (1 - (Number(i.wearPct) || 0) / 100) * 100) / 100 }); }); });
+      const total = lines.reduce(function (s, l) { return s + l.retained; }, 0), held = Number(r.deposit) || 0;
+      clear(depositBox).appendChild(h("div", null,
+        lines.length ? table([{ l: "Pièce", k: "room" }, { l: "Élément", k: "item" }, { l: "Coût", money: true, k: "cost" }, { l: "Vétusté", f: function (x) { return x.wear + " %"; } }, { l: "Retenue", money: true, k: "retained" }], lines)
+          : h("p", { class: "small muted" }, t("Aucune retenue : indiquez un coût de remise en état sur les éléments dégradés (ils apparaissent quand l'état de sortie est moins bon qu'à l'entrée).")),
+        kpis([{ l: "Dépôt de garantie", v: fmtMoney(held) }, { l: "Retenues", v: fmtMoney(total), tone: total ? "warn" : "" }, { l: "À restituer", v: fmtMoney(Math.max(0, held - total)), tone: "good" }]),
+        r.canManage ? h("div", { class: "actions", style: { marginTop: "10px" } }, btn("✉ " + t("Préparer la lettre de restitution du dépôt"), function () {
+          (ro ? Promise.resolve() : save(true)).then(function () { return api("inspection.depositLetter", { inspectionId: id }); }).then(function (d) {
+            return api("lease.get", { leaseId: r.leaseId }).then(function (l) { leaseDocEditor(d, l, function () { App.go("lease/" + r.leaseId); }); }); }).catch(showErr); })) : null));
+    };
     const drawRooms = function () {
       clear(roomsBox);
       st0.rooms.forEach(function (room, ri) {
@@ -1102,10 +1178,11 @@ PAGES.inspection = function (el, id) {
           return h("div", { style: { width: "110px", position: "relative" } }, docImg(pid), ro ? null : h("button", { type: "button", class: "btn sm ghost", style: { position: "absolute", top: "2px", right: "2px" }, onclick: function () { room.photoDocIds.splice(room.photoDocIds.indexOf(pid), 1); touch(); drawRooms(); } }, "×")); }));
         const items = room.items.length ? h("div", { class: "rows-edit" }, room.items.map(function (i) {
           const sel = h("select", { class: "in", disabled: ro, "aria-label": exit ? t("Sortie") : t("État") }, LA_COND.map(function (o) { return h("option", { value: o[0] }, t(o[1])); }));
-          sel.value = i.condition || ""; sel.addEventListener("change", function () { i.condition = sel.value; touch(); });
+          sel.value = i.condition || ""; sel.addEventListener("change", function () { i.condition = sel.value; touch(); if (exit) { drawRooms(); drawDeposit(); } });
           return h("div", { class: "row" }, inp(i, "name", { maxlength: 80, "aria-label": t("Élément") }), sel, del(function () { room.items.splice(room.items.indexOf(i), 1); touch(); drawRooms(); }),
             exit ? h("div", { class: "ref" }, t("À l'entrée") + " : " + laCondLabel(i.entry) + (i.entryNote ? " — " + i.entryNote : "")) : null,
-            h("div", { class: "wide" }, inp(i, "note", { maxlength: 500, placeholder: t("Observation") }))); })) : h("div", { class: "empty" }, t("Aucun élément."));
+            h("div", { class: "wide" }, inp(i, "note", { maxlength: 500, placeholder: t("Observation") })),
+            itemPhotos(i), exit ? repairBox(i) : null); })) : h("div", { class: "empty" }, t("Aucun élément."));
         const tools = ro ? null : [btn(t("Tout en bon état"), function () { room.items.forEach(function (i) { if (!i.condition) i.condition = "GOOD"; }); touch(); drawRooms(); }, "sm"),
           btn("📷 " + t("Photos"), function () { pickFiles({ accept: "image/*", multiple: true, capture: "environment" }).then(function (f) { return f.length ? uploadFiles(f, "LEASE", r.leaseId, "INSPECTION") : []; }).then(function (ids) { room.photoDocIds = room.photoDocIds.concat(ids).slice(0, 12); touch(); drawRooms(); return save(true); }).catch(showErr); }, "sm"),
           btn(t("Supprimer la pièce"), function () { confirmBox(t("Supprimer cette pièce de l'état des lieux ?"), { danger: true }).then(function (ok) { if (ok) { st0.rooms.splice(ri, 1); touch(); drawRooms(); } }); }, "sm ghost")];
@@ -1119,6 +1196,8 @@ PAGES.inspection = function (el, id) {
     drawRooms();
     el.appendChild(roomsBox);
     el.appendChild(panel("Observations générales", ta(st0, "generalNote", 3)));
+    if (exit) { drawDeposit(); el.appendChild(panel("Dépôt de garantie : retenues et restitution", depositBox)); }
+    el.appendChild(panel("Signatures", signBox(r, id, ro, save)));
     // Compte rendu rédigé par l'agent
     if (st0.summary) {
       const sm = st0.summary;
