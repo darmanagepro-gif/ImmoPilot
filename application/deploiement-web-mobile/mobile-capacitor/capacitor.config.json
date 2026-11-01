@@ -3,10 +3,20 @@
   "appName": "ImmoPilot",
   "webDir": "www",
   "server": {
-    "url": "https://VOTRE-NOM.github.io/",
+    "url": "https://immopilotapp.fr/",
     "cleartext": false,
-    "allowNavigation": ["script.google.com", "*.googleusercontent.com", "VOTRE-NOM.github.io"]
+    "allowNavigation": [
+      "immopilotapp.fr",
+      "*.immopilotapp.fr",
+      "*.sumup.com"
+    ]
   },
-  "ios": { "contentInset": "never", "backgroundColor": "#13233d" },
-  "android": { "backgroundColor": "#13233d", "allowMixedContent": false }
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#13233d"
+  },
+  "android": {
+    "backgroundColor": "#13233d",
+    "allowMixedContent": false
+  }
 }
