@@ -1655,7 +1655,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "f711bf9f94d1";
+var IMMO_BUILD_ = "625c72a2a102";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -8132,12 +8132,13 @@ function subContractPdf_(p, a) {
   html += "<h2>Conditions principales</h2><div class='box'><ol style='margin:0;padding-left:16px'>" + [
     "L'abonnement donne accès à l'application ImmoPilot pour l'organisation cliente, dans les limites du forfait.",
     (sumupCardOf_(orgId) && sumupEnabled_() ? "Le tarif est payable d'avance pour chaque " + per + " par prélèvement automatique sur la carte enregistrée par le client auprès de SumUp (aucune donnée de carte n'est conservée par ImmoPilot) ; le client peut retirer sa carte à tout moment, le règlement se fait alors par virement." : "Le tarif est payable d'avance pour chaque " + per + ", par virement, espèces ou chèque ; aucun paiement en ligne n'est effectué par l'application."),
+    sumupEnabled_() && sumupConf_().currency !== cur_() ? "Les prix sont exprimés en " + cur_() + ". Le prélèvement par carte est effectué en " + sumupConf_().currency + (sumupConf_().rateMode === "AUTO" ? " au cours de change du jour du prélèvement (source publique de cours de change, mise à jour quotidienne) : le montant débité peut donc varier légèrement d'une période à l'autre ; le cours appliqué figure dans l'historique des règlements." : " au taux de conversion fixe de " + sumupConf_().rate + " " + sumupConf_().currency + " pour 1 " + cur_() + ", modifiable avec un préavis de 30 jours.") + " D'éventuels frais de change ou bancaires facturés par la banque du client restent à sa charge." : "",
     "En cas d'échéance non réglée, un délai de grâce de " + SUB_GRACE_DAYS_ + " jours s'applique ; au-delà, le compte passe en lecture seule jusqu'au règlement.",
     "Les agences créées par le client dans ImmoPilot n'ont pas d'abonnement propre : elles sont facturées en option sur cet abonnement, au prix par agence indiqué ci-dessus, et suivent son statut.",
     "La résiliation peut être demandée à tout moment ; elle prend effet à la fin de la période payée. Les données restent conservées et exportables.",
     "Chaque organisation n'accède qu'à ses propres données ; l'équipe ImmoPilot n'y accède qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
     "Le client reste responsable des données qu'il saisit (voyageurs, locataires) et de ses obligations déclaratives, notamment au titre de la réglementation sur les données personnelles (" + edition_().dataLaw + ")."
-  ].map(function (x) { return "<li>" + escapeHtml_(x) + "</li>"; }).join("") + "</ol></div>";
+  ].filter(Boolean).map(function (x) { return "<li>" + escapeHtml_(x) + "</li>"; }).join("") + "</ol></div>";
   html += "<h2>Historique des abonnements</h2>" + htmlTable_(["Référence", "Forfait", "Statut", "Début", "Payé jusqu'au", "Tarif"], subs.map(function (s) { return [s.subscriptionId, s.planCode, ST[s.status] || s.status, pdfDate_(s.startDate), pdfDate_(s.paidThrough), fmt(s.price)]; }));
   html += "<h2>Historique des règlements</h2>" + (pays.length ? htmlTable_(["Date", "Montant", "Mode", "Référence", "Détail"], pays.map(function (x) { return [pdfDate_(x.paidAt), fmt(x.amount), PDF_PAY_METHODS_[x.method] || x.method || "", x.reference || "", x.note || ""]; })) +
     "<p class='right'><b>Total réglé : " + escapeHtml_(fmt(sumBy_(pays, function (x) { return x.amount; }))) + "</b></p>" : "<p class='muted'>Aucun règlement enregistré.</p>");
@@ -8194,6 +8195,9 @@ function subscriptionJob_() {
  *   SUMUP_CURRENCY       devise du compte SumUp (EUR par défaut)
  *   SUMUP_RATE           obligatoire si la devise de l'édition (MAD) diffère de SUMUP_CURRENCY : montant en SUMUP_CURRENCY
  *                        pour 1 unité de la devise de l'édition (ex. 0.092). Sans lui, aucun débit n'est tenté.
+ *   SUMUP_RATE_MODE      AUTO = cours du jour (mis à jour chaque matin, SUMUP_RATE sert de secours) ; FIXED (défaut) = SUMUP_RATE.
+ *                        Garde-fous du mode AUTO : cours introuvable, de plus de 3 jours ou variant de plus de 5 % d'un jour à
+ *                        l'autre → le dernier cours valide (sinon SUMUP_RATE) est conservé et le super administrateur est prévenu.
  * Tant que la clé et le code marchand ne sont pas renseignés, rien ne change : paiement manuel comme avant.
  */
 var SUMUP_API_ = "https://api.sumup.com/v0.1";
@@ -8204,7 +8208,41 @@ function sumupConf_() {
   if (TEST_HOOKS_.sumupConfig) return TEST_HOOKS_.sumupConfig;
   const P = PropertiesService.getScriptProperties();
   return { key: P.getProperty("SUMUP_API_KEY") || "", merchant: P.getProperty("SUMUP_MERCHANT_CODE") || "", currency: (P.getProperty("SUMUP_CURRENCY") || "EUR").toUpperCase(),
-    rate: Number(P.getProperty("SUMUP_RATE")) || 0 };
+    rate: sumupRateOf_(P), rateMode: (P.getProperty("SUMUP_RATE_MODE") || "FIXED").toUpperCase(), rateDate: P.getProperty("SUMUP_RATE_AUTO_DATE") || "" };
+}
+var SUMUP_RATE_URL_ = "https://open.er-api.com/v6/latest/";
+var SUMUP_RATE_MAX_JUMP_ = 0.05, SUMUP_RATE_MAX_AGE_DAYS_ = 3;
+/** Taux appliqué : cours du jour en mode AUTO s'il est récent, sinon taux fixe de secours. */
+function sumupRateOf_(P) {
+  const fixed = Number(P.getProperty("SUMUP_RATE")) || 0;
+  if ((P.getProperty("SUMUP_RATE_MODE") || "").toUpperCase() !== "AUTO") return fixed;
+  const auto = Number(P.getProperty("SUMUP_RATE_AUTO")) || 0, d = P.getProperty("SUMUP_RATE_AUTO_DATE") || "";
+  return auto > 0 && d && addDaysStr_(d, SUMUP_RATE_MAX_AGE_DAYS_) >= todayStr_() ? auto : fixed;
+}
+/**
+ * Mode AUTO : récupère le cours du jour (source publique ExchangeRate-API, mise à jour quotidienne) et l'enregistre s'il passe
+ * les garde-fous. Appelée par la tâche quotidienne avant les prélèvements ; aussi : immopilot run actualiserTauxSumUp.
+ */
+function actualiserTauxSumUp() {
+  const P = PropertiesService.getScriptProperties(), base = (P.getProperty("SUMUP_CURRENCY") || "EUR").toUpperCase(), local = cur_();
+  if ((P.getProperty("SUMUP_RATE_MODE") || "").toUpperCase() !== "AUTO" || base === local) return { skipped: "mode AUTO inactif ou devise identique" };
+  const prev = Number(P.getProperty("SUMUP_RATE_AUTO")) || Number(P.getProperty("SUMUP_RATE")) || 0;
+  let rate = 0, why = "";
+  try {
+    const params = { method: "get", muteHttpExceptions: true };
+    const res = TEST_HOOKS_.sumupFetch ? TEST_HOOKS_.sumupFetch(SUMUP_RATE_URL_ + base, params) : UrlFetchApp.fetch(SUMUP_RATE_URL_ + base, params);
+    const j = JSON.parse(res.getContentText() || "{}"), perBase = Number(j.rates && j.rates[local]);
+    if (res.getResponseCode() !== 200 || j.result !== "success" || !(perBase > 0)) why = "cours introuvable";
+    else rate = Math.round(1 / perBase * 1e6) / 1e6; // montant en devise SumUp pour 1 unité de la devise de l'édition
+  } catch (e) { why = "source injoignable"; }
+  if (rate > 0 && prev > 0 && Math.abs(rate - prev) / prev > SUMUP_RATE_MAX_JUMP_) { why = "variation de plus de 5 % (" + prev + " → " + rate + ")"; rate = 0; }
+  if (!(rate > 0)) {
+    try { notify_({ eventKey: "sumup-rate:" + todayStr_(), userIds: superAdminIds_(), type: "SUBSCRIPTION", organizationId: "", title: "Cours " + local + "/" + base + " non mis à jour",
+      body: "Motif : " + why + ". Dernier cours valide conservé (" + prev + "), puis taux de secours SUMUP_RATE après " + SUMUP_RATE_MAX_AGE_DAYS_ + " jours.", link: "#subscriptions" }); } catch (e) { /* sans gravité */ }
+    return { ok: false, reason: why, kept: prev };
+  }
+  P.setProperty("SUMUP_RATE_AUTO", String(rate)); P.setProperty("SUMUP_RATE_AUTO_DATE", todayStr_());
+  return { ok: true, rate: rate, date: todayStr_(), exemple: "100 " + local + " = " + round2_(100 * rate) + " " + base };
 }
 function sumupEnabled_() { const c = sumupConf_(); return !!(c.key && c.merchant); }
 
@@ -8213,7 +8251,7 @@ function sumupAmount_(localAmount) {
   const c = sumupConf_(), local = round2_(num_(localAmount));
   if (cur_() === c.currency) return { amount: local, currency: c.currency, rate: 1 };
   if (!(c.rate > 0)) throw new AppError("PAYMENT", "Taux de conversion " + cur_() + " → " + c.currency + " non défini (SUMUP_RATE) : aucun prélèvement possible.");
-  return { amount: round2_(local * c.rate), currency: c.currency, rate: c.rate };
+  return { amount: round2_(local * c.rate), currency: c.currency, rate: c.rate, variable: c.rateMode === "AUTO", rateDate: c.rateDate };
 }
 
 /** Appel à l'API SumUp. Renvoie { status, body } ; lève une erreur lisible au-delà de 299 sauf si allow contient le code. */
@@ -8253,7 +8291,7 @@ function sumupPayerSub_(p, orgId) {
 function sumupCardInfo_(orgId, s) {
   if (!sumupEnabled_()) return { enabled: false };
   const card = sumupCardOf_(orgId), out = { enabled: true, active: !!card, label: card ? card.label : "", savedAt: card ? card.createdAt : "", lastError: card ? card.lastChargeError || "" : "" };
-  if (s) { try { const total = subAgencyOption_(s).totalPrice, a = sumupAmount_(total); out.amount = a.amount; out.currency = a.currency; out.converted = a.rate !== 1; out.rate = a.rate; }
+  if (s) { try { const total = subAgencyOption_(s).totalPrice, a = sumupAmount_(total); out.amount = a.amount; out.currency = a.currency; out.converted = a.rate !== 1; out.rate = a.rate; out.variable = !!a.variable; }
     catch (e) { out.amountError = e.message; } }
   return out;
 }
@@ -8373,7 +8411,7 @@ function sumupChargeSub_(s, actor) {
 function sumupRecordPaid_(s, card, co, total, amt, actor) {
   const tx = ((co.transactions || [])[0] || {}).transaction_code || co.transaction_code || co.id || "";
   const r = subApplyPayment_(dbGet_("Subscriptions", s.subscriptionId), total, todayStr_(), "CARD", "SumUp " + tx, "", 1, actor || "system");
-  if (amt.rate !== 1) dbUpdate_("Payments", r.paymentId, { note: "1 période — débité " + amt.amount + " " + amt.currency + " (taux " + amt.rate + ")" });
+  if (amt.rate !== 1) dbUpdate_("Payments", r.paymentId, { note: "1 période — débité " + amt.amount + " " + amt.currency + " (cours " + amt.rate + (amt.variable ? " du " + todayStr_() : ", taux fixe") + ")" });
   dbUpdate_("BillingCards", card.cardId, { lastChargeKey: sumupDueKey_(s) + ":OK", chargeAttempts: 0, lastChargeError: "", updatedAt: nowIso_() });
   auditAs_(actor || "system", "", "SUBSCRIPTION_CARD_CHARGED", "Subscription", s.subscriptionId, s.organizationId, { amount: amt.amount, currency: amt.currency, periodEnd: r.periodEnd });
   sumupNotify_(s, "sub-card-ok:" + s.subscriptionId + ":" + r.periodEnd, "Abonnement réglé par carte", amt.amount + " " + amt.currency + " prélevés sur " + card.label + ". Abonnement payé jusqu'au " + r.periodEnd + ".", false);
@@ -8389,6 +8427,7 @@ function sumupNotify_(s, key, title, body, alsoSuper) {
 /** Tâche quotidienne (avant subscriptionJob_) : débite toutes les échéances dues des abonnements ayant une carte. */
 function sumupChargeJob_() {
   if (!sumupEnabled_()) return { skipped: "SumUp non configuré" };
+  try { actualiserTauxSumUp(); } catch (e) { /* le taux de secours s'applique */ }
   const today = todayStr_(), demo = demoOrgIdSet_(); let paid = 0, failed = 0;
   dbAll_("Subscriptions").filter(function (s) { return !demo[String(s.organizationId)] && sumupDue_(s, today) && sumupCardOf_(s.organizationId); }).forEach(function (s) {
     try { const r = withLock_(function () { const fresh = dbGet_("Subscriptions", s.subscriptionId); return sumupDue_(fresh, today) ? sumupChargeSub_(fresh, "system") : { ok: false, reason: "NOT_DUE" }; });
@@ -8418,7 +8457,7 @@ function testerSumUp() {
   const me = sumupCall_("get", "/me").body, prof = me.merchant_profile || {};
   const code = prof.merchant_code || me.merchant_code || "";
   const out = { ok: code === c.merchant, compteSumUp: code, codeConfigure: c.merchant, devise: c.currency, deviseEdition: cur_(), pays: prof.country || "" };
-  if (cur_() !== c.currency) { out.taux = c.rate; if (!(c.rate > 0)) { out.ok = false; out.message = "SUMUP_RATE manquant (conversion " + cur_() + " → " + c.currency + ")."; } else out.exemple = "100 " + cur_() + " = " + round2_(100 * c.rate) + " " + c.currency; }
+  if (cur_() !== c.currency) { out.taux = c.rate; out.modeTaux = c.rateMode === "AUTO" ? "cours du jour" + (c.rateDate ? " (" + c.rateDate + ")" : " (pas encore récupéré : secours)") : "taux fixe"; if (!(c.rate > 0)) { out.ok = false; out.message = "SUMUP_RATE manquant (conversion " + cur_() + " → " + c.currency + ")."; } else out.exemple = "100 " + cur_() + " = " + round2_(100 * c.rate) + " " + c.currency; }
   if (code !== c.merchant) out.message = "Le code marchand configuré ne correspond pas à la clé.";
   return out;
 }
@@ -9817,6 +9856,23 @@ function TEST_GROUPS_() {
           TEST_HOOKS_.sumupConfig = { key: "sup_sk_TEST", merchant: "MAUTRE", currency: "XXX", rate: 0.5 }; T.ok(!testerSumUp().ok, "code marchand erroné détecté");
           void end1;
         } finally { TEST_HOOKS_.sumupConfig = null; TEST_HOOKS_.sumupFetch = null; }
+      }],
+      ["Cours de change automatique (SumUp) : cours du jour, garde-fous, secours", function (T) {
+        const P = PropertiesService.getScriptProperties(), keys = ["SUMUP_CURRENCY", "SUMUP_RATE", "SUMUP_RATE_MODE", "SUMUP_RATE_AUTO", "SUMUP_RATE_AUTO_DATE"], saved = {};
+        keys.forEach(function (k) { saved[k] = P.getProperty(k); });
+        let quote = 10, up = true;
+        TEST_HOOKS_.sumupFetch = function (url) { T.ok(url.indexOf(SUMUP_RATE_URL_) === 0, "source de cours"); const rates = {}; rates[cur_()] = quote;
+          return { getResponseCode: function () { return up ? 200 : 503; }, getContentText: function () { return up ? JSON.stringify({ result: "success", rates: rates }) : ""; } }; };
+        try {
+          P.setProperty("SUMUP_CURRENCY", cur_() === "USD" ? "EUR" : "USD"); P.setProperty("SUMUP_RATE", "0.1"); P.deleteProperty("SUMUP_RATE_AUTO"); P.deleteProperty("SUMUP_RATE_AUTO_DATE");
+          P.setProperty("SUMUP_RATE_MODE", "FIXED"); T.ok(actualiserTauxSumUp().skipped, "mode fixe : pas de mise à jour");
+          P.setProperty("SUMUP_RATE_MODE", "AUTO"); quote = 10.2;
+          const r1 = actualiserTauxSumUp(); T.ok(r1.ok && Math.abs(r1.rate - 1 / 10.2) < 1e-6, "cours du jour enregistré");
+          T.ok(Math.abs(sumupRateOf_(P) - 1 / 10.2) < 1e-6, "cours du jour appliqué");
+          quote = 5; T.ok(!actualiserTauxSumUp().ok && Math.abs(sumupRateOf_(P) - 1 / 10.2) < 1e-6, "variation > 5 % refusée, dernier cours conservé");
+          up = false; T.ok(!actualiserTauxSumUp().ok, "source en panne : cours conservé");
+          P.setProperty("SUMUP_RATE_AUTO_DATE", "2020-01-01"); T.eq(sumupRateOf_(P), 0.1, "cours trop ancien : taux de secours");
+        } finally { TEST_HOOKS_.sumupFetch = null; keys.forEach(function (k) { if (saved[k] === null || saved[k] === undefined) P.deleteProperty(k); else P.setProperty(k, saved[k]); }); }
       }],
       ["Quota de biens du forfait appliqué", function (T, fx) {
         const org = tOrg_("Quota " + fx.run, "OWNER_ORG"), u = tMakeUser_(fx.mail("quota"), "OWNER", org.organizationId, fx.pw);

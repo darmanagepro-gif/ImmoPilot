@@ -7,6 +7,7 @@
 - Refus : un essai par jour (4 au plus par échéance), notification du propriétaire et du super administrateur, puis la règle habituelle (lecture seule après 15 jours). Anti-double débit : référence unique par tentative, tentatives précédentes relues chez SumUp avant tout nouveau débit.
 - Maroc : prix en MAD convertis en euros au taux fixe `SUMUP_RATE`, affiché au propriétaire avant l'enregistrement de la carte ; sans taux, aucun débit.
 - Retrait de carte à tout moment ; bouton « Prélever la carte » pour le super administrateur ; contrat PDF mis à jour selon le mode de paiement.
+- Maroc, cours du jour (`SUMUP_RATE_MODE=AUTO`) : cours MAD/EUR récupéré chaque matin (ExchangeRate-API), garde-fous (cours absent, de plus de 3 jours ou variant de plus de 5 % → dernier cours valide puis `SUMUP_RATE`, alerte au super administrateur), cours appliqué noté sur chaque règlement ; contrat PDF et `contrat-abonnement.html` complétés (débit en euros au cours du jour, frais bancaires du client à sa charge).
 - Sans `SUMUP_API_KEY` et `SUMUP_MERCHANT_CODE`, rien ne change (paiement manuel). Installation : `server/deploy/sumup-config.sh` ; contrôle : `immopilot run testerSumUp` (aucun paiement).
 
 ## Serveur dédié 2.1.0 — 31 octobre 2026 — chiffrement au repos

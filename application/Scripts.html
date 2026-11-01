@@ -334,7 +334,7 @@ function cardPaymentBox(o, s) {
   } else {
     box.appendChild(h("p", null, t("Enregistrez votre carte une seule fois : l'abonnement sera ensuite réglé automatiquement à chaque échéance. Sans engagement, vous pouvez retirer la carte à tout moment.")));
   }
-  if (c.converted) box.appendChild(h("p", { class: "small muted" }, t("Montant converti") + " : " + fmtMoney(s.agencyOption ? s.agencyOption.totalPrice : s.price) + " = " + amount + " (" + t("taux") + " " + c.rate + ")."));
+  if (c.converted) box.appendChild(h("p", { class: "small muted" }, t("Montant converti") + " : " + fmtMoney(s.agencyOption ? s.agencyOption.totalPrice : s.price) + " ≈ " + amount + " (" + (c.variable ? t("cours du jour") : t("taux")) + " " + c.rate + ")." + (c.variable ? " " + t("Le montant en euros suit le cours de change du jour du prélèvement et peut varier légèrement chaque mois.") : "")));
   if (c.amountError) box.appendChild(h("div", { class: "alert bad" }, c.amountError));
   box.appendChild(h("div", { class: "actions" }, c.amountError ? null : btn(c.active ? t("Changer de carte") : t("Enregistrer ma carte"), function () { cardSetupDialog(o); }, c.active ? "" : "primary"),
     c.active ? btn(t("Retirer la carte"), function () { confirmBox(t("Retirer la carte ? Les prochaines échéances devront être réglées par virement."), { danger: true }).then(function (ok) { if (ok) api("sub.cardRemove", { organizationId: o.organizationId }).then(function () { toast(t("Carte retirée.")); App.go("subscriptions"); }).catch(showErr); }); }, "danger") : null));

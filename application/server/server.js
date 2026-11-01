@@ -104,8 +104,8 @@ function sameOrigin(req) {
   try { return new URL(o).host === new URL(C.publicUrl).host || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o); } catch (e) { return false; }
 }
 const ADMIN_FUNCTIONS = ["setupProject", "createFirstSuperAdmin", "verifierInstallation", "healthCheck", "mesurerPerformance", "viderCache", "creerEnvironnementDemo", "creerHistoriqueDemo",
-  "mettreDemoEnVeille", "reveillerDemo", "testerAssistantIA", "testerSumUp", "backupNow", "restoreFromBackup", "jobFrequent", "jobDaily"];
-const ADMIN_PROPS = ["IMMO_ADMIN_EMAILS", "IMMO_APP_URL", "IMMO_AI_PROVIDER", "IMMO_AI_API_KEY", "IMMO_AI_MODEL", "IMMO_EMBED_ORIGINS", "IMMO_PBKDF_ITERATIONS", "SUMUP_API_KEY", "SUMUP_MERCHANT_CODE", "SUMUP_CURRENCY", "SUMUP_RATE"];
+  "mettreDemoEnVeille", "reveillerDemo", "testerAssistantIA", "testerSumUp", "actualiserTauxSumUp", "backupNow", "restoreFromBackup", "jobFrequent", "jobDaily"];
+const ADMIN_PROPS = ["IMMO_ADMIN_EMAILS", "IMMO_APP_URL", "IMMO_AI_PROVIDER", "IMMO_AI_API_KEY", "IMMO_AI_MODEL", "IMMO_EMBED_ORIGINS", "IMMO_PBKDF_ITERATIONS", "SUMUP_API_KEY", "SUMUP_MERCHANT_CODE", "SUMUP_CURRENCY", "SUMUP_RATE", "SUMUP_RATE_MODE"];
 function adminOk(req) {
   const local = /^(127\.|::1|::ffff:127\.)/.test(req.socket.remoteAddress || "");
   const tok = String(req.headers["x-admin-token"] || ""), want = String(C.adminToken || "");

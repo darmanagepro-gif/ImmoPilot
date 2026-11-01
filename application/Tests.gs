@@ -1390,6 +1390,23 @@ function TEST_GROUPS_() {
           void end1;
         } finally { TEST_HOOKS_.sumupConfig = null; TEST_HOOKS_.sumupFetch = null; }
       }],
+      ["Cours de change automatique (SumUp) : cours du jour, garde-fous, secours", function (T) {
+        const P = PropertiesService.getScriptProperties(), keys = ["SUMUP_CURRENCY", "SUMUP_RATE", "SUMUP_RATE_MODE", "SUMUP_RATE_AUTO", "SUMUP_RATE_AUTO_DATE"], saved = {};
+        keys.forEach(function (k) { saved[k] = P.getProperty(k); });
+        let quote = 10, up = true;
+        TEST_HOOKS_.sumupFetch = function (url) { T.ok(url.indexOf(SUMUP_RATE_URL_) === 0, "source de cours"); const rates = {}; rates[cur_()] = quote;
+          return { getResponseCode: function () { return up ? 200 : 503; }, getContentText: function () { return up ? JSON.stringify({ result: "success", rates: rates }) : ""; } }; };
+        try {
+          P.setProperty("SUMUP_CURRENCY", cur_() === "USD" ? "EUR" : "USD"); P.setProperty("SUMUP_RATE", "0.1"); P.deleteProperty("SUMUP_RATE_AUTO"); P.deleteProperty("SUMUP_RATE_AUTO_DATE");
+          P.setProperty("SUMUP_RATE_MODE", "FIXED"); T.ok(actualiserTauxSumUp().skipped, "mode fixe : pas de mise à jour");
+          P.setProperty("SUMUP_RATE_MODE", "AUTO"); quote = 10.2;
+          const r1 = actualiserTauxSumUp(); T.ok(r1.ok && Math.abs(r1.rate - 1 / 10.2) < 1e-6, "cours du jour enregistré");
+          T.ok(Math.abs(sumupRateOf_(P) - 1 / 10.2) < 1e-6, "cours du jour appliqué");
+          quote = 5; T.ok(!actualiserTauxSumUp().ok && Math.abs(sumupRateOf_(P) - 1 / 10.2) < 1e-6, "variation > 5 % refusée, dernier cours conservé");
+          up = false; T.ok(!actualiserTauxSumUp().ok, "source en panne : cours conservé");
+          P.setProperty("SUMUP_RATE_AUTO_DATE", "2020-01-01"); T.eq(sumupRateOf_(P), 0.1, "cours trop ancien : taux de secours");
+        } finally { TEST_HOOKS_.sumupFetch = null; keys.forEach(function (k) { if (saved[k] === null || saved[k] === undefined) P.deleteProperty(k); else P.setProperty(k, saved[k]); }); }
+      }],
       ["Quota de biens du forfait appliqué", function (T, fx) {
         const org = tOrg_("Quota " + fx.run, "OWNER_ORG"), u = tMakeUser_(fx.mail("quota"), "OWNER", org.organizationId, fx.pw);
         const tok = T.pub("auth.login", { email: u.email, password: fx.pw }).token;
