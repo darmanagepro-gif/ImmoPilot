@@ -316,12 +316,22 @@ function leaseDocument_(p, a) {
   const map = { bailleur: org.name, locataire: t.fullName, locataire_email: t.email, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), surface: x.prop.surfaceM2, debut: x.l.startDate,
     fin: x.l.endDate || "indéterminée", loyer: x.l.monthlyRent, charges: x.l.charges, caution: x.l.deposit, jour_echeance: x.l.dueDay, indexation: x.l.indexationRate, conditions: x.l.terms, date: todayStr_() };
   const tpl = getSetting_("template.leaseDocId", x.l.organizationId), text = docTemplateOf_("lease", x.l.organizationId), cur = cur_();
-  const pdf = text ? docTemplatePdf_("lease", text, { bailleur: org.name, bailleur_adresse: [org.address, org.city].filter(String).join(", "), locataire: t.fullName, locataire_email: t.email,
-      bien: x.prop.name, adresse: [x.prop.address, x.prop.city].filter(String).join(", "), surface: x.prop.surfaceM2, debut: pdfDate_(x.l.startDate), fin: x.l.endDate ? pdfDate_(x.l.endDate) : "durée indéterminée",
+  // Contrat complet et conforme (meublé ou vide selon le logement), sans marque ImmoPilot : en-tête au nom du bailleur.
+  const c = rentCtx_(x.l), furnished = leaseFurnished_(x.l, x.prop);
+  const base = laContractTemplate_(c, { furnished: furnished, usage: "HABITATION", clauses: ["INSURANCE_REQUIRED", "SUBLET_FORBIDDEN"], instructions: "" });
+  const sections = base.sections.map(function (sc) { return { title: laFill_(sc.title, c), body: laFill_(sc.body, c) }; });
+  let pdf;
+  if (text) pdf = docTemplatePdf_("lease", text, { bailleur: org.name, bailleur_adresse: [org.address, org.city].filter(String).join(", "), locataire: t.fullName, locataire_email: t.email,
+      bien: x.prop.name, adresse: [x.prop.address, x.prop.city].filter(String).join(", "), surface: x.prop.surfaceM2,
+      type: ({ APARTMENT: "Appartement", STUDIO: "Studio", HOUSE: "Maison", VILLA: "Villa", RIAD: "Riad", COMMERCIAL: "Local commercial", OTHER: "Autre" })[x.prop.propertyType] || x.prop.propertyType || "",
+      debut: pdfDate_(x.l.startDate), fin: x.l.endDate ? pdfDate_(x.l.endDate) : "durée indéterminée",
       loyer: fmtAmount_(x.l.monthlyRent, cur), charges: fmtAmount_(x.l.charges, cur), caution: fmtAmount_(x.l.deposit, cur), jour_echeance: x.l.dueDay, indexation: x.l.indexationRate,
-      conditions: x.l.terms, date: pdfDate_(todayStr_()), ville: x.prop.city || "" }, { name: "Bail_" + x.l.leaseId, subtitle: x.prop.name || "" }) : tpl ? docFromTemplate_(tpl, map, propertyFolder_(x.l.organizationId, x.l.propertyId, "LEASE"), "Bail_" + x.l.leaseId).pdf :
-    htmlToPdf_(pdfShell_("Contrat de location", "<p class='muted'>MODÈLE INDICATIF — à faire valider par un professionnel du " + escapeHtml_(edition_().leaseLaw) + " avant signature. ImmoPilot ne garantit pas la conformité juridique.</p>" +
-      htmlTable_(["Clause", "Contenu"], Object.keys(map).map(function (k) { return [k, map[k] == null ? "" : map[k]]; })) + "<p>Fait à " + escapeHtml_(x.prop.city || "") + ", le " + todayStr_() + "</p><p>Signature bailleur : ______________ &nbsp; Signature locataire : ______________</p>"), "Bail_" + x.l.leaseId);
+      conditions: x.l.terms, date: pdfDate_(todayStr_()), ville: x.prop.city || "",
+      __bienHtml: laPropertyLines_(x.prop, furnished, IMMO_EDITION_ === "MA").map(escapeHtml_).join("<br>"),
+      __clausesHtml: sections.map(function (sc) { return "<h2>" + escapeHtml_(sc.title) + "</h2>" + laParas_(sc.body); }).join("") },
+    { name: "Bail_" + x.l.leaseId, subtitle: x.prop.name || "", title: base.title, issuer: rentIssuer_(org), footer: "Paraphe du bailleur : __________          Paraphe du locataire : __________" });
+  else if (tpl) pdf = docFromTemplate_(tpl, map, propertyFolder_(x.l.organizationId, x.l.propertyId, "LEASE"), "Bail_" + x.l.leaseId).pdf;
+  else pdf = htmlToPdf_(leaseDocHtml_(c, { docType: "LEASE_CONTRACT", status: "FINAL", engine: "MODELE", title: base.title, sectionsJson: JSON.stringify(sections), finalizedAt: todayStr_() }), "Bail_" + x.l.leaseId);
   const out = storeGeneratedPdf_(p, pdf, { propertyId: x.l.propertyId, organizationId: x.l.organizationId }, "LEASE", x.l.leaseId, "CONTRACT");
   dbUpdate_("Leases", x.l.leaseId, { documentId: out.documentId });
   audit_("LEASE_DOCUMENT_GENERATED", "Lease", x.l.leaseId, x.l.organizationId, { template: !!(text || tpl) });

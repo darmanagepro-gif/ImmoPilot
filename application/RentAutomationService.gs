@@ -143,9 +143,13 @@ function rentReceiptPdf_(c, s) {
   const tpl = getSetting_("template.receiptDocId", c.l.organizationId);
   const map = { bailleur: c.org.name, locataire: c.t.fullName, bien: c.prop.name, adresse: rentAddress_(c.prop), periode: s.period, loyer: s.rentAmount, charges: s.chargesAmount, total: s.amountDue,
     date_paiement: pays.map(function (z) { return pdfDate_(z.paidAt); }).join(", "), date: pdfDate_(todayStr_()) };
-  const text = docTemplateOf_("receipt", c.l.organizationId);
+  const text = docTemplateOf_("receipt", c.l.organizationId) || (tpl ? "" : docTemplateDefault_("receipt"));
+  const y = parseInt(String(s.period).slice(0, 4), 10), mo = parseInt(String(s.period).slice(5, 7), 10);
+  const lastDay = new Date(Date.UTC(y, mo, 0)).getUTCDate(), pad = function (n) { return (n < 10 ? "0" : "") + n; };
+  const TYPES = { APARTMENT: "Appartement", STUDIO: "Studio", HOUSE: "Maison", VILLA: "Villa", RIAD: "Riad", COMMERCIAL: "Local commercial", OTHER: "Autre" };
   if (text) return docTemplatePdf_("receipt", text, { bailleur: c.org.name, bailleur_adresse: [c.org.address, c.org.city].filter(String).join(", "), locataire: c.t.fullName, bien: c.prop.name,
-    adresse: rentAddress_(c.prop), periode: rentPeriodLabel_(s), loyer: fmtAmount_(s.rentAmount, cur), charges: fmtAmount_(s.chargesAmount, cur), total: fmtAmount_(s.amountDue, cur),
+    adresse: rentAddress_(c.prop), type: TYPES[c.prop.propertyType] || c.prop.propertyType || "", surface: c.prop.surfaceM2 || "",
+    du: y && mo ? "01/" + pad(mo) + "/" + y : "", au: y && mo ? pad(lastDay) + "/" + pad(mo) + "/" + y : "", echeance: pdfDate_(s.dueDate), periode: rentPeriodLabel_(s), loyer: fmtAmount_(s.rentAmount, cur), charges: fmtAmount_(s.chargesAmount, cur), total: fmtAmount_(s.amountDue, cur),
     date_paiement: map.date_paiement, mode_paiement: pays.map(function (z) { return PDF_PAY_METHODS_[z.method] || z.method; }).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).join(", "),
     reference: rentReference_(c.l, s), date: pdfDate_(todayStr_()), ville: c.prop.city || "" },
     { name: "Quittance_" + s.period + "_" + String(c.l.leaseId).slice(-6), subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org),

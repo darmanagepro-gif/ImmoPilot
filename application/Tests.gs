@@ -1124,7 +1124,7 @@ function TEST_GROUPS_() {
         const all = JSON.stringify(d.sections);
         T.ok(all.indexOf("Yasmine Agent") >= 0 && all.indexOf("Route de Fès km 8") >= 0 && !/\[(BAILLEUR|LOCATAIRE|ADRESSE_DU_BIEN)\]/.test(all), "marqueurs remplacés par les vraies valeurs");
         T.ok(/jardin est entretenu/.test(all) && /non-fumeur/.test(all) && d.inputs.clauses.indexOf("INCONNUE") < 0, "consignes et clauses reprises, clause inconnue ignorée");
-        if (IMMO_EDITION_ === "MA") { T.ok(/07-03/.test(all) && /8 %/.test(all), "révision conforme à la loi 07-03"); T.ok(d.warnings.some(function (w) { return /07-03/.test(w) && /3 %/.test(w); }), "avertissement : indexation annuelle"); }
+        if (IMMO_EDITION_ === "MA") { T.ok(/67-12/.test(all) && /8 %/.test(all), "révision conforme à la loi 67-12 (articles 31 à 38)"); T.ok(d.warnings.some(function (w) { return /67-12/.test(w) && /3 %/.test(w); }), "avertissement : indexation annuelle"); }
         else T.ok(d.warnings.some(function (w) { return /Durée de 12 mois|dépôt/i.test(w); }) || true, "avertissements France");
         const up = T.call(O.tok, "leasedoc.update", { leaseDocId: d.leaseDocId, title: "Contrat de location meublée — Villa Agent", sections: d.sections.concat([{ title: "Article 99 — Piscine", body: "Entretien de la piscine à la charge du bailleur." }]) });
         T.eq(up.sections.length, d.sections.length + 1, "brouillon modifiable");

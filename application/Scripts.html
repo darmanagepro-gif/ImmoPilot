@@ -470,17 +470,22 @@ function templateEditor(org, key) {
       const ta = h("textarea", { rows: 18, style: { width: "100%", fontFamily: "ui-monospace,Menlo,Consolas,monospace", fontSize: "13px", lineHeight: "1.45" } });
       ta.value = info.current || info.defaultText;
       const err = h("div", { class: "alert bad hidden" });
+      const fur = kind === "lease" ? h("input", { type: "checkbox", id: "tpl-fur" }) : null;
       const insert = function (tag) { const s = ta.selectionStart || 0, e = ta.selectionEnd || 0; ta.value = ta.value.slice(0, s) + tag + ta.value.slice(e); ta.focus(); ta.selectionStart = ta.selectionEnd = s + tag.length; };
       const tags = h("div", { class: "small", style: { display: "flex", flexWrap: "wrap", gap: "6px", margin: "8px 0" } }, info.tags.map(function (x) {
         return h("button", { type: "button", class: "btn sm", title: t(x.label), onclick: function () { insert(x.tag); } }, x.tag);
       }));
       const body = h("div", null,
         h("p", { class: "small muted", style: { marginTop: 0 } }, info.current ? t("Votre modèle personnalisé est utilisé pour ce document.") : t("Aucun modèle personnalisé : le document standard d'ImmoPilot est utilisé. Le texte ci-dessous est un point de départ à adapter.")),
-        h("p", { class: "small", style: { margin: "0 0 6px" } }, t("Balises (cliquez pour insérer à l'endroit du curseur) :")), tags, ta,
-        h("p", { class: "small muted" }, t("Mise en forme") + " : « # " + t("Titre") + " » = " + t("intertitre") + ", **" + t("texte") + "** = " + t("gras") + ", « --- » = " + t("trait") + ", « [signatures] » = " + t("cadres de signature") + "."), err);
+        h("p", { class: "small", style: { margin: "0 0 6px" } }, t("Balises (cliquez pour insérer à l'endroit du curseur) :")), tags,
+        (info.blocks || []).length ? h("div", { class: "small", style: { display: "flex", flexWrap: "wrap", gap: "6px", margin: "0 0 8px" } }, h("span", { class: "muted" }, t("Blocs de mise en page") + " :"),
+          info.blocks.map(function (bk) { return h("button", { type: "button", class: "btn sm", onclick: function () { insert("\n" + bk + "\n"); } }, bk); })) : null,
+        kind === "lease" ? h("p", { class: "small muted", style: { margin: "0 0 8px" } }, t("[clauses] insère tous les articles du contrat, conformes à la loi du pays : contrat meublé ou non meublé selon le logement, durée, dépôt de garantie, préavis et formes du congé.")) : null,
+        ta, fur ? h("label", { for: "tpl-fur", class: "small", style: { display: "flex", gap: "6px", alignItems: "center", marginTop: "6px" } }, fur, t("Aperçu d'un bail meublé")) : null,
+        h("p", { class: "small muted" }, t("Mise en forme") + " : « # " + t("Titre") + " » = " + t("intertitre") + ", **" + t("texte") + "** = " + t("gras") + ", « --- » = " + t("trait") + ", « [signatures] » = " + t("cadres de signature") + ", « [entete] » = " + t("bailleur à gauche, locataire à droite") + ", « [bien] » = " + t("détail du logement") + ", « [tableau] » = " + t("tableau des sommes") + ", « [coupon] » = " + t("coupon de paiement") + "."), err);
       const showErr = function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); };
       const m = modal({ title: t(info.title) + " — " + t("modèle"), size: "lg", body: body, onClose: function () { resolve(false); }, buttons: [
-        { label: t("Aperçu PDF"), onClick: function (b) { b.disabled = true; api("template.preview", { organizationId: org, kind: kind, text: ta.value }).then(download).catch(showErr).then(function () { b.disabled = false; }); } },
+        { label: t("Aperçu PDF"), onClick: function (b) { b.disabled = true; api("template.preview", { organizationId: org, kind: kind, text: ta.value, furnished: !!(fur && fur.checked) }).then(download).catch(showErr).then(function () { b.disabled = false; }); } },
         info.current ? { label: t("Revenir au document standard"), onClick: function (b) { confirmBox(t("Supprimer votre modèle et revenir au document standard d'ImmoPilot ?"), { danger: true }).then(function (ok) {
           if (!ok) return; b.disabled = true; api("settings.set", { organizationId: org, key: key, value: "" }).then(function () { toast(t("Paramètre enregistré."), "good"); resolve(true); m.close(); }).catch(function (e) { b.disabled = false; showErr(e); }); }); } } : null,
         { label: t("Enregistrer"), primary: true, onClick: function (b) { b.disabled = true; api("settings.set", { organizationId: org, key: key, value: ta.value }).then(function () { toast(t("Paramètre enregistré."), "good"); resolve(true); m.close(); }).catch(function (e) { b.disabled = false; showErr(e); }); } }

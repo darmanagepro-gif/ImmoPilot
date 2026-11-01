@@ -1662,7 +1662,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "ae534be3b6b9";
+var IMMO_BUILD_ = "8fc48f10254c";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -3699,7 +3699,8 @@ function storeGeneratedPdf_(p, pdfBlob, ctx, ownerType, ownerId, category) {
 var PDF_LOGO_PNG_B64_ = "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";
 /**
  * Gabarit commun des PDF : en-tête avec logo et nom de l'application, titre, sous-titre facultatif (organisation),
- * date de génération et pied de page. opts : { subtitle, footer, issuer: { name, lines[] } } — issuer remplace la marque ImmoPilot.
+ * date de génération et pied de page. opts : { subtitle, footer, issuer: { name, lines[] }, noHead } — issuer remplace la marque ImmoPilot ;
+ * noHead : aucun en-tête de marque (le modèle affiche lui-même les parties avec le bloc [entete]).
  */
 function pdfShell_(title, inner, opts) {
   opts = opts || {};
@@ -3709,7 +3710,7 @@ function pdfShell_(title, inner, opts) {
     "th{background:#e8eef5}.muted{color:#64748b}.right{text-align:right}.head td{border:0;padding:0}.brand{font-size:20px;font-weight:bold;color:#13233d}.gold{color:#c9962b}" +
     ".photos td{border:0;padding:3px;width:50%}.photos img{width:100%;border:1px solid #c9d3df}.sign td{height:70px;width:50%}.box{border:1px solid #c9d3df;padding:8px;margin:8px 0;background:#f8fafc}" +
     ".foot{margin-top:24px;border-top:1px solid #c9d3df;padding-top:6px;color:#64748b;font-size:9px}</style></head><body>" +
-    (opts.issuer
+    (opts.noHead ? "<table class='head'><tr><td></td>" : opts.issuer
       // Document émis par un tiers (devis, facture d'un prestataire) : son identité en en-tête, sans la marque ImmoPilot.
       ? "<table class='head'><tr><td><div class='brand'>" + escapeHtml_(opts.issuer.name) + "</div><div class='muted'>" + (opts.issuer.lines || []).filter(String).map(escapeHtml_).join("<br>") + "</div></td>"
       : "<table class='head'><tr><td style='width:62px'><img src='data:image/png;base64," + PDF_LOGO_PNG_B64_ + "' width='54' height='54'></td>" +
@@ -4625,7 +4626,7 @@ function invRefreshPaid_(invoiceId) {
  *    demande la rédaction au service d'IA. AUCUNE donnée d'identité n'est transmise : ni nom, ni e-mail, ni téléphone, ni adresse,
  *    ni pièce d'identité. L'IA écrit avec des marqueurs ([BAILLEUR], [LOCATAIRE], [ADRESSE_DU_BIEN], [VILLE]) que le serveur
  *    remplace ensuite par les vraies valeurs.
- *  - MODÈLE INTÉGRÉ : sans IA (ou en cas d'erreur), un modèle rédigé à l'avance pour l'édition (Maroc : loi 67-12, loi 07-03 ;
+ *  - MODÈLE INTÉGRÉ : sans IA (ou en cas d'erreur), un modèle rédigé à l'avance pour l'édition (Maroc : loi 67-12 ;
  *    France : loi 89-462) est rempli avec les données du bail. L'application fonctionne donc toujours.
  * Règles :
  *  - Rien n'est envoyé au locataire sans action explicite du bailleur (« Valider », puis « Envoyer au locataire »).
@@ -4656,8 +4657,8 @@ function laFacts_(c) {
 }
 /** Remplace les marqueurs par les vraies valeurs (après la réponse de l'IA : les identités ne lui sont jamais transmises). */
 function laFill_(text, c) {
-  const map = { "[BAILLEUR]": c.org.name || "le bailleur", "[LOCATAIRE]": c.t.fullName || "le locataire", "[ADRESSE_DU_BIEN]": rentAddress_(c.prop) || c.prop.name || "", "[VILLE]": c.prop.city || edition_().city, "[BIEN]": c.prop.name || "" };
-  return String(text || "").replace(/\[(BAILLEUR|LOCATAIRE|ADRESSE_DU_BIEN|VILLE|BIEN)\]/g, function (m) { return map[m]; });
+  const map = { "[BAILLEUR]": c.org.name || "le bailleur", "[LOCATAIRE]": c.t.fullName || "le locataire", "[ADRESSE_DU_BIEN]": rentAddress_(c.prop) || c.prop.name || "", "[VILLE]": c.prop.city || edition_().city, "[BIEN]": c.prop.name || "", "[DESCRIPTION_DU_BIEN]": safeText_(c.prop.description || "", 1500) };
+  return String(text || "").replace(/\[(BAILLEUR|LOCATAIRE|ADRESSE_DU_BIEN|VILLE|BIEN|DESCRIPTION_DU_BIEN)\]/g, function (m) { return map[m]; });
 }
 function laMoney_(v) { return fmtAmount_(v, cur_()); }
 function laParas_(text) { return String(text || "").split(/\n{2,}|\r\n\r\n/).map(function (pg) { return "<p>" + escapeHtml_(pg.trim()).replace(/\n/g, "<br>") + "</p>"; }).join(""); }
@@ -4706,7 +4707,7 @@ function laContractWarnings_(c, inp) {
   const w = ["Modèle généré automatiquement : faites-le relire par un professionnel (avocat, notaire ou adoul selon le cas) avant signature. ImmoPilot ne garantit pas sa conformité juridique."];
   const l = c.l, rent = num_(l.monthlyRent), dep = num_(l.deposit), months = l.endDate ? diffDays_(l.startDate, addDaysStr_(l.endDate, 1)) / 30.44 : null;
   if (IMMO_EDITION_ === "MA") {
-    if (num_(l.indexationRate) > 0) w.push("Le bail prévoit une indexation annuelle de " + num_(l.indexationRate) + " % : au Maroc, la loi n° 07-03 ne permet de réviser le loyer qu'au plus tôt tous les trois ans, dans la limite de " + (inp.usage === "MIXED" ? "8 % (habitation) et 10 % (autres locaux)" : "8 % pour l'habitation") + ". Le contrat reprend la règle légale ; ajustez l'indexation du bail dans ImmoPilot.");
+    if (num_(l.indexationRate) > 0) w.push("Le bail prévoit une indexation annuelle de " + num_(l.indexationRate) + " % : au Maroc, la loi n° 67-12 (articles 31 à 38) ne permet de réviser le loyer qu'au plus tôt tous les trois ans, dans la limite de " + (inp.usage === "MIXED" ? "8 % (habitation) et 10 % (autres locaux)" : "8 % pour l'habitation") + ". Le contrat reprend la règle légale ; ajustez l'indexation du bail dans ImmoPilot.");
     w.push("Faites signer le contrat en deux exemplaires et légaliser les signatures pour lui donner date certaine.");
   } else {
     const maxDep = inp.furnished ? 2 : 1;
@@ -4728,53 +4729,78 @@ function laClauseText_(code, inp, ma) {
     WORKS_AUTH_REQUIRED: "Le locataire ne peut effectuer aucune transformation des lieux, des équipements ou de la distribution des pièces sans l'accord écrit du bailleur ; les simples aménagements restent permis."
   }[code] || "";
 }
-/** Contrat rédigé par le modèle intégré (édition Maroc ou France). */
+/** Désignation détaillée du logement (texte), commune au contrat intégré et au bloc [bien] des modèles. */
+function laPropertyLines_(prop, furnished, ma, markers) {
+  const rooms = parseJson_(prop.roomsJson, []), equip = parseJson_(prop.equipmentJson, []), L = [];
+  if (prop.propertyType) L.push("Nature du bien : " + st_label_(prop.propertyType) + ".");
+  // markers : trame transmise à l'IA → l'adresse et la description restent des marqueurs, remplacés après (laFill_).
+  L.push("Adresse : " + (markers ? "[ADRESSE_DU_BIEN]" : (rentAddress_(prop) || prop.name || "____________________")) + ".");
+  const pos = [!markers && prop.building ? "bâtiment / résidence " + prop.building : "", prop.floor !== "" && prop.floor != null ? "étage " + prop.floor : "", !markers && prop.doorNumber ? "porte " + prop.doorNumber : ""].filter(String);
+  if (pos.length) L.push("Situation dans l'immeuble : " + pos.join(", ") + ".");
+  L.push("Surface " + (ma ? "approximative" : "habitable") + " : " + (num_(prop.surfaceM2) ? num_(prop.surfaceM2) + " m²" : "______ m²") + ".");
+  const comp = [num_(prop.bedrooms) ? num_(prop.bedrooms) + " chambre(s)" : "", num_(prop.bathrooms) ? num_(prop.bathrooms) + " salle(s) d'eau / de bain" : ""].filter(String);
+  if (comp.length || rooms.length) L.push("Composition : " + comp.concat(rooms.map(function (r) { return typeof r === "object" ? (r.name || r.label || "") : String(r); }).filter(String)).join(", ") + ".");
+  L.push("Destination : logement " + (furnished ? "meublé" : "non meublé (vide)") + (ma ? ", à usage d'habitation." : ", à usage d'habitation principale du locataire."));
+  if (equip.length) L.push((furnished ? "Mobilier et équipements fournis" : "Équipements") + " : " + equip.join(", ") + (furnished ? " (détail et état dans l'inventaire annexé)." : "."));
+  if (prop.description) L.push("Description : " + (markers ? "[DESCRIPTION_DU_BIEN]" : safeText_(prop.description, 1500)));
+  return L;
+}
+/** Contrat rédigé par le modèle intégré (édition Maroc ou France), meublé ou vide. */
 function laContractTemplate_(c, inp) {
-  const l = c.l, prop = c.prop, ma = IMMO_EDITION_ === "MA", rent = num_(l.monthlyRent), ch = num_(l.charges), dep = num_(l.deposit);
-  const rooms = parseJson_(prop.roomsJson, []), equip = parseJson_(prop.equipmentJson, []);
+  const l = c.l, prop = c.prop, ma = IMMO_EDITION_ === "MA", fu = !!inp.furnished, rent = num_(l.monthlyRent), ch = num_(l.charges), dep = num_(l.deposit);
   const usage = inp.usage === "MIXED" ? "à usage mixte d'habitation et professionnel" : "à usage d'habitation";
-  const nature = inp.furnished ? "meublé" : "non meublé (vide)";
   const S = [];
   const add = function (t, b) { S.push({ title: "Article " + (S.length + 1) + " — " + t, body: b }); };
-  add("Objet", "Le bailleur, [BAILLEUR], donne en location au locataire, [LOCATAIRE], qui accepte, le logement désigné à l'article 2, " + usage + ", " + nature + ".\n\n" +
-    (ma ? "Le présent contrat est régi par la loi n° 67-12 régissant les rapports contractuels entre les bailleurs et les locataires des locaux à usage d'habitation ou à usage professionnel, par la loi n° 07-03 relative à la révision du montant du loyer et, pour ce qu'elles ne prévoient pas, par le Dahir des obligations et contrats."
-      : "Le présent contrat est régi par la loi n° 89-462 du 6 juillet 1989 tendant à améliorer les rapports locatifs" + (inp.furnished ? ", notamment son titre Ier bis relatif aux logements meublés" : "") + "."));
-  add("Désignation du logement", (prop.propertyType ? "Type de bien : " + st_label_(prop.propertyType) + ".\n" : "") + "Adresse : [ADRESSE_DU_BIEN].\n" +
-    (num_(prop.surfaceM2) ? "Surface " + (ma ? "approximative" : "habitable") + " : " + num_(prop.surfaceM2) + " m².\n" : "") +
-    (rooms.length ? "Composition : " + rooms.join(", ") + ".\n" : "") + (inp.furnished && equip.length ? "Équipements et mobilier fournis : " + equip.join(", ") + " (détail dans l'inventaire annexé).\n" : "") +
-    "\nLe locataire déclare bien connaître les lieux pour les avoir visités. Un état des lieux contradictoire est établi lors de la remise des clés" + (inp.furnished ? ", accompagné d'un inventaire du mobilier" : "") + ".");
-  if (l.endDate) add("Durée", "Le présent bail prend effet le " + pdfDate_(l.startDate) + " pour une durée de " + Math.max(1, Math.round(diffDays_(l.startDate, addDaysStr_(l.endDate, 1)) / 30.44)) + " mois, soit jusqu'au " + pdfDate_(l.endDate) + ".\n\n" +
-    (ma ? "À son terme, il pourra être renouvelé d'un commun accord ; à défaut de congé délivré dans les formes et délais prévus par la loi, il se poursuit dans les conditions prévues par la loi n° 67-12."
-      : "À défaut de congé donné dans les conditions prévues par la loi, il est reconduit tacitement pour une durée de " + (inp.furnished ? "un an." : "trois ans (six ans si le bailleur est une personne morale).")));
-  else add("Durée", "Le présent bail prend effet le " + pdfDate_(l.startDate) + " pour une durée indéterminée. Il prend fin par congé donné dans les formes et délais prévus par la loi.");
-  add("Loyer", "Le loyer mensuel est fixé à " + laMoney_(rent) + " (" + (ch > 0 ? "hors charges" : "charges comprises, sauf consommations individuelles") + ").\n\n" +
-    "Il est payable d'avance, au plus tard le " + (num_(l.dueDay) || 5) + " de chaque mois, par virement ou par tout autre moyen convenu entre les parties. Un avis d'échéance est adressé au locataire avant chaque échéance ; une quittance lui est remise gratuitement pour chaque échéance intégralement réglée.");
-  if (ch > 0) add("Charges", "En sus du loyer, le locataire verse chaque mois une provision pour charges de " + laMoney_(ch) + (ma ? ", destinée aux charges communes (entretien des parties communes, gardiennage, ascenseur le cas échéant)." : ", qui fait l'objet d'une régularisation annuelle sur justificatifs.") +
-    "\n\nLes consommations individuelles (eau, électricité, gaz, téléphone, internet) sont à la charge du locataire, qui souscrit les abonnements correspondants, sauf accord contraire écrit.");
-  else add("Charges et consommations", "Les consommations individuelles (eau, électricité, gaz, téléphone, internet) sont à la charge du locataire, qui souscrit les abonnements correspondants, sauf accord contraire écrit.");
-  add("Révision du loyer", ma ? "Le loyer ne peut être révisé que dans les conditions et limites prévues par la loi n° 07-03 relative à la révision du montant du loyer : la révision ne peut intervenir qu'au terme d'une période d'au moins trois ans, et l'augmentation ne peut excéder " + (inp.usage === "MIXED" ? "8 % pour les locaux à usage d'habitation et 10 % pour les autres locaux." : "8 % pour les locaux à usage d'habitation.")
-    : (num_(l.indexationRate) > 0 ? "Le loyer est révisé chaque année à la date anniversaire du bail, selon la variation de l'indice de référence des loyers (IRL) publié par l'INSEE, l'indice de référence étant celui du dernier trimestre connu à la date de signature du bail."
+  const months = l.endDate ? Math.max(1, Math.round(diffDays_(l.startDate, addDaysStr_(l.endDate, 1)) / 30.44)) : 0;
+  add("Objet et régime juridique", "Le bailleur, [BAILLEUR], donne en location au locataire, [LOCATAIRE], qui accepte, le logement désigné à l'article 2, " + usage + ", " + (fu ? "meublé" : "non meublé (vide)") + ".\n\n" +
+    (ma ? "Le présent contrat est régi par la loi n° 67-12 régissant les rapports contractuels entre les bailleurs et les locataires des locaux à usage d'habitation ou à usage professionnel (dahir n° 1-13-111 du 19 novembre 2013) et, pour ce qu'elle ne prévoit pas, par le Dahir formant Code des obligations et des contrats. Conformément à cette loi, il est établi par écrit et revêt date certaine (signatures légalisées)."
+      : "Le présent contrat est régi par la loi n° 89-462 du 6 juillet 1989 tendant à améliorer les rapports locatifs" + (fu ? ", notamment son titre Ier bis relatif aux logements meublés loués à titre de résidence principale" : "") + ", et établi selon le contrat type défini par le décret n° 2015-587 du 29 mai 2015."));
+  add("Désignation du logement", laPropertyLines_(prop, fu, ma, true).join("\n") + "\n\nLe locataire déclare bien connaître les lieux pour les avoir visités. " +
+    (ma ? "Un état des lieux écrit, daté et détaillé est établi contradictoirement à l'entrée et à la sortie du locataire ; il est annexé au présent contrat."
+      : "Un état des lieux contradictoire est établi lors de la remise des clés et lors de leur restitution" + (fu ? ", ainsi qu'un inventaire et un état détaillé du mobilier ; le logement comporte au minimum les éléments de mobilier prévus par le décret n° 2015-981 du 31 juillet 2015" : "") + "."));
+  if (ma) add("Durée", "Le présent bail prend effet le " + pdfDate_(l.startDate) + (months ? " pour une durée de " + months + " mois, soit jusqu'au " + pdfDate_(l.endDate) + "." : " pour une durée indéterminée.") +
+    "\n\nConformément à la loi n° 67-12, le bail ne prend fin que par un congé donné et, le cas échéant, validé dans les conditions prévues par la loi (voir l'article « Congé, préavis et formes de notification »).");
+  else add("Durée", "Le présent bail prend effet le " + pdfDate_(l.startDate) + (months ? " pour une durée de " + months + " mois, soit jusqu'au " + pdfDate_(l.endDate) + "." : ".") + "\n\n" +
+    (fu ? "La durée d'un bail meublé est d'au moins un an (neuf mois, non reconductibles, lorsque le locataire est étudiant). À défaut de congé, il est reconduit tacitement pour un an."
+      : "La durée d'un bail vide est d'au moins trois ans lorsque le bailleur est une personne physique (ou une société civile familiale) et de six ans lorsqu'il est une personne morale. À défaut de congé, il est reconduit tacitement pour la même durée."));
+  add("Loyer et paiement", "Le loyer mensuel est fixé à " + laMoney_(rent) + (ch > 0 ? " hors charges" : "") + ".\n\nIl est payable d'avance, au plus tard le " + (num_(l.dueDay) || 5) + " de chaque mois, par virement, carte bancaire ou tout autre moyen convenu. " +
+    "Un avis d'échéance est adressé au locataire avant chaque échéance ; le bailleur lui remet gratuitement une quittance détaillant le loyer et les charges pour chaque paiement intégral" + (ma ? " (article 11 de la loi n° 67-12)." : "."));
+  add("Charges et consommations", (ch > 0 ? "En sus du loyer, le locataire verse chaque mois une provision pour charges de " + laMoney_(ch) +
+      (ma ? ", destinée aux charges communes prévues au présent contrat (entretien des parties communes, gardiennage, ascenseur le cas échéant)." : fu ? ", sous forme de provision régularisée chaque année sur justificatifs (ou de forfait si les parties l'ont expressément convenu)." : " ; elle fait l'objet d'une régularisation annuelle sur justificatifs, les pièces étant tenues à la disposition du locataire.") + "\n\n" : "") +
+    "Les consommations individuelles (eau, électricité, gaz, téléphone, internet) sont à la charge du locataire, qui souscrit les abonnements correspondants, sauf accord contraire écrit.");
+  add("Révision du loyer", ma ? "Conformément aux articles 31 à 38 de la loi n° 67-12, le loyer ne peut être révisé qu'au terme d'une période d'au moins trois ans à compter de sa dernière fixation, et l'augmentation ne peut excéder 8 % pour un local à usage d'habitation" + (inp.usage === "MIXED" ? " (10 % pour la partie à usage professionnel)" : "") + ". À défaut d'accord entre les parties, la révision est fixée par le tribunal compétent."
+    : (num_(l.indexationRate) > 0 ? "Le loyer est révisé chaque année à la date anniversaire du bail selon la variation de l'indice de référence des loyers (IRL) publié par l'INSEE, l'indice de référence étant celui du dernier trimestre connu à la date de signature du bail. La révision n'est pas rétroactive : le bailleur dispose d'un an pour la demander."
       : "Le présent bail ne comporte pas de clause de révision annuelle : le loyer n'est pas révisé en cours de bail."));
-  add("Dépôt de garantie", dep > 0 ? "Un dépôt de garantie de " + laMoney_(dep) + (rent > 0 ? " (soit " + Math.round(dep / rent * 10) / 10 + " mois de loyer)" : "") + " est versé à la signature. Il n'est pas productif d'intérêts et ne peut être imputé par le locataire sur le dernier loyer.\n\n" +
-      (ma ? "Il est restitué en fin de bail, après remise des clés et état des lieux de sortie, déduction faite des sommes restant dues au bailleur et dûment justifiées." : "Il est restitué dans un délai d'un mois à compter de la remise des clés si l'état des lieux de sortie est conforme à l'état des lieux d'entrée, et de deux mois dans le cas contraire, déduction faite des sommes restant dues au bailleur et dûment justifiées.")
-    : "Aucun dépôt de garantie n'est demandé.");
-  add("Obligations du bailleur", "Le bailleur est tenu de délivrer au locataire un logement en bon état d'usage et de réparation, avec des équipements en bon état de fonctionnement ; d'assurer au locataire la jouissance paisible du logement ; d'entretenir les locaux et d'y faire les réparations autres que locatives, notamment les grosses réparations ; de remettre gratuitement une quittance au locataire qui en fait la demande ou après chaque paiement intégral.");
-  add("Obligations du locataire", "Le locataire est tenu de payer le loyer et les charges aux termes convenus ; d'user paisiblement des lieux suivant leur destination ; de répondre des dégradations et pertes survenues pendant la durée du bail, sauf si elles résultent de la vétusté, d'une malfaçon, d'un vice de construction, d'un cas fortuit ou de force majeure ; de prendre à sa charge l'entretien courant du logement et les menues réparations ; de laisser exécuter les travaux nécessaires au maintien en état du logement ; de restituer les lieux en fin de bail dans l'état constaté à l'entrée, compte tenu de l'usure normale.");
+  add("Dépôt de garantie", (dep > 0 ? "Un dépôt de garantie de " + laMoney_(dep) + (rent > 0 ? " (soit " + Math.round(dep / rent * 10) / 10 + " mois de loyer)" : "") + " est versé à la signature. " : "Aucun dépôt de garantie n'est demandé. ") +
+    (ma ? "Conformément à l'article 20 de la loi n° 67-12, son montant ne peut excéder deux mois de loyer. Il est restitué au locataire dans un délai d'un mois à compter de la remise des clés, déduction faite des sommes dont il serait redevable et dûment justifiées."
+      : "Son montant ne peut excéder " + (fu ? "deux mois" : "un mois") + " de loyer hors charges. Il n'est pas productif d'intérêts et ne peut être imputé sur le dernier loyer. Il est restitué dans un délai d'un mois à compter de la remise des clés si l'état des lieux de sortie est conforme à celui d'entrée, de deux mois dans le cas contraire, déduction faite des sommes restant dues et justifiées ; à défaut, le solde est majoré de 10 % du loyer mensuel hors charges pour chaque mois de retard commencé."));
+  add("Obligations des parties", "Le bailleur délivre un logement décent, en bon état d'usage et de réparation, avec les équipements prévus en bon état de fonctionnement ; il assure au locataire la jouissance paisible des lieux, les garantit contre les vices et défauts qui en empêchent l'usage, et effectue les réparations autres que locatives.\n\n" +
+    "Le locataire paie le loyer et les charges aux termes convenus ; use paisiblement des lieux suivant leur destination ; répond des dégradations survenues pendant le bail, sauf vétusté, malfaçon, vice de construction, cas fortuit ou force majeure ; prend à sa charge l'entretien courant et les réparations locatives ; " +
+    "ne transforme pas les lieux sans l'accord écrit du bailleur ; et laisse exécuter les travaux nécessaires." + (ma ? "" : " Il s'assure contre les risques locatifs et en justifie chaque année."));
+  // Congé : délais légaux et formes de notification (cœur de la demande).
+  if (ma) add("Congé, préavis et formes de notification",
+    "Congé donné par le locataire : le locataire peut mettre fin au bail à tout moment en respectant un préavis d'un (1) mois. Le loyer et les charges restent dus jusqu'à l'expiration du préavis.\n\n" +
+    "Congé donné par le bailleur : conformément aux articles 44 à 52 de la loi n° 67-12, le bailleur ne peut donner congé que pour l'un des motifs prévus par la loi (notamment la reprise du logement pour y habiter lui-même ou y loger un proche dans les conditions légales, la démolition ou des travaux importants nécessitant l'évacuation des lieux, ou un manquement grave du locataire). " +
+    "Le congé est écrit, motivé, porte sur la totalité des lieux et accorde au locataire un délai d'au moins deux (2) mois à compter de sa notification. Il ouvre droit, le cas échéant, aux indemnités prévues par la loi et, à défaut d'exécution, doit être validé par le tribunal.\n\n" +
+    "Forme : tout congé est notifié par écrit avec date certaine — par l'intermédiaire d'un commissaire judiciaire (huissier de justice) conformément aux articles 37 à 39 du Code de procédure civile, par lettre recommandée avec accusé de réception, ou par remise en main propre contre décharge datée et signée. Le délai court à compter de la réception.");
+  else add("Congé, préavis et formes de notification",
+    "Congé donné par le locataire : le locataire peut donner congé à tout moment. Le préavis est " + (fu ? "d'un (1) mois." : "de trois (3) mois ; il est réduit à un (1) mois lorsque le logement est situé en zone tendue, ou en cas d'obtention d'un premier emploi, de mutation, de perte d'emploi ou de nouvel emploi consécutif à une perte d'emploi, d'état de santé justifiant un changement de domicile, pour le bénéficiaire du RSA ou de l'AAH, ou en cas d'attribution d'un logement social ; le locataire précise alors le motif et le justifie lors de l'envoi du congé.") +
+    " Le loyer et les charges restent dus pendant le préavis, sauf si le logement est reloué plus tôt avec l'accord du bailleur.\n\n" +
+    "Congé donné par le bailleur : le bailleur ne peut donner congé que pour le terme du bail, avec un préavis de " + (fu ? "trois (3) mois" : "six (6) mois") + ", et uniquement pour reprendre le logement afin d'y habiter ou d'y loger un proche dans les conditions légales, pour le vendre" + (fu ? "" : " (le locataire bénéficiant alors d'un droit de préemption)") + ", ou pour un motif légitime et sérieux, notamment l'inexécution par le locataire de l'une de ses obligations. Le congé indique son motif." +
+    (fu ? "" : " Le locataire âgé de plus de 65 ans et aux ressources modestes bénéficie de la protection prévue par l'article 15 III de la loi.") + "\n\n" +
+    "Forme : le congé est notifié par lettre recommandée avec demande d'avis de réception, par acte de commissaire de justice, ou par remise en main propre contre récépissé ou émargement. Le délai de préavis court à compter du jour de la réception de la lettre, de la signification de l'acte ou de la remise en main propre.");
   inp.clauses.forEach(function (k) { const tx = laClauseText_(k, inp, ma); if (tx) add({ INSURANCE_REQUIRED: "Assurance", SUBLET_FORBIDDEN: "Sous-location et cession", PETS_ALLOWED: "Animaux", PETS_FORBIDDEN: "Animaux", NO_SMOKING: "Logement non-fumeur", GUARANTOR: "Cautionnement", WORKS_AUTH_REQUIRED: "Travaux et transformations" }[k], tx); });
-  if (inp.clauses.indexOf("SUBLET_FORBIDDEN") < 0) add("Sous-location et cession", "Toute sous-location ou cession du bail est soumise à l'accord écrit et préalable du bailleur.");
+  if (inp.clauses.indexOf("SUBLET_FORBIDDEN") < 0) add("Sous-location et cession", ma ? "Conformément à l'article 39 de la loi n° 67-12, toute sous-location ou cession du bail est interdite, sauf accord écrit du bailleur établi par acte à date certaine." : "Toute sous-location ou cession du bail est interdite sans l'accord écrit du bailleur, y compris sur le prix du loyer.");
   if (!ma && inp.clauses.indexOf("INSURANCE_REQUIRED") < 0) add("Assurance", laClauseText_("INSURANCE_REQUIRED", inp, ma));
-  add("Congé et fin du bail", ma ? "Le locataire peut mettre fin au bail en donnant congé par écrit au bailleur, dans le respect du délai de préavis prévu par la loi. Le bailleur ne peut donner congé que dans les cas et conditions prévus par la loi n° 67-12. Tout congé est notifié dans les formes prévues par la loi."
-    : "Le locataire peut donner congé à tout moment, par lettre recommandée avec avis de réception, acte de commissaire de justice ou remise en main propre contre émargement, avec un préavis de " + (inp.furnished ? "un mois." : "trois mois (un mois dans les cas prévus par la loi, notamment en zone tendue).") +
-      " Le bailleur ne peut donner congé que pour le terme du bail, avec un préavis de " + (inp.furnished ? "trois mois" : "six mois") + ", pour reprendre le logement, le vendre ou pour un motif légitime et sérieux.");
-  add("Défaut de paiement", ma ? "En cas de non-paiement du loyer ou des charges à leur échéance, le bailleur peut, après une mise en demeure restée sans effet, engager les procédures prévues par la loi pour obtenir le paiement des sommes dues et, le cas échéant, la résiliation du bail et l'expulsion."
-    : "À défaut de paiement du loyer ou des charges aux termes convenus, ou de versement du dépôt de garantie, le bail sera résilié de plein droit dans les conditions et délais prévus à l'article 24 de la loi du 6 juillet 1989, après un commandement de payer demeuré infructueux. Il en va de même à défaut d'assurance des risques locatifs, un mois après un commandement demeuré infructueux.");
+  add("Défaut de paiement et clause résolutoire", ma ? "En cas de non-paiement du loyer ou des charges à leur échéance, le bailleur adresse au locataire une mise en demeure de payer lui accordant un délai qui ne peut être inférieur à quinze (15) jours. À défaut de paiement dans ce délai, le bailleur peut engager les procédures prévues par la loi n° 67-12 pour obtenir le paiement des sommes dues et, le cas échéant, la résiliation du bail et l'expulsion."
+    : "À défaut de paiement du loyer ou des charges aux termes convenus, ou de versement du dépôt de garantie, le bail est résilié de plein droit six (6) semaines après un commandement de payer demeuré infructueux, dans les conditions de l'article 24 de la loi du 6 juillet 1989. Il en est de même à défaut d'assurance des risques locatifs, un mois après un commandement demeuré infructueux.");
   const special = [l.terms, inp.instructions].filter(function (x) { return String(x || "").trim(); }).join("\n\n");
   if (special) add("Conditions particulières", special);
-  add(ma ? "Élection de domicile et litiges" : "Élection de domicile", ma ? "Pour l'exécution des présentes, les parties élisent domicile, le bailleur à son adresse et le locataire dans les lieux loués. Tout litige relatif au présent contrat relève du tribunal compétent du lieu de situation du logement."
-    : "Pour l'exécution des présentes, le bailleur fait élection de domicile à son adresse et le locataire dans les lieux loués.");
-  add("Annexes", "Sont annexés au présent contrat : l'état des lieux d'entrée" + (inp.furnished ? ", l'inventaire du mobilier" : "") + (inp.clauses.indexOf("GUARANTOR") >= 0 ? ", l'acte de cautionnement" : "") +
-    (ma ? "." : ", le dossier de diagnostic technique, la notice d'information et, le cas échéant, les extraits du règlement de copropriété."));
-  return { title: "Contrat de location — logement " + (inp.furnished ? "meublé" : "vide"), sections: S };
+  add(ma ? "Élection de domicile et litiges" : "Élection de domicile", ma ? "Pour l'exécution des présentes, le bailleur élit domicile à son adresse et le locataire dans les lieux loués. Tout litige relatif au présent contrat relève du tribunal compétent du lieu de situation du logement."
+    : "Pour l'exécution des présentes, le bailleur élit domicile à son adresse et le locataire dans les lieux loués.");
+  add("Annexes", "Sont annexés au présent contrat : l'état des lieux d'entrée" + (fu ? ", l'inventaire et l'état détaillé du mobilier" : "") + (inp.clauses.indexOf("GUARANTOR") >= 0 ? ", l'acte de cautionnement" : "") +
+    (ma ? " et une copie des pièces d'identité des parties." : ", la notice d'information prévue par l'arrêté du 29 mai 2015, le dossier de diagnostic technique (diagnostic de performance énergétique, état des risques, et selon le cas constat de risque d'exposition au plomb, diagnostics électricité, gaz et amiante) et, le cas échéant, les extraits du règlement de copropriété."));
+  return { title: fu ? "Contrat de location meublée" : "Contrat de location non meublée (logement vide)", sections: S };
 }
 function st_label_(code) { return ({ APARTMENT: "appartement", VILLA: "villa", RIAD: "riad", STUDIO: "studio", HOUSE: "maison", DUPLEX: "duplex", ROOM: "chambre", OFFICE: "bureau" })[String(code || "").toUpperCase()] || String(code || "").toLowerCase(); }
 
@@ -4786,7 +4812,7 @@ function laContractAi_(c, inp, base) {
     "- Utilise UNIQUEMENT les faits fournis. N'invente aucun montant, aucune date, aucun nom, aucune adresse.\n" +
     "- Pour les identités et l'adresse, écris exactement les marqueurs [BAILLEUR], [LOCATAIRE], [ADRESSE_DU_BIEN], [VILLE].\n" +
     "- Ne cite un numéro d'article de loi que si tu es certain qu'il existe et qu'il est pertinent ; sinon renvoie à « la loi ».\n" +
-    (ma ? "- Maroc : la loi n° 07-03 limite la révision du loyer d'habitation à une fois tous les 3 ans au plus tôt et à 8 % au maximum (10 % pour les autres locaux). N'écris jamais d'indexation annuelle.\n" : "- France : respecte les durées minimales, le plafond du dépôt de garantie (1 mois vide, 2 mois meublé, hors charges) et la révision annuelle selon l'IRL.\n") +
+    (ma ? "- Maroc : la loi n° 67-12 (articles 31 à 38) limite la révision du loyer d'habitation à une fois tous les 3 ans au plus tôt et à 8 % au maximum (10 % pour les autres locaux). N'écris jamais d'indexation annuelle.\n" : "- France : respecte les durées minimales, le plafond du dépôt de garantie (1 mois vide, 2 mois meublé, hors charges) et la révision annuelle selon l'IRL.\n") +
     "- Si une consigne de l'utilisateur est contraire à la loi ou abusive, ne l'applique pas et explique-le dans « warnings ».\n" +
     "- Pas de Markdown. Paragraphes séparés par une ligne vide. Titres sous la forme « Article N — Intitulé ».\n" +
     "Réponds UNIQUEMENT par un objet JSON : {\"title\": string, \"sections\": [{\"title\": string, \"body\": string}], \"warnings\": [string]}.";
@@ -4811,9 +4837,9 @@ function laLetterInputs_(a) {
 function laLetterWarnings_(c, inp) {
   const w = [], l = c.l, rent = num_(l.monthlyRent);
   if (inp.subtype === "RENT_REVISION" && inp.newRent && IMMO_EDITION_ === "MA") {
-    if (inp.newRent > rent * 1.08 + 0.01) w.push("Hausse de " + Math.round((inp.newRent / rent - 1) * 1000) / 10 + " % : la loi n° 07-03 la limite à 8 % pour un logement d'habitation.");
+    if (inp.newRent > rent * 1.08 + 0.01) w.push("Hausse de " + Math.round((inp.newRent / rent - 1) * 1000) / 10 + " % : la loi n° 67-12 la limite à 8 % pour un logement d'habitation.");
     const since = inp.effectiveDate || todayStr_();
-    if (diffDays_(l.startDate, since) < 3 * 365) w.push("Moins de trois ans depuis le début du bail : la loi n° 07-03 ne permet pas encore de réviser le loyer (sauf décision de justice).");
+    if (diffDays_(l.startDate, since) < 3 * 365) w.push("Moins de trois ans depuis le début du bail : la loi n° 67-12 ne permet pas encore de réviser le loyer (sauf décision de justice).");
   }
   if (!c.t.email) w.push("Le locataire n'a pas d'adresse e-mail : le courrier devra lui être remis en main propre ou envoyé par voie postale.");
   return w;
@@ -4827,7 +4853,7 @@ function laLetterTemplate_(c, inp) {
       pdfDate_(start) + " au " + pdfDate_(end) + ", pour un loyer mensuel de " + laMoney_(inp.newRent || l.monthlyRent) + (num_(l.charges) ? " et une provision pour charges de " + laMoney_(l.charges) : "") + ", les autres conditions du bail restant inchangées.\n\n" +
       "Nous vous remercions de nous faire part de votre réponse avant le " + pdfDate_(addDaysStr_(today, 30)) + "." + (inp.instructions ? "\n\n" + inp.instructions : ""));
   } else if (inp.subtype === "RENT_REVISION") {
-    add("Objet : révision du loyer", "Madame, Monsieur,\n\nConformément aux dispositions du bail et " + (ma ? "de la loi n° 07-03 relative à la révision du montant du loyer" : "de l'article 17-1 de la loi du 6 juillet 1989 (indice de référence des loyers)") +
+    add("Objet : révision du loyer", "Madame, Monsieur,\n\nConformément aux dispositions du bail et " + (ma ? "des articles 31 à 38 de la loi n° 67-12 relatifs à la révision du loyer" : "de l'article 17-1 de la loi du 6 juillet 1989 (indice de référence des loyers)") +
       ", nous vous informons que le loyer mensuel du logement situé [ADRESSE_DU_BIEN] est porté de " + laMoney_(l.monthlyRent) + " à " + laMoney_(inp.newRent || l.monthlyRent) + " à compter du " + pdfDate_(inp.effectiveDate || addMonthsStr_(today, 1)) + ".\n\n" +
       "Les autres conditions du bail demeurent inchangées." + (inp.instructions ? "\n\n" + inp.instructions : ""));
   } else if (inp.subtype === "DEPOSIT_RETURN") {
@@ -4914,7 +4940,8 @@ function leaseDocHtml_(c, d) {
     "<table class='sign'><tr><td><b>Le bailleur</b><br><span class='muted'>« Lu et approuvé », signature</span></td><td><b>Le locataire</b><br><span class='muted'>« Lu et approuvé », signature</span></td></tr></table>";
   else inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + pdfDate_(todayStr_()) + ".</p>";
   return pdfShell_(d.title || "Document", inner, { subtitle: (prop.name || "") + (d.docType === "LETTER" ? " · à l'attention de " + (t.fullName || "") : ""), issuer: rentIssuer_(org),
-    footer: (draft ? "PROJET — " : "") + "Document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; ImmoPilot ne garantit pas sa conformité juridique." });
+    footer: draft ? "PROJET — document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; ImmoPilot ne garantit pas sa conformité juridique."
+      : d.docType === "LEASE_CONTRACT" ? "Paraphe du bailleur : __________          Paraphe du locataire : __________" : " " });
 }
 function leaseDocFileName_(d) { return (d.docType === "LEASE_CONTRACT" ? "Bail_" : "Courrier_") + String(d.leaseId).slice(-6) + "_" + todayStr_(); }
 /** Aperçu PDF (brouillon marqué « PROJET ») ou PDF définitif déjà enregistré. */
@@ -5491,12 +5518,22 @@ function leaseDocument_(p, a) {
   const map = { bailleur: org.name, locataire: t.fullName, locataire_email: t.email, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), surface: x.prop.surfaceM2, debut: x.l.startDate,
     fin: x.l.endDate || "indéterminée", loyer: x.l.monthlyRent, charges: x.l.charges, caution: x.l.deposit, jour_echeance: x.l.dueDay, indexation: x.l.indexationRate, conditions: x.l.terms, date: todayStr_() };
   const tpl = getSetting_("template.leaseDocId", x.l.organizationId), text = docTemplateOf_("lease", x.l.organizationId), cur = cur_();
-  const pdf = text ? docTemplatePdf_("lease", text, { bailleur: org.name, bailleur_adresse: [org.address, org.city].filter(String).join(", "), locataire: t.fullName, locataire_email: t.email,
-      bien: x.prop.name, adresse: [x.prop.address, x.prop.city].filter(String).join(", "), surface: x.prop.surfaceM2, debut: pdfDate_(x.l.startDate), fin: x.l.endDate ? pdfDate_(x.l.endDate) : "durée indéterminée",
+  // Contrat complet et conforme (meublé ou vide selon le logement), sans marque ImmoPilot : en-tête au nom du bailleur.
+  const c = rentCtx_(x.l), furnished = leaseFurnished_(x.l, x.prop);
+  const base = laContractTemplate_(c, { furnished: furnished, usage: "HABITATION", clauses: ["INSURANCE_REQUIRED", "SUBLET_FORBIDDEN"], instructions: "" });
+  const sections = base.sections.map(function (sc) { return { title: laFill_(sc.title, c), body: laFill_(sc.body, c) }; });
+  let pdf;
+  if (text) pdf = docTemplatePdf_("lease", text, { bailleur: org.name, bailleur_adresse: [org.address, org.city].filter(String).join(", "), locataire: t.fullName, locataire_email: t.email,
+      bien: x.prop.name, adresse: [x.prop.address, x.prop.city].filter(String).join(", "), surface: x.prop.surfaceM2,
+      type: ({ APARTMENT: "Appartement", STUDIO: "Studio", HOUSE: "Maison", VILLA: "Villa", RIAD: "Riad", COMMERCIAL: "Local commercial", OTHER: "Autre" })[x.prop.propertyType] || x.prop.propertyType || "",
+      debut: pdfDate_(x.l.startDate), fin: x.l.endDate ? pdfDate_(x.l.endDate) : "durée indéterminée",
       loyer: fmtAmount_(x.l.monthlyRent, cur), charges: fmtAmount_(x.l.charges, cur), caution: fmtAmount_(x.l.deposit, cur), jour_echeance: x.l.dueDay, indexation: x.l.indexationRate,
-      conditions: x.l.terms, date: pdfDate_(todayStr_()), ville: x.prop.city || "" }, { name: "Bail_" + x.l.leaseId, subtitle: x.prop.name || "" }) : tpl ? docFromTemplate_(tpl, map, propertyFolder_(x.l.organizationId, x.l.propertyId, "LEASE"), "Bail_" + x.l.leaseId).pdf :
-    htmlToPdf_(pdfShell_("Contrat de location", "<p class='muted'>MODÈLE INDICATIF — à faire valider par un professionnel du " + escapeHtml_(edition_().leaseLaw) + " avant signature. ImmoPilot ne garantit pas la conformité juridique.</p>" +
-      htmlTable_(["Clause", "Contenu"], Object.keys(map).map(function (k) { return [k, map[k] == null ? "" : map[k]]; })) + "<p>Fait à " + escapeHtml_(x.prop.city || "") + ", le " + todayStr_() + "</p><p>Signature bailleur : ______________ &nbsp; Signature locataire : ______________</p>"), "Bail_" + x.l.leaseId);
+      conditions: x.l.terms, date: pdfDate_(todayStr_()), ville: x.prop.city || "",
+      __bienHtml: laPropertyLines_(x.prop, furnished, IMMO_EDITION_ === "MA").map(escapeHtml_).join("<br>"),
+      __clausesHtml: sections.map(function (sc) { return "<h2>" + escapeHtml_(sc.title) + "</h2>" + laParas_(sc.body); }).join("") },
+    { name: "Bail_" + x.l.leaseId, subtitle: x.prop.name || "", title: base.title, issuer: rentIssuer_(org), footer: "Paraphe du bailleur : __________          Paraphe du locataire : __________" });
+  else if (tpl) pdf = docFromTemplate_(tpl, map, propertyFolder_(x.l.organizationId, x.l.propertyId, "LEASE"), "Bail_" + x.l.leaseId).pdf;
+  else pdf = htmlToPdf_(leaseDocHtml_(c, { docType: "LEASE_CONTRACT", status: "FINAL", engine: "MODELE", title: base.title, sectionsJson: JSON.stringify(sections), finalizedAt: todayStr_() }), "Bail_" + x.l.leaseId);
   const out = storeGeneratedPdf_(p, pdf, { propertyId: x.l.propertyId, organizationId: x.l.organizationId }, "LEASE", x.l.leaseId, "CONTRACT");
   dbUpdate_("Leases", x.l.leaseId, { documentId: out.documentId });
   audit_("LEASE_DOCUMENT_GENERATED", "Lease", x.l.leaseId, x.l.organizationId, { template: !!(text || tpl) });
@@ -7277,9 +7314,13 @@ function rentReceiptPdf_(c, s) {
   const tpl = getSetting_("template.receiptDocId", c.l.organizationId);
   const map = { bailleur: c.org.name, locataire: c.t.fullName, bien: c.prop.name, adresse: rentAddress_(c.prop), periode: s.period, loyer: s.rentAmount, charges: s.chargesAmount, total: s.amountDue,
     date_paiement: pays.map(function (z) { return pdfDate_(z.paidAt); }).join(", "), date: pdfDate_(todayStr_()) };
-  const text = docTemplateOf_("receipt", c.l.organizationId);
+  const text = docTemplateOf_("receipt", c.l.organizationId) || (tpl ? "" : docTemplateDefault_("receipt"));
+  const y = parseInt(String(s.period).slice(0, 4), 10), mo = parseInt(String(s.period).slice(5, 7), 10);
+  const lastDay = new Date(Date.UTC(y, mo, 0)).getUTCDate(), pad = function (n) { return (n < 10 ? "0" : "") + n; };
+  const TYPES = { APARTMENT: "Appartement", STUDIO: "Studio", HOUSE: "Maison", VILLA: "Villa", RIAD: "Riad", COMMERCIAL: "Local commercial", OTHER: "Autre" };
   if (text) return docTemplatePdf_("receipt", text, { bailleur: c.org.name, bailleur_adresse: [c.org.address, c.org.city].filter(String).join(", "), locataire: c.t.fullName, bien: c.prop.name,
-    adresse: rentAddress_(c.prop), periode: rentPeriodLabel_(s), loyer: fmtAmount_(s.rentAmount, cur), charges: fmtAmount_(s.chargesAmount, cur), total: fmtAmount_(s.amountDue, cur),
+    adresse: rentAddress_(c.prop), type: TYPES[c.prop.propertyType] || c.prop.propertyType || "", surface: c.prop.surfaceM2 || "",
+    du: y && mo ? "01/" + pad(mo) + "/" + y : "", au: y && mo ? pad(lastDay) + "/" + pad(mo) + "/" + y : "", echeance: pdfDate_(s.dueDate), periode: rentPeriodLabel_(s), loyer: fmtAmount_(s.rentAmount, cur), charges: fmtAmount_(s.chargesAmount, cur), total: fmtAmount_(s.amountDue, cur),
     date_paiement: map.date_paiement, mode_paiement: pays.map(function (z) { return PDF_PAY_METHODS_[z.method] || z.method; }).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).join(", "),
     reference: rentReference_(c.l, s), date: pdfDate_(todayStr_()), ville: c.prop.city || "" },
     { name: "Quittance_" + s.period + "_" + String(c.l.leaseId).slice(-6), subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org),
@@ -8757,21 +8798,28 @@ function testerSumUp() {
  *   **texte**               → gras
  *   ---                     → trait de séparation
  *   [signatures]            → cadres de signature (bailleur / locataire, ou loueur / voyageur)
+ *   [entete]                → bailleur en haut à gauche, locataire en haut à droite
+ *   [bien]                  → encadré du logement (désignation, adresse, type, surface)
+ *   [tableau]               → tableau des sommes (loyer, charges, total)
+ *   [coupon]                → coupon de paiement détachable (période, référence, montant, date, mode)
+ *   [clauses]               → (bail) tous les articles légaux du contrat, meublé ou vide, conformes à la loi du pays
  *   ligne vide              → nouveau paragraphe
  */
 var DOC_TEMPLATES_ = {
   receipt: { key: "template.receipt", title: "Quittance de loyer", signers: ["Le bailleur", "Le locataire"],
     tags: { bailleur: "Nom du bailleur", bailleur_adresse: "Adresse du bailleur", locataire: "Nom du locataire", bien: "Nom du bien", adresse: "Adresse du logement",
-      periode: "Période (ex. mars 2026)", loyer: "Loyer", charges: "Charges", total: "Total réglé", date_paiement: "Date(s) de paiement", mode_paiement: "Mode(s) de paiement",
-      reference: "Référence de l'échéance", date: "Date du jour", ville: "Ville du bien" },
-    sample: { bailleur: "SCI Exemple", bailleur_adresse: "12 rue des Lilas", locataire: "Jean Martin", bien: "Appartement T2", adresse: "5 avenue de la Gare, 3e étage",
-      periode: "mars 2026", loyer: "750,00", charges: "50,00", total: "800,00", date_paiement: "03/03/2026", mode_paiement: "Virement", reference: "LOY-202603-A1B2C3", date: "05/03/2026", ville: "Toulouse" } },
+      type: "Type de logement", surface: "Surface (m²)", periode: "Période (ex. mars 2026)", du: "Début de la période", au: "Fin de la période", echeance: "Date d'échéance",
+      loyer: "Loyer", charges: "Charges", total: "Total réglé", date_paiement: "Date(s) de paiement", mode_paiement: "Mode(s) de paiement",
+      reference: "Référence de l'échéance", date: "Date du jour", ville: "Ville du bien" }, blocks: ["[entete]", "[bien]", "[tableau]", "[coupon]", "[signatures]"],
+    sample: { bailleur: "SCI Exemple", bailleur_adresse: "12 rue des Lilas, 31000 Toulouse", locataire: "Jean Martin", bien: "Appartement T2", adresse: "5 avenue de la Gare, 3e étage, 31000 Toulouse",
+      type: "Appartement", surface: "48", periode: "mars 2026", du: "01/03/2026", au: "31/03/2026", echeance: "05/03/2026", loyer: "750,00", charges: "50,00", total: "800,00", date_paiement: "03/03/2026", mode_paiement: "Virement", reference: "LOY-202603-A1B2C3", date: "05/03/2026", ville: "Toulouse" } },
   lease: { key: "template.lease", title: "Contrat de location", signers: ["Le bailleur", "Le locataire"],
     tags: { bailleur: "Nom du bailleur", bailleur_adresse: "Adresse du bailleur", locataire: "Nom du locataire", locataire_email: "E-mail du locataire", bien: "Nom du bien",
-      adresse: "Adresse du logement", surface: "Surface (m²)", debut: "Date de début", fin: "Date de fin", loyer: "Loyer mensuel", charges: "Charges mensuelles",
+      adresse: "Adresse du logement", type: "Type de logement", surface: "Surface (m²)", debut: "Date de début", fin: "Date de fin", loyer: "Loyer mensuel", charges: "Charges mensuelles",
       caution: "Dépôt de garantie", jour_echeance: "Jour d'échéance", indexation: "Taux d'indexation (%)", conditions: "Conditions particulières", date: "Date du jour", ville: "Ville du bien" },
+    blocks: ["[entete]", "[bien]", "[clauses]", "[signatures]"],
     sample: { bailleur: "SCI Exemple", bailleur_adresse: "12 rue des Lilas", locataire: "Jean Martin", locataire_email: "jean.martin@example.com", bien: "Appartement T2",
-      adresse: "5 avenue de la Gare, 3e étage", surface: "48", debut: "01/04/2026", fin: "31/03/2029", loyer: "750,00", charges: "50,00", caution: "750,00", jour_echeance: "5",
+      adresse: "5 avenue de la Gare, 3e étage", type: "Appartement", surface: "48", debut: "01/04/2026", fin: "31/03/2029", loyer: "750,00", charges: "50,00", caution: "750,00", jour_echeance: "5",
       indexation: "2", conditions: "Animaux non autorisés.", date: "15/03/2026", ville: "Toulouse" } },
   reservation: { key: "template.reservation", title: "Fiche de réservation", signers: ["Le loueur", "Le voyageur"],
     tags: { reference: "Référence de la réservation", loueur: "Nom du loueur", bien: "Nom du bien", adresse: "Adresse du bien", voyageur: "Nom du voyageur", voyageurs: "Nombre de voyageurs",
@@ -8779,25 +8827,18 @@ var DOC_TEMPLATES_ = {
       frais: "Frais", taxes: "Taxes", total: "Total dû", paye: "Déjà payé", solde: "Solde", caution: "Caution", devise: "Devise", statut: "Statut", date: "Date du jour" },
     sample: { reference: "res_0001", loueur: "Conciergerie Exemple", bien: "Studio Centre", adresse: "8 place du Marché", voyageur: "Claire Dubois", voyageurs: "2",
       arrivee: "10/07/2026", depart: "14/07/2026", heure_arrivee: "16:00", heure_depart: "11:00", nuits: "4", prix: "360,00", frais: "40,00", taxes: "8,80", total: "408,80",
-      paye: "100,00", solde: "308,80", caution: "300,00", devise: "EUR", statut: "Confirmée", date: "01/07/2026" } }
+      paye: "100,00", solde: "308,80", caution: "300,00", devise: "EUR", statut: "Confirmée", date: "01/07/2026" }, blocks: ["[signatures]"] }
 };
 var DOC_TEMPLATE_MAX_ = 20000;
 
 /** Texte de départ proposé dans l'éditeur (adapté à l'édition France ou Maroc). */
 function docTemplateDefault_(kind) {
-  const law = edition_().leaseLaw;
   if (kind === "receipt") return [
-    "Je soussigné(e), **{{bailleur}}**, bailleur du logement situé {{adresse}} ({{bien}}), déclare avoir reçu de **{{locataire}}** la somme de **{{total}}** au titre du loyer et des charges de la période **{{periode}}**, et lui en donne quittance, sous réserve de tous mes droits.",
-    "", "# Détail", "Loyer : {{loyer}}", "Charges : {{charges}}", "**Total réglé : {{total}}**", "", "Paiement reçu le {{date_paiement}} ({{mode_paiement}}). Référence : {{reference}}.",
-    "", "Cette quittance annule tous les reçus partiels qui auraient pu être donnés pour la même période.", "", "Fait à {{ville}}, le {{date}}.", "", "[signatures]"].join("\n");
-  if (kind === "lease") return [
-    "Entre les soussignés :", "", "**{{bailleur}}**, {{bailleur_adresse}}, ci-après « le bailleur »,", "", "et **{{locataire}}** ({{locataire_email}}), ci-après « le locataire ».", "",
-    "# 1. Objet", "Le bailleur loue au locataire le logement « {{bien}} » situé {{adresse}}, d'une surface de {{surface}} m², à usage d'habitation principale.", "",
-    "# 2. Durée", "Le bail prend effet le {{debut}} et se termine le {{fin}}.", "",
-    "# 3. Loyer et charges", "Loyer mensuel : **{{loyer}}**, charges : **{{charges}}**, payables d'avance le {{jour_echeance}} de chaque mois. Indexation annuelle : {{indexation}} %.", "",
-    "# 4. Dépôt de garantie", "Un dépôt de garantie de **{{caution}}** est versé à la signature et restitué selon les règles en vigueur.", "",
-    "# 5. Conditions particulières", "{{conditions}}", "", "---",
-    "Modèle indicatif à adapter et à faire valider par un professionnel du " + law + " avant signature.", "", "Fait à {{ville}}, le {{date}}, en deux exemplaires.", "", "[signatures]"].join("\n");
+    "[entete]", "[bien]",
+    "Je soussigné(e), **{{bailleur}}**, bailleur du logement désigné ci-dessus, déclare avoir reçu de **{{locataire}}** la somme de **{{total}}** au titre du loyer et des charges de la période du {{du}} au {{au}} (**{{periode}}**), et lui en donne quittance, sous réserve de tous mes droits.",
+    "", "[tableau]", "Paiement reçu le {{date_paiement}} ({{mode_paiement}}).", "",
+    "Cette quittance annule tous les reçus partiels qui auraient pu être donnés pour la même période.", "", "Fait à {{ville}}, le {{date}}.", "", "[signatures]", "[coupon]"].join("\n");
+  if (kind === "lease") return ["[entete]", "[clauses]", "", "Fait à {{ville}}, le {{date}}, en deux exemplaires originaux, dont un remis à chaque partie.", "", "[signatures]"].join("\n");
   return [
     "# Réservation {{reference}}", "Loueur : **{{loueur}}**", "Bien : **{{bien}}**, {{adresse}}", "Voyageur : **{{voyageur}}** ({{voyageurs}} personne(s))", "",
     "# Séjour", "Arrivée le {{arrivee}} à partir de {{heure_arrivee}}, départ le {{depart}} avant {{heure_depart}} ({{nuits}} nuit(s)).", "",
@@ -8821,6 +8862,9 @@ function docTemplateHtml_(kind, text, map) {
     if (!line.trim()) return flush();
     if (/^#\s+/.test(line)) { flush(); out.push("<h2>" + inline(line.replace(/^#\s+/, "")) + "</h2>"); return; }
     if (/^-{3,}$/.test(line.trim())) { flush(); out.push("<hr style='border:0;border-top:1px solid #c9d3df;margin:12px 0'>"); return; }
+    const blk = line.trim().toLowerCase();
+    if (blk === "[clauses]") { flush(); out.push(String(map.__clausesHtml || "")); return; }
+    if (blk === "[entete]" || blk === "[bien]" || blk === "[tableau]" || blk === "[coupon]") { flush(); out.push(docTemplateBlock_(blk, val)); return; }
     if (line.trim().toLowerCase() === "[signatures]") { flush(); out.push("<table class='sign' style='margin-top:14px'><tr><td><b>" + escapeHtml_(def.signers[0]) + "</b><br><span class='muted'>Lu et approuvé</span></td><td><b>" +
       escapeHtml_(def.signers[1]) + "</b><br><span class='muted'>Lu et approuvé</span></td></tr></table>"); return; }
     para.push(inline(line));
@@ -8829,13 +8873,38 @@ function docTemplateHtml_(kind, text, map) {
   return out.join("");
 }
 
+/** Blocs de mise en page (en-tête des parties, logement, tableau des sommes, coupon de paiement). */
+function docTemplateBlock_(blk, val) {
+  const e = function (k) { return escapeHtml_(val(k)); };
+  const has = function (k) { const v = val(k); return v && v !== "—" && v.indexOf("{{") < 0; };
+  if (blk === "[entete]") return "<table style='margin:0 0 12px;border:0'><tr>" +
+    "<td style='width:50%;border:0;padding:0 12px 0 0;vertical-align:top'><div class='muted' style='font-size:9px;text-transform:uppercase;letter-spacing:.5px'>Bailleur</div><b style='font-size:13px'>" + e("bailleur") + "</b>" +
+      (has("bailleur_adresse") ? "<br>" + e("bailleur_adresse") : "") + "</td>" +
+    "<td style='width:50%;border:0;padding:0;vertical-align:top;text-align:right'><div class='muted' style='font-size:9px;text-transform:uppercase;letter-spacing:.5px'>Locataire</div><b style='font-size:13px'>" + e("locataire") + "</b>" +
+      (has("adresse") ? "<br>" + e("adresse") : "") + "</td></tr></table>";
+  if (blk === "[bien]" && val("__bienHtml") && val("__bienHtml").indexOf("{{") < 0) return "<table style='margin:0 0 12px'><tr><th>Désignation du logement loué</th></tr><tr><td>" + val("__bienHtml") + "</td></tr></table>";
+  if (blk === "[bien]") return "<table style='width:55%;margin:0 0 12px'><tr><th colspan='2'>Logement loué</th></tr>" +
+    [["Désignation", "bien"], ["Adresse", "adresse"], ["Type", "type"], ["Surface", "surface"]].filter(function (r) { return has(r[1]); })
+      .map(function (r) { return "<tr><td style='width:32%' class='muted'>" + r[0] + "</td><td>" + e(r[1]) + (r[1] === "surface" ? " m²" : "") + "</td></tr>"; }).join("") + "</table>";
+  if (blk === "[tableau]") return "<table style='margin:6px 0 10px'><tr><th>Désignation</th><th>Période</th><th class='right'>Montant</th></tr>" +
+    "<tr><td>Loyer (hors charges)</td><td>" + e("periode") + "</td><td class='right'>" + e("loyer") + "</td></tr>" +
+    "<tr><td>Provision pour charges</td><td>" + e("periode") + "</td><td class='right'>" + e("charges") + "</td></tr>" +
+    "<tr><td colspan='2'><b>Total réglé</b></td><td class='right'><b>" + e("total") + "</b></td></tr></table>";
+  if (blk === "[coupon]") return "<div style='margin-top:22px;border-top:1px dashed #94a3b8;padding-top:4px'><div class='muted' style='font-size:9px'>✂ — Coupon de paiement à conserver par le locataire</div>" +
+    "<table style='margin-top:6px'><tr><th>Locataire</th><th>Période</th><th>Référence</th><th>Date de paiement</th><th>Mode</th><th class='right'>Montant réglé</th></tr>" +
+    "<tr><td>" + e("locataire") + "</td><td>" + e("periode") + "</td><td>" + e("reference") + "</td><td>" + e("date_paiement") + "</td><td>" + e("mode_paiement") + "</td><td class='right'><b>" + e("total") + "</b></td></tr></table>" +
+    "<p class='muted' style='margin:4px 0 0;font-size:9px'>Bailleur : " + e("bailleur") + " — logement : " + e("bien") + "</p></div>";
+  return "";
+}
+
 /** Modèle de l'organisation pour ce type de document ("" = gabarit intégré). */
 function docTemplateOf_(kind, orgId) { return String(getSetting_(DOC_TEMPLATES_[kind].key, orgId) || "").trim(); }
 
 /** PDF depuis le modèle texte. opts : { name, subtitle, issuer, footer }. */
 function docTemplatePdf_(kind, text, map, opts) {
   opts = opts || {};
-  return htmlToPdf_(pdfShell_(DOC_TEMPLATES_[kind].title, docTemplateHtml_(kind, text, map), { subtitle: opts.subtitle, issuer: opts.issuer, footer: opts.footer }), opts.name || kind);
+  const own = /^\s*\[entete\]\s*$/im.test(String(text || ""));
+  return htmlToPdf_(pdfShell_(opts.title || DOC_TEMPLATES_[kind].title, docTemplateHtml_(kind, text, map), { subtitle: opts.subtitle, issuer: own ? null : opts.issuer, noHead: own, footer: opts.footer }), opts.name || kind);
 }
 
 function validateDocTemplate_(v) {
@@ -8857,18 +8926,40 @@ function templateInfo_(p, a) {
   assertTemplateOrg_(p, orgId);
   const d = DOC_TEMPLATES_[kind];
   return { kind: kind, key: d.key, title: d.title, current: docTemplateOf_(kind, orgId), defaultText: docTemplateDefault_(kind),
-    tags: Object.keys(d.tags).map(function (k) { return { tag: "{{" + k + "}}", label: d.tags[k] }; }) };
+    tags: Object.keys(d.tags).map(function (k) { return { tag: "{{" + k + "}}", label: d.tags[k] }; }), blocks: d.blocks || [] };
 }
 
+/** Données d'exemple d'un aperçu (et, pour le bail, articles légaux d'un bail d'exemple meublé ou vide). */
+function templateSample_(kind, orgName, furnished) {
+  const map = JSON.parse(JSON.stringify(DOC_TEMPLATES_[kind].sample));
+  if (orgName) { if (map.bailleur !== undefined) map.bailleur = orgName; if (map.loueur !== undefined) map.loueur = orgName; }
+  let title = "";
+  const ecity = edition_().city;
+  if (map.ville !== undefined) map.ville = ecity;
+  if (map.adresse !== undefined) map.adresse = String(map.adresse).replace(/, 31000 Toulouse$/, "") + ", " + ecity;
+  if (map.bailleur_adresse !== undefined) map.bailleur_adresse = "12 rue des Lilas, " + ecity;
+  if (map.devise !== undefined) map.devise = cur_();
+  if (kind === "lease") { // articles légaux du contrat, sur un bail d'exemple (meublé ou vide)
+    const city = edition_().city;
+    const c = { l: { leaseId: "lea_exemple", startDate: "2026-04-01", endDate: furnished ? "2027-03-31" : "2029-03-31", monthlyRent: 750, charges: 50, deposit: furnished ? 1500 : 750, dueDay: 5, indexationRate: IMMO_EDITION_ === "MA" ? 0 : 2, terms: "" },
+      prop: { name: "Appartement T2", address: "5 avenue de la Gare", city: city, propertyType: "APARTMENT", surfaceM2: 48, bedrooms: 1, bathrooms: 1, floor: 3, doorNumber: "12",
+        roomsJson: JSON.stringify(["Séjour", "Cuisine", "Salle d'eau"]), equipmentJson: JSON.stringify(furnished ? ["Plaques de cuisson", "Four", "Réfrigérateur avec freezer", "Vaisselle", "Lit double avec couette", "Rideaux occultants", "Table et chaises", "Rangements"] : ["Plaques de cuisson", "Hotte"]) },
+      t: { fullName: map.locataire }, org: { name: map.bailleur } };
+    const base = laContractTemplate_(c, { furnished: furnished, usage: "HABITATION", clauses: ["INSURANCE_REQUIRED", "SUBLET_FORBIDDEN"], instructions: "" });
+    title = base.title; map.ville = city; map.adresse = "5 avenue de la Gare, " + city;
+    map.__bienHtml = laPropertyLines_(c.prop, furnished, IMMO_EDITION_ === "MA").map(escapeHtml_).join("<br>");
+    map.__clausesHtml = base.sections.map(function (sc) { return "<h2>" + escapeHtml_(laFill_(sc.title, c)) + "</h2>" + laParas_(laFill_(sc.body, c)); }).join("");
+  }
+  return { map: map, title: title };
+}
 /** Aperçu PDF avec des données d'exemple (rien n'est enregistré). */
 function templatePreview_(p, a) {
   const orgId = safeText_(a.organizationId, 120), kind = oneOf_(a.kind, Object.keys(DOC_TEMPLATES_), "Type de modèle");
   assertTemplateOrg_(p, orgId);
   const text = validateDocTemplate_(a.text) || docTemplateDefault_(kind);
   const org = dbGet_("Organizations", orgId) || {};
-  const map = JSON.parse(JSON.stringify(DOC_TEMPLATES_[kind].sample));
-  if (org.name) { if (map.bailleur !== undefined) map.bailleur = org.name; if (map.loueur !== undefined) map.loueur = org.name; }
-  const blob = docTemplatePdf_(kind, text, map, { name: "Apercu_" + kind, subtitle: "APERÇU — données d'exemple" });
+  const smp = templateSample_(kind, org.name, bool_(a.furnished)), map = smp.map, title = smp.title;
+  const blob = docTemplatePdf_(kind, text, map, { name: "Apercu_" + kind, subtitle: "APERÇU — données d'exemple", title: title, issuer: { name: org.name || "Votre organisation", lines: [] } });
   return { fileName: blob.getName(), mimeType: "application/pdf", base64: Utilities.base64Encode(blob.getBytes()) };
 }
 
@@ -10001,7 +10092,7 @@ function TEST_GROUPS_() {
         const all = JSON.stringify(d.sections);
         T.ok(all.indexOf("Yasmine Agent") >= 0 && all.indexOf("Route de Fès km 8") >= 0 && !/\[(BAILLEUR|LOCATAIRE|ADRESSE_DU_BIEN)\]/.test(all), "marqueurs remplacés par les vraies valeurs");
         T.ok(/jardin est entretenu/.test(all) && /non-fumeur/.test(all) && d.inputs.clauses.indexOf("INCONNUE") < 0, "consignes et clauses reprises, clause inconnue ignorée");
-        if (IMMO_EDITION_ === "MA") { T.ok(/07-03/.test(all) && /8 %/.test(all), "révision conforme à la loi 07-03"); T.ok(d.warnings.some(function (w) { return /07-03/.test(w) && /3 %/.test(w); }), "avertissement : indexation annuelle"); }
+        if (IMMO_EDITION_ === "MA") { T.ok(/67-12/.test(all) && /8 %/.test(all), "révision conforme à la loi 67-12 (articles 31 à 38)"); T.ok(d.warnings.some(function (w) { return /67-12/.test(w) && /3 %/.test(w); }), "avertissement : indexation annuelle"); }
         else T.ok(d.warnings.some(function (w) { return /Durée de 12 mois|dépôt/i.test(w); }) || true, "avertissements France");
         const up = T.call(O.tok, "leasedoc.update", { leaseDocId: d.leaseDocId, title: "Contrat de location meublée — Villa Agent", sections: d.sections.concat([{ title: "Article 99 — Piscine", body: "Entretien de la piscine à la charge du bailleur." }]) });
         T.eq(up.sections.length, d.sections.length + 1, "brouillon modifiable");

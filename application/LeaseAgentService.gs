@@ -6,7 +6,7 @@
  *    demande la rédaction au service d'IA. AUCUNE donnée d'identité n'est transmise : ni nom, ni e-mail, ni téléphone, ni adresse,
  *    ni pièce d'identité. L'IA écrit avec des marqueurs ([BAILLEUR], [LOCATAIRE], [ADRESSE_DU_BIEN], [VILLE]) que le serveur
  *    remplace ensuite par les vraies valeurs.
- *  - MODÈLE INTÉGRÉ : sans IA (ou en cas d'erreur), un modèle rédigé à l'avance pour l'édition (Maroc : loi 67-12, loi 07-03 ;
+ *  - MODÈLE INTÉGRÉ : sans IA (ou en cas d'erreur), un modèle rédigé à l'avance pour l'édition (Maroc : loi 67-12 ;
  *    France : loi 89-462) est rempli avec les données du bail. L'application fonctionne donc toujours.
  * Règles :
  *  - Rien n'est envoyé au locataire sans action explicite du bailleur (« Valider », puis « Envoyer au locataire »).
@@ -37,8 +37,8 @@ function laFacts_(c) {
 }
 /** Remplace les marqueurs par les vraies valeurs (après la réponse de l'IA : les identités ne lui sont jamais transmises). */
 function laFill_(text, c) {
-  const map = { "[BAILLEUR]": c.org.name || "le bailleur", "[LOCATAIRE]": c.t.fullName || "le locataire", "[ADRESSE_DU_BIEN]": rentAddress_(c.prop) || c.prop.name || "", "[VILLE]": c.prop.city || edition_().city, "[BIEN]": c.prop.name || "" };
-  return String(text || "").replace(/\[(BAILLEUR|LOCATAIRE|ADRESSE_DU_BIEN|VILLE|BIEN)\]/g, function (m) { return map[m]; });
+  const map = { "[BAILLEUR]": c.org.name || "le bailleur", "[LOCATAIRE]": c.t.fullName || "le locataire", "[ADRESSE_DU_BIEN]": rentAddress_(c.prop) || c.prop.name || "", "[VILLE]": c.prop.city || edition_().city, "[BIEN]": c.prop.name || "", "[DESCRIPTION_DU_BIEN]": safeText_(c.prop.description || "", 1500) };
+  return String(text || "").replace(/\[(BAILLEUR|LOCATAIRE|ADRESSE_DU_BIEN|VILLE|BIEN|DESCRIPTION_DU_BIEN)\]/g, function (m) { return map[m]; });
 }
 function laMoney_(v) { return fmtAmount_(v, cur_()); }
 function laParas_(text) { return String(text || "").split(/\n{2,}|\r\n\r\n/).map(function (pg) { return "<p>" + escapeHtml_(pg.trim()).replace(/\n/g, "<br>") + "</p>"; }).join(""); }
@@ -87,7 +87,7 @@ function laContractWarnings_(c, inp) {
   const w = ["Modèle généré automatiquement : faites-le relire par un professionnel (avocat, notaire ou adoul selon le cas) avant signature. ImmoPilot ne garantit pas sa conformité juridique."];
   const l = c.l, rent = num_(l.monthlyRent), dep = num_(l.deposit), months = l.endDate ? diffDays_(l.startDate, addDaysStr_(l.endDate, 1)) / 30.44 : null;
   if (IMMO_EDITION_ === "MA") {
-    if (num_(l.indexationRate) > 0) w.push("Le bail prévoit une indexation annuelle de " + num_(l.indexationRate) + " % : au Maroc, la loi n° 07-03 ne permet de réviser le loyer qu'au plus tôt tous les trois ans, dans la limite de " + (inp.usage === "MIXED" ? "8 % (habitation) et 10 % (autres locaux)" : "8 % pour l'habitation") + ". Le contrat reprend la règle légale ; ajustez l'indexation du bail dans ImmoPilot.");
+    if (num_(l.indexationRate) > 0) w.push("Le bail prévoit une indexation annuelle de " + num_(l.indexationRate) + " % : au Maroc, la loi n° 67-12 (articles 31 à 38) ne permet de réviser le loyer qu'au plus tôt tous les trois ans, dans la limite de " + (inp.usage === "MIXED" ? "8 % (habitation) et 10 % (autres locaux)" : "8 % pour l'habitation") + ". Le contrat reprend la règle légale ; ajustez l'indexation du bail dans ImmoPilot.");
     w.push("Faites signer le contrat en deux exemplaires et légaliser les signatures pour lui donner date certaine.");
   } else {
     const maxDep = inp.furnished ? 2 : 1;
@@ -109,53 +109,78 @@ function laClauseText_(code, inp, ma) {
     WORKS_AUTH_REQUIRED: "Le locataire ne peut effectuer aucune transformation des lieux, des équipements ou de la distribution des pièces sans l'accord écrit du bailleur ; les simples aménagements restent permis."
   }[code] || "";
 }
-/** Contrat rédigé par le modèle intégré (édition Maroc ou France). */
+/** Désignation détaillée du logement (texte), commune au contrat intégré et au bloc [bien] des modèles. */
+function laPropertyLines_(prop, furnished, ma, markers) {
+  const rooms = parseJson_(prop.roomsJson, []), equip = parseJson_(prop.equipmentJson, []), L = [];
+  if (prop.propertyType) L.push("Nature du bien : " + st_label_(prop.propertyType) + ".");
+  // markers : trame transmise à l'IA → l'adresse et la description restent des marqueurs, remplacés après (laFill_).
+  L.push("Adresse : " + (markers ? "[ADRESSE_DU_BIEN]" : (rentAddress_(prop) || prop.name || "____________________")) + ".");
+  const pos = [!markers && prop.building ? "bâtiment / résidence " + prop.building : "", prop.floor !== "" && prop.floor != null ? "étage " + prop.floor : "", !markers && prop.doorNumber ? "porte " + prop.doorNumber : ""].filter(String);
+  if (pos.length) L.push("Situation dans l'immeuble : " + pos.join(", ") + ".");
+  L.push("Surface " + (ma ? "approximative" : "habitable") + " : " + (num_(prop.surfaceM2) ? num_(prop.surfaceM2) + " m²" : "______ m²") + ".");
+  const comp = [num_(prop.bedrooms) ? num_(prop.bedrooms) + " chambre(s)" : "", num_(prop.bathrooms) ? num_(prop.bathrooms) + " salle(s) d'eau / de bain" : ""].filter(String);
+  if (comp.length || rooms.length) L.push("Composition : " + comp.concat(rooms.map(function (r) { return typeof r === "object" ? (r.name || r.label || "") : String(r); }).filter(String)).join(", ") + ".");
+  L.push("Destination : logement " + (furnished ? "meublé" : "non meublé (vide)") + (ma ? ", à usage d'habitation." : ", à usage d'habitation principale du locataire."));
+  if (equip.length) L.push((furnished ? "Mobilier et équipements fournis" : "Équipements") + " : " + equip.join(", ") + (furnished ? " (détail et état dans l'inventaire annexé)." : "."));
+  if (prop.description) L.push("Description : " + (markers ? "[DESCRIPTION_DU_BIEN]" : safeText_(prop.description, 1500)));
+  return L;
+}
+/** Contrat rédigé par le modèle intégré (édition Maroc ou France), meublé ou vide. */
 function laContractTemplate_(c, inp) {
-  const l = c.l, prop = c.prop, ma = IMMO_EDITION_ === "MA", rent = num_(l.monthlyRent), ch = num_(l.charges), dep = num_(l.deposit);
-  const rooms = parseJson_(prop.roomsJson, []), equip = parseJson_(prop.equipmentJson, []);
+  const l = c.l, prop = c.prop, ma = IMMO_EDITION_ === "MA", fu = !!inp.furnished, rent = num_(l.monthlyRent), ch = num_(l.charges), dep = num_(l.deposit);
   const usage = inp.usage === "MIXED" ? "à usage mixte d'habitation et professionnel" : "à usage d'habitation";
-  const nature = inp.furnished ? "meublé" : "non meublé (vide)";
   const S = [];
   const add = function (t, b) { S.push({ title: "Article " + (S.length + 1) + " — " + t, body: b }); };
-  add("Objet", "Le bailleur, [BAILLEUR], donne en location au locataire, [LOCATAIRE], qui accepte, le logement désigné à l'article 2, " + usage + ", " + nature + ".\n\n" +
-    (ma ? "Le présent contrat est régi par la loi n° 67-12 régissant les rapports contractuels entre les bailleurs et les locataires des locaux à usage d'habitation ou à usage professionnel, par la loi n° 07-03 relative à la révision du montant du loyer et, pour ce qu'elles ne prévoient pas, par le Dahir des obligations et contrats."
-      : "Le présent contrat est régi par la loi n° 89-462 du 6 juillet 1989 tendant à améliorer les rapports locatifs" + (inp.furnished ? ", notamment son titre Ier bis relatif aux logements meublés" : "") + "."));
-  add("Désignation du logement", (prop.propertyType ? "Type de bien : " + st_label_(prop.propertyType) + ".\n" : "") + "Adresse : [ADRESSE_DU_BIEN].\n" +
-    (num_(prop.surfaceM2) ? "Surface " + (ma ? "approximative" : "habitable") + " : " + num_(prop.surfaceM2) + " m².\n" : "") +
-    (rooms.length ? "Composition : " + rooms.join(", ") + ".\n" : "") + (inp.furnished && equip.length ? "Équipements et mobilier fournis : " + equip.join(", ") + " (détail dans l'inventaire annexé).\n" : "") +
-    "\nLe locataire déclare bien connaître les lieux pour les avoir visités. Un état des lieux contradictoire est établi lors de la remise des clés" + (inp.furnished ? ", accompagné d'un inventaire du mobilier" : "") + ".");
-  if (l.endDate) add("Durée", "Le présent bail prend effet le " + pdfDate_(l.startDate) + " pour une durée de " + Math.max(1, Math.round(diffDays_(l.startDate, addDaysStr_(l.endDate, 1)) / 30.44)) + " mois, soit jusqu'au " + pdfDate_(l.endDate) + ".\n\n" +
-    (ma ? "À son terme, il pourra être renouvelé d'un commun accord ; à défaut de congé délivré dans les formes et délais prévus par la loi, il se poursuit dans les conditions prévues par la loi n° 67-12."
-      : "À défaut de congé donné dans les conditions prévues par la loi, il est reconduit tacitement pour une durée de " + (inp.furnished ? "un an." : "trois ans (six ans si le bailleur est une personne morale).")));
-  else add("Durée", "Le présent bail prend effet le " + pdfDate_(l.startDate) + " pour une durée indéterminée. Il prend fin par congé donné dans les formes et délais prévus par la loi.");
-  add("Loyer", "Le loyer mensuel est fixé à " + laMoney_(rent) + " (" + (ch > 0 ? "hors charges" : "charges comprises, sauf consommations individuelles") + ").\n\n" +
-    "Il est payable d'avance, au plus tard le " + (num_(l.dueDay) || 5) + " de chaque mois, par virement ou par tout autre moyen convenu entre les parties. Un avis d'échéance est adressé au locataire avant chaque échéance ; une quittance lui est remise gratuitement pour chaque échéance intégralement réglée.");
-  if (ch > 0) add("Charges", "En sus du loyer, le locataire verse chaque mois une provision pour charges de " + laMoney_(ch) + (ma ? ", destinée aux charges communes (entretien des parties communes, gardiennage, ascenseur le cas échéant)." : ", qui fait l'objet d'une régularisation annuelle sur justificatifs.") +
-    "\n\nLes consommations individuelles (eau, électricité, gaz, téléphone, internet) sont à la charge du locataire, qui souscrit les abonnements correspondants, sauf accord contraire écrit.");
-  else add("Charges et consommations", "Les consommations individuelles (eau, électricité, gaz, téléphone, internet) sont à la charge du locataire, qui souscrit les abonnements correspondants, sauf accord contraire écrit.");
-  add("Révision du loyer", ma ? "Le loyer ne peut être révisé que dans les conditions et limites prévues par la loi n° 07-03 relative à la révision du montant du loyer : la révision ne peut intervenir qu'au terme d'une période d'au moins trois ans, et l'augmentation ne peut excéder " + (inp.usage === "MIXED" ? "8 % pour les locaux à usage d'habitation et 10 % pour les autres locaux." : "8 % pour les locaux à usage d'habitation.")
-    : (num_(l.indexationRate) > 0 ? "Le loyer est révisé chaque année à la date anniversaire du bail, selon la variation de l'indice de référence des loyers (IRL) publié par l'INSEE, l'indice de référence étant celui du dernier trimestre connu à la date de signature du bail."
+  const months = l.endDate ? Math.max(1, Math.round(diffDays_(l.startDate, addDaysStr_(l.endDate, 1)) / 30.44)) : 0;
+  add("Objet et régime juridique", "Le bailleur, [BAILLEUR], donne en location au locataire, [LOCATAIRE], qui accepte, le logement désigné à l'article 2, " + usage + ", " + (fu ? "meublé" : "non meublé (vide)") + ".\n\n" +
+    (ma ? "Le présent contrat est régi par la loi n° 67-12 régissant les rapports contractuels entre les bailleurs et les locataires des locaux à usage d'habitation ou à usage professionnel (dahir n° 1-13-111 du 19 novembre 2013) et, pour ce qu'elle ne prévoit pas, par le Dahir formant Code des obligations et des contrats. Conformément à cette loi, il est établi par écrit et revêt date certaine (signatures légalisées)."
+      : "Le présent contrat est régi par la loi n° 89-462 du 6 juillet 1989 tendant à améliorer les rapports locatifs" + (fu ? ", notamment son titre Ier bis relatif aux logements meublés loués à titre de résidence principale" : "") + ", et établi selon le contrat type défini par le décret n° 2015-587 du 29 mai 2015."));
+  add("Désignation du logement", laPropertyLines_(prop, fu, ma, true).join("\n") + "\n\nLe locataire déclare bien connaître les lieux pour les avoir visités. " +
+    (ma ? "Un état des lieux écrit, daté et détaillé est établi contradictoirement à l'entrée et à la sortie du locataire ; il est annexé au présent contrat."
+      : "Un état des lieux contradictoire est établi lors de la remise des clés et lors de leur restitution" + (fu ? ", ainsi qu'un inventaire et un état détaillé du mobilier ; le logement comporte au minimum les éléments de mobilier prévus par le décret n° 2015-981 du 31 juillet 2015" : "") + "."));
+  if (ma) add("Durée", "Le présent bail prend effet le " + pdfDate_(l.startDate) + (months ? " pour une durée de " + months + " mois, soit jusqu'au " + pdfDate_(l.endDate) + "." : " pour une durée indéterminée.") +
+    "\n\nConformément à la loi n° 67-12, le bail ne prend fin que par un congé donné et, le cas échéant, validé dans les conditions prévues par la loi (voir l'article « Congé, préavis et formes de notification »).");
+  else add("Durée", "Le présent bail prend effet le " + pdfDate_(l.startDate) + (months ? " pour une durée de " + months + " mois, soit jusqu'au " + pdfDate_(l.endDate) + "." : ".") + "\n\n" +
+    (fu ? "La durée d'un bail meublé est d'au moins un an (neuf mois, non reconductibles, lorsque le locataire est étudiant). À défaut de congé, il est reconduit tacitement pour un an."
+      : "La durée d'un bail vide est d'au moins trois ans lorsque le bailleur est une personne physique (ou une société civile familiale) et de six ans lorsqu'il est une personne morale. À défaut de congé, il est reconduit tacitement pour la même durée."));
+  add("Loyer et paiement", "Le loyer mensuel est fixé à " + laMoney_(rent) + (ch > 0 ? " hors charges" : "") + ".\n\nIl est payable d'avance, au plus tard le " + (num_(l.dueDay) || 5) + " de chaque mois, par virement, carte bancaire ou tout autre moyen convenu. " +
+    "Un avis d'échéance est adressé au locataire avant chaque échéance ; le bailleur lui remet gratuitement une quittance détaillant le loyer et les charges pour chaque paiement intégral" + (ma ? " (article 11 de la loi n° 67-12)." : "."));
+  add("Charges et consommations", (ch > 0 ? "En sus du loyer, le locataire verse chaque mois une provision pour charges de " + laMoney_(ch) +
+      (ma ? ", destinée aux charges communes prévues au présent contrat (entretien des parties communes, gardiennage, ascenseur le cas échéant)." : fu ? ", sous forme de provision régularisée chaque année sur justificatifs (ou de forfait si les parties l'ont expressément convenu)." : " ; elle fait l'objet d'une régularisation annuelle sur justificatifs, les pièces étant tenues à la disposition du locataire.") + "\n\n" : "") +
+    "Les consommations individuelles (eau, électricité, gaz, téléphone, internet) sont à la charge du locataire, qui souscrit les abonnements correspondants, sauf accord contraire écrit.");
+  add("Révision du loyer", ma ? "Conformément aux articles 31 à 38 de la loi n° 67-12, le loyer ne peut être révisé qu'au terme d'une période d'au moins trois ans à compter de sa dernière fixation, et l'augmentation ne peut excéder 8 % pour un local à usage d'habitation" + (inp.usage === "MIXED" ? " (10 % pour la partie à usage professionnel)" : "") + ". À défaut d'accord entre les parties, la révision est fixée par le tribunal compétent."
+    : (num_(l.indexationRate) > 0 ? "Le loyer est révisé chaque année à la date anniversaire du bail selon la variation de l'indice de référence des loyers (IRL) publié par l'INSEE, l'indice de référence étant celui du dernier trimestre connu à la date de signature du bail. La révision n'est pas rétroactive : le bailleur dispose d'un an pour la demander."
       : "Le présent bail ne comporte pas de clause de révision annuelle : le loyer n'est pas révisé en cours de bail."));
-  add("Dépôt de garantie", dep > 0 ? "Un dépôt de garantie de " + laMoney_(dep) + (rent > 0 ? " (soit " + Math.round(dep / rent * 10) / 10 + " mois de loyer)" : "") + " est versé à la signature. Il n'est pas productif d'intérêts et ne peut être imputé par le locataire sur le dernier loyer.\n\n" +
-      (ma ? "Il est restitué en fin de bail, après remise des clés et état des lieux de sortie, déduction faite des sommes restant dues au bailleur et dûment justifiées." : "Il est restitué dans un délai d'un mois à compter de la remise des clés si l'état des lieux de sortie est conforme à l'état des lieux d'entrée, et de deux mois dans le cas contraire, déduction faite des sommes restant dues au bailleur et dûment justifiées.")
-    : "Aucun dépôt de garantie n'est demandé.");
-  add("Obligations du bailleur", "Le bailleur est tenu de délivrer au locataire un logement en bon état d'usage et de réparation, avec des équipements en bon état de fonctionnement ; d'assurer au locataire la jouissance paisible du logement ; d'entretenir les locaux et d'y faire les réparations autres que locatives, notamment les grosses réparations ; de remettre gratuitement une quittance au locataire qui en fait la demande ou après chaque paiement intégral.");
-  add("Obligations du locataire", "Le locataire est tenu de payer le loyer et les charges aux termes convenus ; d'user paisiblement des lieux suivant leur destination ; de répondre des dégradations et pertes survenues pendant la durée du bail, sauf si elles résultent de la vétusté, d'une malfaçon, d'un vice de construction, d'un cas fortuit ou de force majeure ; de prendre à sa charge l'entretien courant du logement et les menues réparations ; de laisser exécuter les travaux nécessaires au maintien en état du logement ; de restituer les lieux en fin de bail dans l'état constaté à l'entrée, compte tenu de l'usure normale.");
+  add("Dépôt de garantie", (dep > 0 ? "Un dépôt de garantie de " + laMoney_(dep) + (rent > 0 ? " (soit " + Math.round(dep / rent * 10) / 10 + " mois de loyer)" : "") + " est versé à la signature. " : "Aucun dépôt de garantie n'est demandé. ") +
+    (ma ? "Conformément à l'article 20 de la loi n° 67-12, son montant ne peut excéder deux mois de loyer. Il est restitué au locataire dans un délai d'un mois à compter de la remise des clés, déduction faite des sommes dont il serait redevable et dûment justifiées."
+      : "Son montant ne peut excéder " + (fu ? "deux mois" : "un mois") + " de loyer hors charges. Il n'est pas productif d'intérêts et ne peut être imputé sur le dernier loyer. Il est restitué dans un délai d'un mois à compter de la remise des clés si l'état des lieux de sortie est conforme à celui d'entrée, de deux mois dans le cas contraire, déduction faite des sommes restant dues et justifiées ; à défaut, le solde est majoré de 10 % du loyer mensuel hors charges pour chaque mois de retard commencé."));
+  add("Obligations des parties", "Le bailleur délivre un logement décent, en bon état d'usage et de réparation, avec les équipements prévus en bon état de fonctionnement ; il assure au locataire la jouissance paisible des lieux, les garantit contre les vices et défauts qui en empêchent l'usage, et effectue les réparations autres que locatives.\n\n" +
+    "Le locataire paie le loyer et les charges aux termes convenus ; use paisiblement des lieux suivant leur destination ; répond des dégradations survenues pendant le bail, sauf vétusté, malfaçon, vice de construction, cas fortuit ou force majeure ; prend à sa charge l'entretien courant et les réparations locatives ; " +
+    "ne transforme pas les lieux sans l'accord écrit du bailleur ; et laisse exécuter les travaux nécessaires." + (ma ? "" : " Il s'assure contre les risques locatifs et en justifie chaque année."));
+  // Congé : délais légaux et formes de notification (cœur de la demande).
+  if (ma) add("Congé, préavis et formes de notification",
+    "Congé donné par le locataire : le locataire peut mettre fin au bail à tout moment en respectant un préavis d'un (1) mois. Le loyer et les charges restent dus jusqu'à l'expiration du préavis.\n\n" +
+    "Congé donné par le bailleur : conformément aux articles 44 à 52 de la loi n° 67-12, le bailleur ne peut donner congé que pour l'un des motifs prévus par la loi (notamment la reprise du logement pour y habiter lui-même ou y loger un proche dans les conditions légales, la démolition ou des travaux importants nécessitant l'évacuation des lieux, ou un manquement grave du locataire). " +
+    "Le congé est écrit, motivé, porte sur la totalité des lieux et accorde au locataire un délai d'au moins deux (2) mois à compter de sa notification. Il ouvre droit, le cas échéant, aux indemnités prévues par la loi et, à défaut d'exécution, doit être validé par le tribunal.\n\n" +
+    "Forme : tout congé est notifié par écrit avec date certaine — par l'intermédiaire d'un commissaire judiciaire (huissier de justice) conformément aux articles 37 à 39 du Code de procédure civile, par lettre recommandée avec accusé de réception, ou par remise en main propre contre décharge datée et signée. Le délai court à compter de la réception.");
+  else add("Congé, préavis et formes de notification",
+    "Congé donné par le locataire : le locataire peut donner congé à tout moment. Le préavis est " + (fu ? "d'un (1) mois." : "de trois (3) mois ; il est réduit à un (1) mois lorsque le logement est situé en zone tendue, ou en cas d'obtention d'un premier emploi, de mutation, de perte d'emploi ou de nouvel emploi consécutif à une perte d'emploi, d'état de santé justifiant un changement de domicile, pour le bénéficiaire du RSA ou de l'AAH, ou en cas d'attribution d'un logement social ; le locataire précise alors le motif et le justifie lors de l'envoi du congé.") +
+    " Le loyer et les charges restent dus pendant le préavis, sauf si le logement est reloué plus tôt avec l'accord du bailleur.\n\n" +
+    "Congé donné par le bailleur : le bailleur ne peut donner congé que pour le terme du bail, avec un préavis de " + (fu ? "trois (3) mois" : "six (6) mois") + ", et uniquement pour reprendre le logement afin d'y habiter ou d'y loger un proche dans les conditions légales, pour le vendre" + (fu ? "" : " (le locataire bénéficiant alors d'un droit de préemption)") + ", ou pour un motif légitime et sérieux, notamment l'inexécution par le locataire de l'une de ses obligations. Le congé indique son motif." +
+    (fu ? "" : " Le locataire âgé de plus de 65 ans et aux ressources modestes bénéficie de la protection prévue par l'article 15 III de la loi.") + "\n\n" +
+    "Forme : le congé est notifié par lettre recommandée avec demande d'avis de réception, par acte de commissaire de justice, ou par remise en main propre contre récépissé ou émargement. Le délai de préavis court à compter du jour de la réception de la lettre, de la signification de l'acte ou de la remise en main propre.");
   inp.clauses.forEach(function (k) { const tx = laClauseText_(k, inp, ma); if (tx) add({ INSURANCE_REQUIRED: "Assurance", SUBLET_FORBIDDEN: "Sous-location et cession", PETS_ALLOWED: "Animaux", PETS_FORBIDDEN: "Animaux", NO_SMOKING: "Logement non-fumeur", GUARANTOR: "Cautionnement", WORKS_AUTH_REQUIRED: "Travaux et transformations" }[k], tx); });
-  if (inp.clauses.indexOf("SUBLET_FORBIDDEN") < 0) add("Sous-location et cession", "Toute sous-location ou cession du bail est soumise à l'accord écrit et préalable du bailleur.");
+  if (inp.clauses.indexOf("SUBLET_FORBIDDEN") < 0) add("Sous-location et cession", ma ? "Conformément à l'article 39 de la loi n° 67-12, toute sous-location ou cession du bail est interdite, sauf accord écrit du bailleur établi par acte à date certaine." : "Toute sous-location ou cession du bail est interdite sans l'accord écrit du bailleur, y compris sur le prix du loyer.");
   if (!ma && inp.clauses.indexOf("INSURANCE_REQUIRED") < 0) add("Assurance", laClauseText_("INSURANCE_REQUIRED", inp, ma));
-  add("Congé et fin du bail", ma ? "Le locataire peut mettre fin au bail en donnant congé par écrit au bailleur, dans le respect du délai de préavis prévu par la loi. Le bailleur ne peut donner congé que dans les cas et conditions prévus par la loi n° 67-12. Tout congé est notifié dans les formes prévues par la loi."
-    : "Le locataire peut donner congé à tout moment, par lettre recommandée avec avis de réception, acte de commissaire de justice ou remise en main propre contre émargement, avec un préavis de " + (inp.furnished ? "un mois." : "trois mois (un mois dans les cas prévus par la loi, notamment en zone tendue).") +
-      " Le bailleur ne peut donner congé que pour le terme du bail, avec un préavis de " + (inp.furnished ? "trois mois" : "six mois") + ", pour reprendre le logement, le vendre ou pour un motif légitime et sérieux.");
-  add("Défaut de paiement", ma ? "En cas de non-paiement du loyer ou des charges à leur échéance, le bailleur peut, après une mise en demeure restée sans effet, engager les procédures prévues par la loi pour obtenir le paiement des sommes dues et, le cas échéant, la résiliation du bail et l'expulsion."
-    : "À défaut de paiement du loyer ou des charges aux termes convenus, ou de versement du dépôt de garantie, le bail sera résilié de plein droit dans les conditions et délais prévus à l'article 24 de la loi du 6 juillet 1989, après un commandement de payer demeuré infructueux. Il en va de même à défaut d'assurance des risques locatifs, un mois après un commandement demeuré infructueux.");
+  add("Défaut de paiement et clause résolutoire", ma ? "En cas de non-paiement du loyer ou des charges à leur échéance, le bailleur adresse au locataire une mise en demeure de payer lui accordant un délai qui ne peut être inférieur à quinze (15) jours. À défaut de paiement dans ce délai, le bailleur peut engager les procédures prévues par la loi n° 67-12 pour obtenir le paiement des sommes dues et, le cas échéant, la résiliation du bail et l'expulsion."
+    : "À défaut de paiement du loyer ou des charges aux termes convenus, ou de versement du dépôt de garantie, le bail est résilié de plein droit six (6) semaines après un commandement de payer demeuré infructueux, dans les conditions de l'article 24 de la loi du 6 juillet 1989. Il en est de même à défaut d'assurance des risques locatifs, un mois après un commandement demeuré infructueux.");
   const special = [l.terms, inp.instructions].filter(function (x) { return String(x || "").trim(); }).join("\n\n");
   if (special) add("Conditions particulières", special);
-  add(ma ? "Élection de domicile et litiges" : "Élection de domicile", ma ? "Pour l'exécution des présentes, les parties élisent domicile, le bailleur à son adresse et le locataire dans les lieux loués. Tout litige relatif au présent contrat relève du tribunal compétent du lieu de situation du logement."
-    : "Pour l'exécution des présentes, le bailleur fait élection de domicile à son adresse et le locataire dans les lieux loués.");
-  add("Annexes", "Sont annexés au présent contrat : l'état des lieux d'entrée" + (inp.furnished ? ", l'inventaire du mobilier" : "") + (inp.clauses.indexOf("GUARANTOR") >= 0 ? ", l'acte de cautionnement" : "") +
-    (ma ? "." : ", le dossier de diagnostic technique, la notice d'information et, le cas échéant, les extraits du règlement de copropriété."));
-  return { title: "Contrat de location — logement " + (inp.furnished ? "meublé" : "vide"), sections: S };
+  add(ma ? "Élection de domicile et litiges" : "Élection de domicile", ma ? "Pour l'exécution des présentes, le bailleur élit domicile à son adresse et le locataire dans les lieux loués. Tout litige relatif au présent contrat relève du tribunal compétent du lieu de situation du logement."
+    : "Pour l'exécution des présentes, le bailleur élit domicile à son adresse et le locataire dans les lieux loués.");
+  add("Annexes", "Sont annexés au présent contrat : l'état des lieux d'entrée" + (fu ? ", l'inventaire et l'état détaillé du mobilier" : "") + (inp.clauses.indexOf("GUARANTOR") >= 0 ? ", l'acte de cautionnement" : "") +
+    (ma ? " et une copie des pièces d'identité des parties." : ", la notice d'information prévue par l'arrêté du 29 mai 2015, le dossier de diagnostic technique (diagnostic de performance énergétique, état des risques, et selon le cas constat de risque d'exposition au plomb, diagnostics électricité, gaz et amiante) et, le cas échéant, les extraits du règlement de copropriété."));
+  return { title: fu ? "Contrat de location meublée" : "Contrat de location non meublée (logement vide)", sections: S };
 }
 function st_label_(code) { return ({ APARTMENT: "appartement", VILLA: "villa", RIAD: "riad", STUDIO: "studio", HOUSE: "maison", DUPLEX: "duplex", ROOM: "chambre", OFFICE: "bureau" })[String(code || "").toUpperCase()] || String(code || "").toLowerCase(); }
 
@@ -167,7 +192,7 @@ function laContractAi_(c, inp, base) {
     "- Utilise UNIQUEMENT les faits fournis. N'invente aucun montant, aucune date, aucun nom, aucune adresse.\n" +
     "- Pour les identités et l'adresse, écris exactement les marqueurs [BAILLEUR], [LOCATAIRE], [ADRESSE_DU_BIEN], [VILLE].\n" +
     "- Ne cite un numéro d'article de loi que si tu es certain qu'il existe et qu'il est pertinent ; sinon renvoie à « la loi ».\n" +
-    (ma ? "- Maroc : la loi n° 07-03 limite la révision du loyer d'habitation à une fois tous les 3 ans au plus tôt et à 8 % au maximum (10 % pour les autres locaux). N'écris jamais d'indexation annuelle.\n" : "- France : respecte les durées minimales, le plafond du dépôt de garantie (1 mois vide, 2 mois meublé, hors charges) et la révision annuelle selon l'IRL.\n") +
+    (ma ? "- Maroc : la loi n° 67-12 (articles 31 à 38) limite la révision du loyer d'habitation à une fois tous les 3 ans au plus tôt et à 8 % au maximum (10 % pour les autres locaux). N'écris jamais d'indexation annuelle.\n" : "- France : respecte les durées minimales, le plafond du dépôt de garantie (1 mois vide, 2 mois meublé, hors charges) et la révision annuelle selon l'IRL.\n") +
     "- Si une consigne de l'utilisateur est contraire à la loi ou abusive, ne l'applique pas et explique-le dans « warnings ».\n" +
     "- Pas de Markdown. Paragraphes séparés par une ligne vide. Titres sous la forme « Article N — Intitulé ».\n" +
     "Réponds UNIQUEMENT par un objet JSON : {\"title\": string, \"sections\": [{\"title\": string, \"body\": string}], \"warnings\": [string]}.";
@@ -192,9 +217,9 @@ function laLetterInputs_(a) {
 function laLetterWarnings_(c, inp) {
   const w = [], l = c.l, rent = num_(l.monthlyRent);
   if (inp.subtype === "RENT_REVISION" && inp.newRent && IMMO_EDITION_ === "MA") {
-    if (inp.newRent > rent * 1.08 + 0.01) w.push("Hausse de " + Math.round((inp.newRent / rent - 1) * 1000) / 10 + " % : la loi n° 07-03 la limite à 8 % pour un logement d'habitation.");
+    if (inp.newRent > rent * 1.08 + 0.01) w.push("Hausse de " + Math.round((inp.newRent / rent - 1) * 1000) / 10 + " % : la loi n° 67-12 la limite à 8 % pour un logement d'habitation.");
     const since = inp.effectiveDate || todayStr_();
-    if (diffDays_(l.startDate, since) < 3 * 365) w.push("Moins de trois ans depuis le début du bail : la loi n° 07-03 ne permet pas encore de réviser le loyer (sauf décision de justice).");
+    if (diffDays_(l.startDate, since) < 3 * 365) w.push("Moins de trois ans depuis le début du bail : la loi n° 67-12 ne permet pas encore de réviser le loyer (sauf décision de justice).");
   }
   if (!c.t.email) w.push("Le locataire n'a pas d'adresse e-mail : le courrier devra lui être remis en main propre ou envoyé par voie postale.");
   return w;
@@ -208,7 +233,7 @@ function laLetterTemplate_(c, inp) {
       pdfDate_(start) + " au " + pdfDate_(end) + ", pour un loyer mensuel de " + laMoney_(inp.newRent || l.monthlyRent) + (num_(l.charges) ? " et une provision pour charges de " + laMoney_(l.charges) : "") + ", les autres conditions du bail restant inchangées.\n\n" +
       "Nous vous remercions de nous faire part de votre réponse avant le " + pdfDate_(addDaysStr_(today, 30)) + "." + (inp.instructions ? "\n\n" + inp.instructions : ""));
   } else if (inp.subtype === "RENT_REVISION") {
-    add("Objet : révision du loyer", "Madame, Monsieur,\n\nConformément aux dispositions du bail et " + (ma ? "de la loi n° 07-03 relative à la révision du montant du loyer" : "de l'article 17-1 de la loi du 6 juillet 1989 (indice de référence des loyers)") +
+    add("Objet : révision du loyer", "Madame, Monsieur,\n\nConformément aux dispositions du bail et " + (ma ? "des articles 31 à 38 de la loi n° 67-12 relatifs à la révision du loyer" : "de l'article 17-1 de la loi du 6 juillet 1989 (indice de référence des loyers)") +
       ", nous vous informons que le loyer mensuel du logement situé [ADRESSE_DU_BIEN] est porté de " + laMoney_(l.monthlyRent) + " à " + laMoney_(inp.newRent || l.monthlyRent) + " à compter du " + pdfDate_(inp.effectiveDate || addMonthsStr_(today, 1)) + ".\n\n" +
       "Les autres conditions du bail demeurent inchangées." + (inp.instructions ? "\n\n" + inp.instructions : ""));
   } else if (inp.subtype === "DEPOSIT_RETURN") {
@@ -295,7 +320,8 @@ function leaseDocHtml_(c, d) {
     "<table class='sign'><tr><td><b>Le bailleur</b><br><span class='muted'>« Lu et approuvé », signature</span></td><td><b>Le locataire</b><br><span class='muted'>« Lu et approuvé », signature</span></td></tr></table>";
   else inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + pdfDate_(todayStr_()) + ".</p>";
   return pdfShell_(d.title || "Document", inner, { subtitle: (prop.name || "") + (d.docType === "LETTER" ? " · à l'attention de " + (t.fullName || "") : ""), issuer: rentIssuer_(org),
-    footer: (draft ? "PROJET — " : "") + "Document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; ImmoPilot ne garantit pas sa conformité juridique." });
+    footer: draft ? "PROJET — document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; ImmoPilot ne garantit pas sa conformité juridique."
+      : d.docType === "LEASE_CONTRACT" ? "Paraphe du bailleur : __________          Paraphe du locataire : __________" : " " });
 }
 function leaseDocFileName_(d) { return (d.docType === "LEASE_CONTRACT" ? "Bail_" : "Courrier_") + String(d.leaseId).slice(-6) + "_" + todayStr_(); }
 /** Aperçu PDF (brouillon marqué « PROJET ») ou PDF définitif déjà enregistré. */
