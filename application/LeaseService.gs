@@ -77,7 +77,7 @@ function leaseLoad_(p, id, cap) {
   const prop = dbGet_("Properties", l.propertyId);
   const self = myTenantIds_(p).indexOf(String(l.tenantId)) >= 0;
   if (!(canProp_(p, prop, cap) || (cap === "lease.view" && self))) throw new AppError("FORBIDDEN", "Bail introuvable ou accès refusé.");
-  if (cap === "lease.manage") { assertOrgWritable_(l.organizationId); assertFeature_(l.organizationId, "leases"); }
+  if (/^(lease|inspection|rent)\.manage$/.test(cap)) { assertOrgWritable_(l.organizationId); assertFeature_(l.organizationId, "leases"); }
   return { l: l, prop: prop, self: self };
 }
 
@@ -181,6 +181,7 @@ function leaseGet_(p, a) {
   const x = leaseLoad_(p, a.leaseId, "lease.view");
   const o = leaseOut_(p, x.l);
   o.canManage = canProp_(p, x.prop, "lease.manage"); o.isTenant = x.self;
+  o.canRent = canProp_(p, x.prop, "rent.manage"); o.canInspect = canProp_(p, x.prop, "inspection.manage");
   o.schedules = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(x.l.leaseId); }).map(function (s) { return rentStatus_(s); }).sort(function (u, v) { return String(u.dueDate).localeCompare(String(v.dueDate)); });
   o.payments = dbAll_("Payments").filter(function (z) { return (z.refType === "LEASE" && String(z.refId) === String(x.l.leaseId)) || (z.refType === "RENT_SCHEDULE" && o.schedules.some(function (s) { return s.scheduleId === z.refId; })); })
     .map(function (z) { return { paymentId: z.paymentId, kind: z.kind, refId: z.refId, amount: z.amount, paidAt: z.paidAt, method: z.method, status: z.status, reference: z.reference }; });
@@ -190,13 +191,10 @@ function leaseGet_(p, a) {
   }
   o.documents = docList_(p, { ownerType: "LEASE", ownerId: x.l.leaseId });
   o.agentDocs = leaseDocsOf_(x.l.leaseId, !o.canManage);
-  o.inspections = inspectionsOf_(x.l.leaseId, !o.canManage);
-  if (o.canManage) {
-    o.history = auditHistory_("Lease", x.l.leaseId, 30);
-    o.automation = rentAutomationView_(x.l);
-    o.mailings = rentMailingsOf_(x.l.leaseId);
-    o.agent = { ai: !!aiConfig_(), furnished: leaseFurnished_(x.l, x.prop) };
-  }
+  o.inspections = inspectionsOf_(x.l.leaseId, !(o.canManage || o.canInspect));
+  if (o.canManage || o.canRent || o.canInspect) o.history = auditHistory_("Lease", x.l.leaseId, 30);
+  if (o.canRent) { o.automation = rentAutomationView_(x.l); o.mailings = rentMailingsOf_(x.l.leaseId); }
+  if (o.canManage || o.canInspect) o.agent = { ai: !!aiConfig_(), furnished: leaseFurnished_(x.l, x.prop) };
   return o;
 }
 function leaseCreate_(p, a) {
@@ -350,7 +348,7 @@ function leaseJob_() {
     if (!l.endDate) created += leaseGenerateSchedules_(l);
     const prop = dbGet_("Properties", l.propertyId); if (!prop) return;
     const t = dbGet_("Tenants", l.tenantId) || {};
-    const managers = propertyManagers_(prop, "canManageOperations");
+    const managers = propertyManagers_(prop, "canManageLeases");
     const before = Number(getSetting_("alerts.rentDueDays", l.organizationId)) || 3;
     dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(l.leaseId) && s.status === "OPEN"; }).forEach(function (s) {
       const st = rentStatus_(s, today);

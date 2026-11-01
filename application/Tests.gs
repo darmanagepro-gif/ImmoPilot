@@ -1234,6 +1234,35 @@ function TEST_GROUPS_() {
         T.fails(fx.tok.ownerB, "inspection.get", { inspectionId: x.inspectionId }, "FORBIDDEN");
       }]
     ] },
+    { name: "Missions confiées à l'agence (longue durée)", tests: [
+      ["Agence : baux, locataires et états des lieux seulement ; loyers et incidents restent au propriétaire", function (T, fx) {
+        const O = tLeaseOwner_(T, fx), org = O.org.organizationId;
+        const prop = T.call(O.tok, "property.create", { organizationId: org, name: "Appartement Mission", city: "Marrakech", rentalMode: "LONG_TERM", rooms: ["Séjour"] }).propertyId;
+        const agOrg = tOrg_("Agence Mission " + fx.run, "AGENCY"), agU = tMakeUser_(fx.mail("ag-mission"), "AGENCY_ADMIN", agOrg.organizationId, fx.pw);
+        const agTok = T.pub("auth.login", { email: agU.email, password: fx.pw }).token;
+        T.call(O.tok, "property.agencySet", { propertyId: prop, agencyOrganizationId: agOrg.organizationId, canView: true, detailFlags: true, canManageLeases: true, canManageInspections: true });
+        const acc = T.call(O.tok, "property.get", { propertyId: prop }).accessManagement.agencies[0];
+        T.ok(acc.canManageLeases && acc.canManageInspections && !acc.canManageRent && !acc.canManageIncidents, "missions enregistrées");
+        const t = T.call(agTok, "tenant.create", { propertyId: prop, fullName: "Locataire Mission", email: fx.mail("loc-mission") });
+        const l = T.call(agTok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: tDays_(-40), monthlyRent: 4000, dueDay: 5 });
+        T.call(agTok, "lease.activate", { leaseId: l.leaseId });
+        const g = T.call(agTok, "lease.get", { leaseId: l.leaseId });
+        T.ok(g.canManage && g.canInspect && !g.canRent && !g.automation, "agence : bail et états des lieux, pas les loyers");
+        T.ok(T.call(agTok, "inspection.create", { leaseId: l.leaseId, type: "ENTRY" }).inspectionId, "agence : état des lieux d'entrée");
+        const s0 = g.schedules[0];
+        T.fails(agTok, "rent.sendCall", { scheduleId: s0.scheduleId }, "FORBIDDEN");
+        T.fails(agTok, "pay.record", { refType: "RENT_SCHEDULE", refId: s0.scheduleId, kind: "RENT", amount: 100 }, "FORBIDDEN");
+        const inc = T.call(O.tok, "inc.create", { propertyId: prop, category: "PLUMBING", severity: "MEDIUM", description: "Fuite" });
+        T.fails(agTok, "inc.update", { incidentId: inc.incidentId, severity: "HIGH" }, "FORBIDDEN");
+        const og = T.call(O.tok, "lease.get", { leaseId: l.leaseId });
+        T.ok(og.canRent && og.automation, "propriétaire : loyers (appels, relances, quittances)");
+        T.ok(T.call(O.tok, "pay.record", { refType: "RENT_SCHEDULE", refId: s0.scheduleId, kind: "RENT", amount: 100 }).paymentId, "propriétaire : encaissement");
+        // Ancienne attribution (sans missions détaillées) : « opérations » garde son ancien sens
+        const perm = dbAll_("AgencyPropertyPermissions").filter(function (z) { return String(z.propertyId) === String(prop); })[0];
+        dbUpdate_("AgencyPropertyPermissions", perm.permissionId, { detailFlags: false, canManageOperations: true, canManageRent: false }); CTX_.propMemo = {};
+        T.ok(T.call(agTok, "lease.get", { leaseId: l.leaseId }).canRent, "ancienne attribution « opérations » : loyers inclus");
+      }]
+    ] },
     { name: "Tutoriel et intégration d'un locataire", tests: [
       ["Tutoriel : terminé ou désactivé, mémorisé sur le compte, conservé par la mise à jour du profil", function (T, fx) {
         const O = tLeaseOwner_(T, fx);

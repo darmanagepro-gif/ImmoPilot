@@ -238,7 +238,7 @@ function rentDeliver_(o) {
   if (prev) { patch.attempts = num_(prev.attempts) + 1; dbUpdate_("RentMailings", prev.mailingId, patch); row = prev; }
   else row = dbInsert_("RentMailings", Object.assign(base, patch, { attempts: 1 }));
   audit_(res.ok ? "RENT_MAIL_SENT" : "RENT_MAIL_FAILED", "Lease", c.l.leaseId, c.l.organizationId, { kind: o.kind, level: o.level || 0, scheduleId: o.scheduleId || "", trigger: base.trigger });
-  if (!res.ok && base.trigger === "AUTO" && c.prop.propertyId) notify_({ eventKey: "rentmail-failed:" + base.uniqueKey, userIds: propertyManagers_(c.prop, "canManageOperations"), type: "RENT_MAIL_FAILED",
+  if (!res.ok && base.trigger === "AUTO" && c.prop.propertyId) notify_({ eventKey: "rentmail-failed:" + base.uniqueKey, userIds: propertyManagers_(c.prop, "canManageRent"), type: "RENT_MAIL_FAILED",
     organizationId: c.l.organizationId, email: false, title: "Envoi au locataire impossible : " + (c.prop.name || ""), body: (c.t.fullName || "") + " — " + patch.error, link: "#lease/" + c.l.leaseId });
   return { ok: !!res.ok, status: patch.status, mailingId: row.mailingId, documentId: docId, error: res.ok ? "" : patch.error, to: to };
 }
@@ -304,7 +304,7 @@ function rentAutomationJob_(opts) {
     if (!String((dbGet_("Tenants", l.tenantId) || {}).email || "").trim()) {
       // Sans e-mail du locataire : rien n'est envoyé ; les gestionnaires sont prévenus une seule fois.
       const prop = dbGet_("Properties", l.propertyId);
-      if (prop) notify_({ eventKey: "rent-noemail:" + l.leaseId, userIds: propertyManagers_(prop, "canManageOperations"), type: "RENT_MAIL_FAILED", organizationId: l.organizationId, email: false,
+      if (prop) notify_({ eventKey: "rent-noemail:" + l.leaseId, userIds: propertyManagers_(prop, "canManageRent"), type: "RENT_MAIL_FAILED", organizationId: l.organizationId, email: false,
         title: "Envois automatiques impossibles : " + prop.name, body: "Le locataire n'a pas d'adresse e-mail : ajoutez-la dans « Locataires » pour qu'il reçoive ses appels de loyer, relances et quittances.", link: "#lease/" + l.leaseId });
       out.skipped++; continue;
     }
@@ -326,7 +326,7 @@ function rentAutomationJob_(opts) {
         if (level >= 1 && !already) {
           const r = rentSendReminder_(ctx(), unpaid, level, "AUTO");
           count(r, "reminders");
-          if (r.ok && level >= 2 && ctx().prop.propertyId) notify_({ eventKey: "rent-reminder:" + l.leaseId + ":" + unpaid[0].scheduleId + ":" + level, userIds: propertyManagers_(ctx().prop, "canManageOperations"),
+          if (r.ok && level >= 2 && ctx().prop.propertyId) notify_({ eventKey: "rent-reminder:" + l.leaseId + ":" + unpaid[0].scheduleId + ":" + level, userIds: propertyManagers_(ctx().prop, "canManageRent"),
             type: "RENT_LATE", organizationId: l.organizationId, email: false, title: RENT_REMINDER_TITLES_[level - 1] + " envoyée : " + (ctx().prop.name || ""),
             body: (ctx().t.fullName || "") + " — reste dû " + fmtAmount_(sumBy_(unpaid, function (x) { return x.remaining; })) + ".", link: "#lease/" + l.leaseId });
         }
@@ -345,7 +345,7 @@ function rentAutomationJob_(opts) {
 /* ------------------------------ Routes ------------------------------ */
 function rentSchedLoad_(p, scheduleId) {
   const s = dbGet_("RentSchedules", safeText_(scheduleId, 120)); if (!s) notFound_("Échéance");
-  leaseLoad_(p, s.leaseId, "lease.manage");
+  leaseLoad_(p, s.leaseId, "rent.manage");
   return { s: s, c: rentCtx_(s.leaseId) };
 }
 function rentDeliverResult_(r) {
@@ -361,7 +361,7 @@ function rentSendCallRoute_(p, a) {
 }
 /** Relance manuelle : toutes les échéances impayées échues du bail ; niveau choisi ou calculé. */
 function rentSendReminderRoute_(p, a) {
-  const x = leaseLoad_(p, a.leaseId, "lease.manage"), c = rentCtx_(x.l), unpaid = rentUnpaidDue_(x.l.leaseId, todayStr_());
+  const x = leaseLoad_(p, a.leaseId, "rent.manage"), c = rentCtx_(x.l), unpaid = rentUnpaidDue_(x.l.leaseId, todayStr_());
   assert_(unpaid.length, "Aucune échéance impayée échue sur ce bail.");
   const level = a.level ? Math.max(1, Math.min(3, parseInt(a.level, 10) || 1)) : Math.max(1, Math.min(3, rentReminderLevel_(c.cfg, unpaid[0].dueDate, todayStr_())));
   rateLimit_("rentmail:" + p.userId, 60, 3600);
@@ -379,7 +379,7 @@ function rentPreview_(p, a) {
   const kind = oneOf_(String(a.kind || ""), ["CALL", "REMINDER", "RECEIPT"], "Type");
   let blob;
   if (kind === "REMINDER") {
-    const x = leaseLoad_(p, a.leaseId, "lease.manage"), c = rentCtx_(x.l), unpaid = rentUnpaidDue_(x.l.leaseId, todayStr_());
+    const x = leaseLoad_(p, a.leaseId, "rent.manage"), c = rentCtx_(x.l), unpaid = rentUnpaidDue_(x.l.leaseId, todayStr_());
     assert_(unpaid.length, "Aucune échéance impayée échue sur ce bail.");
     blob = rentReminderPdf_(c, unpaid, a.level ? Math.max(1, Math.min(3, parseInt(a.level, 10) || 1)) : Math.max(1, Math.min(3, rentReminderLevel_(c.cfg, unpaid[0].dueDate, todayStr_()))));
   } else {
@@ -391,7 +391,7 @@ function rentPreview_(p, a) {
 }
 /** Réglages propres à un bail : exclusion des envois automatiques, délai d'appel, jours de relance. */
 function leaseAutomationSet_(p, a) {
-  const x = leaseLoad_(p, a.leaseId, "lease.manage"), own = {};
+  const x = leaseLoad_(p, a.leaseId, "rent.manage"), own = {};
   own.enabled = a.enabled === undefined ? true : bool_(a.enabled);
   if (a.callDaysBefore !== undefined && a.callDaysBefore !== "" && a.callDaysBefore !== null) { const n = parseInt(a.callDaysBefore, 10); assert_(n >= 0 && n <= 31, "Délai de 0 à 31 jours avant l'échéance."); own.callDaysBefore = n; }
   const days = Array.isArray(a.reminderDays) ? a.reminderDays : String(a.reminderDays || "").split(",").map(function (v) { return v.trim(); }).filter(Boolean);

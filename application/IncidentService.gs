@@ -27,7 +27,7 @@ function incidentInsert_(p, prop, d) {
   });
   if (p) audit_("INCIDENT_CREATED", "Incident", i.incidentId, prop.organizationId, { category: cat, severity: sev, source: d.source || "MANUAL" });
   const urgent = sev === "HIGH" || sev === "CRITICAL";
-  notify_({ eventKey: "incident-new:" + i.incidentId, userIds: propertyManagers_(prop, "canManageOperations").filter(function (u) { return !p || u !== p.userId; }), type: urgent ? "INCIDENT_SEVERE" : "INCIDENT",
+  notify_({ eventKey: "incident-new:" + i.incidentId, userIds: propertyManagers_(prop, "canManageIncidents").filter(function (u) { return !p || u !== p.userId; }), type: urgent ? "INCIDENT_SEVERE" : "INCIDENT",
     organizationId: prop.organizationId, title: (urgent ? "Incident grave : " : "Nouvel incident : ") + prop.name, body: cat + " — " + i.description.slice(0, 200), link: "#incident/" + i.incidentId, email: urgent });
   return i;
 }
@@ -134,7 +134,7 @@ function incUpdate_(p, a) {
   dbUpdate_("IncidentsV4", i.incidentId, patch);
   audit_("INCIDENT_UPDATED", "Incident", i.incidentId, i.organizationId, diff_(i, patch, Object.keys(patch).filter(function (k) { return ["updatedAt", "updatedBy"].indexOf(k) < 0; })));
   if (patch.severity && ["HIGH", "CRITICAL"].indexOf(patch.severity) >= 0 && ["HIGH", "CRITICAL"].indexOf(i.severity) < 0)
-    notify_({ eventKey: "incident-escalated:" + i.incidentId + ":" + patch.severity, userIds: propertyManagers_(x.acc.prop, "canManageOperations"), type: "INCIDENT_SEVERE", organizationId: i.organizationId,
+    notify_({ eventKey: "incident-escalated:" + i.incidentId + ":" + patch.severity, userIds: propertyManagers_(x.acc.prop, "canManageIncidents"), type: "INCIDENT_SEVERE", organizationId: i.organizationId,
       title: "Incident escaladé (" + patch.severity + ") : " + x.acc.prop.name, body: i.title || i.category, link: "#incident/" + i.incidentId });
   if (patch.assignedToUserId) notify_({ eventKey: "incident-assigned:" + i.incidentId + ":" + patch.assignedToUserId, userIds: [patch.assignedToUserId], type: "INCIDENT_ASSIGNED", organizationId: i.organizationId,
     title: "Incident qui vous est confié : " + x.acc.prop.name, body: i.title || i.category, link: "#incident/" + i.incidentId });
@@ -155,7 +155,7 @@ function incidentAlertsJob_() {
     const prop = dbGet_("Properties", i.propertyId); if (!prop) return;
     const days = Number(getSetting_("alerts.incidentAgeDays", i.organizationId)) || 3, cost = Number(getSetting_("alerts.incidentCost", i.organizationId)) || 5000;
     const age = (Date.now() - (parseTs_(i.createdAt) || new Date()).getTime()) / 86400000;
-    if (age >= days) { notify_({ eventKey: "incident-age:" + i.incidentId + ":" + days, userIds: propertyManagers_(prop, "canManageOperations"), type: "INCIDENT_AGE", organizationId: i.organizationId,
+    if (age >= days) { notify_({ eventKey: "incident-age:" + i.incidentId + ":" + days, userIds: propertyManagers_(prop, "canManageIncidents"), type: "INCIDENT_AGE", organizationId: i.organizationId,
       title: "Incident ouvert depuis " + Math.floor(age) + " jours : " + prop.name, body: (i.title || i.category) + " — statut " + i.status, link: "#incident/" + i.incidentId }); n++; }
     const c = Math.max(num_(i.estimatedCost), num_(i.finalCost));
     if (c >= cost) { notify_({ eventKey: "incident-cost:" + i.incidentId + ":" + cost, userIds: propertyManagers_(prop), type: "INCIDENT_COST", organizationId: i.organizationId,

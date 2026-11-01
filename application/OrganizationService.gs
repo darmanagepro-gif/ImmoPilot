@@ -153,6 +153,7 @@ function ownerAgencyCreate_(p, a) {
   const invitation = invitationInsertAndSend_(p, { email: adminEmail, displayName: a.adminName, organizationId: agency.organizationId, role: "AGENCY_ADMIN" }, agency);
   const perm = propertyAgencySet_(p, { propertyId: prop.propertyId, agencyOrganizationId: agency.organizationId, canView: true,
     canManageReservations: a.canManageReservations === true, canManageOperations: a.canManageOperations === true, canViewFinance: a.canViewFinance === true,
+    detailFlags: a.detailFlags === true, canManageIncidents: a.canManageIncidents === true, canManageLeases: a.canManageLeases === true, canManageInspections: a.canManageInspections === true, canManageRent: a.canManageRent === true,
     commissionRate: a.commissionRate, validFrom: a.validFrom, validTo: a.validTo });
   return { ok: true, organizationId: agency.organizationId, invitationId: invitation.invitationId, emailSent: invitation.emailSent, emailError: invitation.emailError, permissionId: perm.permissionId };
 }
@@ -192,7 +193,8 @@ function ownerAgencyList_(p) {
     const mine = perms.filter(function (z) { return String(z.agencyOrganizationId) === id; }).map(function (z) {
       const pr = props[String(z.propertyId)];
       return { permissionId: z.permissionId, propertyId: z.propertyId, propertyName: pr.name, propertyCity: pr.city, status: z.status, canView: bool_(z.canView), canManageReservations: bool_(z.canManageReservations),
-        canManageOperations: bool_(z.canManageOperations), canViewFinance: bool_(z.canViewFinance), commissionRate: z.commissionRate, validFrom: z.validFrom, validTo: z.validTo };
+        canManageOperations: bool_(z.canManageOperations), canViewFinance: bool_(z.canViewFinance), commissionRate: z.commissionRate, validFrom: z.validFrom, validTo: z.validTo,
+        canManageIncidents: agencyFlagOn_(z, "canManageIncidents"), canManageLeases: agencyFlagOn_(z, "canManageLeases"), canManageInspections: agencyFlagOn_(z, "canManageInspections"), canManageRent: agencyFlagOn_(z, "canManageRent") };
     });
     return { organizationId: id, name: o.name, city: o.city, contactEmail: o.billingEmail, locale: o.locale, status: o.status, createdByMe: normalizeEmail_(o.createdBy) === p.email,
       address: o.address || "", phone: o.phone || "", contactName: o.contactName || "", responsible: resp, adminName: resp ? resp.name : "", adminEmail: resp ? resp.email : "",

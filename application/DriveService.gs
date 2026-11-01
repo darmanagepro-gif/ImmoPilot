@@ -90,8 +90,8 @@ function docOwnerCtx_(p, ownerType, ownerId, category) {
     const l = leaseId ? dbGet_("Leases", leaseId) : null; if (l) propId = l.propertyId;
     const pr = setProp(propId); if (!pr) return ctx;
     const self = l && myTenantIds_(p).indexOf(String(l.tenantId)) >= 0;
-    ctx.canRead = canProp_(p, pr, "lease.view") || canProp_(p, pr, "finance.view") || !!self;
-    ctx.canWrite = canProp_(p, pr, "lease.manage") || canProp_(p, pr, "finance.manage") || (self && category === "PAYMENT_PROOF");
+    ctx.canRead = canProp_(p, pr, "lease.view") || canProp_(p, pr, "finance.view") || canProp_(p, pr, "inspection.manage") || !!self;
+    ctx.canWrite = canProp_(p, pr, "lease.manage") || canProp_(p, pr, "inspection.manage") || canProp_(p, pr, "rent.manage") || canProp_(p, pr, "finance.manage") || (self && category === "PAYMENT_PROOF");
   } else if (ownerType === "TENANT") {
     const t = dbGet_("Tenants", ownerId); if (!t) return ctx; ctx.organizationId = t.organizationId; ctx.sensitive = true;
     ctx.canRead = hasOrgCap_(p, t.organizationId, "lease.manage") || myTenantIds_(p).indexOf(String(t.tenantId)) >= 0;

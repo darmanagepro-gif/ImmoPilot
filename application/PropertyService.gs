@@ -207,7 +207,10 @@ function propertyAgencySet_(p, a) {
   assert_(agency && agency.status === "ACTIVE" && agencyOrgId !== String(x.organizationId), "Organisation agence invalide.");
   assert_(agency.type === "AGENCY" || dbAll_("UserRoles").some(function (r) { return String(r.organizationId) === agencyOrgId && (r.role === "AGENCY_ADMIN" || r.role === "AGENCY_USER") && r.status === "ACTIVE"; }), "Cette organisation n'est pas une agence active.");
   const flags = { canView: a.canView === true, canManageReservations: a.canManageReservations === true, canManageOperations: a.canManageOperations === true, canViewFinance: a.canViewFinance === true };
-  assert_(flags.canView || (!flags.canManageReservations && !flags.canManageOperations && !flags.canViewFinance), "Les droits de gestion exigent le droit de consultation.");
+  // Missions détaillées (location longue durée, incidents) : sans elles (ancien écran), « opérations » garde son ancien sens.
+  if (a.detailFlags === true) { flags.detailFlags = true; AGENCY_DETAIL_FLAGS_.forEach(function (f) { flags[f] = a[f] === true; }); }
+  else { flags.detailFlags = true; AGENCY_DETAIL_FLAGS_.forEach(function (f) { flags[f] = flags.canManageOperations; }); }
+  assert_(flags.canView || !Object.keys(flags).some(function (k) { return k !== "canView" && k !== "detailFlags" && flags[k]; }), "Les droits de gestion exigent le droit de consultation.");
   const validFrom = a.validFrom ? dateOnly_(a.validFrom, "Début") : "", validTo = a.validTo ? dateOnly_(a.validTo, "Fin") : "";
   assert_(!validFrom || !validTo || validFrom <= validTo, "Période d'attribution invalide.");
   const commissionRate = a.commissionRate === "" || a.commissionRate == null ? "" : rate_(a.commissionRate, "Commission agence");
@@ -230,7 +233,8 @@ function propertyAccessList_(p, a) {
   return {
     agencies: dbAll_("AgencyPropertyPermissions").filter(function (z) { return String(z.propertyId) === String(x.propertyId); }).map(function (z) {
       return { permissionId: z.permissionId, agencyOrganizationId: z.agencyOrganizationId, agencyName: (orgs[z.agencyOrganizationId] || {}).name || z.agencyOrganizationId, canView: bool_(z.canView),
-        canManageReservations: bool_(z.canManageReservations), canManageOperations: bool_(z.canManageOperations), canViewFinance: bool_(z.canViewFinance), commissionRate: z.commissionRate, validFrom: z.validFrom, validTo: z.validTo, status: z.status };
+        canManageReservations: bool_(z.canManageReservations), canManageOperations: bool_(z.canManageOperations), canViewFinance: bool_(z.canViewFinance),
+        canManageIncidents: agencyFlagOn_(z, "canManageIncidents"), canManageLeases: agencyFlagOn_(z, "canManageLeases"), canManageInspections: agencyFlagOn_(z, "canManageInspections"), canManageRent: agencyFlagOn_(z, "canManageRent"), commissionRate: z.commissionRate, validFrom: z.validFrom, validTo: z.validTo, status: z.status };
     }),
     staff: dbAll_("PropertyAssignments").filter(function (z) { return String(z.propertyId) === String(x.propertyId); }).map(function (z) {
       return { assignmentId: z.assignmentId, email: z.email, role: z.role, reservationId: z.reservationId || "", status: z.status, createdAt: z.createdAt };

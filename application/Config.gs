@@ -45,7 +45,7 @@ var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
   VERSION: "2.4.0",
-  SCHEMA_VERSION: 12,
+  SCHEMA_VERSION: 13,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -66,14 +66,14 @@ var ROLE_CAPS = Object.freeze({
   SUPER_ADMIN: ["platform.admin", "audit.view", "subscription.manage", "org.manage", "settings.platform", "support.request"],
   OWNER: ["property.create", "property.edit", "property.archive", "property.assign", "reservation.view", "reservation.edit", "reservation.cancel",
     "guest.view", "guestdoc.view", "checkin.operate", "cleaning.manage", "incident.view", "incident.manage", "incident.report", "quote.decide",
-    "contractor.manage", "workorder.manage", "invoice.view", "invoice.manage", "finance.view", "finance.manage", "lease.view", "lease.manage",
+    "contractor.manage", "workorder.manage", "invoice.view", "invoice.manage", "finance.view", "finance.manage", "lease.view", "lease.manage", "inspection.manage", "rent.manage",
     "report.view", "report.export", "user.invite", "user.manage", "settings.manage", "subscription.view", "audit.view.org", "support.approve", "document.view"],
   AGENCY_ADMIN: ["reservation.view", "reservation.edit", "reservation.cancel", "guest.view", "guestdoc.view", "checkin.operate", "cleaning.manage",
     "incident.view", "incident.manage", "incident.report", "quote.decide", "contractor.manage", "workorder.manage", "invoice.view", "finance.view",
-    "lease.view", "lease.manage", "report.view", "report.export", "user.invite", "user.manage", "settings.manage", "subscription.view",
+    "lease.view", "lease.manage", "inspection.manage", "rent.manage", "report.view", "report.export", "user.invite", "user.manage", "settings.manage", "subscription.view",
     "audit.view.org", "support.approve", "document.view"],
   AGENCY_USER: ["reservation.view", "reservation.edit", "guest.view", "checkin.operate", "cleaning.manage", "incident.view", "incident.manage",
-    "incident.report", "workorder.manage", "lease.view", "report.view", "document.view"],
+    "incident.report", "workorder.manage", "lease.view", "inspection.manage", "report.view", "document.view"],
   GUARD: ["checkin.operate", "incident.report", "guest.view.min"],
   CLEANER: ["cleaning.operate", "incident.report"],
   ARTISAN: ["workorder.operate", "quote.submit", "invoice.submit"],
@@ -84,9 +84,22 @@ var ROLE_CAPS = Object.freeze({
 var AGENCY_FLAG_CAPS = Object.freeze({
   canView: ["reservation.view", "incident.view", "incident.report", "guest.view", "lease.view", "report.view", "document.view", "report.export"],
   canManageReservations: ["reservation.edit", "reservation.cancel", "checkin.operate", "guestdoc.view"],
-  canManageOperations: ["cleaning.manage", "incident.manage", "workorder.manage", "contractor.manage", "quote.decide", "lease.manage"],
+  canManageOperations: ["cleaning.manage"],
+  canManageIncidents: ["incident.manage", "workorder.manage", "contractor.manage", "quote.decide"],
+  canManageLeases: ["lease.manage"],
+  canManageInspections: ["inspection.manage"],
+  canManageRent: ["rent.manage"],
   canViewFinance: ["finance.view", "invoice.view"]
 });
+/**
+ * Missions détaillées confiées à une agence (location longue durée et incidents). Une attribution enregistrée avant
+ * leur création (detailFlags vide) garde son ancien sens : « opérations » = ménage, incidents, devis, baux, états des lieux et loyers.
+ */
+var AGENCY_DETAIL_FLAGS_ = ["canManageIncidents", "canManageLeases", "canManageInspections", "canManageRent"];
+function agencyFlagOn_(a, f) {
+  if (AGENCY_DETAIL_FLAGS_.indexOf(f) >= 0 && !bool_(a.detailFlags)) return bool_(a.canManageOperations);
+  return bool_(a[f]);
+}
 
 /** Rôles qu'un rôle donné peut inviter (prévention de l'élévation de privilèges). */
 var INVITABLE_ROLES = Object.freeze({
@@ -181,7 +194,7 @@ var TABLES_SRC = {
     enums: { status: ["ACTIVE", "INACTIVE", "MAINTENANCE", "ARCHIVED", "DELETED"], rentalMode: ["SHORT_TERM", "LONG_TERM", "BOTH"] },
     cols: "propertyId,organizationId,ownerUserId,residenceId,name,address,city,neighborhood,building,floor,doorNumber,propertyType,surfaceM2#n,bedrooms#n,bathrooms#n,equipmentJson#j,accessInstructions,latitude#n,longitude#n,rentalMode,status,createdAt#t,createdBy,updatedAt#t,updatedBy|capacity#n,description,houseRules,arrivalInstructions,departureInstructions,checkInTime,checkOutTime,minTurnaroundMinutes#n,nightlyPrice#n,cleaningFee#n,monthlyRent#n,charges#n,currency,managementCommissionRate#n,touristTaxPerNight#n,roomsJson#j,cleaningChecklistJson#j,registrationNumber" },
   AgencyPropertyPermissions: { pk: "permissionId", idp: "perm", org: "ownerOrganizationId", req: "propertyId,agencyOrganizationId", enums: { status: ["ACTIVE", "REVOKED"] },
-    cols: "permissionId,propertyId,ownerOrganizationId,agencyOrganizationId,canView#b,canManageReservations#b,canManageOperations#b,status,createdAt#t,createdBy|canViewFinance#b,commissionRate#n,validFrom#d,validTo#d,updatedAt#t,updatedBy" },
+    cols: "permissionId,propertyId,ownerOrganizationId,agencyOrganizationId,canView#b,canManageReservations#b,canManageOperations#b,status,createdAt#t,createdBy|canViewFinance#b,commissionRate#n,validFrom#d,validTo#d,updatedAt#t,updatedBy,detailFlags#b,canManageIncidents#b,canManageLeases#b,canManageInspections#b,canManageRent#b" },
   PropertyAssignments: { pk: "assignmentId", idp: "asgn", req: "propertyId,userId,role", enums: { status: ["ACTIVE", "REVOKED"] },
     cols: "assignmentId,propertyId,reservationId,userId,email,role,status,createdAt#t,createdBy,revokedAt#t,revokedBy" },
   AvailabilityBlocks: { pk: "blockId", idp: "blk", org: "organizationId", req: "propertyId,startDate,endDate", enums: { status: ["ACTIVE", "CANCELLED"] },

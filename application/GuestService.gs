@@ -192,7 +192,7 @@ function guestPortalIncident_(a) {
     title: "Signalement voyageur : " + cat, description: reqText_(a.description, "Description", 5, 2000), status: "OPEN", photoFileIdsJson: "[]", createdAt: nowIso_(), createdBy: "guest:" + r.reservationId,
     updatedAt: nowIso_(), updatedBy: "guest-portal", source: "GUEST" });
   auditAs_("guest-portal", "", "INCIDENT_CREATED", "Incident", i.incidentId, r.organizationId, { source: "GUEST" });
-  notify_({ eventKey: "incident-new:" + i.incidentId, userIds: propertyManagers_(prop, "canManageOperations"), type: "INCIDENT", organizationId: r.organizationId,
+  notify_({ eventKey: "incident-new:" + i.incidentId, userIds: propertyManagers_(prop, "canManageIncidents"), type: "INCIDENT", organizationId: r.organizationId,
     title: "Problème signalé par un voyageur : " + prop.name, body: cat + " — " + i.description.slice(0, 200), link: "#incident/" + i.incidentId });
   return { ok: true, incidentId: i.incidentId };
 }

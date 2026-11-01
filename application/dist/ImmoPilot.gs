@@ -1662,7 +1662,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "b9d5361cf8ad";
+var IMMO_BUILD_ = "fcfa18f0fa01";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -1701,7 +1701,7 @@ var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
   VERSION: "2.4.0",
-  SCHEMA_VERSION: 12,
+  SCHEMA_VERSION: 13,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -1722,14 +1722,14 @@ var ROLE_CAPS = Object.freeze({
   SUPER_ADMIN: ["platform.admin", "audit.view", "subscription.manage", "org.manage", "settings.platform", "support.request"],
   OWNER: ["property.create", "property.edit", "property.archive", "property.assign", "reservation.view", "reservation.edit", "reservation.cancel",
     "guest.view", "guestdoc.view", "checkin.operate", "cleaning.manage", "incident.view", "incident.manage", "incident.report", "quote.decide",
-    "contractor.manage", "workorder.manage", "invoice.view", "invoice.manage", "finance.view", "finance.manage", "lease.view", "lease.manage",
+    "contractor.manage", "workorder.manage", "invoice.view", "invoice.manage", "finance.view", "finance.manage", "lease.view", "lease.manage", "inspection.manage", "rent.manage",
     "report.view", "report.export", "user.invite", "user.manage", "settings.manage", "subscription.view", "audit.view.org", "support.approve", "document.view"],
   AGENCY_ADMIN: ["reservation.view", "reservation.edit", "reservation.cancel", "guest.view", "guestdoc.view", "checkin.operate", "cleaning.manage",
     "incident.view", "incident.manage", "incident.report", "quote.decide", "contractor.manage", "workorder.manage", "invoice.view", "finance.view",
-    "lease.view", "lease.manage", "report.view", "report.export", "user.invite", "user.manage", "settings.manage", "subscription.view",
+    "lease.view", "lease.manage", "inspection.manage", "rent.manage", "report.view", "report.export", "user.invite", "user.manage", "settings.manage", "subscription.view",
     "audit.view.org", "support.approve", "document.view"],
   AGENCY_USER: ["reservation.view", "reservation.edit", "guest.view", "checkin.operate", "cleaning.manage", "incident.view", "incident.manage",
-    "incident.report", "workorder.manage", "lease.view", "report.view", "document.view"],
+    "incident.report", "workorder.manage", "lease.view", "inspection.manage", "report.view", "document.view"],
   GUARD: ["checkin.operate", "incident.report", "guest.view.min"],
   CLEANER: ["cleaning.operate", "incident.report"],
   ARTISAN: ["workorder.operate", "quote.submit", "invoice.submit"],
@@ -1740,9 +1740,22 @@ var ROLE_CAPS = Object.freeze({
 var AGENCY_FLAG_CAPS = Object.freeze({
   canView: ["reservation.view", "incident.view", "incident.report", "guest.view", "lease.view", "report.view", "document.view", "report.export"],
   canManageReservations: ["reservation.edit", "reservation.cancel", "checkin.operate", "guestdoc.view"],
-  canManageOperations: ["cleaning.manage", "incident.manage", "workorder.manage", "contractor.manage", "quote.decide", "lease.manage"],
+  canManageOperations: ["cleaning.manage"],
+  canManageIncidents: ["incident.manage", "workorder.manage", "contractor.manage", "quote.decide"],
+  canManageLeases: ["lease.manage"],
+  canManageInspections: ["inspection.manage"],
+  canManageRent: ["rent.manage"],
   canViewFinance: ["finance.view", "invoice.view"]
 });
+/**
+ * Missions détaillées confiées à une agence (location longue durée et incidents). Une attribution enregistrée avant
+ * leur création (detailFlags vide) garde son ancien sens : « opérations » = ménage, incidents, devis, baux, états des lieux et loyers.
+ */
+var AGENCY_DETAIL_FLAGS_ = ["canManageIncidents", "canManageLeases", "canManageInspections", "canManageRent"];
+function agencyFlagOn_(a, f) {
+  if (AGENCY_DETAIL_FLAGS_.indexOf(f) >= 0 && !bool_(a.detailFlags)) return bool_(a.canManageOperations);
+  return bool_(a[f]);
+}
 
 /** Rôles qu'un rôle donné peut inviter (prévention de l'élévation de privilèges). */
 var INVITABLE_ROLES = Object.freeze({
@@ -1837,7 +1850,7 @@ var TABLES_SRC = {
     enums: { status: ["ACTIVE", "INACTIVE", "MAINTENANCE", "ARCHIVED", "DELETED"], rentalMode: ["SHORT_TERM", "LONG_TERM", "BOTH"] },
     cols: "propertyId,organizationId,ownerUserId,residenceId,name,address,city,neighborhood,building,floor,doorNumber,propertyType,surfaceM2#n,bedrooms#n,bathrooms#n,equipmentJson#j,accessInstructions,latitude#n,longitude#n,rentalMode,status,createdAt#t,createdBy,updatedAt#t,updatedBy|capacity#n,description,houseRules,arrivalInstructions,departureInstructions,checkInTime,checkOutTime,minTurnaroundMinutes#n,nightlyPrice#n,cleaningFee#n,monthlyRent#n,charges#n,currency,managementCommissionRate#n,touristTaxPerNight#n,roomsJson#j,cleaningChecklistJson#j,registrationNumber" },
   AgencyPropertyPermissions: { pk: "permissionId", idp: "perm", org: "ownerOrganizationId", req: "propertyId,agencyOrganizationId", enums: { status: ["ACTIVE", "REVOKED"] },
-    cols: "permissionId,propertyId,ownerOrganizationId,agencyOrganizationId,canView#b,canManageReservations#b,canManageOperations#b,status,createdAt#t,createdBy|canViewFinance#b,commissionRate#n,validFrom#d,validTo#d,updatedAt#t,updatedBy" },
+    cols: "permissionId,propertyId,ownerOrganizationId,agencyOrganizationId,canView#b,canManageReservations#b,canManageOperations#b,status,createdAt#t,createdBy|canViewFinance#b,commissionRate#n,validFrom#d,validTo#d,updatedAt#t,updatedBy,detailFlags#b,canManageIncidents#b,canManageLeases#b,canManageInspections#b,canManageRent#b" },
   PropertyAssignments: { pk: "assignmentId", idp: "asgn", req: "propertyId,userId,role", enums: { status: ["ACTIVE", "REVOKED"] },
     cols: "assignmentId,propertyId,reservationId,userId,email,role,status,createdAt#t,createdBy,revokedAt#t,revokedBy" },
   AvailabilityBlocks: { pk: "blockId", idp: "blk", org: "organizationId", req: "propertyId,startDate,endDate", enums: { status: ["ACTIVE", "CANCELLED"] },
@@ -3561,8 +3574,8 @@ function docOwnerCtx_(p, ownerType, ownerId, category) {
     const l = leaseId ? dbGet_("Leases", leaseId) : null; if (l) propId = l.propertyId;
     const pr = setProp(propId); if (!pr) return ctx;
     const self = l && myTenantIds_(p).indexOf(String(l.tenantId)) >= 0;
-    ctx.canRead = canProp_(p, pr, "lease.view") || canProp_(p, pr, "finance.view") || !!self;
-    ctx.canWrite = canProp_(p, pr, "lease.manage") || canProp_(p, pr, "finance.manage") || (self && category === "PAYMENT_PROOF");
+    ctx.canRead = canProp_(p, pr, "lease.view") || canProp_(p, pr, "finance.view") || canProp_(p, pr, "inspection.manage") || !!self;
+    ctx.canWrite = canProp_(p, pr, "lease.manage") || canProp_(p, pr, "inspection.manage") || canProp_(p, pr, "rent.manage") || canProp_(p, pr, "finance.manage") || (self && category === "PAYMENT_PROOF");
   } else if (ownerType === "TENANT") {
     const t = dbGet_("Tenants", ownerId); if (!t) return ctx; ctx.organizationId = t.organizationId; ctx.sensitive = true;
     ctx.canRead = hasOrgCap_(p, t.organizationId, "lease.manage") || myTenantIds_(p).indexOf(String(t.tenantId)) >= 0;
@@ -3899,13 +3912,13 @@ function paymentTarget_(p, refType, refId, kind) {
   }
   if (refType === "RENT_SCHEDULE") {
     const s = dbGet_("RentSchedules", safeText_(refId, 120)); if (!s) notFound_("Échéance");
-    const prop = assertPropAny_(p, s.propertyId, ["lease.manage", "finance.manage"]);
+    const prop = assertPropAny_(p, s.propertyId, ["rent.manage", "finance.manage"]);
     oneOf_(kind, ["RENT"], "Type de paiement");
     return { propertyId: prop.propertyId, organizationId: prop.organizationId, row: s };
   }
   if (refType === "LEASE") {
     const l = dbGet_("Leases", safeText_(refId, 120)); if (!l) notFound_("Bail");
-    const prop = assertPropAny_(p, l.propertyId, ["lease.manage", "finance.manage"]);
+    const prop = assertPropAny_(p, l.propertyId, ["lease.manage", "rent.manage", "finance.manage"]);
     oneOf_(kind, ["DEPOSIT", "DEPOSIT_REFUND"], "Type de paiement");
     return { propertyId: prop.propertyId, organizationId: prop.organizationId, row: l };
   }
@@ -3994,7 +4007,7 @@ function payList_(p, a) {
   accessibleProps_(p, "reservation.edit").forEach(function (x) { allowed[String(x.propertyId)] = x; });
   const rows = dbAll_("Payments").filter(function (x) {
     if (x.kind === "SUBSCRIPTION" || !allowed[String(x.propertyId)]) return false;
-    if (x.refType !== "RESERVATION" && !canProp_(p, allowed[String(x.propertyId)], "finance.view") && !canProp_(p, allowed[String(x.propertyId)], "lease.manage")) return false;
+    if (x.refType !== "RESERVATION" && !canProp_(p, allowed[String(x.propertyId)], "finance.view") && !canProp_(p, allowed[String(x.propertyId)], "lease.manage") && !canProp_(p, allowed[String(x.propertyId)], "rent.manage")) return false;
     if (a.propertyId && String(x.propertyId) !== String(a.propertyId)) return false;
     if (a.direction && x.direction !== a.direction) return false;
     if (a.kind && x.kind !== a.kind) return false;
@@ -4257,7 +4270,7 @@ function guestPortalIncident_(a) {
     title: "Signalement voyageur : " + cat, description: reqText_(a.description, "Description", 5, 2000), status: "OPEN", photoFileIdsJson: "[]", createdAt: nowIso_(), createdBy: "guest:" + r.reservationId,
     updatedAt: nowIso_(), updatedBy: "guest-portal", source: "GUEST" });
   auditAs_("guest-portal", "", "INCIDENT_CREATED", "Incident", i.incidentId, r.organizationId, { source: "GUEST" });
-  notify_({ eventKey: "incident-new:" + i.incidentId, userIds: propertyManagers_(prop, "canManageOperations"), type: "INCIDENT", organizationId: r.organizationId,
+  notify_({ eventKey: "incident-new:" + i.incidentId, userIds: propertyManagers_(prop, "canManageIncidents"), type: "INCIDENT", organizationId: r.organizationId,
     title: "Problème signalé par un voyageur : " + prop.name, body: cat + " — " + i.description.slice(0, 200), link: "#incident/" + i.incidentId });
   return { ok: true, incidentId: i.incidentId };
 }
@@ -4328,7 +4341,7 @@ function incidentInsert_(p, prop, d) {
   });
   if (p) audit_("INCIDENT_CREATED", "Incident", i.incidentId, prop.organizationId, { category: cat, severity: sev, source: d.source || "MANUAL" });
   const urgent = sev === "HIGH" || sev === "CRITICAL";
-  notify_({ eventKey: "incident-new:" + i.incidentId, userIds: propertyManagers_(prop, "canManageOperations").filter(function (u) { return !p || u !== p.userId; }), type: urgent ? "INCIDENT_SEVERE" : "INCIDENT",
+  notify_({ eventKey: "incident-new:" + i.incidentId, userIds: propertyManagers_(prop, "canManageIncidents").filter(function (u) { return !p || u !== p.userId; }), type: urgent ? "INCIDENT_SEVERE" : "INCIDENT",
     organizationId: prop.organizationId, title: (urgent ? "Incident grave : " : "Nouvel incident : ") + prop.name, body: cat + " — " + i.description.slice(0, 200), link: "#incident/" + i.incidentId, email: urgent });
   return i;
 }
@@ -4435,7 +4448,7 @@ function incUpdate_(p, a) {
   dbUpdate_("IncidentsV4", i.incidentId, patch);
   audit_("INCIDENT_UPDATED", "Incident", i.incidentId, i.organizationId, diff_(i, patch, Object.keys(patch).filter(function (k) { return ["updatedAt", "updatedBy"].indexOf(k) < 0; })));
   if (patch.severity && ["HIGH", "CRITICAL"].indexOf(patch.severity) >= 0 && ["HIGH", "CRITICAL"].indexOf(i.severity) < 0)
-    notify_({ eventKey: "incident-escalated:" + i.incidentId + ":" + patch.severity, userIds: propertyManagers_(x.acc.prop, "canManageOperations"), type: "INCIDENT_SEVERE", organizationId: i.organizationId,
+    notify_({ eventKey: "incident-escalated:" + i.incidentId + ":" + patch.severity, userIds: propertyManagers_(x.acc.prop, "canManageIncidents"), type: "INCIDENT_SEVERE", organizationId: i.organizationId,
       title: "Incident escaladé (" + patch.severity + ") : " + x.acc.prop.name, body: i.title || i.category, link: "#incident/" + i.incidentId });
   if (patch.assignedToUserId) notify_({ eventKey: "incident-assigned:" + i.incidentId + ":" + patch.assignedToUserId, userIds: [patch.assignedToUserId], type: "INCIDENT_ASSIGNED", organizationId: i.organizationId,
     title: "Incident qui vous est confié : " + x.acc.prop.name, body: i.title || i.category, link: "#incident/" + i.incidentId });
@@ -4456,7 +4469,7 @@ function incidentAlertsJob_() {
     const prop = dbGet_("Properties", i.propertyId); if (!prop) return;
     const days = Number(getSetting_("alerts.incidentAgeDays", i.organizationId)) || 3, cost = Number(getSetting_("alerts.incidentCost", i.organizationId)) || 5000;
     const age = (Date.now() - (parseTs_(i.createdAt) || new Date()).getTime()) / 86400000;
-    if (age >= days) { notify_({ eventKey: "incident-age:" + i.incidentId + ":" + days, userIds: propertyManagers_(prop, "canManageOperations"), type: "INCIDENT_AGE", organizationId: i.organizationId,
+    if (age >= days) { notify_({ eventKey: "incident-age:" + i.incidentId + ":" + days, userIds: propertyManagers_(prop, "canManageIncidents"), type: "INCIDENT_AGE", organizationId: i.organizationId,
       title: "Incident ouvert depuis " + Math.floor(age) + " jours : " + prop.name, body: (i.title || i.category) + " — statut " + i.status, link: "#incident/" + i.incidentId }); n++; }
     const c = Math.max(num_(i.estimatedCost), num_(i.finalCost));
     if (c >= cost) { notify_({ eventKey: "incident-cost:" + i.incidentId + ":" + cost, userIds: propertyManagers_(prop), type: "INCIDENT_COST", organizationId: i.organizationId,
@@ -5035,7 +5048,7 @@ function inspectionEntryOf_(leaseId) {
     .sort(function (a, b) { return String(b.finalizedAt).localeCompare(String(a.finalizedAt)); })[0] || null;
 }
 function inspectionCreate_(p, a) {
-  const c = laCtx_(p, a.leaseId, "lease.manage"), type = oneOf_(a.type || "ENTRY", ["ENTRY", "EXIT"], "Type d'état des lieux");
+  const c = laCtx_(p, a.leaseId, "inspection.manage"), type = oneOf_(a.type || "ENTRY", ["ENTRY", "EXIT"], "Type d'état des lieux");
   assert_(!dbAll_("LeaseInspections").some(function (r) { return String(r.leaseId) === String(c.l.leaseId) && r.type === type && r.status === "DRAFT"; }), "Un état des lieux de ce type est déjà en cours : ouvrez-le pour le compléter.", "CONFLICT");
   const furnished = leaseFurnished_(c.l, c.prop);
   let rooms = laDefaultRooms_(c.prop, furnished), keys = laDefaultKeys_();
@@ -5055,12 +5068,12 @@ function inspectionCreate_(p, a) {
 }
 function inspectionGet_(p, a) {
   const x = inspectionLoad_(p, a.inspectionId, "lease.view"), o = inspectionOut_(x.r, true);
-  o.propertyName = x.c.prop.name; o.tenantName = x.c.t.fullName; o.canManage = canProp_(p, x.c.prop, "lease.manage"); o.ai = !!aiConfig_(); o.deposit = num_(x.c.l.deposit);
+  o.propertyName = x.c.prop.name; o.tenantName = x.c.t.fullName; o.canManage = canProp_(p, x.c.prop, "inspection.manage"); o.canLetter = canProp_(p, x.c.prop, "lease.manage"); o.ai = !!aiConfig_(); o.deposit = num_(x.c.l.deposit);
   return o;
 }
 function laCond_(v) { v = String(v || ""); return LA_CONDITIONS_.indexOf(v) >= 0 ? v : ""; }
 function inspectionSave_(p, a) {
-  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
   assert_(x.r.status === "DRAFT", "État des lieux validé : il ne peut plus être modifié.");
   const patch = { updatedAt: nowIso_(), updatedBy: p.email };
   if (a.inspectionDate) patch.inspectionDate = dateOnly_(a.inspectionDate, "Date");
@@ -5144,7 +5157,7 @@ function laInspectionAi_(c, r) {
 }
 /** Rédaction du compte rendu par l'agent (IA ou modèle intégré), enregistrée dans le brouillon. */
 function inspectionWrite_(p, a) {
-  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
   assert_(x.r.status === "DRAFT", "État des lieux déjà validé.");
   let summary = laInspectionTemplate_(x.r), engine = "MODELE", warning = "";
   if (a.useAi !== false) {
@@ -5221,7 +5234,7 @@ function inspectionPdf_(p, a) {
   return { fileName: blob.getName(), mimeType: "application/pdf", base64: Utilities.base64Encode(blob.getBytes()) };
 }
 function inspectionFinalize_(p, a) {
-  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
   assert_(x.r.status === "DRAFT", "État des lieux déjà validé.");
   const rooms = parseJson_(x.r.roomsJson, []);
   const blank = rooms.reduce(function (n, room) { return n + (room.items || []).filter(function (i) { return !i.condition; }).length; }, 0);
@@ -5237,7 +5250,7 @@ function inspectionFinalize_(p, a) {
   return out;
 }
 function inspectionSend_(p, a) {
-  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
   assert_(x.r.status === "FINAL" && x.r.documentId, "Validez d'abord l'état des lieux.");
   const label = x.r.type === "EXIT" ? "État des lieux de sortie" : "État des lieux d'entrée";
   const out = laSendStored_(p, x.c, x.r.documentId, label + " — " + (x.c.prop.name || ""), safeText_(a.message, 2000) || "Veuillez trouver ci-joint l'" + label.charAt(0).toLowerCase() + label.slice(1) +
@@ -5246,7 +5259,7 @@ function inspectionSend_(p, a) {
   return out;
 }
 function inspectionCancel_(p, a) {
-  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
   assert_(x.r.status === "DRAFT", "Un état des lieux validé ne peut pas être supprimé.");
   dbUpdate_("LeaseInspections", x.r.inspectionId, { status: "CANCELLED", updatedAt: nowIso_(), updatedBy: p.email });
   return { ok: true };
@@ -5255,7 +5268,7 @@ function inspectionCancel_(p, a) {
 /* ------------------------- Signature sur l'écran ------------------------- */
 /** Signature du bailleur (ou de son représentant) ou du locataire, tracée sur l'écran pendant la visite. */
 function inspectionSign_(p, a) {
-  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
   assert_(x.r.status === "DRAFT", "État des lieux déjà validé.");
   const role = oneOf_(a.role, ["LANDLORD", "TENANT"], "Signataire"), name = reqText_(a.name, "Nom du signataire", 2, 120);
   const img = String(a.image || "").replace(/^data:image\/png;base64,/, "");
@@ -5369,7 +5382,7 @@ function leaseLoad_(p, id, cap) {
   const prop = dbGet_("Properties", l.propertyId);
   const self = myTenantIds_(p).indexOf(String(l.tenantId)) >= 0;
   if (!(canProp_(p, prop, cap) || (cap === "lease.view" && self))) throw new AppError("FORBIDDEN", "Bail introuvable ou accès refusé.");
-  if (cap === "lease.manage") { assertOrgWritable_(l.organizationId); assertFeature_(l.organizationId, "leases"); }
+  if (/^(lease|inspection|rent)\.manage$/.test(cap)) { assertOrgWritable_(l.organizationId); assertFeature_(l.organizationId, "leases"); }
   return { l: l, prop: prop, self: self };
 }
 
@@ -5473,6 +5486,7 @@ function leaseGet_(p, a) {
   const x = leaseLoad_(p, a.leaseId, "lease.view");
   const o = leaseOut_(p, x.l);
   o.canManage = canProp_(p, x.prop, "lease.manage"); o.isTenant = x.self;
+  o.canRent = canProp_(p, x.prop, "rent.manage"); o.canInspect = canProp_(p, x.prop, "inspection.manage");
   o.schedules = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(x.l.leaseId); }).map(function (s) { return rentStatus_(s); }).sort(function (u, v) { return String(u.dueDate).localeCompare(String(v.dueDate)); });
   o.payments = dbAll_("Payments").filter(function (z) { return (z.refType === "LEASE" && String(z.refId) === String(x.l.leaseId)) || (z.refType === "RENT_SCHEDULE" && o.schedules.some(function (s) { return s.scheduleId === z.refId; })); })
     .map(function (z) { return { paymentId: z.paymentId, kind: z.kind, refId: z.refId, amount: z.amount, paidAt: z.paidAt, method: z.method, status: z.status, reference: z.reference }; });
@@ -5482,13 +5496,10 @@ function leaseGet_(p, a) {
   }
   o.documents = docList_(p, { ownerType: "LEASE", ownerId: x.l.leaseId });
   o.agentDocs = leaseDocsOf_(x.l.leaseId, !o.canManage);
-  o.inspections = inspectionsOf_(x.l.leaseId, !o.canManage);
-  if (o.canManage) {
-    o.history = auditHistory_("Lease", x.l.leaseId, 30);
-    o.automation = rentAutomationView_(x.l);
-    o.mailings = rentMailingsOf_(x.l.leaseId);
-    o.agent = { ai: !!aiConfig_(), furnished: leaseFurnished_(x.l, x.prop) };
-  }
+  o.inspections = inspectionsOf_(x.l.leaseId, !(o.canManage || o.canInspect));
+  if (o.canManage || o.canRent || o.canInspect) o.history = auditHistory_("Lease", x.l.leaseId, 30);
+  if (o.canRent) { o.automation = rentAutomationView_(x.l); o.mailings = rentMailingsOf_(x.l.leaseId); }
+  if (o.canManage || o.canInspect) o.agent = { ai: !!aiConfig_(), furnished: leaseFurnished_(x.l, x.prop) };
   return o;
 }
 function leaseCreate_(p, a) {
@@ -5642,7 +5653,7 @@ function leaseJob_() {
     if (!l.endDate) created += leaseGenerateSchedules_(l);
     const prop = dbGet_("Properties", l.propertyId); if (!prop) return;
     const t = dbGet_("Tenants", l.tenantId) || {};
-    const managers = propertyManagers_(prop, "canManageOperations");
+    const managers = propertyManagers_(prop, "canManageLeases");
     const before = Number(getSetting_("alerts.rentDueDays", l.organizationId)) || 3;
     dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(l.leaseId) && s.status === "OPEN"; }).forEach(function (s) {
       const st = rentStatus_(s, today);
@@ -6414,6 +6425,7 @@ function ownerAgencyCreate_(p, a) {
   const invitation = invitationInsertAndSend_(p, { email: adminEmail, displayName: a.adminName, organizationId: agency.organizationId, role: "AGENCY_ADMIN" }, agency);
   const perm = propertyAgencySet_(p, { propertyId: prop.propertyId, agencyOrganizationId: agency.organizationId, canView: true,
     canManageReservations: a.canManageReservations === true, canManageOperations: a.canManageOperations === true, canViewFinance: a.canViewFinance === true,
+    detailFlags: a.detailFlags === true, canManageIncidents: a.canManageIncidents === true, canManageLeases: a.canManageLeases === true, canManageInspections: a.canManageInspections === true, canManageRent: a.canManageRent === true,
     commissionRate: a.commissionRate, validFrom: a.validFrom, validTo: a.validTo });
   return { ok: true, organizationId: agency.organizationId, invitationId: invitation.invitationId, emailSent: invitation.emailSent, emailError: invitation.emailError, permissionId: perm.permissionId };
 }
@@ -6453,7 +6465,8 @@ function ownerAgencyList_(p) {
     const mine = perms.filter(function (z) { return String(z.agencyOrganizationId) === id; }).map(function (z) {
       const pr = props[String(z.propertyId)];
       return { permissionId: z.permissionId, propertyId: z.propertyId, propertyName: pr.name, propertyCity: pr.city, status: z.status, canView: bool_(z.canView), canManageReservations: bool_(z.canManageReservations),
-        canManageOperations: bool_(z.canManageOperations), canViewFinance: bool_(z.canViewFinance), commissionRate: z.commissionRate, validFrom: z.validFrom, validTo: z.validTo };
+        canManageOperations: bool_(z.canManageOperations), canViewFinance: bool_(z.canViewFinance), commissionRate: z.commissionRate, validFrom: z.validFrom, validTo: z.validTo,
+        canManageIncidents: agencyFlagOn_(z, "canManageIncidents"), canManageLeases: agencyFlagOn_(z, "canManageLeases"), canManageInspections: agencyFlagOn_(z, "canManageInspections"), canManageRent: agencyFlagOn_(z, "canManageRent") };
     });
     return { organizationId: id, name: o.name, city: o.city, contactEmail: o.billingEmail, locale: o.locale, status: o.status, createdByMe: normalizeEmail_(o.createdBy) === p.email,
       address: o.address || "", phone: o.phone || "", contactName: o.contactName || "", responsible: resp, adminName: resp ? resp.name : "", adminEmail: resp ? resp.email : "",
@@ -6841,7 +6854,7 @@ function propertyAccess_(p, prop) {
     const agOrg = dbGet_("Organizations", a.agencyOrganizationId);
     if (!agOrg || agOrg.status !== "ACTIVE") return;
     const flagCaps = {};
-    Object.keys(AGENCY_FLAG_CAPS).forEach(function (f) { if (bool_(a[f])) AGENCY_FLAG_CAPS[f].forEach(function (c) { flagCaps[c] = true; }); });
+    Object.keys(AGENCY_FLAG_CAPS).forEach(function (f) { if (agencyFlagOn_(a, f)) AGENCY_FLAG_CAPS[f].forEach(function (c) { flagCaps[c] = true; }); });
     const roleCaps = {}; agencyRoles.forEach(function (r) { r.caps.forEach(function (c) { roleCaps[c] = true; }); });
     add(Object.keys(flagCaps).filter(function (c) { return roleCaps[c]; }), "AGENCY");
     agencyOrgIds.push(String(a.agencyOrganizationId));
@@ -6917,7 +6930,7 @@ function propertyManagers_(prop, flag) {
   const ids = {};
   dbAll_("UserRoles").forEach(function (r) { if (r.status === "ACTIVE" && r.role === "OWNER" && String(r.organizationId) === String(prop.organizationId)) ids[r.userId] = true; });
   dbAll_("AgencyPropertyPermissions").forEach(function (a) {
-    if (String(a.propertyId) !== String(prop.propertyId) || a.status !== "ACTIVE" || !bool_(a.canView) || (flag && !bool_(a[flag]))) return;
+    if (String(a.propertyId) !== String(prop.propertyId) || a.status !== "ACTIVE" || !bool_(a.canView) || (flag && !agencyFlagOn_(a, flag))) return;
     dbAll_("UserRoles").forEach(function (r) { if (r.status === "ACTIVE" && String(r.organizationId) === String(a.agencyOrganizationId) && (r.role === "AGENCY_ADMIN" || r.role === "AGENCY_USER")) ids[r.userId] = true; });
   });
   return Object.keys(ids);
@@ -7199,7 +7212,10 @@ function propertyAgencySet_(p, a) {
   assert_(agency && agency.status === "ACTIVE" && agencyOrgId !== String(x.organizationId), "Organisation agence invalide.");
   assert_(agency.type === "AGENCY" || dbAll_("UserRoles").some(function (r) { return String(r.organizationId) === agencyOrgId && (r.role === "AGENCY_ADMIN" || r.role === "AGENCY_USER") && r.status === "ACTIVE"; }), "Cette organisation n'est pas une agence active.");
   const flags = { canView: a.canView === true, canManageReservations: a.canManageReservations === true, canManageOperations: a.canManageOperations === true, canViewFinance: a.canViewFinance === true };
-  assert_(flags.canView || (!flags.canManageReservations && !flags.canManageOperations && !flags.canViewFinance), "Les droits de gestion exigent le droit de consultation.");
+  // Missions détaillées (location longue durée, incidents) : sans elles (ancien écran), « opérations » garde son ancien sens.
+  if (a.detailFlags === true) { flags.detailFlags = true; AGENCY_DETAIL_FLAGS_.forEach(function (f) { flags[f] = a[f] === true; }); }
+  else { flags.detailFlags = true; AGENCY_DETAIL_FLAGS_.forEach(function (f) { flags[f] = flags.canManageOperations; }); }
+  assert_(flags.canView || !Object.keys(flags).some(function (k) { return k !== "canView" && k !== "detailFlags" && flags[k]; }), "Les droits de gestion exigent le droit de consultation.");
   const validFrom = a.validFrom ? dateOnly_(a.validFrom, "Début") : "", validTo = a.validTo ? dateOnly_(a.validTo, "Fin") : "";
   assert_(!validFrom || !validTo || validFrom <= validTo, "Période d'attribution invalide.");
   const commissionRate = a.commissionRate === "" || a.commissionRate == null ? "" : rate_(a.commissionRate, "Commission agence");
@@ -7222,7 +7238,8 @@ function propertyAccessList_(p, a) {
   return {
     agencies: dbAll_("AgencyPropertyPermissions").filter(function (z) { return String(z.propertyId) === String(x.propertyId); }).map(function (z) {
       return { permissionId: z.permissionId, agencyOrganizationId: z.agencyOrganizationId, agencyName: (orgs[z.agencyOrganizationId] || {}).name || z.agencyOrganizationId, canView: bool_(z.canView),
-        canManageReservations: bool_(z.canManageReservations), canManageOperations: bool_(z.canManageOperations), canViewFinance: bool_(z.canViewFinance), commissionRate: z.commissionRate, validFrom: z.validFrom, validTo: z.validTo, status: z.status };
+        canManageReservations: bool_(z.canManageReservations), canManageOperations: bool_(z.canManageOperations), canViewFinance: bool_(z.canViewFinance),
+        canManageIncidents: agencyFlagOn_(z, "canManageIncidents"), canManageLeases: agencyFlagOn_(z, "canManageLeases"), canManageInspections: agencyFlagOn_(z, "canManageInspections"), canManageRent: agencyFlagOn_(z, "canManageRent"), commissionRate: z.commissionRate, validFrom: z.validFrom, validTo: z.validTo, status: z.status };
     }),
     staff: dbAll_("PropertyAssignments").filter(function (z) { return String(z.propertyId) === String(x.propertyId); }).map(function (z) {
       return { assignmentId: z.assignmentId, email: z.email, role: z.role, reservationId: z.reservationId || "", status: z.status, createdAt: z.createdAt };
@@ -7499,7 +7516,7 @@ function rentDeliver_(o) {
   if (prev) { patch.attempts = num_(prev.attempts) + 1; dbUpdate_("RentMailings", prev.mailingId, patch); row = prev; }
   else row = dbInsert_("RentMailings", Object.assign(base, patch, { attempts: 1 }));
   audit_(res.ok ? "RENT_MAIL_SENT" : "RENT_MAIL_FAILED", "Lease", c.l.leaseId, c.l.organizationId, { kind: o.kind, level: o.level || 0, scheduleId: o.scheduleId || "", trigger: base.trigger });
-  if (!res.ok && base.trigger === "AUTO" && c.prop.propertyId) notify_({ eventKey: "rentmail-failed:" + base.uniqueKey, userIds: propertyManagers_(c.prop, "canManageOperations"), type: "RENT_MAIL_FAILED",
+  if (!res.ok && base.trigger === "AUTO" && c.prop.propertyId) notify_({ eventKey: "rentmail-failed:" + base.uniqueKey, userIds: propertyManagers_(c.prop, "canManageRent"), type: "RENT_MAIL_FAILED",
     organizationId: c.l.organizationId, email: false, title: "Envoi au locataire impossible : " + (c.prop.name || ""), body: (c.t.fullName || "") + " — " + patch.error, link: "#lease/" + c.l.leaseId });
   return { ok: !!res.ok, status: patch.status, mailingId: row.mailingId, documentId: docId, error: res.ok ? "" : patch.error, to: to };
 }
@@ -7565,7 +7582,7 @@ function rentAutomationJob_(opts) {
     if (!String((dbGet_("Tenants", l.tenantId) || {}).email || "").trim()) {
       // Sans e-mail du locataire : rien n'est envoyé ; les gestionnaires sont prévenus une seule fois.
       const prop = dbGet_("Properties", l.propertyId);
-      if (prop) notify_({ eventKey: "rent-noemail:" + l.leaseId, userIds: propertyManagers_(prop, "canManageOperations"), type: "RENT_MAIL_FAILED", organizationId: l.organizationId, email: false,
+      if (prop) notify_({ eventKey: "rent-noemail:" + l.leaseId, userIds: propertyManagers_(prop, "canManageRent"), type: "RENT_MAIL_FAILED", organizationId: l.organizationId, email: false,
         title: "Envois automatiques impossibles : " + prop.name, body: "Le locataire n'a pas d'adresse e-mail : ajoutez-la dans « Locataires » pour qu'il reçoive ses appels de loyer, relances et quittances.", link: "#lease/" + l.leaseId });
       out.skipped++; continue;
     }
@@ -7587,7 +7604,7 @@ function rentAutomationJob_(opts) {
         if (level >= 1 && !already) {
           const r = rentSendReminder_(ctx(), unpaid, level, "AUTO");
           count(r, "reminders");
-          if (r.ok && level >= 2 && ctx().prop.propertyId) notify_({ eventKey: "rent-reminder:" + l.leaseId + ":" + unpaid[0].scheduleId + ":" + level, userIds: propertyManagers_(ctx().prop, "canManageOperations"),
+          if (r.ok && level >= 2 && ctx().prop.propertyId) notify_({ eventKey: "rent-reminder:" + l.leaseId + ":" + unpaid[0].scheduleId + ":" + level, userIds: propertyManagers_(ctx().prop, "canManageRent"),
             type: "RENT_LATE", organizationId: l.organizationId, email: false, title: RENT_REMINDER_TITLES_[level - 1] + " envoyée : " + (ctx().prop.name || ""),
             body: (ctx().t.fullName || "") + " — reste dû " + fmtAmount_(sumBy_(unpaid, function (x) { return x.remaining; })) + ".", link: "#lease/" + l.leaseId });
         }
@@ -7606,7 +7623,7 @@ function rentAutomationJob_(opts) {
 /* ------------------------------ Routes ------------------------------ */
 function rentSchedLoad_(p, scheduleId) {
   const s = dbGet_("RentSchedules", safeText_(scheduleId, 120)); if (!s) notFound_("Échéance");
-  leaseLoad_(p, s.leaseId, "lease.manage");
+  leaseLoad_(p, s.leaseId, "rent.manage");
   return { s: s, c: rentCtx_(s.leaseId) };
 }
 function rentDeliverResult_(r) {
@@ -7622,7 +7639,7 @@ function rentSendCallRoute_(p, a) {
 }
 /** Relance manuelle : toutes les échéances impayées échues du bail ; niveau choisi ou calculé. */
 function rentSendReminderRoute_(p, a) {
-  const x = leaseLoad_(p, a.leaseId, "lease.manage"), c = rentCtx_(x.l), unpaid = rentUnpaidDue_(x.l.leaseId, todayStr_());
+  const x = leaseLoad_(p, a.leaseId, "rent.manage"), c = rentCtx_(x.l), unpaid = rentUnpaidDue_(x.l.leaseId, todayStr_());
   assert_(unpaid.length, "Aucune échéance impayée échue sur ce bail.");
   const level = a.level ? Math.max(1, Math.min(3, parseInt(a.level, 10) || 1)) : Math.max(1, Math.min(3, rentReminderLevel_(c.cfg, unpaid[0].dueDate, todayStr_())));
   rateLimit_("rentmail:" + p.userId, 60, 3600);
@@ -7640,7 +7657,7 @@ function rentPreview_(p, a) {
   const kind = oneOf_(String(a.kind || ""), ["CALL", "REMINDER", "RECEIPT"], "Type");
   let blob;
   if (kind === "REMINDER") {
-    const x = leaseLoad_(p, a.leaseId, "lease.manage"), c = rentCtx_(x.l), unpaid = rentUnpaidDue_(x.l.leaseId, todayStr_());
+    const x = leaseLoad_(p, a.leaseId, "rent.manage"), c = rentCtx_(x.l), unpaid = rentUnpaidDue_(x.l.leaseId, todayStr_());
     assert_(unpaid.length, "Aucune échéance impayée échue sur ce bail.");
     blob = rentReminderPdf_(c, unpaid, a.level ? Math.max(1, Math.min(3, parseInt(a.level, 10) || 1)) : Math.max(1, Math.min(3, rentReminderLevel_(c.cfg, unpaid[0].dueDate, todayStr_()))));
   } else {
@@ -7652,7 +7669,7 @@ function rentPreview_(p, a) {
 }
 /** Réglages propres à un bail : exclusion des envois automatiques, délai d'appel, jours de relance. */
 function leaseAutomationSet_(p, a) {
-  const x = leaseLoad_(p, a.leaseId, "lease.manage"), own = {};
+  const x = leaseLoad_(p, a.leaseId, "rent.manage"), own = {};
   own.enabled = a.enabled === undefined ? true : bool_(a.enabled);
   if (a.callDaysBefore !== undefined && a.callDaysBefore !== "" && a.callDaysBefore !== null) { const n = parseInt(a.callDaysBefore, 10); assert_(n >= 0 && n <= 31, "Délai de 0 à 31 jours avant l'échéance."); own.callDaysBefore = n; }
   const days = Array.isArray(a.reminderDays) ? a.reminderDays : String(a.reminderDays || "").split(",").map(function (v) { return v.trim(); }).filter(Boolean);
@@ -10310,6 +10327,35 @@ function TEST_GROUPS_() {
         T.fails(fx.tok.ownerB, "inspection.get", { inspectionId: x.inspectionId }, "FORBIDDEN");
       }]
     ] },
+    { name: "Missions confiées à l'agence (longue durée)", tests: [
+      ["Agence : baux, locataires et états des lieux seulement ; loyers et incidents restent au propriétaire", function (T, fx) {
+        const O = tLeaseOwner_(T, fx), org = O.org.organizationId;
+        const prop = T.call(O.tok, "property.create", { organizationId: org, name: "Appartement Mission", city: "Marrakech", rentalMode: "LONG_TERM", rooms: ["Séjour"] }).propertyId;
+        const agOrg = tOrg_("Agence Mission " + fx.run, "AGENCY"), agU = tMakeUser_(fx.mail("ag-mission"), "AGENCY_ADMIN", agOrg.organizationId, fx.pw);
+        const agTok = T.pub("auth.login", { email: agU.email, password: fx.pw }).token;
+        T.call(O.tok, "property.agencySet", { propertyId: prop, agencyOrganizationId: agOrg.organizationId, canView: true, detailFlags: true, canManageLeases: true, canManageInspections: true });
+        const acc = T.call(O.tok, "property.get", { propertyId: prop }).accessManagement.agencies[0];
+        T.ok(acc.canManageLeases && acc.canManageInspections && !acc.canManageRent && !acc.canManageIncidents, "missions enregistrées");
+        const t = T.call(agTok, "tenant.create", { propertyId: prop, fullName: "Locataire Mission", email: fx.mail("loc-mission") });
+        const l = T.call(agTok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: tDays_(-40), monthlyRent: 4000, dueDay: 5 });
+        T.call(agTok, "lease.activate", { leaseId: l.leaseId });
+        const g = T.call(agTok, "lease.get", { leaseId: l.leaseId });
+        T.ok(g.canManage && g.canInspect && !g.canRent && !g.automation, "agence : bail et états des lieux, pas les loyers");
+        T.ok(T.call(agTok, "inspection.create", { leaseId: l.leaseId, type: "ENTRY" }).inspectionId, "agence : état des lieux d'entrée");
+        const s0 = g.schedules[0];
+        T.fails(agTok, "rent.sendCall", { scheduleId: s0.scheduleId }, "FORBIDDEN");
+        T.fails(agTok, "pay.record", { refType: "RENT_SCHEDULE", refId: s0.scheduleId, kind: "RENT", amount: 100 }, "FORBIDDEN");
+        const inc = T.call(O.tok, "inc.create", { propertyId: prop, category: "PLUMBING", severity: "MEDIUM", description: "Fuite" });
+        T.fails(agTok, "inc.update", { incidentId: inc.incidentId, severity: "HIGH" }, "FORBIDDEN");
+        const og = T.call(O.tok, "lease.get", { leaseId: l.leaseId });
+        T.ok(og.canRent && og.automation, "propriétaire : loyers (appels, relances, quittances)");
+        T.ok(T.call(O.tok, "pay.record", { refType: "RENT_SCHEDULE", refId: s0.scheduleId, kind: "RENT", amount: 100 }).paymentId, "propriétaire : encaissement");
+        // Ancienne attribution (sans missions détaillées) : « opérations » garde son ancien sens
+        const perm = dbAll_("AgencyPropertyPermissions").filter(function (z) { return String(z.propertyId) === String(prop); })[0];
+        dbUpdate_("AgencyPropertyPermissions", perm.permissionId, { detailFlags: false, canManageOperations: true, canManageRent: false }); CTX_.propMemo = {};
+        T.ok(T.call(agTok, "lease.get", { leaseId: l.leaseId }).canRent, "ancienne attribution « opérations » : loyers inclus");
+      }]
+    ] },
     { name: "Tutoriel et intégration d'un locataire", tests: [
       ["Tutoriel : terminé ou désactivé, mémorisé sur le compte, conservé par la mise à jour du profil", function (T, fx) {
         const O = tLeaseOwner_(T, fx);
@@ -11293,7 +11339,7 @@ function quoteLoad_(p, id) {
 function decisionMakers_(prop, amountTTC) {
   const owners = dbAll_("UserRoles").filter(function (r) { return r.status === "ACTIVE" && r.role === "OWNER" && String(r.organizationId) === String(prop.organizationId); }).map(function (r) { return r.userId; });
   const limit = Number(getSetting_("quote.agencyApprovalLimit", prop.organizationId)) || 0;
-  return amountTTC <= limit ? owners.concat(propertyManagers_(prop, "canManageOperations")) : owners;
+  return amountTTC <= limit ? owners.concat(propertyManagers_(prop, "canManageIncidents")) : owners;
 }
 
 /* ------------------------------ Devis ------------------------------ */
@@ -11350,7 +11396,7 @@ function quoteDeclineRequest_(p, a) {
   assert_(x.q.status === "REQUESTED", "Demande déjà traitée.");
   dbUpdate_("Quotes", x.q.quoteId, { status: "DECLINED", decisionNote: safeText_(a.reason, 500), decisionAt: nowIso_(), decisionBy: p.email });
   audit_("QUOTE_DECLINED_BY_ARTISAN", "Quote", x.q.quoteId, x.q.organizationId, {});
-  notify_({ eventKey: "quote-declined:" + x.q.quoteId, userIds: propertyManagers_(x.prop, "canManageOperations"), type: "QUOTE_DECLINED", organizationId: x.q.organizationId,
+  notify_({ eventKey: "quote-declined:" + x.q.quoteId, userIds: propertyManagers_(x.prop, "canManageIncidents"), type: "QUOTE_DECLINED", organizationId: x.q.organizationId,
     title: "Demande de devis refusée par l'artisan", body: x.prop.name + (a.reason ? " — " + a.reason : ""), link: "#incident/" + x.q.incidentId });
   return { ok: true };
 }
@@ -11380,7 +11426,7 @@ function quoteDecide_(p, a) {
       dbUpdate_("IncidentsV4", inc.incidentId, { status: "QUOTE_PENDING", updatedAt: nowIso_(), updatedBy: p.email });
     audit_("QUOTE_" + decision, "Quote", q.quoteId, q.organizationId, { amountTTC: q.amountTTC });
     const art = dbGet_("Artisans", q.artisanId);
-    notify_({ eventKey: "quote-decision:" + q.quoteId, userIds: (art && art.userId ? [art.userId] : []).concat(propertyManagers_(x.prop, "canManageOperations").filter(function (u) { return u !== p.userId; })),
+    notify_({ eventKey: "quote-decision:" + q.quoteId, userIds: (art && art.userId ? [art.userId] : []).concat(propertyManagers_(x.prop, "canManageIncidents").filter(function (u) { return u !== p.userId; })),
       type: "QUOTE_DECISION", organizationId: q.organizationId, title: "Devis " + (decision === "APPROVED" ? "accepté" : "refusé") + " : " + x.prop.name, body: note, link: "#incident/" + q.incidentId });
     return { ok: true, status: decision };
   });
@@ -11447,7 +11493,7 @@ function woRespond_(p, a) {
   const decision = oneOf_(a.decision, ["ACCEPTED", "DECLINED"], "Décision");
   dbUpdate_("WorkOrders", x.w.workOrderId, { status: decision, acceptedAt: decision === "ACCEPTED" ? nowIso_() : "", declineReason: decision === "DECLINED" ? safeText_(a.reason, 500) : "", updatedAt: nowIso_(), updatedBy: p.email });
   audit_("WORK_ORDER_" + decision, "WorkOrder", x.w.workOrderId, x.w.organizationId, {});
-  if (decision === "DECLINED") notify_({ eventKey: "wo-declined:" + x.w.workOrderId, userIds: propertyManagers_(x.prop, "canManageOperations"), type: "WORK_ORDER_DECLINED", organizationId: x.w.organizationId,
+  if (decision === "DECLINED") notify_({ eventKey: "wo-declined:" + x.w.workOrderId, userIds: propertyManagers_(x.prop, "canManageIncidents"), type: "WORK_ORDER_DECLINED", organizationId: x.w.organizationId,
     title: "Intervention refusée : " + x.prop.name, body: a.reason || "", link: "#incident/" + x.w.incidentId });
   return { ok: true, status: decision };
 }
@@ -11459,7 +11505,7 @@ function woSchedule_(p, a) {
   dbUpdate_("WorkOrders", x.w.workOrderId, { status: "SCHEDULED", scheduledAt: at.toISOString(), updatedAt: nowIso_(), updatedBy: p.email });
   audit_("WORK_ORDER_SCHEDULED", "WorkOrder", x.w.workOrderId, x.w.organizationId, { scheduledAt: at.toISOString() });
   const art = dbGet_("Artisans", x.w.artisanId);
-  notify_({ eventKey: "wo-scheduled:" + x.w.workOrderId + ":" + at.toISOString(), userIds: propertyManagers_(x.prop, "canManageOperations").concat(art && art.userId ? [art.userId] : []).filter(function (u) { return u !== p.userId; }),
+  notify_({ eventKey: "wo-scheduled:" + x.w.workOrderId + ":" + at.toISOString(), userIds: propertyManagers_(x.prop, "canManageIncidents").concat(art && art.userId ? [art.userId] : []).filter(function (u) { return u !== p.userId; }),
     type: "WORK_ORDER_SCHEDULED", organizationId: x.w.organizationId, title: "Intervention planifiée : " + x.prop.name, body: Utilities.formatDate(at, tz_(), "dd/MM/yyyy HH:mm") + " — " + (x.w.title || ""), link: "#workorders" });
   return { ok: true };
 }
@@ -11479,7 +11525,7 @@ function woComplete_(p, a) {
   const photos = assertDocsOf_(a.photoDocIds || [], "WORKORDER", x.w.workOrderId);
   dbUpdate_("WorkOrders", x.w.workOrderId, { status: "COMPLETED", report: report, completedAt: nowIso_(), startedAt: x.w.startedAt || nowIso_(), photoDocIdsJson: photos, updatedAt: nowIso_(), updatedBy: p.email });
   audit_("WORK_ORDER_COMPLETED", "WorkOrder", x.w.workOrderId, x.w.organizationId, { photos: photos.length });
-  notify_({ eventKey: "wo-completed:" + x.w.workOrderId, userIds: propertyManagers_(x.prop, "canManageOperations"), type: "WORK_ORDER_COMPLETED", organizationId: x.w.organizationId,
+  notify_({ eventKey: "wo-completed:" + x.w.workOrderId, userIds: propertyManagers_(x.prop, "canManageIncidents"), type: "WORK_ORDER_COMPLETED", organizationId: x.w.organizationId,
     title: "Intervention terminée, à contrôler : " + x.prop.name, body: report.slice(0, 200), link: "#incident/" + x.w.incidentId });
   return { ok: true };
 }

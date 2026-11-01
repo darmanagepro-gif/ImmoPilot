@@ -114,8 +114,7 @@ PAGES.property = function (el, id) {
 function propertyAccessTab(b, p) {
   const am = p.accessManagement;
   b.appendChild(panel("Agences autorisées", h("div", null, h("p", { class: "muted small" }, t("Chaque agence ne voit que les biens qui lui sont attribués, avec les droits cochés. Les réservations restent protégées contre les doublons entre agences.")),
-    table([{ l: "Agence", k: "agencyName" }, { l: "Consultation", f: function (a) { return a.canView ? "✔" : "—"; } }, { l: "Réservations", f: function (a) { return a.canManageReservations ? "✔" : "—"; } }, { l: "Opérations", f: function (a) { return a.canManageOperations ? "✔" : "—"; } },
-      { l: "Finances", f: function (a) { return a.canViewFinance ? "✔" : "—"; } }, { l: "Commission", f: function (a) { return isNil(a.commissionRate) ? "—" : a.commissionRate + " %"; } }, { l: "Période", f: function (a) { return (a.validFrom ? fmtDate(a.validFrom) : "…") + " → " + (a.validTo ? fmtDate(a.validTo) : "…"); } }, { l: "Statut", status: true, k: "status" },
+    table([{ l: "Agence", k: "agencyName" }, { l: "Missions confiées", f: function (a) { return agencyRights(a); } }, { l: "Commission", f: function (a) { return isNil(a.commissionRate) ? "—" : a.commissionRate + " %"; } }, { l: "Période", f: function (a) { return (a.validFrom ? fmtDate(a.validFrom) : "…") + " → " + (a.validTo ? fmtDate(a.validTo) : "…"); } }, { l: "Statut", status: true, k: "status" },
       { l: "", f: function (a) { return btn(t("Modifier"), function () { agencyDialog(p, a); }, "sm"); } }], am.agencies, { empty: "Aucune agence attribuée." })), [btn("+ " + t("Créer une agence"), function () { agencyCreateDialog(p); }, "primary"), btn("+ " + t("Attribuer une agence existante"), function () { agencyDialog(p, {}); })]));
   b.appendChild(panel("Gardiens, ménage, artisans, locataires", h("div", null, table([{ l: "E-mail", k: "email" }, { l: "Rôle", f: function (x) { return roleLabel(x.role); } }, { l: "Réservation", k: "reservationId" }, { l: "Statut", status: true, k: "status" }, { l: "Depuis", dt: true, k: "createdAt" },
     { l: "", f: function (x) { return x.status === "ACTIVE" ? btn(t("Retirer"), function () { confirmBox(t("Retirer cette affectation ? L'accès est coupé immédiatement."), { danger: true }).then(function (ok) { if (ok) api("property.staffRevoke", { assignmentId: x.assignmentId }).then(function () { (S.cache.propertyTab = "access", App.go("property/" + p.propertyId)); }).catch(showErr); }); }, "sm danger") : null; } }], am.staff, { empty: "Aucune affectation." })),
@@ -132,10 +131,11 @@ function agencyCreateDialog(p, back) {
     { k: "adminEmail", l: "E-mail du responsable de l'agence", t: "email", req: true, help: "Il recevra une invitation personnelle (valable 7 jours) pour créer son mot de passe." },
     { k: "adminName", l: "Nom du responsable" },
     { k: "city", l: "Ville", def: ED.city },
-    { k: "canManageReservations", l: "Peut gérer les réservations et arrivées", t: "checkbox", def: true }, { k: "canManageOperations", l: "Peut gérer ménage, incidents, devis et baux", t: "checkbox" },
+    { k: "canManageReservations", l: "Courte durée : réservations et arrivées", t: "checkbox", def: true }].concat(agencyMissionFields(false)).concat([
+
     { k: "canViewFinance", l: "Peut consulter les finances du bien", t: "checkbox" }, { k: "commissionRate", l: "Commission de l'agence (%)", t: "number", min: 0, max: 100, step: "0.01", help: "Vide = commission de gestion du bien." },
-    { k: "validFrom", l: "Valable du", t: "date" }, { k: "validTo", l: "au", t: "date" }], {}, function (v) {
-    v.propertyId = p.propertyId;
+    { k: "validFrom", l: "Valable du", t: "date" }, { k: "validTo", l: "au", t: "date" }]), {}, function (v) {
+    v.propertyId = p.propertyId; v.detailFlags = true;
     return api("property.agencyCreate", v).then(function (r) {
       toast(r.emailSent ? t("Agence créée et invitation envoyée.") : t("Agence créée, mais l'e-mail d'invitation n'est pas parti. Renvoyez-le depuis Utilisateurs › Invitations."), r.emailSent ? "good" : "bad");
       if (back) back(); else { S.cache.propertyTab = "access"; App.go("property/" + p.propertyId); }
@@ -143,15 +143,28 @@ function agencyCreateDialog(p, back) {
     });
   }, { intro: t("L'agence aura accès à ce bien uniquement, avec les droits cochés. Vous pourrez la retirer à tout moment, ou lui confier d'autres biens avec « Attribuer une agence existante ».") });
 }
+/** Missions confiées à l'agence, cochées une à une : ce qui n'est pas coché reste de la responsabilité du propriétaire. */
+function agencyMissionFields(edit) {
+  return [
+    { k: "canManageOperations", l: "Courte durée : ménage", t: "checkbox" },
+    { k: "canManageLeases", l: "Longue durée : baux et locataires (création du locataire, contrat, préavis, fin de bail)", t: "checkbox" },
+    { k: "canManageInspections", l: "Longue durée : états des lieux d'entrée et de sortie", t: "checkbox" },
+    { k: "canManageRent", l: "Longue durée : loyers (appels de loyer, relances, quittances, encaissements)", t: "checkbox" },
+    { k: "canManageIncidents", l: "Incidents, pannes, devis et interventions", t: "checkbox" }];
+}
+function agencyRights(x) {
+  return [x.canView ? t("Consultation") : null, x.canManageReservations ? t("Réservations") : null, x.canManageOperations ? t("Ménage") : null, x.canManageLeases ? t("Baux") : null,
+    x.canManageInspections ? t("États des lieux") : null, x.canManageRent ? t("Loyers") : null, x.canManageIncidents ? t("Incidents") : null, x.canViewFinance ? t("Finances") : null].filter(Boolean).join(", ") || "—";
+}
 function agencyDialog(p, a, back) {
   return formModal(t("Droits de l'agence"), [
     a.agencyOrganizationId ? null : { k: "agencyOrganizationId", l: "Agence", t: "select", req: true, opts: function () { return api("property.agencyChoices", { propertyId: p.propertyId }).then(function (l) { return l.map(function (o) { return [o.organizationId, o.name]; }); }); } },
-    { k: "canView", l: "Peut consulter le bien", t: "checkbox", def: true }, { k: "canManageReservations", l: "Peut gérer les réservations et arrivées", t: "checkbox" }, { k: "canManageOperations", l: "Peut gérer ménage, incidents, devis et baux", t: "checkbox" },
+    { k: "canView", l: "Peut consulter le bien", t: "checkbox", def: true }, { k: "canManageReservations", l: "Courte durée : réservations et arrivées", t: "checkbox" }].concat(agencyMissionFields(true)).concat([
     { k: "canViewFinance", l: "Peut consulter les finances du bien", t: "checkbox" }, { k: "commissionRate", l: "Commission de l'agence (%)", t: "number", min: 0, max: 100, step: "0.01", help: "Vide = commission de gestion du bien." },
-    { k: "validFrom", l: "Valable du", t: "date" }, { k: "validTo", l: "au", t: "date" }].filter(Boolean), a, function (v) {
-    v.propertyId = p.propertyId; if (a.agencyOrganizationId) v.agencyOrganizationId = a.agencyOrganizationId;
+    { k: "validFrom", l: "Valable du", t: "date" }, { k: "validTo", l: "au", t: "date" }]).filter(Boolean), a, function (v) {
+    v.propertyId = p.propertyId; v.detailFlags = true; if (a.agencyOrganizationId) v.agencyOrganizationId = a.agencyOrganizationId;
     return api("property.agencySet", v).then(function () { if (back) back(); else { S.cache.propertyTab = "access"; App.go("property/" + p.propertyId); } });
-  }, { intro: t("Décocher « consulter » retire l'attribution.") });
+  }, { intro: t("Cochez seulement ce que l'agence gère : le reste reste de votre responsabilité. Décocher « consulter » retire l'attribution.") });
 }
 
 
@@ -171,7 +184,7 @@ PAGES.agencies = function (el) {
     if (!list.length) { box.appendChild(panel(null, h("p", { class: "muted" }, t("Aucune agence pour le moment. Créez-en une, ou attribuez une agence existante depuis la fiche d'un bien (onglet « Agences et équipes »).")))); return; }
     list.sort(function (a, b) { return (a.status === "ACTIVE" ? 0 : 1) - (b.status === "ACTIVE" ? 0 : 1); });
     list.forEach(function (ag) {
-      const rights = function (x) { return [x.canView ? t("Consultation") : null, x.canManageReservations ? t("Réservations") : null, x.canManageOperations ? t("Opérations") : null, x.canViewFinance ? t("Finances") : null].filter(Boolean).join(", ") || "—"; };
+      const rights = agencyRights;
       const live = ag.status === "ACTIVE";
       const tools = [
         live ? btn("+ " + t("Confier un bien"), function () {
@@ -756,19 +769,19 @@ PAGES.lease = function (el, id) {
         A.push(btn(t("Terminer le bail"), function () { formModal(t("Fin de bail"), [{ k: "endDate", l: "Date de fin", t: "date", def: today() }, { k: "reason", l: "Motif" }], {}, function (v) { v.leaseId = id; return api("lease.end", v).then(function (r) { modal({ title: t("Bail terminé"), size: "sm", body: kv([["Échéances annulées", r.schedulesCancelled], ["Échéances impayées", r.unpaidSchedules + " (" + fmtMoney(r.unpaidAmount) + ")"], ["Caution détenue", fmtMoney(r.depositHeld)]]), onClose: go }); }); }); }, "danger"));
       }
       if (["ENDED", "NOTICE", "RENEWED"].indexOf(l.status) >= 0 && l.depositHeld > 0) A.push(btn(t("Restituer la caution"), function () { formModal(t("Restitution de caution"), [{ k: "amountReturned", l: "Montant restitué", t: "number", req: true, def: l.depositHeld }, { k: "deductionReason", l: "Motif des retenues éventuelles", t: "textarea" }, { k: "method", l: "Mode", t: "select", opts: (S.meta.payMethods || []).map(function (m) { return [m, st(m)]; }) }, { k: "reference", l: "Référence" }], {}, function (v) { v.leaseId = id; v.requestKey = rk(); return api("lease.depositReturn", v).then(go); }); }));
-      if (l.deposit > 0 && l.depositHeld < l.deposit && ["DRAFT", "ACTIVE"].indexOf(l.status) >= 0) A.push(btn(t("Encaisser la caution"), function () { payDialog({ refType: "LEASE", refId: id, kind: "DEPOSIT", amount: l.deposit - l.depositHeld }).then(function (x) { if (x) go(); }); }));
       A.push(btn("✦ " + t("Rédiger le bail"), function () { contractAgentDialog(l); }));
     }
+    if ((l.canManage || l.canRent) && l.deposit > 0 && l.depositHeld < l.deposit && ["DRAFT", "ACTIVE"].indexOf(l.status) >= 0) A.push(btn(t("Encaisser la caution"), function () { payDialog({ refType: "LEASE", refId: id, kind: "DEPOSIT", amount: l.deposit - l.depositHeld }).then(function (x) { if (x) go(); }); }));
     el.appendChild(pageHead(l.tenantName, l.propertyName + " · " + fmtDate(l.startDate) + " → " + (l.endDate ? fmtDate(l.endDate) : t("durée indéterminée")), A));
     el.appendChild(kpis([{ l: "Loyer + charges", v: fmtMoney(Number(l.monthlyRent) + Number(l.charges || 0)) }, { l: "Arriérés", v: fmtMoney(l.arrears), tone: l.arrears ? "bad" : "good", sub: l.lateCount + " " + t("échéance(s) en retard") },
       { l: "Caution détenue", v: fmtMoney(l.depositHeld), sub: t("prévue") + " " + fmtMoney(l.deposit) }, { l: "Prochaine échéance", v: l.nextDue ? fmtDate(l.nextDue.dueDate) : "—", sub: l.nextDue ? fmtMoney(l.nextDue.remaining) : "" }]));
     el.appendChild(panel("Échéancier", table([{ l: "Période", k: "period" }, { l: "Échéance", date: true, k: "dueDate" }, { l: "Loyer", money: true, k: "rentAmount" }, { l: "Charges", money: true, k: "chargesAmount" }, { l: "Dû", money: true, k: "amountDue" }, { l: "Payé", money: true, k: "paid" }, { l: "Reste", money: true, k: "remaining" },
       { l: "Statut", f: function (s) { return h("span", null, stTag(s.status), s.daysLate ? " " + s.daysLate + " j" : ""); } },
-      { l: "", f: function (s) { return h("span", { class: "actions" }, l.canManage && s.remaining > 0 && s.status !== "CANCELLED" ? btn(t("Paiement"), function () { payDialog({ refType: "RENT_SCHEDULE", refId: s.scheduleId, kind: "RENT", amount: s.remaining }).then(function (x) { if (x) go(); }); }, "sm primary") : null,
-        l.canManage && s.remaining > 0 && s.status !== "CANCELLED" ? btn("✉ " + t("Appel"), function () { rentMailConfirm("CALL", { scheduleId: s.scheduleId }, l).then(function (x) { if (x) go(); }); }, "sm") : null,
+      { l: "", f: function (s) { return h("span", { class: "actions" }, l.canRent && s.remaining > 0 && s.status !== "CANCELLED" ? btn(t("Paiement"), function () { payDialog({ refType: "RENT_SCHEDULE", refId: s.scheduleId, kind: "RENT", amount: s.remaining }).then(function (x) { if (x) go(); }); }, "sm primary") : null,
+        l.canRent && s.remaining > 0 && s.status !== "CANCELLED" ? btn("✉ " + t("Appel"), function () { rentMailConfirm("CALL", { scheduleId: s.scheduleId }, l).then(function (x) { if (x) go(); }); }, "sm") : null,
         s.status === "PAID" ? btn(t("Quittance"), function () { api("lease.receipt", { scheduleId: s.scheduleId }).then(download).catch(showErr); }, "sm") : null,
-        l.canManage && s.status === "PAID" ? btn("✉", function () { rentMailConfirm("RECEIPT", { scheduleId: s.scheduleId }, l).then(function (x) { if (x) go(); }); }, "sm") : null); } }], l.schedules, { empty: "Échéancier généré à l'activation." })));
-    if (l.canManage && l.automation) el.appendChild(rentAutomationPanel(l, go));
+        l.canRent && s.status === "PAID" ? btn("✉", function () { rentMailConfirm("RECEIPT", { scheduleId: s.scheduleId }, l).then(function (x) { if (x) go(); }); }, "sm") : null); } }], l.schedules, { empty: "Échéancier généré à l'activation." })));
+    if (l.canRent && l.automation) el.appendChild(rentAutomationPanel(l, go));
     el.appendChild(leaseAgentPanel(l, go));
     el.appendChild(h("div", { class: "grid c2" }, panel("Conditions", kv([["Jour d'échéance", l.dueDay], ["Indexation", l.indexationRate ? l.indexationRate + " % / an" : "—"], ["Prochaine indexation", fmtDate(l.nextIndexationDate)], ["Préavis", l.noticeDate ? fmtDate(l.noticeDate) + " (" + st(l.noticeBy) + ")" : "—"], ["Conditions particulières", l.terms]])),
       panel("Locataire", kv([["Nom", l.tenantName], ["E-mail", l.tenantEmail], ["Téléphone", l.tenantPhone]]))));
@@ -982,10 +995,10 @@ function leaseDocsTable(l, go) {
   rows, { empty: "Aucun document rédigé pour ce bail." });
 }
 function leaseAgentPanel(l, go) {
-  if (!l.canManage) return (l.agentDocs || []).length || (l.inspections || []).length ? panel("Documents du bail", leaseDocsTable(l, go)) : h("div");
+  if (!l.canManage && !l.canInspect) return (l.agentDocs || []).length || (l.inspections || []).length ? panel("Documents du bail", leaseDocsTable(l, go)) : h("div");
   const ai = l.agent && l.agent.ai;
-  const tools = [btn("✦ " + t("Rédiger le bail"), function () { contractAgentDialog(l); }, "sm primary"), btn(t("État des lieux d'entrée"), function () { inspectionStart(l, "ENTRY"); }, "sm"),
-    btn(t("État des lieux de sortie"), function () { inspectionStart(l, "EXIT"); }, "sm"), btn(t("Courrier au locataire"), function () { letterAgentDialog(l); }, "sm")];
+  const tools = [l.canManage ? btn("✦ " + t("Rédiger le bail"), function () { contractAgentDialog(l); }, "sm primary") : null, l.canInspect ? btn(t("État des lieux d'entrée"), function () { inspectionStart(l, "ENTRY"); }, "sm") : null,
+    l.canInspect ? btn(t("État des lieux de sortie"), function () { inspectionStart(l, "EXIT"); }, "sm") : null, l.canManage ? btn(t("Courrier au locataire"), function () { letterAgentDialog(l); }, "sm") : null].filter(Boolean);
   return panel("Agent de rédaction (IA)", h("div", null, h("p", { class: "small muted", style: { margin: "0 0 10px" } }, h("b", null, ai ? "✦ " + t("IA activée") + " · " : t("Modèles intégrés") + " · "), laAgentIntro(ai)), leaseDocsTable(l, go)), tools);
 }
 function contractAgentDialog(l) {
@@ -1166,7 +1179,7 @@ PAGES.inspection = function (el, id) {
         lines.length ? table([{ l: "Pièce", k: "room" }, { l: "Élément", k: "item" }, { l: "Coût", money: true, k: "cost" }, { l: "Vétusté", f: function (x) { return x.wear + " %"; } }, { l: "Retenue", money: true, k: "retained" }], lines)
           : h("p", { class: "small muted" }, t("Aucune retenue : indiquez un coût de remise en état sur les éléments dégradés (ils apparaissent quand l'état de sortie est moins bon qu'à l'entrée).")),
         kpis([{ l: "Dépôt de garantie", v: fmtMoney(held) }, { l: "Retenues", v: fmtMoney(total), tone: total ? "warn" : "" }, { l: "À restituer", v: fmtMoney(Math.max(0, held - total)), tone: "good" }]),
-        r.canManage ? h("div", { class: "actions", style: { marginTop: "10px" } }, btn("✉ " + t("Préparer la lettre de restitution du dépôt"), function () {
+        r.canLetter ? h("div", { class: "actions", style: { marginTop: "10px" } }, btn("✉ " + t("Préparer la lettre de restitution du dépôt"), function () {
           (ro ? Promise.resolve() : save(true)).then(function () { return api("inspection.depositLetter", { inspectionId: id }); }).then(function (d) {
             return api("lease.get", { leaseId: r.leaseId }).then(function (l) { leaseDocEditor(d, l, function () { App.go("lease/" + r.leaseId); }); }); }).catch(showErr); })) : null));
     };

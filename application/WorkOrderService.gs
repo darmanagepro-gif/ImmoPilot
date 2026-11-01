@@ -46,7 +46,7 @@ function quoteLoad_(p, id) {
 function decisionMakers_(prop, amountTTC) {
   const owners = dbAll_("UserRoles").filter(function (r) { return r.status === "ACTIVE" && r.role === "OWNER" && String(r.organizationId) === String(prop.organizationId); }).map(function (r) { return r.userId; });
   const limit = Number(getSetting_("quote.agencyApprovalLimit", prop.organizationId)) || 0;
-  return amountTTC <= limit ? owners.concat(propertyManagers_(prop, "canManageOperations")) : owners;
+  return amountTTC <= limit ? owners.concat(propertyManagers_(prop, "canManageIncidents")) : owners;
 }
 
 /* ------------------------------ Devis ------------------------------ */
@@ -103,7 +103,7 @@ function quoteDeclineRequest_(p, a) {
   assert_(x.q.status === "REQUESTED", "Demande déjà traitée.");
   dbUpdate_("Quotes", x.q.quoteId, { status: "DECLINED", decisionNote: safeText_(a.reason, 500), decisionAt: nowIso_(), decisionBy: p.email });
   audit_("QUOTE_DECLINED_BY_ARTISAN", "Quote", x.q.quoteId, x.q.organizationId, {});
-  notify_({ eventKey: "quote-declined:" + x.q.quoteId, userIds: propertyManagers_(x.prop, "canManageOperations"), type: "QUOTE_DECLINED", organizationId: x.q.organizationId,
+  notify_({ eventKey: "quote-declined:" + x.q.quoteId, userIds: propertyManagers_(x.prop, "canManageIncidents"), type: "QUOTE_DECLINED", organizationId: x.q.organizationId,
     title: "Demande de devis refusée par l'artisan", body: x.prop.name + (a.reason ? " — " + a.reason : ""), link: "#incident/" + x.q.incidentId });
   return { ok: true };
 }
@@ -133,7 +133,7 @@ function quoteDecide_(p, a) {
       dbUpdate_("IncidentsV4", inc.incidentId, { status: "QUOTE_PENDING", updatedAt: nowIso_(), updatedBy: p.email });
     audit_("QUOTE_" + decision, "Quote", q.quoteId, q.organizationId, { amountTTC: q.amountTTC });
     const art = dbGet_("Artisans", q.artisanId);
-    notify_({ eventKey: "quote-decision:" + q.quoteId, userIds: (art && art.userId ? [art.userId] : []).concat(propertyManagers_(x.prop, "canManageOperations").filter(function (u) { return u !== p.userId; })),
+    notify_({ eventKey: "quote-decision:" + q.quoteId, userIds: (art && art.userId ? [art.userId] : []).concat(propertyManagers_(x.prop, "canManageIncidents").filter(function (u) { return u !== p.userId; })),
       type: "QUOTE_DECISION", organizationId: q.organizationId, title: "Devis " + (decision === "APPROVED" ? "accepté" : "refusé") + " : " + x.prop.name, body: note, link: "#incident/" + q.incidentId });
     return { ok: true, status: decision };
   });
@@ -200,7 +200,7 @@ function woRespond_(p, a) {
   const decision = oneOf_(a.decision, ["ACCEPTED", "DECLINED"], "Décision");
   dbUpdate_("WorkOrders", x.w.workOrderId, { status: decision, acceptedAt: decision === "ACCEPTED" ? nowIso_() : "", declineReason: decision === "DECLINED" ? safeText_(a.reason, 500) : "", updatedAt: nowIso_(), updatedBy: p.email });
   audit_("WORK_ORDER_" + decision, "WorkOrder", x.w.workOrderId, x.w.organizationId, {});
-  if (decision === "DECLINED") notify_({ eventKey: "wo-declined:" + x.w.workOrderId, userIds: propertyManagers_(x.prop, "canManageOperations"), type: "WORK_ORDER_DECLINED", organizationId: x.w.organizationId,
+  if (decision === "DECLINED") notify_({ eventKey: "wo-declined:" + x.w.workOrderId, userIds: propertyManagers_(x.prop, "canManageIncidents"), type: "WORK_ORDER_DECLINED", organizationId: x.w.organizationId,
     title: "Intervention refusée : " + x.prop.name, body: a.reason || "", link: "#incident/" + x.w.incidentId });
   return { ok: true, status: decision };
 }
@@ -212,7 +212,7 @@ function woSchedule_(p, a) {
   dbUpdate_("WorkOrders", x.w.workOrderId, { status: "SCHEDULED", scheduledAt: at.toISOString(), updatedAt: nowIso_(), updatedBy: p.email });
   audit_("WORK_ORDER_SCHEDULED", "WorkOrder", x.w.workOrderId, x.w.organizationId, { scheduledAt: at.toISOString() });
   const art = dbGet_("Artisans", x.w.artisanId);
-  notify_({ eventKey: "wo-scheduled:" + x.w.workOrderId + ":" + at.toISOString(), userIds: propertyManagers_(x.prop, "canManageOperations").concat(art && art.userId ? [art.userId] : []).filter(function (u) { return u !== p.userId; }),
+  notify_({ eventKey: "wo-scheduled:" + x.w.workOrderId + ":" + at.toISOString(), userIds: propertyManagers_(x.prop, "canManageIncidents").concat(art && art.userId ? [art.userId] : []).filter(function (u) { return u !== p.userId; }),
     type: "WORK_ORDER_SCHEDULED", organizationId: x.w.organizationId, title: "Intervention planifiée : " + x.prop.name, body: Utilities.formatDate(at, tz_(), "dd/MM/yyyy HH:mm") + " — " + (x.w.title || ""), link: "#workorders" });
   return { ok: true };
 }
@@ -232,7 +232,7 @@ function woComplete_(p, a) {
   const photos = assertDocsOf_(a.photoDocIds || [], "WORKORDER", x.w.workOrderId);
   dbUpdate_("WorkOrders", x.w.workOrderId, { status: "COMPLETED", report: report, completedAt: nowIso_(), startedAt: x.w.startedAt || nowIso_(), photoDocIdsJson: photos, updatedAt: nowIso_(), updatedBy: p.email });
   audit_("WORK_ORDER_COMPLETED", "WorkOrder", x.w.workOrderId, x.w.organizationId, { photos: photos.length });
-  notify_({ eventKey: "wo-completed:" + x.w.workOrderId, userIds: propertyManagers_(x.prop, "canManageOperations"), type: "WORK_ORDER_COMPLETED", organizationId: x.w.organizationId,
+  notify_({ eventKey: "wo-completed:" + x.w.workOrderId, userIds: propertyManagers_(x.prop, "canManageIncidents"), type: "WORK_ORDER_COMPLETED", organizationId: x.w.organizationId,
     title: "Intervention terminée, à contrôler : " + x.prop.name, body: report.slice(0, 200), link: "#incident/" + x.w.incidentId });
   return { ok: true };
 }

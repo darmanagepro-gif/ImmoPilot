@@ -143,13 +143,13 @@ function paymentTarget_(p, refType, refId, kind) {
   }
   if (refType === "RENT_SCHEDULE") {
     const s = dbGet_("RentSchedules", safeText_(refId, 120)); if (!s) notFound_("Échéance");
-    const prop = assertPropAny_(p, s.propertyId, ["lease.manage", "finance.manage"]);
+    const prop = assertPropAny_(p, s.propertyId, ["rent.manage", "finance.manage"]);
     oneOf_(kind, ["RENT"], "Type de paiement");
     return { propertyId: prop.propertyId, organizationId: prop.organizationId, row: s };
   }
   if (refType === "LEASE") {
     const l = dbGet_("Leases", safeText_(refId, 120)); if (!l) notFound_("Bail");
-    const prop = assertPropAny_(p, l.propertyId, ["lease.manage", "finance.manage"]);
+    const prop = assertPropAny_(p, l.propertyId, ["lease.manage", "rent.manage", "finance.manage"]);
     oneOf_(kind, ["DEPOSIT", "DEPOSIT_REFUND"], "Type de paiement");
     return { propertyId: prop.propertyId, organizationId: prop.organizationId, row: l };
   }
@@ -238,7 +238,7 @@ function payList_(p, a) {
   accessibleProps_(p, "reservation.edit").forEach(function (x) { allowed[String(x.propertyId)] = x; });
   const rows = dbAll_("Payments").filter(function (x) {
     if (x.kind === "SUBSCRIPTION" || !allowed[String(x.propertyId)]) return false;
-    if (x.refType !== "RESERVATION" && !canProp_(p, allowed[String(x.propertyId)], "finance.view") && !canProp_(p, allowed[String(x.propertyId)], "lease.manage")) return false;
+    if (x.refType !== "RESERVATION" && !canProp_(p, allowed[String(x.propertyId)], "finance.view") && !canProp_(p, allowed[String(x.propertyId)], "lease.manage") && !canProp_(p, allowed[String(x.propertyId)], "rent.manage")) return false;
     if (a.propertyId && String(x.propertyId) !== String(a.propertyId)) return false;
     if (a.direction && x.direction !== a.direction) return false;
     if (a.kind && x.kind !== a.kind) return false;

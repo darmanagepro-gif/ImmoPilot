@@ -415,7 +415,7 @@ function inspectionEntryOf_(leaseId) {
     .sort(function (a, b) { return String(b.finalizedAt).localeCompare(String(a.finalizedAt)); })[0] || null;
 }
 function inspectionCreate_(p, a) {
-  const c = laCtx_(p, a.leaseId, "lease.manage"), type = oneOf_(a.type || "ENTRY", ["ENTRY", "EXIT"], "Type d'état des lieux");
+  const c = laCtx_(p, a.leaseId, "inspection.manage"), type = oneOf_(a.type || "ENTRY", ["ENTRY", "EXIT"], "Type d'état des lieux");
   assert_(!dbAll_("LeaseInspections").some(function (r) { return String(r.leaseId) === String(c.l.leaseId) && r.type === type && r.status === "DRAFT"; }), "Un état des lieux de ce type est déjà en cours : ouvrez-le pour le compléter.", "CONFLICT");
   const furnished = leaseFurnished_(c.l, c.prop);
   let rooms = laDefaultRooms_(c.prop, furnished), keys = laDefaultKeys_();
@@ -435,12 +435,12 @@ function inspectionCreate_(p, a) {
 }
 function inspectionGet_(p, a) {
   const x = inspectionLoad_(p, a.inspectionId, "lease.view"), o = inspectionOut_(x.r, true);
-  o.propertyName = x.c.prop.name; o.tenantName = x.c.t.fullName; o.canManage = canProp_(p, x.c.prop, "lease.manage"); o.ai = !!aiConfig_(); o.deposit = num_(x.c.l.deposit);
+  o.propertyName = x.c.prop.name; o.tenantName = x.c.t.fullName; o.canManage = canProp_(p, x.c.prop, "inspection.manage"); o.canLetter = canProp_(p, x.c.prop, "lease.manage"); o.ai = !!aiConfig_(); o.deposit = num_(x.c.l.deposit);
   return o;
 }
 function laCond_(v) { v = String(v || ""); return LA_CONDITIONS_.indexOf(v) >= 0 ? v : ""; }
 function inspectionSave_(p, a) {
-  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
   assert_(x.r.status === "DRAFT", "État des lieux validé : il ne peut plus être modifié.");
   const patch = { updatedAt: nowIso_(), updatedBy: p.email };
   if (a.inspectionDate) patch.inspectionDate = dateOnly_(a.inspectionDate, "Date");
@@ -524,7 +524,7 @@ function laInspectionAi_(c, r) {
 }
 /** Rédaction du compte rendu par l'agent (IA ou modèle intégré), enregistrée dans le brouillon. */
 function inspectionWrite_(p, a) {
-  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
   assert_(x.r.status === "DRAFT", "État des lieux déjà validé.");
   let summary = laInspectionTemplate_(x.r), engine = "MODELE", warning = "";
   if (a.useAi !== false) {
@@ -601,7 +601,7 @@ function inspectionPdf_(p, a) {
   return { fileName: blob.getName(), mimeType: "application/pdf", base64: Utilities.base64Encode(blob.getBytes()) };
 }
 function inspectionFinalize_(p, a) {
-  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
   assert_(x.r.status === "DRAFT", "État des lieux déjà validé.");
   const rooms = parseJson_(x.r.roomsJson, []);
   const blank = rooms.reduce(function (n, room) { return n + (room.items || []).filter(function (i) { return !i.condition; }).length; }, 0);
@@ -617,7 +617,7 @@ function inspectionFinalize_(p, a) {
   return out;
 }
 function inspectionSend_(p, a) {
-  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
   assert_(x.r.status === "FINAL" && x.r.documentId, "Validez d'abord l'état des lieux.");
   const label = x.r.type === "EXIT" ? "État des lieux de sortie" : "État des lieux d'entrée";
   const out = laSendStored_(p, x.c, x.r.documentId, label + " — " + (x.c.prop.name || ""), safeText_(a.message, 2000) || "Veuillez trouver ci-joint l'" + label.charAt(0).toLowerCase() + label.slice(1) +
@@ -626,7 +626,7 @@ function inspectionSend_(p, a) {
   return out;
 }
 function inspectionCancel_(p, a) {
-  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
   assert_(x.r.status === "DRAFT", "Un état des lieux validé ne peut pas être supprimé.");
   dbUpdate_("LeaseInspections", x.r.inspectionId, { status: "CANCELLED", updatedAt: nowIso_(), updatedBy: p.email });
   return { ok: true };
@@ -635,7 +635,7 @@ function inspectionCancel_(p, a) {
 /* ------------------------- Signature sur l'écran ------------------------- */
 /** Signature du bailleur (ou de son représentant) ou du locataire, tracée sur l'écran pendant la visite. */
 function inspectionSign_(p, a) {
-  const x = inspectionLoad_(p, a.inspectionId, "lease.manage");
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
   assert_(x.r.status === "DRAFT", "État des lieux déjà validé.");
   const role = oneOf_(a.role, ["LANDLORD", "TENANT"], "Signataire"), name = reqText_(a.name, "Nom du signataire", 2, 120);
   const img = String(a.image || "").replace(/^data:image\/png;base64,/, "");

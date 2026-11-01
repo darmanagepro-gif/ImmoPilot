@@ -100,7 +100,7 @@ function propertyAccess_(p, prop) {
     const agOrg = dbGet_("Organizations", a.agencyOrganizationId);
     if (!agOrg || agOrg.status !== "ACTIVE") return;
     const flagCaps = {};
-    Object.keys(AGENCY_FLAG_CAPS).forEach(function (f) { if (bool_(a[f])) AGENCY_FLAG_CAPS[f].forEach(function (c) { flagCaps[c] = true; }); });
+    Object.keys(AGENCY_FLAG_CAPS).forEach(function (f) { if (agencyFlagOn_(a, f)) AGENCY_FLAG_CAPS[f].forEach(function (c) { flagCaps[c] = true; }); });
     const roleCaps = {}; agencyRoles.forEach(function (r) { r.caps.forEach(function (c) { roleCaps[c] = true; }); });
     add(Object.keys(flagCaps).filter(function (c) { return roleCaps[c]; }), "AGENCY");
     agencyOrgIds.push(String(a.agencyOrganizationId));
@@ -176,7 +176,7 @@ function propertyManagers_(prop, flag) {
   const ids = {};
   dbAll_("UserRoles").forEach(function (r) { if (r.status === "ACTIVE" && r.role === "OWNER" && String(r.organizationId) === String(prop.organizationId)) ids[r.userId] = true; });
   dbAll_("AgencyPropertyPermissions").forEach(function (a) {
-    if (String(a.propertyId) !== String(prop.propertyId) || a.status !== "ACTIVE" || !bool_(a.canView) || (flag && !bool_(a[flag]))) return;
+    if (String(a.propertyId) !== String(prop.propertyId) || a.status !== "ACTIVE" || !bool_(a.canView) || (flag && !agencyFlagOn_(a, flag))) return;
     dbAll_("UserRoles").forEach(function (r) { if (r.status === "ACTIVE" && String(r.organizationId) === String(a.agencyOrganizationId) && (r.role === "AGENCY_ADMIN" || r.role === "AGENCY_USER")) ids[r.userId] = true; });
   });
   return Object.keys(ids);
