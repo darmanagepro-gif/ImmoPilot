@@ -143,7 +143,7 @@ var DEFAULT_SETTINGS = Object.freeze({
   "contractors.platformOnly": true,
   // Identité de l'éditeur pour les pages légales (Paramètres › Plateforme) ; vide = « À compléter » surligné.
   "legal.publisherName": "ECO SYNERGY", "legal.legalForm": "société par actions simplifiée (SAS) au capital de 500 €", "legal.address": "16 chemin de Garrabot, 31770 Colomiers, France",
-  "legal.registration": "immatriculée au RCS de Toulouse sous le n° 932 443 005 (SIRET 932 443 005 00016)", "legal.vatNumber": "FR56932443005", "legal.director": "",
+  "legal.registration": "immatriculée au RCS de Toulouse sous le n° 932 443 005 (SIRET 932 443 005 00016)", "legal.vatNumber": "FR56932443005", "legal.director": "la société RENEWCO, présidente d'ECO SYNERGY",
   "legal.contactEmail": "ecosynergy31@gmail.com", "legal.phone": "+33 7 49 98 09 18", "legal.hostName": "", "legal.hostAddress": "", "legal.hostPhone": "", "legal.mediator": "",
   "legal.dataAuthorityRef": "", "legal.dpoEmail": ""
 });
