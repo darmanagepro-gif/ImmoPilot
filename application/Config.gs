@@ -129,8 +129,8 @@ var DEFAULT_SETTINGS = Object.freeze({
   "template.reservationDocId": "",
   "template.receipt": "", "template.lease": "", "template.reservation": "",
   // Location longue durée : envois automatiques au locataire (désactivés par défaut, à activer par l'organisation).
-  "rent.autoCall": false,
-  "rent.callDaysBefore": 7,
+  "rent.autoCall": true,
+  "rent.callDaysBefore": 5,
   "rent.autoReminders": false,
   "rent.reminderDays": [5, 15, 30],
   "rent.autoReceipt": false,

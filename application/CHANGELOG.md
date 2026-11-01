@@ -6,6 +6,8 @@
 - Lien de paiement par carte du bailleur (`rent.cardPaymentUrl`, SON compte SumUp / Stripe / PayPal : les fonds ne transitent pas par ImmoPilot) : inséré dans les appels de loyer et les relances (PDF et e-mails) avec le montant et la référence ; bouton « Payer par carte » dans l'espace locataire pour chaque échéance due. Balises facultatives `{montant}` et `{reference}` dans le lien.
 - Signature électronique du contrat d'abonnement avant l'enregistrement de la carte : acceptation, code à usage unique par e-mail ou par SMS (Brevo, `BREVO_API_KEY` + `SMS_SENDER`), 10 minutes, 5 essais. Preuves conservées (signataire, canal masqué, date, IP, navigateur, empreinte SHA-256 du contrat, version des CGV) ; PDF signé avec certificat enregistré et envoyé par e-mail. Nouvelle signature exigée si le forfait ou le prix change. Nouvelle table `ContractSignatures` (schéma 11).
 - Profil : le téléphone est affiché et conservé lors de la modification du profil.
+- Quittance et appel de loyer présentés en tableau (bailleur à gauche, locataire à droite, logement, période du … au …, coupon de paiement) ; « Appel de loyer » envoyé automatiquement par e-mail avec le PDF 5 jours avant l'échéance (nouveaux réglages par défaut, modifiables).
+- Bail intégré meublé ou vide, détaillé et conforme France (loi de 1989) / Maroc (loi 67-12) : durées, dépôt de garantie, révision, préavis et formes du congé ; sans marque ImmoPilot. Maroc : révision du loyer d'habitation selon la loi 67-12 (et non plus 07-03).
 
 ## Serveur dédié 2.2.0 — 1er novembre 2026 — prélèvement automatique des abonnements par SumUp
 

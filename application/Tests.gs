@@ -1048,7 +1048,7 @@ function TEST_GROUPS_() {
         const before = TEST_HOOKS_.mailSink.length;
         const r1 = rentAutomationJob_({ force: true, batch: 50 });
         T.ok(r1.calls >= 1, "appel de loyer envoyé (" + JSON.stringify(r1) + ")");
-        const call = TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return m.to === email && /Avis d'échéance/.test(m.subject); })[0];
+        const call = TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return m.to === email && /Appel de loyer/.test(m.subject); })[0];
         T.ok(call && call.attachments.length === 1 && /^Appel_loyer_.*\.pdf$/.test(call.attachments[0].name) && call.attachments[0].mimeType === "application/pdf", "PDF de l'appel en pièce jointe");
         T.eq(call.bcc, "compta@example.test", "copie cachée au gestionnaire");
         T.ok(/Virement au compte du bailleur/.test(call.body) && /4\s?200,00/.test(call.body.replace(/ | /g, " ")), "montant et modalités dans l'e-mail");

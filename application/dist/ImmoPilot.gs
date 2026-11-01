@@ -374,7 +374,7 @@ var ASSISTANT_KB_ = [
     s: ["À la première connexion, de petites fenêtres présentent chaque menu de votre espace.", "Bouton 🎓 en haut à droite : « Revoir le tutoriel », ou décochez « Tutoriel au démarrage » pour ne plus l'afficher.", "Pendant la visite : « Suivant », « Précédent », « Passer » (ou la touche Échap)."] },
   { id: "rent-auto", t: "Appels de loyer, relances et quittances envoyés automatiquement par e-mail", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "leases", k: "appel de loyer avis d'échéance relance automatique impayé quittance automatique email pdf locataire rappel mise en demeure envoi automatique",
     s: ["Activez les envois dans « Paramètres » › « Paramètres de l'organisation » : rent.autoCall (appels de loyer), rent.autoReminders (relances), rent.autoReceipt (quittances). Ils sont désactivés par défaut.",
-      "Réglez les délais : rent.callDaysBefore (jours avant l'échéance, 7 par défaut) et rent.reminderDays (jours après l'échéance, par exemple 5, 15, 30 : rappel, relance, dernière relance). Ajoutez vos modalités de paiement (rent.paymentInstructions) et, si besoin, une adresse en copie (rent.copyEmail).",
+      "Réglez les délais : rent.callDaysBefore (jours avant l'échéance, 5 par défaut) et rent.reminderDays (jours après l'échéance, par exemple 5, 15, 30 : rappel, relance, dernière relance). Ajoutez vos modalités de paiement (rent.paymentInstructions) et, si besoin, une adresse en copie (rent.copyEmail).",
       "Chaque envoi part par e-mail au locataire avec le PDF en pièce jointe, entre 8 h et 20 h, sans doublon. Une relance regroupe toutes les échéances impayées du bail.",
       "Quand vous enregistrez le paiement complet d'une échéance (bouton « Paiement »), la quittance part aussitôt au locataire.",
       "Sur la fiche du bail, panneau « Envois automatiques au locataire » : réglages propres au bail (« Régler pour ce bail », ou exclure le bail), prochain envoi prévu, historique et PDF de chaque envoi. Les boutons « ✉ Appel », « ✉ » (quittance) et « Relancer » envoient à la demande, avec aperçu."] },
@@ -1662,7 +1662,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "8fc48f10254c";
+var IMMO_BUILD_ = "88eff409425d";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -1785,8 +1785,8 @@ var DEFAULT_SETTINGS = Object.freeze({
   "template.reservationDocId": "",
   "template.receipt": "", "template.lease": "", "template.reservation": "",
   // Location longue durée : envois automatiques au locataire (désactivés par défaut, à activer par l'organisation).
-  "rent.autoCall": false,
-  "rent.callDaysBefore": 7,
+  "rent.autoCall": true,
+  "rent.callDaysBefore": 5,
   "rent.autoReminders": false,
   "rent.reminderDays": [5, 15, 30],
   "rent.autoReceipt": false,
@@ -4764,7 +4764,7 @@ function laContractTemplate_(c, inp) {
     (fu ? "La durée d'un bail meublé est d'au moins un an (neuf mois, non reconductibles, lorsque le locataire est étudiant). À défaut de congé, il est reconduit tacitement pour un an."
       : "La durée d'un bail vide est d'au moins trois ans lorsque le bailleur est une personne physique (ou une société civile familiale) et de six ans lorsqu'il est une personne morale. À défaut de congé, il est reconduit tacitement pour la même durée."));
   add("Loyer et paiement", "Le loyer mensuel est fixé à " + laMoney_(rent) + (ch > 0 ? " hors charges" : "") + ".\n\nIl est payable d'avance, au plus tard le " + (num_(l.dueDay) || 5) + " de chaque mois, par virement, carte bancaire ou tout autre moyen convenu. " +
-    "Un avis d'échéance est adressé au locataire avant chaque échéance ; le bailleur lui remet gratuitement une quittance détaillant le loyer et les charges pour chaque paiement intégral" + (ma ? " (article 11 de la loi n° 67-12)." : "."));
+    "Un appel de loyer est adressé au locataire avant chaque échéance ; le bailleur lui remet gratuitement une quittance détaillant le loyer et les charges pour chaque paiement intégral" + (ma ? " (article 11 de la loi n° 67-12)." : "."));
   add("Charges et consommations", (ch > 0 ? "En sus du loyer, le locataire verse chaque mois une provision pour charges de " + laMoney_(ch) +
       (ma ? ", destinée aux charges communes prévues au présent contrat (entretien des parties communes, gardiennage, ascenseur le cas échéant)." : fu ? ", sous forme de provision régularisée chaque année sur justificatifs (ou de forfait si les parties l'ont expressément convenu)." : " ; elle fait l'objet d'une régularisation annuelle sur justificatifs, les pièces étant tenues à la disposition du locataire.") + "\n\n" : "") +
     "Les consommations individuelles (eau, électricité, gaz, téléphone, internet) sont à la charge du locataire, qui souscrit les abonnements correspondants, sauf accord contraire écrit.");
@@ -7171,7 +7171,7 @@ function propertyStaffRevoke_(p, a) {
  * ====================================================================== */
 /**
  * Location longue durée — envois automatiques au locataire, avec le PDF en pièce jointe :
- *  - APPEL DE LOYER (avis d'échéance) : rent.callDaysBefore jours avant l'échéance ;
+ *  - APPEL DE LOYER : rent.callDaysBefore jours avant l'échéance (5 par défaut, activé par défaut) ;
  *  - RELANCES : aux jours rent.reminderDays après l'échéance (par défaut 5, 15 et 30), tant qu'il reste un impayé ;
  *    une relance regroupe TOUTES les échéances impayées du bail (jamais une rafale d'e-mails pour d'anciens impayés) ;
  *  - QUITTANCE : dès qu'une échéance est entièrement soldée par un paiement enregistré (bouton « Paiement » du bailleur).
@@ -7270,23 +7270,41 @@ function rentPayText_(c, amount, ref) {
 }
 
 /* ------------------------------ Documents PDF ------------------------------ */
-/** Avis d'échéance (appel de loyer) d'une échéance, avec les arriérés éventuels. */
+/** Période d'une échéance : premier et dernier jour du mois concerné (JJ/MM/AAAA). */
+function rentPeriodBounds_(s) {
+  const y = parseInt(String(s.period).slice(0, 4), 10), m = parseInt(String(s.period).slice(5, 7), 10), pad = function (n) { return (n < 10 ? "0" : "") + n; };
+  if (!y || !m) return { du: "", au: "" };
+  return { du: "01/" + pad(m) + "/" + y, au: pad(new Date(Date.UTC(y, m, 0)).getUTCDate()) + "/" + pad(m) + "/" + y };
+}
+var RENT_PROP_TYPES_ = { APARTMENT: "Appartement", STUDIO: "Studio", HOUSE: "Maison", VILLA: "Villa", RIAD: "Riad", COMMERCIAL: "Local commercial", OTHER: "Autre" };
+/** Appel de loyer d'une échéance (même présentation que la quittance), avec les arriérés éventuels et un coupon de paiement. */
 function rentCallPdf_(c, s) {
-  const st = rentStatus_(s), cur = cur_(), today = todayStr_();
+  const st = rentStatus_(s), cur = cur_(), today = todayStr_(), pb = rentPeriodBounds_(s), ref = rentReference_(c.l, s);
   // Arriérés : échéances antérieures DÉJÀ échues et non soldées (jamais les échéances à venir).
   const arrears = rentOpenSchedules_(c.l.leaseId, today).filter(function (x) { return x.scheduleId !== s.scheduleId && x.remaining > 0 && x.dueDate < s.dueDate && x.dueDate < today; });
-  const arrearsTotal = sumBy_(arrears, function (x) { return x.remaining; });
-  const rows = [["Loyer — " + rentPeriodLabel_(s), fmtAmount_(s.rentAmount, cur)], ["Charges", fmtAmount_(s.chargesAmount, cur)]];
-  if (st.paid > 0) rows.push(["Déjà réglé sur cette échéance", "− " + fmtAmount_(st.paid, cur)]);
-  rows.push(["<b>Montant de l'échéance</b>", "<b>" + escapeHtml_(fmtAmount_(st.remaining, cur)) + "</b>"]);
-  arrears.forEach(function (a) { rows.push(["Arriéré — " + rentPeriodLabel_(a) + " (échéance du " + pdfDate_(a.dueDate) + ")", fmtAmount_(a.remaining, cur)]); });
-  if (arrears.length) rows.push(["<b>Total à régler</b>", "<b>" + escapeHtml_(fmtAmount_(round2_(st.remaining + arrearsTotal), cur)) + "</b>"]);
-  const table = "<table><tr><th>Désignation</th><th class='right'>Montant</th></tr>" + rows.map(function (r) { return "<tr><td>" + (/^<b>/.test(r[0]) ? r[0] : escapeHtml_(r[0])) + "</td><td class='right'>" + (/^<b>/.test(r[1]) ? r[1] : escapeHtml_(r[1])) + "</td></tr>"; }).join("") + "</table>";
-  const inner = rentParties_(c) + "<p>Madame, Monsieur,</p><p>Nous vous prions de bien vouloir régler le loyer et les charges de la période <b>" + escapeHtml_(rentPeriodLabel_(s)) + "</b> pour le logement désigné ci-dessus, <b>au plus tard le " + pdfDate_(s.dueDate) + "</b>.</p>" +
-    table + "<p>Référence à indiquer avec votre règlement : <b>" + escapeHtml_(rentReference_(c.l, s)) + "</b></p>" + rentPayInfoHtml_(c, round2_(st.remaining + arrearsTotal), rentReference_(c.l, s)) +
-    "<p class='muted'>Cet avis d'échéance ne vaut pas quittance. La quittance vous sera adressée après encaissement de la totalité de l'échéance.</p>" +
-    "<p style='margin-top:18px'>Fait le " + pdfDate_(today) + ".<br>Le bailleur, " + escapeHtml_(c.org.name || "") + "</p>";
-  return htmlToPdf_(pdfShell_("Avis d'échéance — appel de loyer", inner, { subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org),
+  const arrearsTotal = sumBy_(arrears, function (x) { return x.remaining; }), total = round2_(st.remaining + arrearsTotal);
+  const per = "du " + pb.du + " au " + pb.au;
+  const rows = [["Loyer (hors charges)", per, fmtAmount_(s.rentAmount, cur)], ["Provision pour charges", per, fmtAmount_(s.chargesAmount, cur)]];
+  if (st.paid > 0) rows.push(["Déjà réglé sur cette échéance", "", "− " + fmtAmount_(st.paid, cur)]);
+  rows.push(["<b>Montant de l'échéance</b>", "", "<b>" + escapeHtml_(fmtAmount_(st.remaining, cur)) + "</b>"]);
+  arrears.forEach(function (x) { rows.push(["Arriéré — " + rentPeriodLabel_(x), "échéance du " + pdfDate_(x.dueDate), fmtAmount_(x.remaining, cur)]); });
+  if (arrears.length) rows.push(["<b>Total à régler</b>", "", "<b>" + escapeHtml_(fmtAmount_(total, cur)) + "</b>"]);
+  const cell = function (v) { return /^<b>/.test(v) ? v : escapeHtml_(v); };
+  const table = "<table style='margin:6px 0 10px'><tr><th>Désignation</th><th>Période</th><th class='right'>Montant</th></tr>" +
+    rows.map(function (r) { return "<tr><td>" + cell(r[0]) + "</td><td>" + cell(r[1]) + "</td><td class='right'>" + cell(r[2]) + "</td></tr>"; }).join("") + "</table>";
+  const vals = { bailleur: c.org.name || "", bailleur_adresse: [c.org.address, c.org.city].filter(String).join(", "), locataire: c.t.fullName || "", adresse: rentAddress_(c.prop),
+    bien: c.prop.name || "", type: RENT_PROP_TYPES_[c.prop.propertyType] || c.prop.propertyType || "", surface: c.prop.surfaceM2 || "" };
+  const val = function (k) { const v = vals[k]; return v === undefined ? "{{" + k + "}}" : String(v === "" || v == null ? "—" : v); };
+  const coupon = "<div style='margin-top:22px;border-top:1px dashed #94a3b8;padding-top:4px'><div class='muted' style='font-size:9px'>✂ — Coupon à joindre à votre règlement</div>" +
+    "<table style='margin-top:6px'><tr><th>Locataire</th><th>Période</th><th>Référence</th><th>À régler avant le</th><th class='right'>Montant à régler</th></tr>" +
+    "<tr><td>" + escapeHtml_(vals.locataire) + "</td><td>" + escapeHtml_(rentPeriodLabel_(s)) + "</td><td>" + escapeHtml_(ref) + "</td><td>" + pdfDate_(s.dueDate) + "</td><td class='right'><b>" + escapeHtml_(fmtAmount_(total, cur)) + "</b></td></tr></table>" +
+    "<p class='muted' style='margin:4px 0 0;font-size:9px'>Bailleur : " + escapeHtml_(vals.bailleur) + " — logement : " + escapeHtml_(vals.bien) + "</p></div>";
+  const inner = docTemplateBlock_("[entete]", val) + docTemplateBlock_("[bien]", val) +
+    "<p>Madame, Monsieur,</p><p>Nous vous prions de bien vouloir régler le loyer et les charges de la période <b>" + escapeHtml_(rentPeriodLabel_(s)) + "</b> (" + escapeHtml_(per) + ") pour le logement désigné ci-dessus, <b>au plus tard le " + pdfDate_(s.dueDate) + "</b>.</p>" +
+    table + "<p>Référence à indiquer avec votre règlement : <b>" + escapeHtml_(ref) + "</b></p>" + rentPayInfoHtml_(c, total, ref) +
+    "<p class='muted'>Cet appel de loyer ne vaut pas quittance. La quittance vous sera adressée après encaissement de la totalité de l'échéance.</p>" +
+    "<p style='margin-top:14px'>Fait le " + pdfDate_(today) + ".<br>Le bailleur, " + escapeHtml_(c.org.name || "") + "</p>" + coupon;
+  return htmlToPdf_(pdfShell_("Appel de loyer — " + rentPeriodLabel_(s), inner, { noHead: true, subtitle: "Échéance du " + pdfDate_(s.dueDate),
     footer: "Document émis par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Appel_loyer_" + s.period + "_" + String(c.l.leaseId).slice(-6));
 }
 /** Relance : niveau 1 à 3 ; liste toutes les échéances impayées échues du bail. */
@@ -7346,8 +7364,8 @@ function rentStorePdf_(c, blob, category, actorEmail) {
 function rentMailText_(c, kind, data) {
   const cur = cur_(), hello = "Bonjour " + (c.t.fullName || "") + ",\n\n", sign = "\n\nCordialement,\n" + (c.org.name || "Le bailleur") +
     (c.org.phone ? "\nTél. " + c.org.phone : "") + "\n\n—\nMessage envoyé par " + IMMO_CONFIG.APP_NAME + " pour le compte de " + (c.org.name || "votre bailleur") + ".";
-  if (kind === "CALL") return { subject: "Avis d'échéance — loyer " + rentPeriodLabel_(data.s) + " — " + (c.prop.name || ""),
-    body: hello + "Veuillez trouver ci-joint l'avis d'échéance de votre loyer pour la période " + rentPeriodLabel_(data.s) + " (" + (c.prop.name || "") + ").\n\nMontant à régler : " +
+  if (kind === "CALL") return { subject: "Appel de loyer — " + rentPeriodLabel_(data.s) + " — " + (c.prop.name || ""),
+    body: hello + "Veuillez trouver ci-joint l'appel de loyer pour la période " + rentPeriodLabel_(data.s) + " (du " + rentPeriodBounds_(data.s).du + " au " + rentPeriodBounds_(data.s).au + "), logement " + (c.prop.name || "") + ".\n\nMontant à régler : " +
       fmtAmount_(data.total, cur) + ", au plus tard le " + pdfDate_(data.s.dueDate) + ".\nRéférence à indiquer : " + rentReference_(c.l, data.s) + "." + rentPayText_(c, data.total, rentReference_(c.l, data.s)) +
       "\n\nSi vous avez déjà effectué ce règlement, merci de ne pas tenir compte de ce message." + sign };
   if (kind === "REMINDER") return { subject: RENT_REMINDER_TITLES_[data.level - 1] + " — " + (c.prop.name || ""),
@@ -10016,7 +10034,7 @@ function TEST_GROUPS_() {
         const before = TEST_HOOKS_.mailSink.length;
         const r1 = rentAutomationJob_({ force: true, batch: 50 });
         T.ok(r1.calls >= 1, "appel de loyer envoyé (" + JSON.stringify(r1) + ")");
-        const call = TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return m.to === email && /Avis d'échéance/.test(m.subject); })[0];
+        const call = TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return m.to === email && /Appel de loyer/.test(m.subject); })[0];
         T.ok(call && call.attachments.length === 1 && /^Appel_loyer_.*\.pdf$/.test(call.attachments[0].name) && call.attachments[0].mimeType === "application/pdf", "PDF de l'appel en pièce jointe");
         T.eq(call.bcc, "compta@example.test", "copie cachée au gestionnaire");
         T.ok(/Virement au compte du bailleur/.test(call.body) && /4\s?200,00/.test(call.body.replace(/ | /g, " ")), "montant et modalités dans l'e-mail");
