@@ -1,5 +1,14 @@
 # Journal des modifications
 
+## Serveur dédié 2.2.0 — 1er novembre 2026 — prélèvement automatique des abonnements par SumUp
+
+- Le super administrateur attribue le forfait ; le propriétaire enregistre sa carte UNE fois (Abonnements › « Enregistrer ma carte ») dans le formulaire sécurisé SumUp (3D Secure). Aucune donnée de carte ne passe par ImmoPilot : seul le jeton SumUp est conservé (base chiffrée).
+- Débit automatique à chaque échéance (fin d'essai, fin de période, ou tout de suite si un règlement est attendu) par la tâche quotidienne ; règlement enregistré (mode « Carte », référence SumUp), abonnement prolongé, notification.
+- Refus : un essai par jour (4 au plus par échéance), notification du propriétaire et du super administrateur, puis la règle habituelle (lecture seule après 15 jours). Anti-double débit : référence unique par tentative, tentatives précédentes relues chez SumUp avant tout nouveau débit.
+- Maroc : prix en MAD convertis en euros au taux fixe `SUMUP_RATE`, affiché au propriétaire avant l'enregistrement de la carte ; sans taux, aucun débit.
+- Retrait de carte à tout moment ; bouton « Prélever la carte » pour le super administrateur ; contrat PDF mis à jour selon le mode de paiement.
+- Sans `SUMUP_API_KEY` et `SUMUP_MERCHANT_CODE`, rien ne change (paiement manuel). Installation : `server/deploy/sumup-config.sh` ; contrôle : `immopilot run testerSumUp` (aucun paiement).
+
 ## Serveur dédié 2.1.0 — 31 octobre 2026 — chiffrement au repos
 
 - Chiffrement AES-256-GCM facultatif des données sur le serveur : lignes de la base (dont numéros de pièces d'identité), scans de CIN / CNI / passeports et tous les fichiers, propriétés sensibles (clé IA), pièces jointes et corps des e-mails en file. Activé par `DATA_KEY_FILE` ; sans ce réglage, rien ne change.

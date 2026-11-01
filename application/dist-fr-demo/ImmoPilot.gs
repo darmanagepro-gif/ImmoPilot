@@ -1,6 +1,6 @@
 /**
  * ImmoPilot 2.3.1 (édition FR) — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
- * Contient les 36 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SubscriptionService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
+ * Contient les 37 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SubscriptionService.gs, SumUpService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
  * À coller seul dans le projet Apps Script (aucun autre fichier .gs ne doit rester dans le projet).
  */
 
@@ -1453,7 +1453,7 @@ function routes_() { return {
   "inspection.create": "inspectionCreate_", "inspection.get": "inspectionGet_", "inspection.save": "inspectionSave_", "inspection.write": "inspectionWrite_", "inspection.pdf": "inspectionPdf_",
   "inspection.finalize": "inspectionFinalize_", "inspection.send": "inspectionSend_", "inspection.cancel": "inspectionCancel_",
   "plan.list": "planList_", "plan.save": "planSave_", "sub.assign": "subAssign_", "sub.recordPayment": "subRecordPayment_", "sub.setStatus": "subSetStatus_", "sub.list": "subList_",
-  "sub.mine": function (p) { return subMine_(p); }, "sub.requestChange": "subRequestChange_", "sub.contractPdf": "subContractPdf_", "assistant.kb": "assistantKb_", "assistant.ask": "assistantAsk_",
+  "sub.mine": function (p) { return subMine_(p); }, "sub.requestChange": "subRequestChange_", "sub.cardSetup": "subCardSetup_", "sub.cardConfirm": "subCardConfirm_", "sub.cardRemove": "subCardRemove_", "sub.chargeNow": "subChargeNow_", "sub.contractPdf": "subContractPdf_", "assistant.kb": "assistantKb_", "assistant.ask": "assistantAsk_",
   "dash.get": "dashGet_", "pareto.run": "paretoRun_", "pareto.export": "paretoExport_", "report.run": "reportRun_", "report.export": "reportExport_"
 }; }
 function publicRoutes_() { return {
@@ -1468,7 +1468,7 @@ function publicRoutes_() { return {
  */
 var INSTALL_HTML_FILES_ = ["Index", "Styles", "Components", "I18n", "Login", "Dashboard", "Pages", "Scripts", "Assistant"];
 /* Première et dernière fonction de chaque fichier : détecte un fichier absent ET un fichier collé incomplètement. */
-var INSTALL_GS_SENTINELS_ = { Admin: ["assertEditor_", "auditList_"], Legal: ["legalGet_", "legalValues_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], LeaseAgentService: ["laFill_", "inspectionCancel_"], RentAutomationService: ["rentReminderDays_", "rentMailingsOf_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SubscriptionService: ["planOut_", "subscriptionJob_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
+var INSTALL_GS_SENTINELS_ = { Admin: ["assertEditor_", "auditList_"], Legal: ["legalGet_", "legalValues_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], LeaseAgentService: ["laFill_", "inspectionCancel_"], RentAutomationService: ["rentReminderDays_", "rentMailingsOf_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SubscriptionService: ["planOut_", "subscriptionJob_"], SumUpService: ["sumupConf_", "sumupChargeJob_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
 function installCheck_() {
   const g = typeof globalThis !== "undefined" ? globalThis : this;
   const missingGs = Object.keys(INSTALL_GS_SENTINELS_).filter(function (f) { return INSTALL_GS_SENTINELS_[f].some(function (n) { return typeof g[n] !== "function"; }); });
@@ -1655,7 +1655,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "4ea4088bd1d0";
+var IMMO_BUILD_ = "f711bf9f94d1";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -1908,6 +1908,9 @@ var TABLES_SRC = {
   Subscriptions: { pk: "subscriptionId", idp: "sub", org: "organizationId", req: "organizationId,planCode",
     enums: { status: ["TRIAL", "ACTIVE", "PAST_DUE", "SUSPENDED", "CANCELLED", "EXPIRED"] },
     cols: "subscriptionId,organizationId,planCode,status,startDate#d,nextDueDate#d,createdAt#t,createdBy|periodEnd#d,trialEnd#d,cancelAtPeriodEnd#b,price#n,currency,periodicity,canceledAt#t,suspendedAt#t,paidThrough#d,updatedAt#t,updatedBy,lastReminderKey,agencyOptionPrice#n" },
+  BillingCards: { pk: "cardId", idp: "card", org: "organizationId", req: "organizationId",
+    enums: { status: ["PENDING", "ACTIVE", "FAILED", "REPLACED", "REMOVED"] },
+    cols: "cardId,organizationId,status,customerId,token,label,setupCheckoutId,createdAt#t,createdBy,updatedAt#t,lastChargeKey,chargeAttempts#n,chargeSeq#n,lastChargeAt#t,lastChargeError" },
   OperationRequests: { pk: "requestKey", idp: "opr", org: "organizationId", cols: "requestKey,organizationId,operation,resourceId,createdAt#t" }
 };
 
@@ -7965,7 +7968,7 @@ function subOut_(s, orgs) {
   return { subscriptionId: s.subscriptionId, organizationId: s.organizationId, organizationName: ((orgs || {})[String(s.organizationId)] || {}).name || "", planCode: s.planCode, status: s.status,
     startDate: s.startDate, trialEnd: s.trialEnd, periodEnd: s.periodEnd, nextDueDate: s.nextDueDate, paidThrough: s.paidThrough, price: s.price, currency: s.currency || cur_(), periodicity: s.periodicity,
     cancelAtPeriodEnd: bool_(s.cancelAtPeriodEnd), daysOverdue: s.status === "PAST_DUE" || s.status === "SUSPENDED" ? Math.max(0, diffDays_(s.nextDueDate || today, today)) : 0, createdAt: s.createdAt,
-    agencyOption: subAgencyOption_(s) };
+    agencyOption: subAgencyOption_(s), cardLabel: (sumupCardOf_(s.organizationId) || {}).label || "" };
 }
 /** Option agences : agences créées par le propriétaire, facturées sur SON abonnement (prix par agence et par période). */
 function subAgencyOption_(s) {
@@ -8083,8 +8086,8 @@ function subMine_(p) {
     if (e.inheritedFrom) return { organizationId: orgId, organizationName: (orgs[orgId] || {}).name, includedIn: (orgs[e.inheritedFrom] || {}).name || "", subscription: null,
       plan: e.plan ? planOut_(e.plan) : null, usage: subUsage_(orgId), readOnly: e.readOnly, billing: [], paymentProvider: "" };
     return { organizationId: orgId, organizationName: (orgs[orgId] || {}).name, subscription: e.subscription ? subOut_(e.subscription, orgs) : null, plan: e.plan ? planOut_(e.plan) : null, usage: subUsage_(orgId),
-      readOnly: e.readOnly, billing: dbAll_("Payments").filter(function (x) { return x.kind === "SUBSCRIPTION" && String(x.organizationId) === orgId && x.status === "RECORDED"; })
-        .map(function (x) { return { amount: x.amount, paidAt: x.paidAt, method: x.method, reference: x.reference }; }), paymentProvider: PAYMENT_PROVIDERS_.MANUAL.name };
+      readOnly: e.readOnly, card: sumupCardInfo_(orgId, e.subscription), billing: dbAll_("Payments").filter(function (x) { return x.kind === "SUBSCRIPTION" && String(x.organizationId) === orgId && x.status === "RECORDED"; })
+        .map(function (x) { return { amount: x.amount, paidAt: x.paidAt, method: x.method, reference: x.reference }; }), paymentProvider: sumupCardOf_(orgId) && sumupEnabled_() ? "Prélèvement automatique par carte (SumUp)" : PAYMENT_PROVIDERS_.MANUAL.name };
   });
 }
 function subRequestChange_(p, a) {
@@ -8128,7 +8131,7 @@ function subContractPdf_(p, a) {
     ["Fonctionnalités", feats.map(function (f) { return FEAT[f] || f; }).join(", ") || "—"]]);
   html += "<h2>Conditions principales</h2><div class='box'><ol style='margin:0;padding-left:16px'>" + [
     "L'abonnement donne accès à l'application ImmoPilot pour l'organisation cliente, dans les limites du forfait.",
-    "Le tarif est payable d'avance pour chaque " + per + ", par virement, espèces ou chèque ; aucun paiement en ligne n'est effectué par l'application.",
+    (sumupCardOf_(orgId) && sumupEnabled_() ? "Le tarif est payable d'avance pour chaque " + per + " par prélèvement automatique sur la carte enregistrée par le client auprès de SumUp (aucune donnée de carte n'est conservée par ImmoPilot) ; le client peut retirer sa carte à tout moment, le règlement se fait alors par virement." : "Le tarif est payable d'avance pour chaque " + per + ", par virement, espèces ou chèque ; aucun paiement en ligne n'est effectué par l'application."),
     "En cas d'échéance non réglée, un délai de grâce de " + SUB_GRACE_DAYS_ + " jours s'applique ; au-delà, le compte passe en lecture seule jusqu'au règlement.",
     "Les agences créées par le client dans ImmoPilot n'ont pas d'abonnement propre : elles sont facturées en option sur cet abonnement, au prix par agence indiqué ci-dessus, et suivent son statut.",
     "La résiliation peut être demandée à tout moment ; elle prend effet à la fin de la période payée. Les données restent conservées et exportables.",
@@ -8171,6 +8174,253 @@ function subscriptionJob_() {
     }
   });
   return { statusChanged: changed, alerts: alerts };
+}
+
+/* ======================================================================
+ * SumUpService.gs
+ * ====================================================================== */
+/**
+ * Prélèvement automatique des abonnements par carte, via SumUp (paiements récurrents avec authentification forte).
+ *
+ * Parcours : le super administrateur attribue un forfait (sub.assign) → le propriétaire enregistre sa carte UNE fois dans le
+ * formulaire sécurisé SumUp (widget, 3D Secure ; aucune donnée de carte ne passe par ImmoPilot) → à chaque échéance (fin d'essai,
+ * fin de période, ou tout de suite si un règlement est attendu) le serveur débite la carte enregistrée et prolonge l'abonnement
+ * (subApplyPayment_). Échec : nouvel essai chaque jour (SUMUP_MAX_ATTEMPTS_ au plus par échéance), notifications, puis la règle
+ * habituelle (lecture seule après le délai de grâce) s'applique.
+ *
+ * Configuration (propriétés du script ; jamais dans le code ni dans GitHub) :
+ *   SUMUP_API_KEY        clé secrète SumUp (sup_sk_…)
+ *   SUMUP_MERCHANT_CODE  code marchand SumUp
+ *   SUMUP_CURRENCY       devise du compte SumUp (EUR par défaut)
+ *   SUMUP_RATE           obligatoire si la devise de l'édition (MAD) diffère de SUMUP_CURRENCY : montant en SUMUP_CURRENCY
+ *                        pour 1 unité de la devise de l'édition (ex. 0.092). Sans lui, aucun débit n'est tenté.
+ * Tant que la clé et le code marchand ne sont pas renseignés, rien ne change : paiement manuel comme avant.
+ */
+var SUMUP_API_ = "https://api.sumup.com/v0.1";
+var SUMUP_MAX_ATTEMPTS_ = 4;
+var SUMUP_SETUP_AMOUNT_ = 1; // autorisation de vérification de la carte, remboursée aussitôt par SumUp
+
+function sumupConf_() {
+  if (TEST_HOOKS_.sumupConfig) return TEST_HOOKS_.sumupConfig;
+  const P = PropertiesService.getScriptProperties();
+  return { key: P.getProperty("SUMUP_API_KEY") || "", merchant: P.getProperty("SUMUP_MERCHANT_CODE") || "", currency: (P.getProperty("SUMUP_CURRENCY") || "EUR").toUpperCase(),
+    rate: Number(P.getProperty("SUMUP_RATE")) || 0 };
+}
+function sumupEnabled_() { const c = sumupConf_(); return !!(c.key && c.merchant); }
+
+/** Montant à débiter dans la devise SumUp. Garde-fou : jamais un montant en MAD envoyé tel quel vers un compte en EUR. */
+function sumupAmount_(localAmount) {
+  const c = sumupConf_(), local = round2_(num_(localAmount));
+  if (cur_() === c.currency) return { amount: local, currency: c.currency, rate: 1 };
+  if (!(c.rate > 0)) throw new AppError("PAYMENT", "Taux de conversion " + cur_() + " → " + c.currency + " non défini (SUMUP_RATE) : aucun prélèvement possible.");
+  return { amount: round2_(local * c.rate), currency: c.currency, rate: c.rate };
+}
+
+/** Appel à l'API SumUp. Renvoie { status, body } ; lève une erreur lisible au-delà de 299 sauf si allow contient le code. */
+function sumupCall_(method, path, body, allow) {
+  const c = sumupConf_();
+  if (!c.key) throw new AppError("PAYMENT", "SumUp n'est pas configuré.");
+  const params = { method: method, contentType: "application/json", muteHttpExceptions: true, headers: { Authorization: "Bearer " + c.key } };
+  if (body) params.payload = JSON.stringify(body);
+  const r = TEST_HOOKS_.sumupFetch ? TEST_HOOKS_.sumupFetch(SUMUP_API_ + path, params) : UrlFetchApp.fetch(SUMUP_API_ + path, params);
+  const status = r.getResponseCode(), txt = r.getContentText();
+  let j = {}; try { j = txt ? JSON.parse(txt) : {}; } catch (e) { j = { raw: String(txt).slice(0, 300) }; }
+  if (status >= 300 && (allow || []).indexOf(status) < 0) {
+    const msg = j.message || j.error_message || (j[0] && j[0].message) || j.error_code || ("HTTP " + status);
+    throw new AppError("PAYMENT", "SumUp a refusé l'opération : " + String(msg).slice(0, 200));
+  }
+  return { status: status, body: j };
+}
+
+/* ------------------------------ Cartes enregistrées ------------------------------ */
+function sumupCardOf_(orgId) {
+  return dbAll_("BillingCards").filter(function (c) { return String(c.organizationId) === String(orgId) && c.status === "ACTIVE" && c.token; })
+    .sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); })[0] || null;
+}
+function sumupCustomerId_(orgId) { return "immo-" + edition_().code.toLowerCase() + "-" + String(orgId).replace(/[^A-Za-z0-9_-]/g, "").slice(-48); }
+
+/** Organisation qui règle l'abonnement : propriétaire (option agences) ou organisation cliente elle-même. */
+function sumupPayerSub_(p, orgId) {
+  const org = dbGet_("Organizations", orgId);
+  assert_(org && org.type !== "PLATFORM", "Organisation introuvable.");
+  if (agencyBillingParent_(org)) throw new AppError("VALIDATION", "Cette agence est incluse dans l'abonnement de son propriétaire : c'est lui qui enregistre la carte.");
+  const e = entitlement_(orgId), s = e.subscription;
+  assert_(s && ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0, "Aucun abonnement en cours : l'administrateur ImmoPilot doit d'abord attribuer un forfait.");
+  return s;
+}
+
+/** Infos de paiement par carte pour l'écran « Abonnements » (aucun secret, aucun jeton). */
+function sumupCardInfo_(orgId, s) {
+  if (!sumupEnabled_()) return { enabled: false };
+  const card = sumupCardOf_(orgId), out = { enabled: true, active: !!card, label: card ? card.label : "", savedAt: card ? card.createdAt : "", lastError: card ? card.lastChargeError || "" : "" };
+  if (s) { try { const total = subAgencyOption_(s).totalPrice, a = sumupAmount_(total); out.amount = a.amount; out.currency = a.currency; out.converted = a.rate !== 1; out.rate = a.rate; }
+    catch (e) { out.amountError = e.message; } }
+  return out;
+}
+
+/** 1. Le propriétaire demande à enregistrer sa carte : client SumUp + paiement de vérification (tokenisation). */
+function subCardSetup_(p, a) {
+  const orgId = safeText_(a.organizationId, 120);
+  assertOrgCap_(p, orgId, "settings.manage");
+  assert_(sumupEnabled_(), "Le paiement par carte n'est pas encore activé sur cette plateforme.");
+  const s = sumupPayerSub_(p, orgId);
+  sumupAmount_(subAgencyOption_(s).totalPrice); // refuse dès maintenant si la conversion n'est pas configurée
+  const c = sumupConf_(), org = dbGet_("Organizations", orgId), customerId = sumupCustomerId_(orgId);
+  sumupCall_("post", "/customers", { customer_id: customerId, personal_details: { email: safeText_(p.email, 200), first_name: safeText_(org.name, 100) } }, [409]);
+  const co = sumupCall_("post", "/checkouts", { checkout_reference: "CARD-" + orgId.slice(-20) + "-" + Date.now(), amount: SUMUP_SETUP_AMOUNT_, currency: c.currency, merchant_code: c.merchant,
+    description: "ImmoPilot : enregistrement de la carte (montant remboursé)", customer_id: customerId, purpose: "SETUP_RECURRING_PAYMENT" }).body;
+  assert_(co && co.id, "SumUp n'a pas créé le paiement de vérification.");
+  dbInsert_("BillingCards", { organizationId: orgId, status: "PENDING", customerId: customerId, token: "", label: "", setupCheckoutId: co.id, createdAt: nowIso_(), createdBy: p.email });
+  audit_("CARD_SETUP_STARTED", "Organization", orgId, orgId, {});
+  return { checkoutId: co.id, setupAmount: SUMUP_SETUP_AMOUNT_, currency: c.currency, info: sumupCardInfo_(orgId, s) };
+}
+
+/** 2. Après le widget : on relit le paiement chez SumUp (jamais le navigateur), on garde le jeton, et on débite si une échéance est due. */
+function subCardConfirm_(p, a) {
+  const orgId = safeText_(a.organizationId, 120), checkoutId = safeText_(a.checkoutId, 120);
+  assertOrgCap_(p, orgId, "settings.manage");
+  const row = dbAll_("BillingCards").find(function (c) { return String(c.organizationId) === orgId && c.setupCheckoutId === checkoutId && c.status === "PENDING"; });
+  assert_(row, "Enregistrement de carte introuvable ou déjà traité.");
+  const co = sumupCall_("get", "/checkouts/" + encodeURIComponent(checkoutId)).body;
+  assert_(String(co.customer_id || row.customerId) === row.customerId, "Paiement de vérification incohérent.");
+  let token = co.payment_instrument && co.payment_instrument.token, label = "";
+  if (!token || ["PAID", "SUCCESSFUL"].indexOf(String(co.status)) < 0) {
+    const list = sumupCall_("get", "/customers/" + encodeURIComponent(row.customerId) + "/payment-instruments", null, [404]).body;
+    const inst = (Array.isArray(list) ? list : []).filter(function (x) { return x.active !== false && x.token; }).sort(function (x, y) { return String(y.created_at || "").localeCompare(String(x.created_at || "")); })[0];
+    if (["PAID", "SUCCESSFUL"].indexOf(String(co.status)) < 0 || !inst) {
+      dbUpdate_("BillingCards", row.cardId, { status: "FAILED", lastChargeError: "Carte non validée (" + (co.status || "inconnu") + ")", updatedAt: nowIso_() });
+      throw new AppError("PAYMENT", "La carte n'a pas été validée par SumUp. Réessayez ou utilisez une autre carte.");
+    }
+    token = inst.token; label = sumupCardLabel_(inst.card);
+  }
+  if (!label) label = sumupCardLabel_((co.payment_instrument || {}).card || co.card);
+  return withLock_(function () {
+    dbAll_("BillingCards").filter(function (c) { return String(c.organizationId) === orgId && c.status === "ACTIVE" && c.cardId !== row.cardId; }).forEach(function (old) {
+      try { if (old.token && old.token !== token) sumupCall_("delete", "/customers/" + encodeURIComponent(old.customerId) + "/payment-instruments/" + encodeURIComponent(old.token), null, [404]); } catch (e) { /* sans gravité */ }
+      dbUpdate_("BillingCards", old.cardId, { status: "REPLACED", token: "", updatedAt: nowIso_() });
+    });
+    dbUpdate_("BillingCards", row.cardId, { status: "ACTIVE", token: token, label: label || "Carte enregistrée", updatedAt: nowIso_(), chargeAttempts: 0, lastChargeError: "" });
+    audit_("CARD_SAVED", "Organization", orgId, orgId, { label: label });
+    const s = sumupPayerSub_(p, orgId), res = { ok: true, label: label || "Carte enregistrée", charged: null };
+    if (sumupDue_(s, todayStr_())) res.charged = sumupChargeSub_(s, p.email);
+    return res;
+  });
+}
+function sumupCardLabel_(card) {
+  card = card || {};
+  const last4 = card.last_4_digits || card.last4 || "", type = card.type || card.brand || "";
+  return last4 ? (type ? String(type).toUpperCase() + " " : "") + "•••• " + String(last4).slice(-4) : "";
+}
+
+/** Retrait de la carte : plus aucun prélèvement automatique (l'abonnement continue, règlement manuel possible). */
+function subCardRemove_(p, a) {
+  const orgId = safeText_(a.organizationId, 120);
+  if (!p.isSuper) assertOrgCap_(p, orgId, "settings.manage");
+  const card = sumupCardOf_(orgId);
+  assert_(card, "Aucune carte enregistrée.");
+  try { sumupCall_("delete", "/customers/" + encodeURIComponent(card.customerId) + "/payment-instruments/" + encodeURIComponent(card.token), null, [404]); } catch (e) { /* le jeton est oublié de notre côté dans tous les cas */ }
+  dbUpdate_("BillingCards", card.cardId, { status: "REMOVED", token: "", updatedAt: nowIso_() });
+  audit_("CARD_REMOVED", "Organization", orgId, orgId, {});
+  return { ok: true };
+}
+
+/* ------------------------------ Prélèvements ------------------------------ */
+/** Une échéance est-elle due aujourd'hui (ou dépassée) ? */
+function sumupDue_(s, today) {
+  if (!s || ["CANCELLED", "EXPIRED"].indexOf(s.status) >= 0) return false;
+  if (s.status === "TRIAL") return !!s.trialEnd && s.trialEnd <= today;
+  if (s.status === "ACTIVE") return !bool_(s.cancelAtPeriodEnd) && !!s.periodEnd && s.periodEnd <= today;
+  return ["PAST_DUE", "SUSPENDED"].indexOf(s.status) >= 0; // règlement attendu
+}
+function sumupDueKey_(s) { return String(s.status === "TRIAL" ? s.trialEnd : s.status === "ACTIVE" ? s.periodEnd : s.nextDueDate || s.periodEnd || s.startDate).replace(/-/g, ""); }
+function sumupRef_(s, seq) { return "SUB-" + String(s.subscriptionId).slice(-24) + "-" + sumupDueKey_(s) + "-" + seq; }
+
+/**
+ * Débite UNE échéance d'un abonnement avec la carte enregistrée. Anti-double débit : chaque tentative a une référence unique
+ * (SumUp refuse les doublons) et les tentatives précédentes de la même échéance sont relues avant d'en lancer une nouvelle.
+ */
+function sumupChargeSub_(s, actor) {
+  const card = sumupCardOf_(s.organizationId);
+  if (!card) return { ok: false, reason: "NO_CARD" };
+  const c = sumupConf_(), total = subAgencyOption_(s).totalPrice, amt = sumupAmount_(total), dueKey = sumupDueKey_(s);
+  // chargeSeq ne revient jamais en arrière : chaque tentative a une référence unique, même si une date d'échéance se répète.
+  const sameDue = String(card.lastChargeKey || "") === dueKey, attempts = sameDue ? Number(card.chargeAttempts) || 0 : 0, seq = Number(card.chargeSeq) || 0;
+  // Une tentative précédente de CETTE échéance a-t-elle abouti sans être enregistrée (coupure réseau…) ?
+  for (let k = seq - attempts + 1; k <= seq; k++) {
+    const found = sumupCall_("get", "/checkouts?checkout_reference=" + encodeURIComponent(sumupRef_(s, k)), null, [404]).body;
+    const paid = (Array.isArray(found) ? found : []).find(function (x) { return String(x.status) === "PAID"; });
+    if (paid) return sumupRecordPaid_(s, card, paid, total, amt, actor);
+  }
+  if (attempts >= SUMUP_MAX_ATTEMPTS_) return { ok: false, reason: "MAX_ATTEMPTS" };
+  if (sameDue && card.lastChargeAt && String(card.lastChargeAt).slice(0, 10) === todayStr_() && actor === "system") return { ok: false, reason: "ALREADY_TRIED_TODAY" };
+  const ref = sumupRef_(s, seq + 1);
+  dbUpdate_("BillingCards", card.cardId, { lastChargeKey: dueKey, chargeAttempts: attempts + 1, chargeSeq: seq + 1, lastChargeAt: nowIso_(), updatedAt: nowIso_() });
+  let res;
+  try {
+    const plan = dbGet_("SubscriptionPlans", s.planCode) || {};
+    const co = sumupCall_("post", "/checkouts", { checkout_reference: ref, amount: amt.amount, currency: amt.currency, merchant_code: c.merchant, customer_id: card.customerId,
+      description: ("ImmoPilot : abonnement " + (plan.name || s.planCode)).slice(0, 120) }).body;
+    res = sumupCall_("put", "/checkouts/" + encodeURIComponent(co.id), { payment_type: "card", token: card.token, customer_id: card.customerId }).body;
+  } catch (e) { res = { status: "FAILED", message: e.message }; }
+  if (String(res.status) === "PAID") return sumupRecordPaid_(s, card, res, total, amt, actor);
+  const why = String(res.message || res.status || "refusé").slice(0, 200);
+  dbUpdate_("BillingCards", card.cardId, { lastChargeError: why, updatedAt: nowIso_() });
+  auditAs_(actor || "system", "", "SUBSCRIPTION_CARD_CHARGE_FAILED", "Subscription", s.subscriptionId, s.organizationId, { attempt: attempts + 1, reason: why });
+  sumupNotify_(s, "sub-card-fail:" + s.subscriptionId + ":" + dueKey + ":" + (attempts + 1), "Prélèvement de l'abonnement refusé",
+    "Le prélèvement de " + amt.amount + " " + amt.currency + " sur " + card.label + " a échoué (" + why + "). " + (attempts + 1 < SUMUP_MAX_ATTEMPTS_ ? "Nouvel essai demain. " : "") + "Vous pouvez enregistrer une autre carte dans Abonnements.", true);
+  return { ok: false, reason: "DECLINED", message: why, attempt: attempts + 1 };
+}
+function sumupRecordPaid_(s, card, co, total, amt, actor) {
+  const tx = ((co.transactions || [])[0] || {}).transaction_code || co.transaction_code || co.id || "";
+  const r = subApplyPayment_(dbGet_("Subscriptions", s.subscriptionId), total, todayStr_(), "CARD", "SumUp " + tx, "", 1, actor || "system");
+  if (amt.rate !== 1) dbUpdate_("Payments", r.paymentId, { note: "1 période — débité " + amt.amount + " " + amt.currency + " (taux " + amt.rate + ")" });
+  dbUpdate_("BillingCards", card.cardId, { lastChargeKey: sumupDueKey_(s) + ":OK", chargeAttempts: 0, lastChargeError: "", updatedAt: nowIso_() });
+  auditAs_(actor || "system", "", "SUBSCRIPTION_CARD_CHARGED", "Subscription", s.subscriptionId, s.organizationId, { amount: amt.amount, currency: amt.currency, periodEnd: r.periodEnd });
+  sumupNotify_(s, "sub-card-ok:" + s.subscriptionId + ":" + r.periodEnd, "Abonnement réglé par carte", amt.amount + " " + amt.currency + " prélevés sur " + card.label + ". Abonnement payé jusqu'au " + r.periodEnd + ".", false);
+  return { ok: true, paymentId: r.paymentId, periodEnd: r.periodEnd, amount: amt.amount, currency: amt.currency };
+}
+function sumupNotify_(s, key, title, body, alsoSuper) {
+  const admins = dbAll_("UserRoles").filter(function (r) { return r.status === "ACTIVE" && String(r.organizationId) === String(s.organizationId) && (r.role === "OWNER" || r.role === "AGENCY_ADMIN"); }).map(function (r) { return r.userId; });
+  try { notify_({ eventKey: key, userIds: admins, type: "SUBSCRIPTION", organizationId: s.organizationId, title: title, body: body, link: "#subscriptions" });
+    if (alsoSuper) notify_({ eventKey: key + ":super", userIds: superAdminIds_(), type: "SUBSCRIPTION", organizationId: "", title: title + " — " + ((dbGet_("Organizations", s.organizationId) || {}).name || ""), body: body, link: "#subscriptions" });
+  } catch (e) { /* une notification manquée ne doit jamais bloquer un paiement */ }
+}
+
+/** Tâche quotidienne (avant subscriptionJob_) : débite toutes les échéances dues des abonnements ayant une carte. */
+function sumupChargeJob_() {
+  if (!sumupEnabled_()) return { skipped: "SumUp non configuré" };
+  const today = todayStr_(), demo = demoOrgIdSet_(); let paid = 0, failed = 0;
+  dbAll_("Subscriptions").filter(function (s) { return !demo[String(s.organizationId)] && sumupDue_(s, today) && sumupCardOf_(s.organizationId); }).forEach(function (s) {
+    try { const r = withLock_(function () { const fresh = dbGet_("Subscriptions", s.subscriptionId); return sumupDue_(fresh, today) ? sumupChargeSub_(fresh, "system") : { ok: false, reason: "NOT_DUE" }; });
+      if (r.ok) paid++; else if (r.reason === "DECLINED") failed++; }
+    catch (e) { failed++; }
+  });
+  return { paid: paid, failed: failed };
+}
+
+/** Super administrateur : relancer tout de suite le prélèvement d'une échéance due. */
+function subChargeNow_(p, a) {
+  requireSuper_(p);
+  const s = dbGet_("Subscriptions", safeText_(a.subscriptionId, 120));
+  assert_(s, "Abonnement introuvable.");
+  assert_(sumupEnabled_(), "SumUp n'est pas configuré.");
+  assert_(sumupDue_(s, todayStr_()), "Aucune échéance due pour cet abonnement.");
+  return withLock_(function () { return sumupChargeSub_(dbGet_("Subscriptions", s.subscriptionId), p.email); });
+}
+
+/**
+ * Contrôle de la configuration (commande : immopilot run testerSumUp). Aucun paiement : lit seulement le profil du compte SumUp
+ * et vérifie que le code marchand correspond. Ne renvoie jamais la clé.
+ */
+function testerSumUp() {
+  const c = sumupConf_();
+  if (!c.key || !c.merchant) return { ok: false, message: "SUMUP_API_KEY ou SUMUP_MERCHANT_CODE manquant." };
+  const me = sumupCall_("get", "/me").body, prof = me.merchant_profile || {};
+  const code = prof.merchant_code || me.merchant_code || "";
+  const out = { ok: code === c.merchant, compteSumUp: code, codeConfigure: c.merchant, devise: c.currency, deviseEdition: cur_(), pays: prof.country || "" };
+  if (cur_() !== c.currency) { out.taux = c.rate; if (!(c.rate > 0)) { out.ok = false; out.message = "SUMUP_RATE manquant (conversion " + cur_() + " → " + c.currency + ")."; } else out.exemple = "100 " + cur_() + " = " + round2_(100 * c.rate) + " " + c.currency; }
+  if (code !== c.merchant) out.message = "Le code marchand configuré ne correspond pas à la clé.";
+  return out;
 }
 
 /* ======================================================================
@@ -8218,7 +8468,7 @@ function testEnvSetup_() {
   folder.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
   const env = { ss: ss, folder: folder, previousSs: DB_SS_ };
   dbSetSpreadsheet_(ss);
-  TEST_HOOKS_ = { driveRoot: folder, mailSink: [], appUrl: "https://example.test/exec", pbkdfIters: 50, mailQuota: null, aiConfig: false, aiFetch: null };
+  TEST_HOOKS_ = { driveRoot: folder, mailSink: [], appUrl: "https://example.test/exec", pbkdfIters: 50, mailQuota: null, aiConfig: false, aiFetch: null, sumupConfig: null, sumupFetch: null };
   ctxReset_();
   runMigrations_("tests");
   return env;
@@ -8227,7 +8477,7 @@ function testEnvTeardown_(env) {
   try { DriveApp.getFileById(env.ss.getId()).setTrashed(true); } catch (e) { console.error(e.message); }
   try { env.folder.setTrashed(true); } catch (e) { console.error(e.message); }
   DB_SS_ = null; dbReset_();
-  TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null };
+  TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null, sumupConfig: null, sumupFetch: null };
 }
 
 function testKit_(results) {
@@ -9495,6 +9745,79 @@ function TEST_GROUPS_() {
         T.ok(T.call(tok, "property.create", { organizationId: org.organizationId, name: "OK", city: "Rabat" }).propertyId, "écriture rétablie");
         T.fails(tok, "lease.create", { propertyId: "x" }, "FORBIDDEN");
       }],
+      ["Prélèvement automatique par carte (SumUp simulé) : enregistrement, débit, renouvellement, refus, anti-double débit", function (T, fx) {
+        const sim = { checkouts: {}, n: 0, puts: 0, mode: "ok", lostOnce: false };
+        const resp = function (code, body) { return { getResponseCode: function () { return code; }, getContentText: function () { return JSON.stringify(body); } }; };
+        TEST_HOOKS_.sumupFetch = function (url, params) {
+          const path = url.replace(SUMUP_API_, ""), m = String(params.method).toLowerCase(), body = params.payload ? JSON.parse(params.payload) : {};
+          T.ok(params.headers.Authorization === "Bearer sup_sk_TEST", "clé envoyée dans l'en-tête");
+          if (m === "post" && path === "/customers") return resp(201, body);
+          if (m === "post" && path === "/checkouts") { const id = "co" + (++sim.n); sim.checkouts[id] = Object.assign({ id: id, status: "PENDING" }, body); return resp(201, sim.checkouts[id]); }
+          let x = /^\/checkouts\/(co\d+)$/.exec(path);
+          if (m === "get" && x) return resp(200, sim.checkouts[x[1]]);
+          if (m === "put" && x) { sim.puts++; const co = sim.checkouts[x[1]]; T.eq(body.token, "tok_1", "débit avec le jeton enregistré");
+            if (sim.mode === "decline") { co.status = "FAILED"; return resp(200, Object.assign({ message: "Carte refusée" }, co)); }
+            co.status = "PAID"; co.transactions = [{ transaction_code: "TX" + sim.n }];
+            if (sim.lostOnce) { sim.lostOnce = false; return resp(502, { message: "passerelle" }); }
+            return resp(200, co); }
+          x = /^\/checkouts\?checkout_reference=(.+)$/.exec(path);
+          if (m === "get" && x) { const ref = decodeURIComponent(x[1]); return resp(200, Object.keys(sim.checkouts).map(function (k) { return sim.checkouts[k]; }).filter(function (c) { return c.checkout_reference === ref; })); }
+          if (m === "delete") return resp(204, {});
+          if (m === "get" && path === "/me") return resp(200, { merchant_profile: { merchant_code: "MTEST", country: "FR" } });
+          return resp(404, { message: "inconnu " + m + " " + path });
+        };
+        try {
+          const org = tOrg_("Carte " + fx.run, "OWNER_ORG"), u = tMakeUser_(fx.mail("carte"), "OWNER", org.organizationId, fx.pw);
+          const tok = T.pub("auth.login", { email: u.email, password: fx.pw }).token;
+          const s = T.call(fx.tok.superA, "sub.assign", { organizationId: org.organizationId, planCode: "ESSENTIEL", trial: false });
+          TEST_HOOKS_.sumupConfig = { key: "", merchant: "", currency: cur_(), rate: 0 };
+          T.eq(T.call(tok, "sub.mine", {}).filter(function (o) { return o.organizationId === org.organizationId; })[0].card.enabled, false, "non configuré : rien ne change");
+          T.fails(tok, "sub.cardSetup", { organizationId: org.organizationId }, "VALIDATION");
+          TEST_HOOKS_.sumupConfig = { key: "sup_sk_TEST", merchant: "MTEST", currency: "XXX", rate: 0 };
+          T.fails(tok, "sub.cardSetup", { organizationId: org.organizationId }, "PAYMENT"); // devise différente sans taux : refus
+          TEST_HOOKS_.sumupConfig = { key: "sup_sk_TEST", merchant: "MTEST", currency: "XXX", rate: 0.5 };
+          const price = num_(dbGet_("Subscriptions", s.subscriptionId).price);
+          const setup = T.call(tok, "sub.cardSetup", { organizationId: org.organizationId });
+          T.eq(sim.checkouts[setup.checkoutId].purpose, "SETUP_RECURRING_PAYMENT", "paiement de vérification (tokenisation)");
+          T.eq(setup.info.amount, round2_(price * 0.5), "montant converti affiché avant l'enregistrement");
+          T.fails(fx.tok.ownerB, "sub.cardConfirm", { organizationId: org.organizationId, checkoutId: setup.checkoutId }, "FORBIDDEN");
+          sim.checkouts[setup.checkoutId].status = "PAID"; sim.checkouts[setup.checkoutId].payment_instrument = { token: "tok_1", card: { last_4_digits: "4242", type: "VISA" } };
+          const conf = T.call(tok, "sub.cardConfirm", { organizationId: org.organizationId, checkoutId: setup.checkoutId });
+          T.ok(conf.charged && conf.charged.ok && conf.charged.amount === round2_(price * 0.5), "1er mois débité aussitôt (règlement attendu)");
+          let cur = dbGet_("Subscriptions", s.subscriptionId);
+          T.eq(cur.status, "ACTIVE", "abonnement actif après le débit");
+          const mine = T.call(tok, "sub.mine", {}).filter(function (o) { return o.organizationId === org.organizationId; })[0];
+          T.ok(mine.card.active && mine.card.label === "VISA •••• 4242" && JSON.stringify(mine).indexOf("tok_1") < 0, "carte affichée, jeton jamais renvoyé au navigateur");
+          T.ok(mine.billing.some(function (b) { return b.method === "CARD" && /^SumUp TX/.test(b.reference); }), "règlement enregistré (carte, référence SumUp)");
+          T.fails(tok, "sub.cardConfirm", { organizationId: org.organizationId, checkoutId: setup.checkoutId }, "VALIDATION");
+          // Renouvellement à la fin de période
+          const end1 = cur.periodEnd; dbUpdate_("Subscriptions", s.subscriptionId, { periodEnd: todayStr_(), nextDueDate: todayStr_() });
+          const putsBefore = sim.puts; T.eq(sumupChargeJob_().paid, 1, "échéance débitée par la tâche quotidienne");
+          T.ok(dbGet_("Subscriptions", s.subscriptionId).periodEnd > todayStr_() && sim.puts === putsBefore + 1, "période prolongée");
+          T.eq(sumupChargeJob_().paid, 0, "pas de second débit le même jour");
+          // Refus de la carte
+          dbUpdate_("Subscriptions", s.subscriptionId, { periodEnd: todayStr_(), nextDueDate: todayStr_() }); sim.mode = "decline";
+          T.eq(sumupChargeJob_().failed, 1, "refus signalé");
+          T.eq(dbGet_("Subscriptions", s.subscriptionId).status, "ACTIVE", "statut inchangé (le délai de grâce s'applique ensuite)");
+          const p2 = sim.puts; sumupChargeJob_(); T.eq(sim.puts, p2, "un seul essai par jour");
+          // Réponse perdue : le paiement a abouti chez SumUp mais la réponse n'est pas arrivée → aucune nouvelle tentative de débit
+          const card = sumupCardOf_(org.organizationId); dbUpdate_("BillingCards", card.cardId, { lastChargeAt: "2020-01-01T00:00:00Z" });
+          sim.mode = "ok"; sim.lostOnce = true; T.eq(sumupChargeJob_().paid, 0, "réponse perdue : rien d'enregistré");
+          dbUpdate_("BillingCards", card.cardId, { lastChargeAt: "2020-01-01T00:00:00Z" });
+          const p3 = sim.puts; T.eq(sumupChargeJob_().paid, 1, "paiement retrouvé par sa référence et enregistré");
+          T.eq(sim.puts, p3, "aucun double débit");
+          // Retrait de la carte
+          T.call(tok, "sub.cardRemove", { organizationId: org.organizationId });
+          dbUpdate_("Subscriptions", s.subscriptionId, { periodEnd: todayStr_(), nextDueDate: todayStr_() });
+          T.eq(sumupChargeJob_().paid, 0, "plus de prélèvement après retrait de la carte");
+          const refs = Object.keys(sim.checkouts).map(function (k) { return sim.checkouts[k].checkout_reference; });
+          T.eq(refs.length, Object.keys(refs.reduce(function (o, x) { o[x] = 1; return o; }, {})).length, "chaque tentative a une référence unique");
+          T.ok(!JSON.stringify(dbAll_("BillingCards").filter(function (c) { return c.organizationId === org.organizationId; })).match(/tok_1/), "jeton effacé");
+          const chk = testerSumUp(); T.ok(chk.ok && chk.compteSumUp === "MTEST" && JSON.stringify(chk).indexOf("sup_sk") < 0, "contrôle de configuration sans exposer la clé");
+          TEST_HOOKS_.sumupConfig = { key: "sup_sk_TEST", merchant: "MAUTRE", currency: "XXX", rate: 0.5 }; T.ok(!testerSumUp().ok, "code marchand erroné détecté");
+          void end1;
+        } finally { TEST_HOOKS_.sumupConfig = null; TEST_HOOKS_.sumupFetch = null; }
+      }],
       ["Quota de biens du forfait appliqué", function (T, fx) {
         const org = tOrg_("Quota " + fx.run, "OWNER_ORG"), u = tMakeUser_(fx.mail("quota"), "OWNER", org.organizationId, fx.pw);
         const tok = T.pub("auth.login", { email: u.email, password: fx.pw }).token;
@@ -9692,7 +10015,7 @@ function jobFrequent() {
 function jobSummary_(r) { return { ok: !!(r && r.ok), skipped: !!(r && r.skipped), errorCount: r && r.errors ? r.errors.length : 0 }; }
 /** Chaque jour : baux, abonnements, devis expirés, alertes incidents, rétention, arrivées imminentes, sauvegarde. */
 function jobDaily() {
-  return jobSummary_(runJob_("jobDaily", { leases: leaseJob_, subscriptions: subscriptionJob_, quotes: quoteExpireJob_, incidents: incidentAlertsJob_, retention: purgeExpiredDocuments_,
+  return jobSummary_(runJob_("jobDaily", { leases: leaseJob_, cardPayments: sumupChargeJob_, subscriptions: subscriptionJob_, quotes: quoteExpireJob_, incidents: incidentAlertsJob_, retention: purgeExpiredDocuments_,
     arrivals: upcomingArrivalsJob_, guestTokens: guestTokenExpireJob_, backup: function () { return backupDatabase_("quotidien").name; } }));
 }
 
@@ -10049,7 +10372,7 @@ function userErase_(p, a) {
  * Points d'injection réservés à la suite de tests (Tests.gs). Ce sont des variables d'exécution : elles ne peuvent être
  * modifiées que par du code serveur dans la même exécution (jamais par le navigateur) et reviennent à null à chaque requête.
  */
-var TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null };
+var TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null, sumupConfig: null, sumupFetch: null };
 class AppError extends Error {
   constructor(code, message) { super(message); this.name = "AppError"; this.code = code; }
 }

@@ -40,7 +40,7 @@ function testEnvSetup_() {
   folder.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
   const env = { ss: ss, folder: folder, previousSs: DB_SS_ };
   dbSetSpreadsheet_(ss);
-  TEST_HOOKS_ = { driveRoot: folder, mailSink: [], appUrl: "https://example.test/exec", pbkdfIters: 50, mailQuota: null, aiConfig: false, aiFetch: null };
+  TEST_HOOKS_ = { driveRoot: folder, mailSink: [], appUrl: "https://example.test/exec", pbkdfIters: 50, mailQuota: null, aiConfig: false, aiFetch: null, sumupConfig: null, sumupFetch: null };
   ctxReset_();
   runMigrations_("tests");
   return env;
@@ -49,7 +49,7 @@ function testEnvTeardown_(env) {
   try { DriveApp.getFileById(env.ss.getId()).setTrashed(true); } catch (e) { console.error(e.message); }
   try { env.folder.setTrashed(true); } catch (e) { console.error(e.message); }
   DB_SS_ = null; dbReset_();
-  TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null };
+  TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null, sumupConfig: null, sumupFetch: null };
 }
 
 function testKit_(results) {
@@ -1316,6 +1316,79 @@ function TEST_GROUPS_() {
         T.eq(dbGet_("Subscriptions", s.subscriptionId).status, "ACTIVE", "réactivé par paiement enregistré");
         T.ok(T.call(tok, "property.create", { organizationId: org.organizationId, name: "OK", city: "Rabat" }).propertyId, "écriture rétablie");
         T.fails(tok, "lease.create", { propertyId: "x" }, "FORBIDDEN");
+      }],
+      ["Prélèvement automatique par carte (SumUp simulé) : enregistrement, débit, renouvellement, refus, anti-double débit", function (T, fx) {
+        const sim = { checkouts: {}, n: 0, puts: 0, mode: "ok", lostOnce: false };
+        const resp = function (code, body) { return { getResponseCode: function () { return code; }, getContentText: function () { return JSON.stringify(body); } }; };
+        TEST_HOOKS_.sumupFetch = function (url, params) {
+          const path = url.replace(SUMUP_API_, ""), m = String(params.method).toLowerCase(), body = params.payload ? JSON.parse(params.payload) : {};
+          T.ok(params.headers.Authorization === "Bearer sup_sk_TEST", "clé envoyée dans l'en-tête");
+          if (m === "post" && path === "/customers") return resp(201, body);
+          if (m === "post" && path === "/checkouts") { const id = "co" + (++sim.n); sim.checkouts[id] = Object.assign({ id: id, status: "PENDING" }, body); return resp(201, sim.checkouts[id]); }
+          let x = /^\/checkouts\/(co\d+)$/.exec(path);
+          if (m === "get" && x) return resp(200, sim.checkouts[x[1]]);
+          if (m === "put" && x) { sim.puts++; const co = sim.checkouts[x[1]]; T.eq(body.token, "tok_1", "débit avec le jeton enregistré");
+            if (sim.mode === "decline") { co.status = "FAILED"; return resp(200, Object.assign({ message: "Carte refusée" }, co)); }
+            co.status = "PAID"; co.transactions = [{ transaction_code: "TX" + sim.n }];
+            if (sim.lostOnce) { sim.lostOnce = false; return resp(502, { message: "passerelle" }); }
+            return resp(200, co); }
+          x = /^\/checkouts\?checkout_reference=(.+)$/.exec(path);
+          if (m === "get" && x) { const ref = decodeURIComponent(x[1]); return resp(200, Object.keys(sim.checkouts).map(function (k) { return sim.checkouts[k]; }).filter(function (c) { return c.checkout_reference === ref; })); }
+          if (m === "delete") return resp(204, {});
+          if (m === "get" && path === "/me") return resp(200, { merchant_profile: { merchant_code: "MTEST", country: "FR" } });
+          return resp(404, { message: "inconnu " + m + " " + path });
+        };
+        try {
+          const org = tOrg_("Carte " + fx.run, "OWNER_ORG"), u = tMakeUser_(fx.mail("carte"), "OWNER", org.organizationId, fx.pw);
+          const tok = T.pub("auth.login", { email: u.email, password: fx.pw }).token;
+          const s = T.call(fx.tok.superA, "sub.assign", { organizationId: org.organizationId, planCode: "ESSENTIEL", trial: false });
+          TEST_HOOKS_.sumupConfig = { key: "", merchant: "", currency: cur_(), rate: 0 };
+          T.eq(T.call(tok, "sub.mine", {}).filter(function (o) { return o.organizationId === org.organizationId; })[0].card.enabled, false, "non configuré : rien ne change");
+          T.fails(tok, "sub.cardSetup", { organizationId: org.organizationId }, "VALIDATION");
+          TEST_HOOKS_.sumupConfig = { key: "sup_sk_TEST", merchant: "MTEST", currency: "XXX", rate: 0 };
+          T.fails(tok, "sub.cardSetup", { organizationId: org.organizationId }, "PAYMENT"); // devise différente sans taux : refus
+          TEST_HOOKS_.sumupConfig = { key: "sup_sk_TEST", merchant: "MTEST", currency: "XXX", rate: 0.5 };
+          const price = num_(dbGet_("Subscriptions", s.subscriptionId).price);
+          const setup = T.call(tok, "sub.cardSetup", { organizationId: org.organizationId });
+          T.eq(sim.checkouts[setup.checkoutId].purpose, "SETUP_RECURRING_PAYMENT", "paiement de vérification (tokenisation)");
+          T.eq(setup.info.amount, round2_(price * 0.5), "montant converti affiché avant l'enregistrement");
+          T.fails(fx.tok.ownerB, "sub.cardConfirm", { organizationId: org.organizationId, checkoutId: setup.checkoutId }, "FORBIDDEN");
+          sim.checkouts[setup.checkoutId].status = "PAID"; sim.checkouts[setup.checkoutId].payment_instrument = { token: "tok_1", card: { last_4_digits: "4242", type: "VISA" } };
+          const conf = T.call(tok, "sub.cardConfirm", { organizationId: org.organizationId, checkoutId: setup.checkoutId });
+          T.ok(conf.charged && conf.charged.ok && conf.charged.amount === round2_(price * 0.5), "1er mois débité aussitôt (règlement attendu)");
+          let cur = dbGet_("Subscriptions", s.subscriptionId);
+          T.eq(cur.status, "ACTIVE", "abonnement actif après le débit");
+          const mine = T.call(tok, "sub.mine", {}).filter(function (o) { return o.organizationId === org.organizationId; })[0];
+          T.ok(mine.card.active && mine.card.label === "VISA •••• 4242" && JSON.stringify(mine).indexOf("tok_1") < 0, "carte affichée, jeton jamais renvoyé au navigateur");
+          T.ok(mine.billing.some(function (b) { return b.method === "CARD" && /^SumUp TX/.test(b.reference); }), "règlement enregistré (carte, référence SumUp)");
+          T.fails(tok, "sub.cardConfirm", { organizationId: org.organizationId, checkoutId: setup.checkoutId }, "VALIDATION");
+          // Renouvellement à la fin de période
+          const end1 = cur.periodEnd; dbUpdate_("Subscriptions", s.subscriptionId, { periodEnd: todayStr_(), nextDueDate: todayStr_() });
+          const putsBefore = sim.puts; T.eq(sumupChargeJob_().paid, 1, "échéance débitée par la tâche quotidienne");
+          T.ok(dbGet_("Subscriptions", s.subscriptionId).periodEnd > todayStr_() && sim.puts === putsBefore + 1, "période prolongée");
+          T.eq(sumupChargeJob_().paid, 0, "pas de second débit le même jour");
+          // Refus de la carte
+          dbUpdate_("Subscriptions", s.subscriptionId, { periodEnd: todayStr_(), nextDueDate: todayStr_() }); sim.mode = "decline";
+          T.eq(sumupChargeJob_().failed, 1, "refus signalé");
+          T.eq(dbGet_("Subscriptions", s.subscriptionId).status, "ACTIVE", "statut inchangé (le délai de grâce s'applique ensuite)");
+          const p2 = sim.puts; sumupChargeJob_(); T.eq(sim.puts, p2, "un seul essai par jour");
+          // Réponse perdue : le paiement a abouti chez SumUp mais la réponse n'est pas arrivée → aucune nouvelle tentative de débit
+          const card = sumupCardOf_(org.organizationId); dbUpdate_("BillingCards", card.cardId, { lastChargeAt: "2020-01-01T00:00:00Z" });
+          sim.mode = "ok"; sim.lostOnce = true; T.eq(sumupChargeJob_().paid, 0, "réponse perdue : rien d'enregistré");
+          dbUpdate_("BillingCards", card.cardId, { lastChargeAt: "2020-01-01T00:00:00Z" });
+          const p3 = sim.puts; T.eq(sumupChargeJob_().paid, 1, "paiement retrouvé par sa référence et enregistré");
+          T.eq(sim.puts, p3, "aucun double débit");
+          // Retrait de la carte
+          T.call(tok, "sub.cardRemove", { organizationId: org.organizationId });
+          dbUpdate_("Subscriptions", s.subscriptionId, { periodEnd: todayStr_(), nextDueDate: todayStr_() });
+          T.eq(sumupChargeJob_().paid, 0, "plus de prélèvement après retrait de la carte");
+          const refs = Object.keys(sim.checkouts).map(function (k) { return sim.checkouts[k].checkout_reference; });
+          T.eq(refs.length, Object.keys(refs.reduce(function (o, x) { o[x] = 1; return o; }, {})).length, "chaque tentative a une référence unique");
+          T.ok(!JSON.stringify(dbAll_("BillingCards").filter(function (c) { return c.organizationId === org.organizationId; })).match(/tok_1/), "jeton effacé");
+          const chk = testerSumUp(); T.ok(chk.ok && chk.compteSumUp === "MTEST" && JSON.stringify(chk).indexOf("sup_sk") < 0, "contrôle de configuration sans exposer la clé");
+          TEST_HOOKS_.sumupConfig = { key: "sup_sk_TEST", merchant: "MAUTRE", currency: "XXX", rate: 0.5 }; T.ok(!testerSumUp().ok, "code marchand erroné détecté");
+          void end1;
+        } finally { TEST_HOOKS_.sumupConfig = null; TEST_HOOKS_.sumupFetch = null; }
       }],
       ["Quota de biens du forfait appliqué", function (T, fx) {
         const org = tOrg_("Quota " + fx.run, "OWNER_ORG"), u = tMakeUser_(fx.mail("quota"), "OWNER", org.organizationId, fx.pw);

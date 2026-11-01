@@ -2870,12 +2870,12 @@ PAGES.subscriptions = function (el) {
     { id: "subs", label: "Abonnements clients", render: function (b) {
       const lv = listView(b, { route: "sub.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["TRIAL", "ACTIVE", "PAST_DUE", "SUSPENDED", "EXPIRED", "CANCELLED"] }, { k: "includeClosed", l: "Inclure les clos", t: "checkbox" }, { k: "includeDemo", l: "Inclure la démo", t: "checkbox" }],
         columns: [{ l: "Organisation", k: "organizationName" }, { l: "Forfait", k: "planCode" }, { l: "Statut", status: true, k: "status" }, { l: "Fin de période", date: true, k: "periodEnd" }, { l: "Échéance", date: true, k: "nextDueDate" },
-          { l: "Retard (j)", num: true, k: "daysOverdue" }, { l: "Prix", money: true, k: "price" }, { l: "Option agences", f: function (r) { return r.agencyOption && r.agencyOption.count ? r.agencyOption.count + " × " + fmtMoney(r.agencyOption.unitPrice) : "—"; } }, { l: "Total / période", money: true, f: function (r) { return r.agencyOption ? r.agencyOption.totalPrice : r.price; } }, { l: "Biens", num: true, f: function (r) { return r.usage.properties; } }, { l: "Utilisateurs", num: true, f: function (r) { return r.usage.users; } },
+          { l: "Retard (j)", num: true, k: "daysOverdue" }, { l: "Prix", money: true, k: "price" }, { l: "Option agences", f: function (r) { return r.agencyOption && r.agencyOption.count ? r.agencyOption.count + " × " + fmtMoney(r.agencyOption.unitPrice) : "—"; } }, { l: "Total / période", money: true, f: function (r) { return r.agencyOption ? r.agencyOption.totalPrice : r.price; } }, { l: "Carte", f: function (r) { return r.cardLabel || "—"; } }, { l: "Biens", num: true, f: function (r) { return r.usage.properties; } }, { l: "Utilisateurs", num: true, f: function (r) { return r.usage.users; } },
           { l: "", f: function (r) { return h("span", { class: "actions" }, btn(t("Paiement"), function () {
             formModal(t("Enregistrer un paiement d'abonnement"), [{ k: "amount", l: "Montant (MAD)", t: "number", req: true, def: r.agencyOption ? r.agencyOption.totalPrice : r.price }, { k: "periods", l: "Nombre de périodes", t: "number", def: 1, min: 1 }, { k: "paidAt", l: "Date", t: "date", def: today() },
               { k: "method", l: "Mode", t: "select", opts: (S.meta.payMethods || []).map(function (m) { return [m, st(m)]; }) }, { k: "reference", l: "Référence (virement, reçu…)", req: true }], {},
               function (v) { v.subscriptionId = r.subscriptionId; v.requestKey = rk(); return api("sub.recordPayment", v).then(function (x) { if (x.warning) toast(x.warning, "bad"); lv.reload(); }); }, { intro: t("Aucun paiement en ligne n'est simulé : enregistrez un règlement réellement reçu.") });
-          }, "sm"), btn(t("Contrat (PDF)"), function () { api("sub.contractPdf", { organizationId: r.organizationId }).then(download).catch(showErr); }, "sm"), h("select", { class: "btn sm", onchange: function (e) { const a = e.target.value; e.target.value = ""; if (!a) return; confirmBox(t("Confirmer l'action") + " : " + st("sub." + a) + " ?", { danger: a !== "REACTIVATE" && a !== "UNDO_CANCEL" }).then(function (ok) { if (ok) api("sub.setStatus", { subscriptionId: r.subscriptionId, action: a }).then(lv.reload).catch(showErr); }); } },
+          }, "sm"), btn(t("Contrat (PDF)"), function () { api("sub.contractPdf", { organizationId: r.organizationId }).then(download).catch(showErr); }, "sm"), r.cardLabel && ["PAST_DUE", "SUSPENDED"].indexOf(r.status) >= 0 ? btn(t("Prélever la carte"), function () { api("sub.chargeNow", { subscriptionId: r.subscriptionId }).then(function (x) { toast(x.ok ? t("Prélèvement réussi.") : t("Prélèvement refusé") + (x.message ? " : " + x.message : ""), x.ok ? "" : "bad"); lv.reload(); }).catch(showErr); }, "sm") : null, h("select", { class: "btn sm", onchange: function (e) { const a = e.target.value; e.target.value = ""; if (!a) return; confirmBox(t("Confirmer l'action") + " : " + st("sub." + a) + " ?", { danger: a !== "REACTIVATE" && a !== "UNDO_CANCEL" }).then(function (ok) { if (ok) api("sub.setStatus", { subscriptionId: r.subscriptionId, action: a }).then(lv.reload).catch(showErr); }); } },
             h("option", { value: "" }, t("Action…")), ["SUSPEND", "REACTIVATE", "CANCEL_AT_END", "UNDO_CANCEL", "CANCEL_NOW"].map(function (a) { return h("option", { value: a }, st("sub." + a)); }))); } }],
         after: function (r) { clear(hist).appendChild(table([{ l: "Organisation", k: "organizationName" }, { l: "Montant", money: true, k: "amount" }, { l: "Date", date: true, k: "paidAt" }, { l: "Mode", f: function (x) { return st(x.method); } }, { l: "Référence", k: "reference" }], r.billing || [])); } });
       const hist = h("div"); b.appendChild(panel("Historique de facturation", hist));
@@ -2917,6 +2917,7 @@ function mySubscriptions(el) {
         !s ? h("div", { class: "alert info" }, t("Aucun abonnement enregistré pour cette organisation.")) :
           kv([["Forfait", pl ? pl.name : s.planCode], ["Statut", stTag(s.status)], ["Fin de période", fmtDate(s.periodEnd)], ["Prochaine échéance", fmtDate(s.nextDueDate)], ["Tarif", fmtMoney(s.price) + " / " + st(s.periodicity)], s.agencyOption && s.agencyOption.count ? ["Option agences", s.agencyOption.count + " × " + fmtMoney(s.agencyOption.unitPrice) + " (" + s.agencyOption.agencies.join(", ") + ")"] : null,
             ["Total par période", h("b", null, fmtMoney(s.agencyOption ? s.agencyOption.totalPrice : s.price))], ["Paiement", o.paymentProvider]]),
+        s && o.card && o.card.enabled ? cardPaymentBox(o, s) : null,
         h("h3", { style: { marginTop: "16px" } }, t("Utilisation")),
         kpis([{ l: "Biens", v: fmtNum(o.usage.properties, 0) + (pl ? " / " + pl.maxProperties : ""), tone: pl && o.usage.properties >= pl.maxProperties ? "bad" : "" },
           { l: "Utilisateurs", v: fmtNum(o.usage.users, 0) + (pl ? " / " + pl.maxUsers : ""), tone: pl && o.usage.users >= pl.maxUsers ? "bad" : "" },
@@ -2931,6 +2932,51 @@ function mySubscriptions(el) {
         }, "danger") : null))));
     });
   }).catch(function (e) { el.appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+}
+
+/* Prélèvement automatique par carte (SumUp) : le formulaire de carte est celui de SumUp (aucune donnée de carte chez ImmoPilot). */
+function cardPaymentBox(o, s) {
+  const c = o.card, box = h("div", { class: "panel", style: { marginTop: "14px", padding: "12px" } });
+  const amount = c.amount != null ? c.amount.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + (c.currency === "EUR" ? "€" : c.currency) : "";
+  box.appendChild(h("h3", { style: { marginTop: 0 } }, t("Prélèvement automatique par carte")));
+  if (c.active) {
+    box.appendChild(h("p", null, t("Carte enregistrée") + " : ", h("b", null, c.label), amount ? " · " + t("prélevé à chaque échéance") + " : " + amount : ""));
+    if (c.lastError) box.appendChild(h("div", { class: "alert bad" }, t("Dernier prélèvement refusé") + " : " + c.lastError));
+  } else {
+    box.appendChild(h("p", null, t("Enregistrez votre carte une seule fois : l'abonnement sera ensuite réglé automatiquement à chaque échéance. Sans engagement, vous pouvez retirer la carte à tout moment.")));
+  }
+  if (c.converted) box.appendChild(h("p", { class: "small muted" }, t("Montant converti") + " : " + fmtMoney(s.agencyOption ? s.agencyOption.totalPrice : s.price) + " = " + amount + " (" + t("taux") + " " + c.rate + ")."));
+  if (c.amountError) box.appendChild(h("div", { class: "alert bad" }, c.amountError));
+  box.appendChild(h("div", { class: "actions" }, c.amountError ? null : btn(c.active ? t("Changer de carte") : t("Enregistrer ma carte"), function () { cardSetupDialog(o); }, c.active ? "" : "primary"),
+    c.active ? btn(t("Retirer la carte"), function () { confirmBox(t("Retirer la carte ? Les prochaines échéances devront être réglées par virement."), { danger: true }).then(function (ok) { if (ok) api("sub.cardRemove", { organizationId: o.organizationId }).then(function () { toast(t("Carte retirée.")); App.go("subscriptions"); }).catch(showErr); }); }, "danger") : null));
+  box.appendChild(h("p", { class: "small muted" }, t("Paiement sécurisé par SumUp (3D Secure). Une vérification d'un petit montant, remboursée aussitôt, peut apparaître sur votre relevé.")));
+  return box;
+}
+function loadSumUpSdk() {
+  if (window.SumUpCard) return Promise.resolve();
+  return new Promise(function (res, rej) { const sc = document.createElement("script"); sc.src = "https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js"; sc.onload = function () { res(); }; sc.onerror = function () { rej(new Error(t("Impossible de charger le formulaire de paiement SumUp."))); }; document.head.appendChild(sc); });
+}
+function cardSetupDialog(o) {
+  const holder = h("div", { id: "sumup-card", style: { minHeight: "260px" } }), msg = h("div");
+  const m = modal({ title: t("Enregistrer ma carte"), body: h("div", null, msg, holder) });
+  let done = false;
+  api("sub.cardSetup", { organizationId: o.organizationId }).then(function (r) {
+    return loadSumUpSdk().then(function () {
+      window.SumUpCard.mount({ id: "sumup-card", checkoutId: r.checkoutId, locale: (S.lang === "en" ? "en-GB" : "fr-FR"),
+        onResponse: function (type, body) {
+          if (done) return;
+          if (type === "success") {
+            done = true; clear(msg).appendChild(h("div", { class: "alert info" }, t("Vérification de la carte…")));
+            api("sub.cardConfirm", { organizationId: o.organizationId, checkoutId: r.checkoutId }).then(function (x) {
+              m.close(); toast(x.charged && x.charged.ok ? t("Carte enregistrée et échéance réglée.") : x.charged && !x.charged.ok && x.charged.message ? t("Carte enregistrée, mais le prélèvement a été refusé") + " : " + x.charged.message : t("Carte enregistrée."), x.charged && !x.charged.ok ? "bad" : "");
+              App.go("subscriptions");
+            }).catch(function (e) { done = false; clear(msg).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+          } else if (type === "fail" || type === "error") {
+            clear(msg).appendChild(h("div", { class: "alert bad" }, t("Paiement refusé ou interrompu. Vérifiez la carte et réessayez.") + (body && body.message ? " (" + body.message + ")" : "")));
+          }
+        } });
+    });
+  }).catch(function (e) { clear(msg).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
 }
 
 /* =============================== Paramètres =============================== */

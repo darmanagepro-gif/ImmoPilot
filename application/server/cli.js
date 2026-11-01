@@ -7,6 +7,7 @@
  *   node cli.js run <fonction> [args…]      ex. creerEnvironnementDemo, creerHistoriqueDemo, mesurerPerformance, healthCheck,
  *                                           viderCache, backupNow, mettreDemoEnVeille, reveillerDemo, testerAssistantIA
  *   node cli.js set <PROPRIETE> <valeur>    ex. IMMO_AI_PROVIDER anthropic | IMMO_AI_API_KEY … | IMMO_ADMIN_EMAILS a@b.fr
+ *   node cli.js set-secret <PROPRIETE>      comme set, mais la valeur est lue sur l'entrée standard (jamais visible ni dans l'historique)
  *   node cli.js mails                       état de la file d'envoi des e-mails
  *   node cli.js encrypt-data                chiffre au repos tout ce qui est encore en clair (exige DATA_KEY_FILE ; faites d'abord une sauvegarde)
  *   node cli.js verify-data                 contrôle : tout se déchiffre-t-il, reste-t-il du clair ?
@@ -41,6 +42,13 @@ function print(r) {
     if (cmd === "setup") return print(await call({ fn: "setupProject", args: [] }));
     if (cmd === "run" && rest[0]) return print(await call({ fn: rest[0], args: rest.slice(1) }));
     if (cmd === "set" && rest[0]) return print(await call({ fn: "setProperty", key: rest[0], value: rest.slice(1).join(" ") }));
+    if (cmd === "set-secret" && rest[0]) {
+      const v = require("fs").readFileSync(0, "utf8").replace(/[\r\n]+$/, "").trim();
+      if (!v) throw new Error("Valeur vide : rien n'a été enregistré.");
+      const r = await call({ fn: "setProperty", key: rest[0], value: v });
+      if (r.ok) console.log(rest[0] + " enregistré (" + v.length + " caractères)."); else print(r);
+      return;
+    }
     if (cmd === "encrypt-data") return print(await call({ fn: "encryptData" }));
     if (cmd === "verify-data") { const r = await call({ fn: "verifyData" }); print(r); if (r.ok && r.result && !r.result.ok) process.exitCode = 2; return; }
     if (cmd === "mails") {
@@ -50,6 +58,6 @@ function print(r) {
       console.table(db.prepare("SELECT id, created, recipient, subject, tries, error FROM outbox WHERE status <> 'SENT' ORDER BY id DESC LIMIT 10").all());
       return;
     }
-    console.log(require("fs").readFileSync(__filename, "utf8").split("\n").slice(2, 13).join("\n").replace(/^ \* ?/gm, ""));
+    console.log(require("fs").readFileSync(__filename, "utf8").split("\n").slice(2, 14).join("\n").replace(/^ \* ?/gm, ""));
   } catch (e) { console.error(e.message); process.exitCode = 1; }
 })();

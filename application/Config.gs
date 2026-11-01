@@ -259,6 +259,9 @@ var TABLES_SRC = {
   Subscriptions: { pk: "subscriptionId", idp: "sub", org: "organizationId", req: "organizationId,planCode",
     enums: { status: ["TRIAL", "ACTIVE", "PAST_DUE", "SUSPENDED", "CANCELLED", "EXPIRED"] },
     cols: "subscriptionId,organizationId,planCode,status,startDate#d,nextDueDate#d,createdAt#t,createdBy|periodEnd#d,trialEnd#d,cancelAtPeriodEnd#b,price#n,currency,periodicity,canceledAt#t,suspendedAt#t,paidThrough#d,updatedAt#t,updatedBy,lastReminderKey,agencyOptionPrice#n" },
+  BillingCards: { pk: "cardId", idp: "card", org: "organizationId", req: "organizationId",
+    enums: { status: ["PENDING", "ACTIVE", "FAILED", "REPLACED", "REMOVED"] },
+    cols: "cardId,organizationId,status,customerId,token,label,setupCheckoutId,createdAt#t,createdBy,updatedAt#t,lastChargeKey,chargeAttempts#n,chargeSeq#n,lastChargeAt#t,lastChargeError" },
   OperationRequests: { pk: "requestKey", idp: "opr", org: "organizationId", cols: "requestKey,organizationId,operation,resourceId,createdAt#t" }
 };
 

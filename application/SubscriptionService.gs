@@ -32,7 +32,7 @@ function subOut_(s, orgs) {
   return { subscriptionId: s.subscriptionId, organizationId: s.organizationId, organizationName: ((orgs || {})[String(s.organizationId)] || {}).name || "", planCode: s.planCode, status: s.status,
     startDate: s.startDate, trialEnd: s.trialEnd, periodEnd: s.periodEnd, nextDueDate: s.nextDueDate, paidThrough: s.paidThrough, price: s.price, currency: s.currency || cur_(), periodicity: s.periodicity,
     cancelAtPeriodEnd: bool_(s.cancelAtPeriodEnd), daysOverdue: s.status === "PAST_DUE" || s.status === "SUSPENDED" ? Math.max(0, diffDays_(s.nextDueDate || today, today)) : 0, createdAt: s.createdAt,
-    agencyOption: subAgencyOption_(s) };
+    agencyOption: subAgencyOption_(s), cardLabel: (sumupCardOf_(s.organizationId) || {}).label || "" };
 }
 /** Option agences : agences créées par le propriétaire, facturées sur SON abonnement (prix par agence et par période). */
 function subAgencyOption_(s) {
@@ -150,8 +150,8 @@ function subMine_(p) {
     if (e.inheritedFrom) return { organizationId: orgId, organizationName: (orgs[orgId] || {}).name, includedIn: (orgs[e.inheritedFrom] || {}).name || "", subscription: null,
       plan: e.plan ? planOut_(e.plan) : null, usage: subUsage_(orgId), readOnly: e.readOnly, billing: [], paymentProvider: "" };
     return { organizationId: orgId, organizationName: (orgs[orgId] || {}).name, subscription: e.subscription ? subOut_(e.subscription, orgs) : null, plan: e.plan ? planOut_(e.plan) : null, usage: subUsage_(orgId),
-      readOnly: e.readOnly, billing: dbAll_("Payments").filter(function (x) { return x.kind === "SUBSCRIPTION" && String(x.organizationId) === orgId && x.status === "RECORDED"; })
-        .map(function (x) { return { amount: x.amount, paidAt: x.paidAt, method: x.method, reference: x.reference }; }), paymentProvider: PAYMENT_PROVIDERS_.MANUAL.name };
+      readOnly: e.readOnly, card: sumupCardInfo_(orgId, e.subscription), billing: dbAll_("Payments").filter(function (x) { return x.kind === "SUBSCRIPTION" && String(x.organizationId) === orgId && x.status === "RECORDED"; })
+        .map(function (x) { return { amount: x.amount, paidAt: x.paidAt, method: x.method, reference: x.reference }; }), paymentProvider: sumupCardOf_(orgId) && sumupEnabled_() ? "Prélèvement automatique par carte (SumUp)" : PAYMENT_PROVIDERS_.MANUAL.name };
   });
 }
 function subRequestChange_(p, a) {
@@ -195,7 +195,7 @@ function subContractPdf_(p, a) {
     ["Fonctionnalités", feats.map(function (f) { return FEAT[f] || f; }).join(", ") || "—"]]);
   html += "<h2>Conditions principales</h2><div class='box'><ol style='margin:0;padding-left:16px'>" + [
     "L'abonnement donne accès à l'application ImmoPilot pour l'organisation cliente, dans les limites du forfait.",
-    "Le tarif est payable d'avance pour chaque " + per + ", par virement, espèces ou chèque ; aucun paiement en ligne n'est effectué par l'application.",
+    (sumupCardOf_(orgId) && sumupEnabled_() ? "Le tarif est payable d'avance pour chaque " + per + " par prélèvement automatique sur la carte enregistrée par le client auprès de SumUp (aucune donnée de carte n'est conservée par ImmoPilot) ; le client peut retirer sa carte à tout moment, le règlement se fait alors par virement." : "Le tarif est payable d'avance pour chaque " + per + ", par virement, espèces ou chèque ; aucun paiement en ligne n'est effectué par l'application."),
     "En cas d'échéance non réglée, un délai de grâce de " + SUB_GRACE_DAYS_ + " jours s'applique ; au-delà, le compte passe en lecture seule jusqu'au règlement.",
     "Les agences créées par le client dans ImmoPilot n'ont pas d'abonnement propre : elles sont facturées en option sur cet abonnement, au prix par agence indiqué ci-dessus, et suivent son statut.",
     "La résiliation peut être demandée à tout moment ; elle prend effet à la fin de la période payée. Les données restent conservées et exportables.",
