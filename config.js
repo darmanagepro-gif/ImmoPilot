@@ -8,10 +8,10 @@ window.IMMOPILOT_CONFIG = {
 
   // Société éditrice (utilisée dans les pages de contrats)
   societe: {
-    nom: "Darmanagepro",
-    ville: "Marrakech",
-    email: "Darmanagepro@gmail.com",
-    telephone: "+33 7 49 98 00 18"
+    nom: "ECO SYNERGY",
+    ville: "Colomiers (France)",
+    email: "ecosynergy31@gmail.com",
+    telephone: "+33 7 49 98 09 18"
   },
 
   /*

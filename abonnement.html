@@ -36,7 +36,7 @@
 <div id="retour" class="card" hidden>
 <h3>Merci !</h3>
 <p>Votre paiement est en cours de vérification par SumUp. Dès qu'il est confirmé, votre abonnement est activé et le contrat d'abonnement est signé électroniquement. Une copie vous est envoyée par e-mail.</p>
-<p class="note">Cette page ne vaut pas confirmation de paiement. En cas de question : <a href="mailto:Darmanagepro@gmail.com">Darmanagepro@gmail.com</a>.</p>
+<p class="note">Cette page ne vaut pas confirmation de paiement. En cas de question : <a href="mailto:ecosynergy31@gmail.com">ecosynergy31@gmail.com</a>.</p>
 <a class="btn" href="index.html">Ouvrir ImmoPilot</a>
 </div>
 
@@ -102,7 +102,7 @@
             etat.textContent = "Carte enregistrée. Paiement du 1er mois en cours…";
             appel("sumup_finaliser_abonnement", { checkoutId: j.checkoutId }).then(function (r) {
               if (r && r.ok) location.href = "abonnement.html?retour=1";
-              else erreur("Le paiement n'a pas pu être confirmé. Contactez-nous : Darmanagepro@gmail.com");
+              else erreur("Le paiement n'a pas pu être confirmé. Contactez-nous : ecosynergy31@gmail.com");
             }).catch(function () { erreur("Erreur réseau. Vérifiez votre connexion puis réessayez."); });
           }
         });
