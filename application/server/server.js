@@ -105,7 +105,7 @@ function sameOrigin(req) {
 }
 const ADMIN_FUNCTIONS = ["setupProject", "createFirstSuperAdmin", "verifierInstallation", "healthCheck", "mesurerPerformance", "viderCache", "creerEnvironnementDemo", "creerHistoriqueDemo",
   "mettreDemoEnVeille", "reveillerDemo", "testerAssistantIA", "testerSumUp", "actualiserTauxSumUp", "backupNow", "restoreFromBackup", "jobFrequent", "jobDaily"];
-const ADMIN_PROPS = ["IMMO_ADMIN_EMAILS", "IMMO_APP_URL", "IMMO_AI_PROVIDER", "IMMO_AI_API_KEY", "IMMO_AI_MODEL", "IMMO_EMBED_ORIGINS", "IMMO_PBKDF_ITERATIONS", "SUMUP_API_KEY", "SUMUP_MERCHANT_CODE", "SUMUP_CURRENCY", "SUMUP_RATE", "SUMUP_RATE_MODE"];
+const ADMIN_PROPS = ["IMMO_ADMIN_EMAILS", "IMMO_APP_URL", "IMMO_AI_PROVIDER", "IMMO_AI_API_KEY", "IMMO_AI_MODEL", "IMMO_EMBED_ORIGINS", "IMMO_PBKDF_ITERATIONS", "SUMUP_API_KEY", "SUMUP_MERCHANT_CODE", "SUMUP_CURRENCY", "SUMUP_RATE", "SUMUP_RATE_MODE", "BREVO_API_KEY", "SMS_SENDER"];
 function adminOk(req) {
   const local = /^(127\.|::1|::ffff:127\.)/.test(req.socket.remoteAddress || "");
   const tok = String(req.headers["x-admin-token"] || ""), want = String(C.adminToken || "");
@@ -122,7 +122,10 @@ const server = http.createServer(async function (req, res) {
       if (req.headers["x-immopilot"] !== "1" || !/application\/json/.test(String(req.headers["content-type"] || "")) || !sameOrigin(req)) return send(res, 403, "text/plain; charset=utf-8", "Refusé.");
       const body = JSON.parse(await readBody(req, C.maxBody));
       if (["api", "apiPublic"].indexOf(body.fn) < 0 || !Array.isArray(body.args)) return send(res, 400, "text/plain; charset=utf-8", "Appel invalide.");
-      const out = rt.call(body.fn, body.args);
+      // IP et navigateur de la requête : preuves de la signature électronique du contrat (SignatureService.gs).
+      rt.ctx.REQUEST_META_ = { ip: ip, userAgent: String(req.headers["user-agent"] || "").slice(0, 300) };
+      let out;
+      try { out = rt.call(body.fn, body.args); } finally { rt.ctx.REQUEST_META_ = null; }
       return send(res, 200, "application/json; charset=utf-8", JSON.stringify(out === undefined ? null : out));
     }
     if (req.method === "POST" && url.pathname === "/admin/run") {

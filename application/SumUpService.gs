@@ -120,6 +120,7 @@ function subCardSetup_(p, a) {
   assertOrgCap_(p, orgId, "settings.manage");
   assert_(sumupEnabled_(), "Le paiement par carte n'est pas encore activé sur cette plateforme.");
   const s = sumupPayerSub_(p, orgId);
+  assert_(subSignatureOf_(orgId, s), "Signez d'abord le contrat d'abonnement (code reçu par e-mail ou SMS) avant d'enregistrer votre carte.");
   sumupAmount_(subAgencyOption_(s).totalPrice); // refuse dès maintenant si la conversion n'est pas configurée
   const c = sumupConf_(), org = dbGet_("Organizations", orgId), customerId = sumupCustomerId_(orgId);
   sumupCall_("post", "/customers", { customer_id: customerId, personal_details: { email: safeText_(p.email, 200), first_name: safeText_(org.name, 100) } }, [409]);

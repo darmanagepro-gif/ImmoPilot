@@ -338,7 +338,7 @@ function meBootstrap_(p) {
   const user = dbGet_("Users", p.userId);
   const unread = dbAll_("Notifications").filter(function (n) { return String(n.userId) === p.userId && !n.readAt; }).length;
   return {
-    userId: p.userId, email: p.email, displayName: p.displayName, locale: (user && user.locale) || "fr", isSuper: p.isSuper, impersonator: p.impersonator || null,
+    userId: p.userId, email: p.email, displayName: p.displayName, phone: (user && user.phone) || "", locale: (user && user.locale) || "fr", isSuper: p.isSuper, impersonator: p.impersonator || null,
     demoView: p.demoView || null, demoViews: p.demoView ? demoViewList_() : [],
     roles: p.roles.map(function (r) { return { role: r.role, organizationId: r.organizationId, organizationName: (orgs[r.organizationId] || {}).name || "" }; }),
     caps: uiCaps_(p).concat(p.isSuper ? ["platform.admin"] : []),

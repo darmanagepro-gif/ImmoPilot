@@ -336,10 +336,57 @@ function cardPaymentBox(o, s) {
   }
   if (c.converted) box.appendChild(h("p", { class: "small muted" }, t("Montant converti") + " : " + fmtMoney(s.agencyOption ? s.agencyOption.totalPrice : s.price) + " ≈ " + amount + " (" + (c.variable ? t("cours du jour") : t("taux")) + " " + c.rate + ")." + (c.variable ? " " + t("Le montant en euros suit le cours de change du jour du prélèvement et peut varier légèrement chaque mois.") : "")));
   if (c.amountError) box.appendChild(h("div", { class: "alert bad" }, c.amountError));
-  box.appendChild(h("div", { class: "actions" }, c.amountError ? null : btn(c.active ? t("Changer de carte") : t("Enregistrer ma carte"), function () { cardSetupDialog(o); }, c.active ? "" : "primary"),
+  const sg = o.sign, needSign = !!(sg && !sg.signed);
+  if (sg && sg.signed) box.appendChild(h("p", { class: "small" }, "✓ " + t("Contrat d'abonnement signé électroniquement le") + " " + fmtDate(sg.signedAt) + "."));
+  else if (needSign) box.appendChild(h("div", { class: "alert info" }, t("Avant d'enregistrer votre carte, signez votre contrat d'abonnement : vous recevez un code par e-mail ou par SMS, à saisir ici.")));
+  box.appendChild(h("div", { class: "actions" }, c.amountError ? null : needSign ? btn("✍ " + t("Signer le contrat puis enregistrer ma carte"), function () { signContractDialog(o).then(function (ok) { if (ok) cardSetupDialog(o); }); }, "primary") :
+    btn(c.active ? t("Changer de carte") : t("Enregistrer ma carte"), function () { cardSetupDialog(o); }, c.active ? "" : "primary"),
     c.active ? btn(t("Retirer la carte"), function () { confirmBox(t("Retirer la carte ? Les prochaines échéances devront être réglées par virement."), { danger: true }).then(function (ok) { if (ok) api("sub.cardRemove", { organizationId: o.organizationId }).then(function () { toast(t("Carte retirée.")); App.go("subscriptions"); }).catch(showErr); }); }, "danger") : null));
   box.appendChild(h("p", { class: "small muted" }, t("Paiement sécurisé par SumUp (3D Secure). Une vérification d'un petit montant, remboursée aussitôt, peut apparaître sur votre relevé.")));
   return box;
+}
+/** Signature électronique du contrat d'abonnement : acceptation, code à usage unique (e-mail ou SMS), saisie du code. */
+function signContractDialog(o) {
+  const sg = o.sign || {};
+  return new Promise(function (resolve) {
+    let signatureId = "", finished = false;
+    const err = h("div", { class: "alert bad hidden" }), info = h("div");
+    const showErr = function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); };
+    const accept = h("input", { type: "checkbox", id: "sign-accept" });
+    const chan = h("select", null, h("option", { value: "EMAIL" }, t("Par e-mail") + " (" + (sg.email || "") + ")"), sg.smsAvailable ? h("option", { value: "SMS" }, t("Par SMS") + " (" + sg.phone + ")") : null);
+    const code = h("input", { type: "text", inputmode: "numeric", autocomplete: "one-time-code", maxlength: 6, placeholder: "123456", style: { fontSize: "22px", letterSpacing: "6px", width: "10em", textAlign: "center" } });
+    const step2 = h("div", { class: "hidden", style: { marginTop: "12px" } }, info, h("div", { class: "field" }, h("label", { for: "sign-code" }, t("Code reçu")), code));
+    code.id = "sign-code";
+    const body = h("div", null,
+      h("p", { style: { marginTop: 0 } }, t("Votre contrat d'abonnement précise le forfait, le prix, la durée et les conditions. Lisez-le, puis signez-le avec le code que nous vous envoyons.")),
+      h("div", { class: "actions", style: { margin: "0 0 10px" } }, btn("📄 " + t("Lire le contrat (PDF)"), function () { api("sub.contractPdf", { organizationId: o.organizationId }).then(download).catch(showErr); }),
+        h("a", { class: "btn", href: location.origin + location.pathname + "?action=legal&doc=cgv", target: "_blank", rel: "noopener" }, t("Conditions générales"))),
+      h("label", { for: "sign-accept", style: { display: "flex", gap: "8px", alignItems: "flex-start", cursor: "pointer" } }, accept,
+        h("span", null, t("J'ai lu et j'accepte le contrat d'abonnement et les conditions générales d'ImmoPilot. Je signe électroniquement ce contrat."))),
+      h("div", { class: "field", style: { marginTop: "10px" } }, h("label", null, t("Recevoir le code de signature")), chan),
+      sg.smsAvailable ? null : h("p", { class: "small muted" }, t("Pour recevoir le code par SMS, ajoutez votre numéro de téléphone dans votre profil (Paramètres).")),
+      step2, err);
+    let sendBtn;
+    const send = function (b) {
+      if (!accept.checked) return showErr(new Error(t("Cochez la case d'acceptation du contrat.")));
+      err.classList.add("hidden"); b.disabled = true;
+      api("sub.signStart", { organizationId: o.organizationId, channel: chan.value, accept: true }).then(function (r) {
+        signatureId = r.signatureId; step2.classList.remove("hidden");
+        clear(info).appendChild(h("div", { class: "alert info" }, t("Code envoyé") + " " + (r.channel === "SMS" ? t("par SMS au") : t("par e-mail à")) + " " + r.destination + " · " + t("valable") + " " + r.expiresInMinutes + " min."));
+        b.textContent = t("Renvoyer un code"); b.disabled = false; code.focus();
+      }).catch(function (e) { b.disabled = false; showErr(e); });
+    };
+    const m = modal({ title: t("Signer le contrat d'abonnement"), body: body, onClose: function () { if (!finished) resolve(false); }, buttons: [
+      { label: t("Recevoir le code"), onClick: function (b) { sendBtn = b; send(b); } },
+      { label: "✍ " + t("Signer"), primary: true, onClick: function (b) {
+        if (!signatureId) return showErr(new Error(t("Demandez d'abord votre code.")));
+        if (!/^\d{6}$/.test(code.value.trim())) return showErr(new Error(t("Saisissez le code à 6 chiffres.")));
+        b.disabled = true; err.classList.add("hidden");
+        api("sub.signConfirm", { organizationId: o.organizationId, signatureId: signatureId, code: code.value.trim() }).then(function () {
+          finished = true; toast(t("Contrat signé. Une copie vous a été envoyée par e-mail."), "good"); m.close(); resolve(true);
+        }).catch(function (e) { b.disabled = false; showErr(e); });
+      } }] });
+  });
 }
 function loadSumUpSdk() {
   if (window.SumUpCard) return Promise.resolve();
@@ -374,10 +421,10 @@ PAGES.settings = function (el) {
   const orgAdmin = myOrgs(["OWNER", "AGENCY_ADMIN"]);
   tabs(el, [
     { id: "profile", label: "Mon profil", render: function (b) {
-      b.appendChild(panel("Profil", h("div", null, kv([["Nom", S.me.displayName], ["E-mail", S.me.email], ["Rôles", S.me.roles.map(function (r) { return roleLabel(r.role) + " (" + r.organizationName + ")"; }).join(" · ")]]),
+      b.appendChild(panel("Profil", h("div", null, kv([["Nom", S.me.displayName], ["E-mail", S.me.email], ["Téléphone", S.me.phone || "—"], ["Rôles", S.me.roles.map(function (r) { return roleLabel(r.role) + " (" + r.organizationName + ")"; }).join(" · ")]]),
         h("div", { class: "actions", style: { marginTop: "14px" } },
           btn(t("Modifier"), function () { formModal(t("Mon profil"), [{ k: "displayName", l: "Nom affiché", req: true }, { k: "phone", l: "Téléphone", t: "tel" }, { k: "locale", l: "Langue", t: "select", opts: langOpts() }],
-            { displayName: S.me.displayName, locale: S.lang }, function (v) { return api("me.updateProfile", v).then(function () { setLang(v.locale); return App.refreshMe(); }).then(function () { App.shell(); App.go("settings"); }); }); }),
+            { displayName: S.me.displayName, phone: S.me.phone || "", locale: S.lang }, function (v) { return api("me.updateProfile", v).then(function () { setLang(v.locale); return App.refreshMe(); }).then(function () { App.shell(); App.go("settings"); }); }); }),
           btn(t("Changer le mot de passe"), function () { formModal(t("Changer le mot de passe"), [{ k: "currentPassword", l: "Mot de passe actuel", t: "password", req: true }, { k: "newPassword", l: "Nouveau mot de passe", t: "password", req: true, help: "10 caractères minimum, avec lettres et chiffres." }], {},
             function (v) { return api("me.changePassword", v); }, { success: "Mot de passe modifié. Vos autres sessions ont été fermées." }); }),
           btn(t("Déconnecter mes autres appareils"), function () { api("me.logoutAll").then(function () { localLogout(t("Toutes vos sessions ont été fermées.")); }).catch(showErr); }),
@@ -407,20 +454,50 @@ function settingsEditor(b, orgId, orgAdmin) {
     api("settings.get", { organizationId: org }).then(function (r) {
       const keys = org ? S.meta.orgEditableSettings : S.meta.settingsKeys;
       clear(box).appendChild(table([{ l: "Paramètre", f: function (x) { return h("div", null, h("b", null, st("set." + x.k) === "set." + x.k ? x.k : st("set." + x.k)), h("div", { class: "small muted" }, x.k)); } },
-        { l: "Valeur", f: function (x) { const v = x.v; return Array.isArray(v) ? v.map(function (y) { return typeof y === "object" ? JSON.stringify(y) : y; }).join(", ") : (typeof v === "boolean" ? (v ? t("Oui") : t("Non")) : String(v === "" ? "—" : v)); } },
+        { l: "Valeur", f: function (x) { const v = x.v; if (/^template\.(receipt|lease|reservation)$/.test(x.k)) return v ? "✓ " + t("Modèle personnalisé") : t("Document standard"); return Array.isArray(v) ? v.map(function (y) { return typeof y === "object" ? JSON.stringify(y) : y; }).join(", ") : (typeof v === "boolean" ? (v ? t("Oui") : t("Non")) : String(v === "" ? "—" : v)); } },
         { l: "", f: function (x) { return btn(t("Modifier"), function () { editSetting(org, x.k, x.v).then(function (ok) { if (ok) load(org); }); }, "sm"); } }],
         keys.map(function (k) { return { k: k, v: r.settings[k] }; })));
     }).catch(function (e) { clear(box).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
   };
   load(orgId);
 }
+/** Éditeur des modèles de documents (quittance, bail, fiche de réservation) : texte + balises, aperçu PDF. */
+function templateEditor(org, key) {
+  const kind = key.replace("template.", "");
+  return new Promise(function (resolve) {
+    if (!org) { toast(t("Choisissez d'abord une organisation : les modèles sont propres à chaque organisation."), "warn"); return resolve(false); }
+    api("template.info", { organizationId: org, kind: kind }).then(function (info) {
+      const ta = h("textarea", { rows: 18, style: { width: "100%", fontFamily: "ui-monospace,Menlo,Consolas,monospace", fontSize: "13px", lineHeight: "1.45" } });
+      ta.value = info.current || info.defaultText;
+      const err = h("div", { class: "alert bad hidden" });
+      const insert = function (tag) { const s = ta.selectionStart || 0, e = ta.selectionEnd || 0; ta.value = ta.value.slice(0, s) + tag + ta.value.slice(e); ta.focus(); ta.selectionStart = ta.selectionEnd = s + tag.length; };
+      const tags = h("div", { class: "small", style: { display: "flex", flexWrap: "wrap", gap: "6px", margin: "8px 0" } }, info.tags.map(function (x) {
+        return h("button", { type: "button", class: "btn sm", title: t(x.label), onclick: function () { insert(x.tag); } }, x.tag);
+      }));
+      const body = h("div", null,
+        h("p", { class: "small muted", style: { marginTop: 0 } }, info.current ? t("Votre modèle personnalisé est utilisé pour ce document.") : t("Aucun modèle personnalisé : le document standard d'ImmoPilot est utilisé. Le texte ci-dessous est un point de départ à adapter.")),
+        h("p", { class: "small", style: { margin: "0 0 6px" } }, t("Balises (cliquez pour insérer à l'endroit du curseur) :")), tags, ta,
+        h("p", { class: "small muted" }, t("Mise en forme") + " : « # " + t("Titre") + " » = " + t("intertitre") + ", **" + t("texte") + "** = " + t("gras") + ", « --- » = " + t("trait") + ", « [signatures] » = " + t("cadres de signature") + "."), err);
+      const showErr = function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); };
+      const m = modal({ title: t(info.title) + " — " + t("modèle"), size: "lg", body: body, onClose: function () { resolve(false); }, buttons: [
+        { label: t("Aperçu PDF"), onClick: function (b) { b.disabled = true; api("template.preview", { organizationId: org, kind: kind, text: ta.value }).then(download).catch(showErr).then(function () { b.disabled = false; }); } },
+        info.current ? { label: t("Revenir au document standard"), onClick: function (b) { confirmBox(t("Supprimer votre modèle et revenir au document standard d'ImmoPilot ?"), { danger: true }).then(function (ok) {
+          if (!ok) return; b.disabled = true; api("settings.set", { organizationId: org, key: key, value: "" }).then(function () { toast(t("Paramètre enregistré."), "good"); resolve(true); m.close(); }).catch(function (e) { b.disabled = false; showErr(e); }); }); } } : null,
+        { label: t("Enregistrer"), primary: true, onClick: function (b) { b.disabled = true; api("settings.set", { organizationId: org, key: key, value: ta.value }).then(function () { toast(t("Paramètre enregistré."), "good"); resolve(true); m.close(); }).catch(function (e) { b.disabled = false; showErr(e); }); } }
+      ].filter(Boolean) });
+    }).catch(function (e) { showErr(e); resolve(false); });
+  });
+}
 function editSetting(org, key, cur) {
+  if (/^template\.(receipt|lease|reservation)$/.test(key)) return templateEditor(org, key);
   let field = { k: "value", l: "Valeur" }, val = cur;
   if (typeof cur === "boolean") field.t = "checkbox";
   else if (typeof cur === "number") field.t = "number";
   else if (key === "reservation.cancellationPolicy") { field.t = "textarea"; field.help = "Une règle par ligne : jours avant l'arrivée ; pourcentage retenu (ex. 7;0)"; val = cur.map(function (r) { return r.daysBefore + ";" + r.penaltyPercent; }).join("\n"); }
   else if (Array.isArray(cur)) { field.t = "textarea"; field.help = "Valeurs séparées par des virgules."; val = cur.join(", "); }
   else if (/^template\./.test(key)) field.help = "Identifiant d'un document Google Docs (modèle avec balises {{cle}}).";
+  else if (key === "rent.cardPaymentUrl") field.help = "Lien de paiement de VOTRE compte (SumUp, Stripe, PayPal…) : le locataire vous paie directement. Facultatif : {montant} et {reference} sont remplacés automatiquement.";
+  else if (key === "rent.paymentInstructions") field.t = "textarea";
   return formModal(t("Paramètre") + " " + key, [field], { value: val }, function (v) {
     let value = v.value;
     if (key === "reservation.cancellationPolicy") value = String(value).split("\n").map(function (l) { const p = l.split(";"); return { daysBefore: Number(p[0]), penaltyPercent: Number(p[1]) }; }).filter(function (x) { return !isNaN(x.daysBefore); });

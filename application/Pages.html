@@ -897,7 +897,8 @@ PAGES.mylease = function (el) {
     list.forEach(function (l) {
       el.appendChild(panel(l.propertyName, h("div", null, kpis([{ l: "Loyer + charges", v: fmtMoney(Number(l.monthlyRent) + Number(l.charges || 0)) }, { l: "Reste à payer", v: fmtMoney(l.arrears), tone: l.arrears ? "bad" : "good" }, { l: "Prochaine échéance", v: l.nextDue ? fmtDate(l.nextDue.dueDate) : "—" }]),
         table([{ l: "Période", k: "period" }, { l: "Échéance", date: true, k: "dueDate" }, { l: "Dû", money: true, k: "amountDue" }, { l: "Payé", money: true, k: "paid" }, { l: "Statut", status: true, k: "status" },
-          { l: "", f: function (s) { return s.status === "PAID" ? btn(t("Quittance"), function () { api("lease.receipt", { scheduleId: s.scheduleId }).then(download).catch(showErr); }, "sm") : null; } }], l.schedules),
+          { l: "", f: function (s) { return s.status === "PAID" ? btn(t("Quittance"), function () { api("lease.receipt", { scheduleId: s.scheduleId }).then(download).catch(showErr); }, "sm") :
+            s.payUrl ? h("a", { class: "btn sm primary", href: s.payUrl, target: "_blank", rel: "noopener noreferrer" }, "💳 " + t("Payer par carte")) : null; } }], l.schedules),
         h("div", { class: "actions", style: { marginTop: "12px" } }, btn(t("Transmettre un justificatif de paiement"), function () { pickFiles({ capture: "environment" }).then(function (f) { return uploadFiles(f, "LEASE", l.leaseId, "PAYMENT_PROOF"); }).then(function () { toast(t("Justificatif transmis. Il sera vérifié par votre gestionnaire."), "good"); }).catch(showErr); }, "primary"),
           btn(t("Déclarer un incident"), function () { incidentDialog({ propertyId: l.propertyId }); }), l.documentId ? btn(t("Mon contrat"), function () { openDoc(l.documentId); }) : null),
         (l.agentDocs || []).length || (l.inspections || []).length ? leaseDocsTable(l, function () { App.go("mylease"); }) : null)));
@@ -930,7 +931,7 @@ function rentAutomationPanel(l, go) {
   const warn = [];
   if (!a.tenantEmail) warn.push(t("Le locataire n'a pas d'adresse e-mail : aucun envoi n'est possible. Ajoutez-la dans « Locataires »."));
   if (!(a.orgCall || a.orgReminders || a.orgReceipt)) warn.push(t("Les envois automatiques sont désactivés pour votre organisation : activez-les dans Paramètres › Paramètres de l'organisation (rent.autoCall, rent.autoReminders, rent.autoReceipt)."));
-  else if (!a.hasPaymentInstructions) warn.push(t("Conseil : renseignez vos modalités de paiement (paramètre rent.paymentInstructions) : elles figurent sur les appels de loyer et les relances."));
+  else if (!a.hasPaymentInstructions) warn.push(t("Conseil : renseignez vos modalités de paiement (paramètre rent.paymentInstructions) et, si vous le souhaitez, votre lien de paiement par carte (rent.cardPaymentUrl) : ils figurent sur les appels de loyer et les relances."));
   const body = h("div", null,
     warn.map(function (w) { return h("div", { class: "alert warn", style: { marginBottom: "10px" } }, w); }),
     kv([["Appels de loyer", h("span", null, on(a.orgCall && a.enabled), " ", a.orgCall ? t("envoyés") + " " + a.callDaysBefore + " " + t("jour(s) avant l'échéance") : "")],

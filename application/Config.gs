@@ -44,8 +44,8 @@ function cur_() { return edition_().currency; }
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
-  VERSION: "2.3.1",
-  SCHEMA_VERSION: 10,
+  VERSION: "2.4.0",
+  SCHEMA_VERSION: 11,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -127,6 +127,7 @@ var DEFAULT_SETTINGS = Object.freeze({
   "template.leaseDocId": "",
   "template.receiptDocId": "",
   "template.reservationDocId": "",
+  "template.receipt": "", "template.lease": "", "template.reservation": "",
   // Location longue durée : envois automatiques au locataire (désactivés par défaut, à activer par l'organisation).
   "rent.autoCall": false,
   "rent.callDaysBefore": 7,
@@ -134,7 +135,7 @@ var DEFAULT_SETTINGS = Object.freeze({
   "rent.reminderDays": [5, 15, 30],
   "rent.autoReceipt": false,
   "rent.copyEmail": "",
-  "rent.paymentInstructions": "",
+  "rent.paymentInstructions": "", "rent.cardPaymentUrl": "",
   "list.incidentCategories": ["PLUMBING", "ELECTRICITY", "AC", "HUMIDITY", "LOCKSMITH", "FURNITURE", "APPLIANCE", "CLEANING", "DAMAGE", "SECURITY", "OTHER"],
   "list.expenseCategories": ["MAINTENANCE", "CLEANING", "UTILITIES", "TAXES", "INSURANCE", "AGENCY_FEES", "SUPPLIES", "OTHER"],
   "list.cancelReasons": ["GUEST_REQUEST", "NO_PAYMENT", "OVERBOOKING", "OWNER_REQUEST", "FORCE_MAJEURE", "OTHER"],
@@ -260,6 +261,9 @@ var TABLES_SRC = {
   Subscriptions: { pk: "subscriptionId", idp: "sub", org: "organizationId", req: "organizationId,planCode",
     enums: { status: ["TRIAL", "ACTIVE", "PAST_DUE", "SUSPENDED", "CANCELLED", "EXPIRED"] },
     cols: "subscriptionId,organizationId,planCode,status,startDate#d,nextDueDate#d,createdAt#t,createdBy|periodEnd#d,trialEnd#d,cancelAtPeriodEnd#b,price#n,currency,periodicity,canceledAt#t,suspendedAt#t,paidThrough#d,updatedAt#t,updatedBy,lastReminderKey,agencyOptionPrice#n" },
+  ContractSignatures: { pk: "signatureId", idp: "sig", org: "organizationId", req: "organizationId,subscriptionId",
+    enums: { status: ["PENDING", "SIGNED", "EXPIRED"], channel: ["EMAIL", "SMS"] },
+    cols: "signatureId,organizationId,subscriptionId,planCode,totalPrice#n,currency,contractHash,legalVersion,signerUserId,signerEmail,signerName,channel,destination,otpHash,otpExpires#t,otpAttempts#n,status,createdAt#t,signedAt#t,ip,userAgent,documentId" },
   BillingCards: { pk: "cardId", idp: "card", org: "organizationId", req: "organizationId",
     enums: { status: ["PENDING", "ACTIVE", "FAILED", "REPLACED", "REMOVED"] },
     cols: "cardId,organizationId,status,customerId,token,label,setupCheckoutId,createdAt#t,createdBy,updatedAt#t,lastChargeKey,chargeAttempts#n,chargeSeq#n,lastChargeAt#t,lastChargeError" },

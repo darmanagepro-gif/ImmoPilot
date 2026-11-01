@@ -3,7 +3,7 @@
  * Points d'injection réservés à la suite de tests (Tests.gs). Ce sont des variables d'exécution : elles ne peuvent être
  * modifiées que par du code serveur dans la même exécution (jamais par le navigateur) et reviennent à null à chaque requête.
  */
-var TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null, sumupConfig: null, sumupFetch: null };
+var TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null, sumupConfig: null, sumupFetch: null, smsSink: null };
 class AppError extends Error {
   constructor(code, message) { super(message); this.name = "AppError"; this.code = code; }
 }

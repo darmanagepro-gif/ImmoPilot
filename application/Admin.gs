@@ -198,13 +198,18 @@ function settingsGet_(p, a) {
 var ORG_EDITABLE_SETTINGS_ = ["reservation.defaultCheckIn", "reservation.defaultCheckOut", "reservation.minTurnaroundMinutes", "reservation.cancellationPolicy", "checkin.graceMinutes",
   "cleaning.acceptanceMinutes", "cleaning.requirePhotos", "commission.contractorRate", "commission.vatRate", "finance.vatRate", "quote.agencyApprovalLimit", "workorder.requireQuote",
   "invoice.tolerancePercent", "rent.graceDays", "alerts.rentDueDays", "alerts.leaseEndDays", "alerts.incidentAgeDays", "alerts.incidentCost", "retention.sensitiveDocDays",
-  "guests.storeIdReference", "notify.emailEnabled", "template.leaseDocId", "template.receiptDocId", "template.reservationDocId", "list.incidentCategories", "list.expenseCategories",
+  "guests.storeIdReference", "notify.emailEnabled", "template.receipt", "template.lease", "template.reservation", "template.leaseDocId", "template.receiptDocId", "template.reservationDocId", "list.incidentCategories", "list.expenseCategories",
   "list.cancelReasons", "list.cleaningAnomalies", "list.specialties", "locale", "currency",
-  "rent.autoCall", "rent.callDaysBefore", "rent.autoReminders", "rent.reminderDays", "rent.autoReceipt", "rent.copyEmail", "rent.paymentInstructions"];
+  "rent.autoCall", "rent.callDaysBefore", "rent.autoReminders", "rent.reminderDays", "rent.autoReceipt", "rent.copyEmail", "rent.paymentInstructions", "rent.cardPaymentUrl"];
+/** Réglages modifiables par une organisation (les modèles Google Docs n'existent que dans la version Google Apps Script). */
+function orgEditableSettings_() {
+  const vps = typeof IMMO_RUNTIME_ !== "undefined" && IMMO_RUNTIME_ === "vps";
+  return ORG_EDITABLE_SETTINGS_.filter(function (k) { return !(vps && /DocId$/.test(k)); });
+}
 function settingsSet_(p, a) {
   const orgId = safeText_(a.organizationId || "", 120), key = String(a.key || "");
   assert_(Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key), "Paramètre inconnu.");
-  if (orgId) { if (!p.isSuper) assertOrgCap_(p, orgId, "settings.manage"); assert_(ORG_EDITABLE_SETTINGS_.indexOf(key) >= 0, "Paramètre réservé à la plateforme."); }
+  if (orgId) { if (!p.isSuper) assertOrgCap_(p, orgId, "settings.manage"); assert_(orgEditableSettings_().indexOf(key) >= 0, "Paramètre réservé à la plateforme."); }
   else requireSuper_(p);
   const v = validateSettingValue_(key, a.value);
   setSetting_(key, v, orgId || null, p.email);
@@ -223,6 +228,8 @@ function validateSettingValue_(key, v) {
     if (key === "rent.reminderDays") return rentReminderDays_(arr);
     return arr.slice(0, 40).map(function (x) { return safeText_(String(x).toUpperCase().replace(/[^A-Z0-9_]/g, "_"), 40); }).filter(Boolean);
   }
+  if (/^template\.(receipt|lease|reservation)$/.test(key)) return validateDocTemplate_(v);
+  if (key === "rent.cardPaymentUrl") return validatePayUrl_(v);
   if (/^template\./.test(key)) { const s = safeText_(v, 100); assert_(!s || /^[\w-]{20,}$/.test(s), "Identifiant de document Google invalide."); if (s) assertTemplateAllowed_(s); return s; }
   if (/Check(In|Out)$/.test(key)) { const s = safeText_(v, 5); assert_(/^([01]\d|2[0-3]):[0-5]\d$/.test(s), "Heure au format HH:MM attendue."); return s; }
   if (key === "rent.copyEmail") return String(v || "").trim() ? validateEmail_(v) : "";

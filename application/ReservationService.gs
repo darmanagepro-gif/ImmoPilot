@@ -350,7 +350,7 @@ function resvSendConfirmation_(p, a) {
   return { ok: true, duplicate: !!res.duplicate };
 }
 
-/** Fiche de réservation PDF (modèle Google Docs si configuré, sinon gabarit HTML intégré). */
+/** Fiche de réservation PDF (modèle de l'organisation si configuré, sinon gabarit intégré). */
 function resvSheet_(p, a) {
   const r = assertResv_(p, a.reservationId, "reservation.view");
   const prop = dbGet_("Properties", r.propertyId), m = resvMoney_(r);
@@ -358,8 +358,15 @@ function resvSheet_(p, a) {
     nuits: diffDays_(r.checkIn, r.checkOut), prix: r.totalPrice, frais: r.fees, taxes: r.taxes, total: m.amountDue, paye: m.netPaid, solde: m.balance, caution: r.deposit, statut: r.status, devise: r.currency || cur_() };
   const ctx = { propertyId: prop.propertyId, organizationId: prop.organizationId, sensitive: false };
   const tpl = getSetting_("template.reservationDocId", prop.organizationId);
+  const text = docTemplateOf_("reservation", prop.organizationId), org = dbGet_("Organizations", prop.organizationId) || {}, dv = r.currency || cur_();
+  const STR = { DRAFT: "Brouillon", PENDING: "En attente", CONFIRMED: "Confirmée", IN_PROGRESS: "En cours", COMPLETED: "Terminée", CANCELLED: "Annulée", NO_SHOW: "Non présentée" };
   let pdf;
-  if (tpl) pdf = docFromTemplate_(tpl, map, propertyFolder_(prop.organizationId, prop.propertyId, "RESERVATION"), "Fiche_" + r.reservationId).pdf;
+  if (text) pdf = docTemplatePdf_("reservation", text, { reference: r.reservationId, loueur: org.name, bien: prop.name, adresse: [prop.address, prop.city].filter(String).join(", "), voyageur: r.guestName,
+    voyageurs: r.guestCount, arrivee: pdfDate_(r.checkIn), depart: pdfDate_(r.checkOut), heure_arrivee: prop.checkInTime || getSetting_("reservation.defaultCheckIn", prop.organizationId),
+    heure_depart: prop.checkOutTime || getSetting_("reservation.defaultCheckOut", prop.organizationId), nuits: diffDays_(r.checkIn, r.checkOut), prix: fmtAmount_(r.totalPrice, dv), frais: fmtAmount_(r.fees, dv),
+    taxes: fmtAmount_(r.taxes, dv), total: fmtAmount_(m.amountDue, dv), paye: fmtAmount_(m.netPaid, dv), solde: fmtAmount_(m.balance, dv), caution: fmtAmount_(r.deposit, dv), devise: dv,
+    statut: STR[r.status] || r.status, date: pdfDate_(todayStr_()) }, { name: "Fiche_" + r.reservationId, subtitle: prop.name || "" });
+  else if (tpl) pdf = docFromTemplate_(tpl, map, propertyFolder_(prop.organizationId, prop.propertyId, "RESERVATION"), "Fiche_" + r.reservationId).pdf;
   else pdf = htmlToPdf_(pdfShell_("Fiche de réservation", htmlTable_(["Champ", "Valeur"], Object.keys(map).map(function (k) { return [k, map[k]]; }))), "Fiche_" + r.reservationId);
   const out = storeGeneratedPdf_(p, pdf, ctx, "RESERVATION", r.reservationId, "SHEET");
   audit_("RESERVATION_SHEET_GENERATED", "Reservation", r.reservationId, r.organizationId, {});

@@ -36,7 +36,7 @@ function rentAutoCfg_(lease) {
     leaseEnabled: own.enabled !== false,
     call: !!getSetting_("rent.autoCall", o), reminders: !!getSetting_("rent.autoReminders", o), receipt: !!getSetting_("rent.autoReceipt", o),
     callDaysBefore: isFinite(before) ? Math.max(0, Math.min(31, before)) : 7, reminderDays: days,
-    copyEmail: String(getSetting_("rent.copyEmail", o) || ""), paymentInstructions: String(getSetting_("rent.paymentInstructions", o) || ""),
+    copyEmail: String(getSetting_("rent.copyEmail", o) || ""), paymentInstructions: String(getSetting_("rent.paymentInstructions", o) || ""), cardPaymentUrl: String(getSetting_("rent.cardPaymentUrl", o) || ""),
     custom: { enabled: own.enabled !== false, callDaysBefore: own.callDaysBefore === undefined ? "" : own.callDaysBefore, reminderDays: Array.isArray(own.reminderDays) ? own.reminderDays : [] }
   };
 }
@@ -70,8 +70,32 @@ function rentParties_(c) {
     escapeHtml_([c.org.address, c.org.city].filter(String).join(", ")) + "</td><td><b>" + escapeHtml_(c.t.fullName || "") + "</b><br>" + escapeHtml_(c.prop.name || "") + "<br>" +
     escapeHtml_(rentAddress_(c.prop)) + "</td></tr></table>";
 }
-function rentPayInfoHtml_(c) {
-  return c.cfg.paymentInstructions ? "<div class='box'><b>Modalités de paiement</b><br>" + escapeHtml_(c.cfg.paymentInstructions).replace(/\n/g, "<br>") + "</div>" : "";
+/**
+ * Lien de paiement par carte du bailleur : celui de SON compte (SumUp, Stripe, PayPal…), les fonds lui sont versés
+ * directement, sans transiter par ImmoPilot. Balises facultatives dans le lien : {montant} et {reference}.
+ */
+function validatePayUrl_(v) {
+  const s = safeText_(v, 500);
+  if (!s) return "";
+  assert_(/^https:\/\/[^\s<>"'`]+$/.test(s), "Lien de paiement invalide : collez l'adresse complète commençant par https://");
+  return s;
+}
+function rentPayUrl_(c, amount, ref) {
+  const u = String(c.cfg.cardPaymentUrl || "");
+  if (!u) return "";
+  return u.replace(/\{montant\}/g, encodeURIComponent((Math.round(num_(amount) * 100) / 100).toFixed(2))).replace(/\{reference\}/g, encodeURIComponent(ref || ""));
+}
+function rentPayInfoHtml_(c, amount, ref) {
+  const url = rentPayUrl_(c, amount, ref);
+  if (!c.cfg.paymentInstructions && !url) return "";
+  return "<div class='box'><b>Modalités de paiement</b>" + (c.cfg.paymentInstructions ? "<br>" + escapeHtml_(c.cfg.paymentInstructions).replace(/\n/g, "<br>") : "") +
+    (url ? "<p style='margin:8px 0 0'><b>Payer par carte bancaire</b> (paiement sécurisé) : <a href='" + escapeHtml_(url) + "'>" + escapeHtml_(url) + "</a><br><span class='muted'>Montant à régler : " +
+      escapeHtml_(fmtAmount_(amount, cur_())) + (ref ? " — référence à indiquer : " + escapeHtml_(ref) : "") + "</span></p>" : "") + "</div>";
+}
+function rentPayText_(c, amount, ref) {
+  const url = rentPayUrl_(c, amount, ref);
+  return (c.cfg.paymentInstructions ? "\n\nModalités de paiement :\n" + c.cfg.paymentInstructions : "") +
+    (url ? "\n\nPayer par carte bancaire (paiement sécurisé), montant " + fmtAmount_(amount, cur_()) + (ref ? ", référence " + ref : "") + " :\n" + url : "");
 }
 
 /* ------------------------------ Documents PDF ------------------------------ */
@@ -88,7 +112,7 @@ function rentCallPdf_(c, s) {
   if (arrears.length) rows.push(["<b>Total à régler</b>", "<b>" + escapeHtml_(fmtAmount_(round2_(st.remaining + arrearsTotal), cur)) + "</b>"]);
   const table = "<table><tr><th>Désignation</th><th class='right'>Montant</th></tr>" + rows.map(function (r) { return "<tr><td>" + (/^<b>/.test(r[0]) ? r[0] : escapeHtml_(r[0])) + "</td><td class='right'>" + (/^<b>/.test(r[1]) ? r[1] : escapeHtml_(r[1])) + "</td></tr>"; }).join("") + "</table>";
   const inner = rentParties_(c) + "<p>Madame, Monsieur,</p><p>Nous vous prions de bien vouloir régler le loyer et les charges de la période <b>" + escapeHtml_(rentPeriodLabel_(s)) + "</b> pour le logement désigné ci-dessus, <b>au plus tard le " + pdfDate_(s.dueDate) + "</b>.</p>" +
-    table + "<p>Référence à indiquer avec votre règlement : <b>" + escapeHtml_(rentReference_(c.l, s)) + "</b></p>" + rentPayInfoHtml_(c) +
+    table + "<p>Référence à indiquer avec votre règlement : <b>" + escapeHtml_(rentReference_(c.l, s)) + "</b></p>" + rentPayInfoHtml_(c, round2_(st.remaining + arrearsTotal), rentReference_(c.l, s)) +
     "<p class='muted'>Cet avis d'échéance ne vaut pas quittance. La quittance vous sera adressée après encaissement de la totalité de l'échéance.</p>" +
     "<p style='margin-top:18px'>Fait le " + pdfDate_(today) + ".<br>Le bailleur, " + escapeHtml_(c.org.name || "") + "</p>";
   return htmlToPdf_(pdfShell_("Avis d'échéance — appel de loyer", inner, { subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org),
@@ -107,18 +131,25 @@ function rentReminderPdf_(c, unpaid, level) {
     "<p>Malgré nos relances, les sommes ci-dessous restent impayées. Nous vous mettons en demeure de les régler <b>sous 8 jours</b> à compter de la réception de ce courrier. À défaut, nous nous verrons contraints d'engager, sans autre avis, les démarches prévues par le " + escapeHtml_(edition_().leaseLaw) + " pour le recouvrement des sommes dues.</p>"
   ];
   const inner = rentParties_(c) + "<p><b>Objet : " + escapeHtml_(title) + "</b></p><p>Madame, Monsieur,</p>" + texts[lvl - 1] + table +
-    "<p><b>Total restant dû : " + escapeHtml_(fmtAmount_(total, cur)) + "</b></p>" + rentPayInfoHtml_(c) +
+    "<p><b>Total restant dû : " + escapeHtml_(fmtAmount_(total, cur)) + "</b></p>" + rentPayInfoHtml_(c, total, unpaid.length ? rentReference_(c.l, unpaid[0]) : "") +
     "<p class='muted'>Si votre règlement nous est parvenu entre-temps, merci de ne pas tenir compte de ce courrier.</p>" +
     "<p style='margin-top:18px'>Fait le " + pdfDate_(today) + ".<br>Le bailleur, " + escapeHtml_(c.org.name || "") + "</p>";
   return htmlToPdf_(pdfShell_(title, inner, { subtitle: (c.prop.name || "") + " · " + unpaid.length + " échéance(s) impayée(s)", issuer: rentIssuer_(c.org),
     footer: "Document émis par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Relance_" + lvl + "_" + today + "_" + String(c.l.leaseId).slice(-6));
 }
-/** Quittance d'une échéance entièrement réglée (modèle intégré ou modèle Google Docs de l'organisation). */
+/** Quittance d'une échéance entièrement réglée (modèle de l'organisation, sinon gabarit intégré). */
 function rentReceiptPdf_(c, s) {
   const cur = cur_(), pays = dbAll_("Payments").filter(function (z) { return z.refType === "RENT_SCHEDULE" && String(z.refId) === String(s.scheduleId) && z.status === "RECORDED" && z.kind === "RENT"; });
   const tpl = getSetting_("template.receiptDocId", c.l.organizationId);
   const map = { bailleur: c.org.name, locataire: c.t.fullName, bien: c.prop.name, adresse: rentAddress_(c.prop), periode: s.period, loyer: s.rentAmount, charges: s.chargesAmount, total: s.amountDue,
     date_paiement: pays.map(function (z) { return pdfDate_(z.paidAt); }).join(", "), date: pdfDate_(todayStr_()) };
+  const text = docTemplateOf_("receipt", c.l.organizationId);
+  if (text) return docTemplatePdf_("receipt", text, { bailleur: c.org.name, bailleur_adresse: [c.org.address, c.org.city].filter(String).join(", "), locataire: c.t.fullName, bien: c.prop.name,
+    adresse: rentAddress_(c.prop), periode: rentPeriodLabel_(s), loyer: fmtAmount_(s.rentAmount, cur), charges: fmtAmount_(s.chargesAmount, cur), total: fmtAmount_(s.amountDue, cur),
+    date_paiement: map.date_paiement, mode_paiement: pays.map(function (z) { return PDF_PAY_METHODS_[z.method] || z.method; }).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).join(", "),
+    reference: rentReference_(c.l, s), date: pdfDate_(todayStr_()), ville: c.prop.city || "" },
+    { name: "Quittance_" + s.period + "_" + String(c.l.leaseId).slice(-6), subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org),
+      footer: "Quittance délivrée gratuitement par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." });
   if (tpl) return docFromTemplate_(tpl, map, propertyFolder_(c.l.organizationId, c.l.propertyId, "LEASE"), "Quittance_" + s.period + "_" + c.l.leaseId).pdf;
   const inner = rentParties_(c) + "<p>Je soussigné(e), <b>" + escapeHtml_(c.org.name || "") + "</b>, bailleur du logement désigné ci-dessus, déclare avoir reçu de <b>" + escapeHtml_(c.t.fullName || "") +
     "</b> la somme de <b>" + escapeHtml_(fmtAmount_(s.amountDue, cur)) + "</b> au titre du loyer et des charges de la période <b>" + escapeHtml_(rentPeriodLabel_(s)) + "</b>, et lui en donne quittance, sous réserve de tous mes droits.</p>" +
@@ -140,14 +171,13 @@ function rentStorePdf_(c, blob, category, actorEmail) {
 function rentMailText_(c, kind, data) {
   const cur = cur_(), hello = "Bonjour " + (c.t.fullName || "") + ",\n\n", sign = "\n\nCordialement,\n" + (c.org.name || "Le bailleur") +
     (c.org.phone ? "\nTél. " + c.org.phone : "") + "\n\n—\nMessage envoyé par " + IMMO_CONFIG.APP_NAME + " pour le compte de " + (c.org.name || "votre bailleur") + ".";
-  const pay = c.cfg.paymentInstructions ? "\n\nModalités de paiement :\n" + c.cfg.paymentInstructions : "";
   if (kind === "CALL") return { subject: "Avis d'échéance — loyer " + rentPeriodLabel_(data.s) + " — " + (c.prop.name || ""),
     body: hello + "Veuillez trouver ci-joint l'avis d'échéance de votre loyer pour la période " + rentPeriodLabel_(data.s) + " (" + (c.prop.name || "") + ").\n\nMontant à régler : " +
-      fmtAmount_(data.total, cur) + ", au plus tard le " + pdfDate_(data.s.dueDate) + ".\nRéférence à indiquer : " + rentReference_(c.l, data.s) + "." + pay +
+      fmtAmount_(data.total, cur) + ", au plus tard le " + pdfDate_(data.s.dueDate) + ".\nRéférence à indiquer : " + rentReference_(c.l, data.s) + "." + rentPayText_(c, data.total, rentReference_(c.l, data.s)) +
       "\n\nSi vous avez déjà effectué ce règlement, merci de ne pas tenir compte de ce message." + sign };
   if (kind === "REMINDER") return { subject: RENT_REMINDER_TITLES_[data.level - 1] + " — " + (c.prop.name || ""),
     body: hello + ["Sauf erreur de notre part, votre loyer n'a pas encore été réglé.", "Malgré notre précédent rappel, des loyers restent impayés.", "Malgré nos relances, des loyers restent impayés : vous trouverez ci-joint notre dernière relance avant procédure."][data.level - 1] +
-      "\n\nTotal restant dû : " + fmtAmount_(data.total, cur) + " (" + data.count + " échéance(s)). Le détail figure dans le document joint." + pay +
+      "\n\nTotal restant dû : " + fmtAmount_(data.total, cur) + " (" + data.count + " échéance(s)). Le détail figure dans le document joint." + rentPayText_(c, data.total, data.ref || "") +
       "\n\nSi vous avez déjà réglé, merci de ne pas tenir compte de ce message. En cas de difficulté, contactez-nous." + sign };
   if (kind === "RECEIPT") return { subject: "Quittance de loyer — " + rentPeriodLabel_(data.s) + " — " + (c.prop.name || ""),
     body: hello + "Nous avons bien reçu votre règlement de " + fmtAmount_(data.s.amountDue, cur) + " pour la période " + rentPeriodLabel_(data.s) + ".\nVeuillez trouver ci-joint votre quittance de loyer.\n\nMerci." + sign };
@@ -201,7 +231,7 @@ function rentSendReminder_(c, unpaid, level, trigger, actor) {
   const total = sumBy_(unpaid, function (x) { return x.remaining; });
   return rentDeliver_({ c: c, kind: "REMINDER", level: level, scheduleId: unpaid[0].scheduleId, trigger: trigger, actor: actor, category: "RENT_REMINDER",
     uniqueKey: trigger === "AUTO" ? "REMINDER:" + c.l.leaseId + ":" + unpaid[0].scheduleId + ":" + level : "",
-    build: function () { return rentReminderPdf_(c, unpaid, level); }, mail: function () { return rentMailText_(c, "REMINDER", { level: level, total: total, count: unpaid.length }); } });
+    build: function () { return rentReminderPdf_(c, unpaid, level); }, mail: function () { return rentMailText_(c, "REMINDER", { level: level, total: total, count: unpaid.length, ref: unpaid.length ? rentReference_(c.l, unpaid[0]) : "" }); } });
 }
 function rentSendReceipt_(c, s, trigger, actor) {
   return rentDeliver_({ c: c, kind: "RECEIPT", scheduleId: s.scheduleId, uniqueKey: trigger === "AUTO" ? "RECEIPT:" + s.scheduleId : "", trigger: trigger, actor: actor, category: "RECEIPT",
@@ -362,7 +392,7 @@ function rentAutomationView_(l, t) {
     if (lvl < cfg.reminderDays.length && lvl < 3) nextReminder = addDaysStr_(unpaid[0].dueDate, cfg.reminderDays[lvl]);
   }
   return { orgCall: cfg.call, orgReminders: cfg.reminders, orgReceipt: cfg.receipt, enabled: cfg.leaseEnabled, callDaysBefore: cfg.callDaysBefore, reminderDays: cfg.reminderDays,
-    custom: cfg.custom, tenantEmail: t.email || "", nextCall: nextCall, nextReminder: nextReminder, hasPaymentInstructions: !!cfg.paymentInstructions };
+    custom: cfg.custom, tenantEmail: t.email || "", nextCall: nextCall, nextReminder: nextReminder, hasPaymentInstructions: !!(cfg.paymentInstructions || cfg.cardPaymentUrl), hasCardPaymentUrl: !!cfg.cardPaymentUrl };
 }
 function rentMailingsOf_(leaseId) {
   return dbAll_("RentMailings").filter(function (m) { return String(m.leaseId) === String(leaseId); })

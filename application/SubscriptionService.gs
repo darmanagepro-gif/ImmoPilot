@@ -150,7 +150,7 @@ function subMine_(p) {
     if (e.inheritedFrom) return { organizationId: orgId, organizationName: (orgs[orgId] || {}).name, includedIn: (orgs[e.inheritedFrom] || {}).name || "", subscription: null,
       plan: e.plan ? planOut_(e.plan) : null, usage: subUsage_(orgId), readOnly: e.readOnly, billing: [], paymentProvider: "" };
     return { organizationId: orgId, organizationName: (orgs[orgId] || {}).name, subscription: e.subscription ? subOut_(e.subscription, orgs) : null, plan: e.plan ? planOut_(e.plan) : null, usage: subUsage_(orgId),
-      readOnly: e.readOnly, card: sumupCardInfo_(orgId, e.subscription), billing: dbAll_("Payments").filter(function (x) { return x.kind === "SUBSCRIPTION" && String(x.organizationId) === orgId && x.status === "RECORDED"; })
+      readOnly: e.readOnly, card: sumupCardInfo_(orgId, e.subscription), sign: e.subscription ? subSignInfo_(p, orgId, e.subscription) : null, billing: dbAll_("Payments").filter(function (x) { return x.kind === "SUBSCRIPTION" && String(x.organizationId) === orgId && x.status === "RECORDED"; })
         .map(function (x) { return { amount: x.amount, paidAt: x.paidAt, method: x.method, reference: x.reference }; }), paymentProvider: sumupCardOf_(orgId) && sumupEnabled_() ? "Prélèvement automatique par carte (SumUp)" : PAYMENT_PROVIDERS_.MANUAL.name };
   });
 }
@@ -173,6 +173,19 @@ function subContractPdf_(p, a) {
   const orgId = safeText_(a.organizationId, 120), org = dbGet_("Organizations", orgId);
   assert_(org && org.type !== "PLATFORM", "Organisation introuvable.");
   if (!p.isSuper && !hasOrgCap_(p, orgId, "subscription.view")) forbid_("Accès refusé.");
+  const d = subContractData_(orgId), sig = subSignatureOf_(orgId, d.cur);
+  audit_("SUBSCRIPTION_CONTRACT_PDF", "Subscription", d.cur.subscriptionId, orgId, {});
+  return storeGeneratedPdf_(p, subContractBlob_(d, sig), { propertyId: "", organizationId: orgId }, "SUBSCRIPTION", d.cur.subscriptionId, "CONTRACT");
+}
+/** PDF du contrat ; avec sig (signature électronique validée), le cadre de signature est remplacé par le certificat. */
+function subContractBlob_(d, sig) {
+  return htmlToPdf_(pdfShell_("Contrat d'abonnement et historique", d.html + (sig ? subSignCertificateHtml_(sig) : d.signBox) + d.tail, { subtitle: d.org.name }),
+    "Abonnement_" + d.org.name.replace(/[^\wÀ-ÿ]+/g, "_") + (sig ? "_signe" : ""));
+}
+/** Contenu du contrat d'abonnement (sans le cadre de signature) : sert au PDF et à l'empreinte signée. */
+function subContractData_(orgId) {
+  const org = dbGet_("Organizations", orgId);
+  assert_(org && org.type !== "PLATFORM", "Organisation introuvable.");
   const subs = dbAll_("Subscriptions").filter(function (s) { return String(s.organizationId) === orgId; }).sort(function (x, y) { return String(x.createdAt).localeCompare(String(y.createdAt)); });
   assert_(subs.length, "Aucun abonnement enregistré pour cette organisation.");
   const cur = entitlement_(orgId).subscription || subs[subs.length - 1], plan = dbGet_("SubscriptionPlans", cur.planCode) || {};
@@ -206,11 +219,12 @@ function subContractPdf_(p, a) {
   html += "<h2>Historique des abonnements</h2>" + htmlTable_(["Référence", "Forfait", "Statut", "Début", "Payé jusqu'au", "Tarif"], subs.map(function (s) { return [s.subscriptionId, s.planCode, ST[s.status] || s.status, pdfDate_(s.startDate), pdfDate_(s.paidThrough), fmt(s.price)]; }));
   html += "<h2>Historique des règlements</h2>" + (pays.length ? htmlTable_(["Date", "Montant", "Mode", "Référence", "Détail"], pays.map(function (x) { return [pdfDate_(x.paidAt), fmt(x.amount), PDF_PAY_METHODS_[x.method] || x.method || "", x.reference || "", x.note || ""]; })) +
     "<p class='right'><b>Total réglé : " + escapeHtml_(fmt(sumBy_(pays, function (x) { return x.amount; }))) + "</b></p>" : "<p class='muted'>Aucun règlement enregistré.</p>");
-  html += "<h2>Signatures</h2><table class='sign'><tr><td>Pour " + escapeHtml_(platform.name) + "</td><td>Pour " + escapeHtml_(org.name) + "</td></tr></table>";
-  html += "<p class='muted'>Modèle indicatif : conditions à faire valider par un professionnel du droit avant usage contractuel.</p>";
-  audit_("SUBSCRIPTION_CONTRACT_PDF", "Subscription", cur.subscriptionId, orgId, {});
-  return storeGeneratedPdf_(p, htmlToPdf_(pdfShell_("Contrat d'abonnement et historique", html, { subtitle: org.name }), "Abonnement_" + org.name.replace(/[^\wÀ-ÿ]+/g, "_")),
-    { propertyId: "", organizationId: orgId }, "SUBSCRIPTION", cur.subscriptionId, "CONTRACT");
+  const lg = legalGet_({ id: "cgv" });
+  html += "<h2>Documents contractuels</h2><p>Le présent contrat est complété par les conditions générales d'abonnement et d'utilisation, la politique de confidentialité et l'accord de traitement des données d'ImmoPilot" +
+    " (version du " + escapeHtml_(pdfDate_(lg.updatedAt)) + "), consultables à tout moment depuis l'application (lien « Conditions générales ») ; le client déclare en avoir pris connaissance et les accepter.</p>";
+  return { org: org, cur: cur, platform: platform, html: html, legalVersion: lg.updatedAt,
+    signBox: "<h2>Signatures</h2><table class='sign'><tr><td>Pour " + escapeHtml_(platform.name) + "</td><td>Pour " + escapeHtml_(org.name) + "</td></tr></table>",
+    tail: "<p class='muted'>Modèle indicatif : conditions à faire valider par un professionnel du droit avant usage contractuel.</p>" };
 }
 
 /** Tâche quotidienne : transitions de statut, relances et alertes de quotas. */

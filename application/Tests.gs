@@ -40,7 +40,7 @@ function testEnvSetup_() {
   folder.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
   const env = { ss: ss, folder: folder, previousSs: DB_SS_ };
   dbSetSpreadsheet_(ss);
-  TEST_HOOKS_ = { driveRoot: folder, mailSink: [], appUrl: "https://example.test/exec", pbkdfIters: 50, mailQuota: null, aiConfig: false, aiFetch: null, sumupConfig: null, sumupFetch: null };
+  TEST_HOOKS_ = { driveRoot: folder, mailSink: [], appUrl: "https://example.test/exec", pbkdfIters: 50, mailQuota: null, aiConfig: false, aiFetch: null, sumupConfig: null, sumupFetch: null, smsSink: null };
   ctxReset_();
   runMigrations_("tests");
   return env;
@@ -49,7 +49,7 @@ function testEnvTeardown_(env) {
   try { DriveApp.getFileById(env.ss.getId()).setTrashed(true); } catch (e) { console.error(e.message); }
   try { env.folder.setTrashed(true); } catch (e) { console.error(e.message); }
   DB_SS_ = null; dbReset_();
-  TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null, sumupConfig: null, sumupFetch: null };
+  TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null, sumupConfig: null, sumupFetch: null, smsSink: null };
 }
 
 function testKit_(results) {
@@ -990,6 +990,25 @@ function TEST_GROUPS_() {
         T.call(fx.tok.ownerA, "pay.record", { refType: "RENT_SCHEDULE", refId: s0.scheduleId, kind: "RENT", amount: 3300 });
         T.fails(fx.tok.ownerA, "pay.record", { refType: "RENT_SCHEDULE", refId: s0.scheduleId, kind: "RENT", amount: 1 }, "VALIDATION");
         T.ok(T.call(fx.tok.tenant, "lease.receipt", { scheduleId: s0.scheduleId }).base64, "quittance pour le locataire");
+        // Modèle de quittance de l'organisation (texte + balises), à la place des modèles Google Docs.
+        const orgA = fx.orgA.organizationId;
+        T.fails(fx.tok.ownerA, "settings.set", { organizationId: orgA, key: "template.receipt", value: "Bonjour {{Mauvaise Balise}}" }, "VALIDATION");
+        T.fails(fx.tok.ownerB, "template.info", { organizationId: orgA, kind: "receipt" }, "FORBIDDEN");
+        const ti = T.call(fx.tok.ownerA, "template.info", { organizationId: orgA, kind: "receipt" });
+        T.ok(!ti.current && /\{\{locataire\}\}/.test(ti.defaultText) && ti.tags.length >= 10, "texte de départ et balises proposés");
+        T.ok(T.call(fx.tok.ownerA, "template.preview", { organizationId: orgA, kind: "reservation", text: "" }).base64, "aperçu PDF (données d'exemple)");
+        const th = docTemplateHtml_("receipt", "# Titre\n**{{locataire}}** <script>x</script> {{inconnue}}\n[signatures]", { locataire: "A&B" });
+        T.ok(th.indexOf("<b>A&amp;B</b>") >= 0 && th.indexOf("<script>") < 0 && th.indexOf("{{inconnue}}") >= 0 && th.indexOf("<h2>Titre</h2>") >= 0 && th.indexOf("class='sign'") > 0, "modèle échappé, balises remplacées, mise en forme");
+        T.call(fx.tok.ownerA, "settings.set", { organizationId: orgA, key: "template.receipt", value: "Quittance {{periode}} pour **{{locataire}}** : {{total}}.\n[signatures]" });
+        T.ok(T.call(fx.tok.tenant, "lease.receipt", { scheduleId: s0.scheduleId }).base64, "quittance depuis le modèle personnalisé");
+        T.call(fx.tok.ownerA, "settings.set", { organizationId: orgA, key: "template.receipt", value: "" });
+        // Lien de paiement par carte du bailleur (montant et référence insérés).
+        T.fails(fx.tok.ownerA, "settings.set", { organizationId: orgA, key: "rent.cardPaymentUrl", value: "http://pay.example.test" }, "VALIDATION");
+        T.call(fx.tok.ownerA, "settings.set", { organizationId: orgA, key: "rent.cardPaymentUrl", value: "https://pay.example.test/p?m={montant}&r={reference}" });
+        const s1 = T.call(fx.tok.tenant, "lease.mine", {})[0].schedules.filter(function (x) { return x.status !== "PAID" && x.remaining > 0; })[0];
+        T.ok(s1 && /^https:\/\/pay\.example\.test\/p\?m=\d+\.\d{2}&r=LOY-/.test(s1.payUrl), "lien de paiement par carte dans l'espace locataire");
+        T.ok(rentPayText_(rentCtx_(l.leaseId), 1234.5, "REF-1").indexOf("https://pay.example.test/p?m=1234.50&r=REF-1") > 0, "lien inséré dans les e-mails d'appel et de relance");
+        T.call(fx.tok.ownerA, "settings.set", { organizationId: orgA, key: "rent.cardPaymentUrl", value: "" });
         T.eq(T.call(fx.tok.tenant, "lease.mine", {}).length, 1, "espace locataire");
         T.fails(fx.tok.ownerB, "lease.get", { leaseId: l.leaseId }, "FORBIDDEN");
         T.call(fx.tok.ownerA, "pay.record", { refType: "LEASE", refId: l.leaseId, kind: "DEPOSIT", amount: 10000 });
@@ -1346,6 +1365,32 @@ function TEST_GROUPS_() {
           T.eq(T.call(tok, "sub.mine", {}).filter(function (o) { return o.organizationId === org.organizationId; })[0].card.enabled, false, "non configuré : rien ne change");
           T.fails(tok, "sub.cardSetup", { organizationId: org.organizationId }, "VALIDATION");
           TEST_HOOKS_.sumupConfig = { key: "sup_sk_TEST", merchant: "MTEST", currency: "XXX", rate: 0 };
+          // Signature électronique du contrat exigée avant l'enregistrement de la carte.
+          T.fails(tok, "sub.cardSetup", { organizationId: org.organizationId }, "VALIDATION");
+          T.fails(tok, "sub.signStart", { organizationId: org.organizationId, channel: "EMAIL" }, "VALIDATION"); // sans acceptation
+          const st1 = T.call(tok, "sub.signStart", { organizationId: org.organizationId, channel: "EMAIL", accept: true });
+          const m1 = TEST_HOOKS_.mailSink.filter(function (m) { return m.to === u.email && /Code de signature/.test(m.subject); }).pop();
+          T.ok(m1 && /^\d{6}$/.test(/(\d{6})/.exec(m1.subject)[1]), "code à 6 chiffres envoyé par e-mail");
+          const c1 = /(\d{6})/.exec(m1.subject)[1];
+          T.ok(!dbGet_("ContractSignatures", st1.signatureId).otpHash.includes(c1), "code jamais conservé en clair");
+          T.fails(tok, "sub.signConfirm", { organizationId: org.organizationId, signatureId: st1.signatureId, code: c1 === "000000" ? "111111" : "000000" }, "VALIDATION");
+          T.fails(fx.tok.ownerB, "sub.signConfirm", { organizationId: org.organizationId, signatureId: st1.signatureId, code: c1 }, "FORBIDDEN");
+          TEST_HOOKS_.smsSink = [];
+          T.fails(tok, "sub.signStart", { organizationId: org.organizationId, channel: "SMS", accept: true }, "VALIDATION"); // aucun numéro
+          dbUpdate_("Users", u.userId, { phone: "0612345678" });
+          T.ok(T.call(tok, "sub.mine", {}).filter(function (o) { return o.organizationId === org.organizationId; })[0].sign.smsAvailable, "SMS proposé quand un numéro est connu");
+          const st2 = T.call(tok, "sub.signStart", { organizationId: org.organizationId, channel: "SMS", accept: true });
+          T.eq(TEST_HOOKS_.smsSink.length, 1, "code envoyé par SMS");
+          T.eq(TEST_HOOKS_.smsSink[0].to, edition_().phoneCountry + "612345678", "numéro au format international");
+          const c2 = /(\d{6})/.exec(TEST_HOOKS_.smsSink[0].text)[1];
+          const signed = T.call(tok, "sub.signConfirm", { organizationId: org.organizationId, signatureId: st2.signatureId, code: c2 });
+          T.ok(signed.ok && signed.documentId, "contrat signé et PDF enregistré");
+          const sg = dbGet_("ContractSignatures", st2.signatureId);
+          T.ok(sg.status === "SIGNED" && /^[0-9a-f]{64}$/.test(sg.contractHash) && sg.signedAt, "preuves enregistrées (empreinte, date)");
+          T.ok(TEST_HOOKS_.mailSink.some(function (m) { return m.to === u.email && /signé/.test(m.subject) && m.attachments.length === 1; }), "contrat signé envoyé par e-mail");
+          T.fails(tok, "sub.signConfirm", { organizationId: org.organizationId, signatureId: st2.signatureId, code: c2 }, "VALIDATION"); // code à usage unique
+          T.ok(T.call(tok, "sub.mine", {}).filter(function (o) { return o.organizationId === org.organizationId; })[0].sign.signed, "signature visible côté client");
+          TEST_HOOKS_.smsSink = null;
           T.fails(tok, "sub.cardSetup", { organizationId: org.organizationId }, "PAYMENT"); // devise différente sans taux : refus
           TEST_HOOKS_.sumupConfig = { key: "sup_sk_TEST", merchant: "MTEST", currency: "XXX", rate: 0.5 };
           const price = num_(dbGet_("Subscriptions", s.subscriptionId).price);

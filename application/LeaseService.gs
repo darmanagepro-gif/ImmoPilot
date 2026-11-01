@@ -184,6 +184,10 @@ function leaseGet_(p, a) {
   o.schedules = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(x.l.leaseId); }).map(function (s) { return rentStatus_(s); }).sort(function (u, v) { return String(u.dueDate).localeCompare(String(v.dueDate)); });
   o.payments = dbAll_("Payments").filter(function (z) { return (z.refType === "LEASE" && String(z.refId) === String(x.l.leaseId)) || (z.refType === "RENT_SCHEDULE" && o.schedules.some(function (s) { return s.scheduleId === z.refId; })); })
     .map(function (z) { return { paymentId: z.paymentId, kind: z.kind, refId: z.refId, amount: z.amount, paidAt: z.paidAt, method: z.method, status: z.status, reference: z.reference }; });
+  if (x.self) { // espace locataire : lien de paiement par carte du bailleur pour chaque échéance restant due
+    const rc = rentCtx_(x.l);
+    if (rc.cfg.cardPaymentUrl) o.schedules.forEach(function (s) { if (s.remaining > 0 && s.status !== "PAID" && s.status !== "CANCELLED") s.payUrl = rentPayUrl_(rc, s.remaining, rentReference_(x.l, s)); });
+  }
   o.documents = docList_(p, { ownerType: "LEASE", ownerId: x.l.leaseId });
   o.agentDocs = leaseDocsOf_(x.l.leaseId, !o.canManage);
   o.inspections = inspectionsOf_(x.l.leaseId, !o.canManage);
@@ -305,19 +309,22 @@ function leaseReceipt_(p, a) {
   audit_("RENT_RECEIPT_GENERATED", "Lease", x.l.leaseId, x.l.organizationId, { period: s.period });
   return storeGeneratedPdf_(p, pdf, { propertyId: x.l.propertyId, organizationId: x.l.organizationId }, "LEASE", x.l.leaseId, "RECEIPT");
 }
-/** Contrat de bail généré depuis un modèle Google Docs ({{balises}}) ou un gabarit intégré. */
+/** Contrat de bail généré depuis le modèle de l'organisation ({{balises}}) ou un gabarit intégré. */
 function leaseDocument_(p, a) {
   const x = leaseLoad_(p, a.leaseId, "lease.manage");
   const t = dbGet_("Tenants", x.l.tenantId) || {}, org = dbGet_("Organizations", x.l.organizationId) || {};
   const map = { bailleur: org.name, locataire: t.fullName, locataire_email: t.email, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), surface: x.prop.surfaceM2, debut: x.l.startDate,
     fin: x.l.endDate || "indéterminée", loyer: x.l.monthlyRent, charges: x.l.charges, caution: x.l.deposit, jour_echeance: x.l.dueDay, indexation: x.l.indexationRate, conditions: x.l.terms, date: todayStr_() };
-  const tpl = getSetting_("template.leaseDocId", x.l.organizationId);
-  const pdf = tpl ? docFromTemplate_(tpl, map, propertyFolder_(x.l.organizationId, x.l.propertyId, "LEASE"), "Bail_" + x.l.leaseId).pdf :
+  const tpl = getSetting_("template.leaseDocId", x.l.organizationId), text = docTemplateOf_("lease", x.l.organizationId), cur = cur_();
+  const pdf = text ? docTemplatePdf_("lease", text, { bailleur: org.name, bailleur_adresse: [org.address, org.city].filter(String).join(", "), locataire: t.fullName, locataire_email: t.email,
+      bien: x.prop.name, adresse: [x.prop.address, x.prop.city].filter(String).join(", "), surface: x.prop.surfaceM2, debut: pdfDate_(x.l.startDate), fin: x.l.endDate ? pdfDate_(x.l.endDate) : "durée indéterminée",
+      loyer: fmtAmount_(x.l.monthlyRent, cur), charges: fmtAmount_(x.l.charges, cur), caution: fmtAmount_(x.l.deposit, cur), jour_echeance: x.l.dueDay, indexation: x.l.indexationRate,
+      conditions: x.l.terms, date: pdfDate_(todayStr_()), ville: x.prop.city || "" }, { name: "Bail_" + x.l.leaseId, subtitle: x.prop.name || "" }) : tpl ? docFromTemplate_(tpl, map, propertyFolder_(x.l.organizationId, x.l.propertyId, "LEASE"), "Bail_" + x.l.leaseId).pdf :
     htmlToPdf_(pdfShell_("Contrat de location", "<p class='muted'>MODÈLE INDICATIF — à faire valider par un professionnel du " + escapeHtml_(edition_().leaseLaw) + " avant signature. ImmoPilot ne garantit pas la conformité juridique.</p>" +
       htmlTable_(["Clause", "Contenu"], Object.keys(map).map(function (k) { return [k, map[k] == null ? "" : map[k]]; })) + "<p>Fait à " + escapeHtml_(x.prop.city || "") + ", le " + todayStr_() + "</p><p>Signature bailleur : ______________ &nbsp; Signature locataire : ______________</p>"), "Bail_" + x.l.leaseId);
   const out = storeGeneratedPdf_(p, pdf, { propertyId: x.l.propertyId, organizationId: x.l.organizationId }, "LEASE", x.l.leaseId, "CONTRACT");
   dbUpdate_("Leases", x.l.leaseId, { documentId: out.documentId });
-  audit_("LEASE_DOCUMENT_GENERATED", "Lease", x.l.leaseId, x.l.organizationId, { template: !!tpl });
+  audit_("LEASE_DOCUMENT_GENERATED", "Lease", x.l.leaseId, x.l.organizationId, { template: !!(text || tpl) });
   return out;
 }
 /** Espace locataire : ses baux, échéances et documents uniquement. */

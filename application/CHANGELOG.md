@@ -1,5 +1,12 @@
 # Journal des modifications
 
+## 2.4.0 — 1er novembre 2026 — modèles de documents, lien de paiement par carte, signature électronique du contrat
+
+- Modèles de documents intégrés (remplacent les modèles Google Docs, indisponibles sur le serveur dédié) : quittance, bail et fiche de réservation. Chaque organisation écrit son texte avec des balises ({{locataire}}, {{total}}…) et une mise en forme simple (intertitres, gras, trait, cadres de signature), avec aperçu PDF sur données d'exemple. Vide = document standard. Texte toujours échappé (aucun HTML accepté).
+- Lien de paiement par carte du bailleur (`rent.cardPaymentUrl`, SON compte SumUp / Stripe / PayPal : les fonds ne transitent pas par ImmoPilot) : inséré dans les appels de loyer et les relances (PDF et e-mails) avec le montant et la référence ; bouton « Payer par carte » dans l'espace locataire pour chaque échéance due. Balises facultatives `{montant}` et `{reference}` dans le lien.
+- Signature électronique du contrat d'abonnement avant l'enregistrement de la carte : acceptation, code à usage unique par e-mail ou par SMS (Brevo, `BREVO_API_KEY` + `SMS_SENDER`), 10 minutes, 5 essais. Preuves conservées (signataire, canal masqué, date, IP, navigateur, empreinte SHA-256 du contrat, version des CGV) ; PDF signé avec certificat enregistré et envoyé par e-mail. Nouvelle signature exigée si le forfait ou le prix change. Nouvelle table `ContractSignatures` (schéma 11).
+- Profil : le téléphone est affiché et conservé lors de la modification du profil.
+
 ## Serveur dédié 2.2.0 — 1er novembre 2026 — prélèvement automatique des abonnements par SumUp
 
 - Le super administrateur attribue le forfait ; le propriétaire enregistre sa carte UNE fois (Abonnements › « Enregistrer ma carte ») dans le formulaire sécurisé SumUp (3D Secure). Aucune donnée de carte ne passe par ImmoPilot : seul le jeton SumUp est conservé (base chiffrée).
