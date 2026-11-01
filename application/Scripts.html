@@ -98,7 +98,7 @@ const App = window.App = {
     const bell = h("button", { class: "bell", type: "button", "aria-label": t("Notifications"), onclick: function () { NAV_HASH.v = "notifications"; } }, "🔔", S.me.unreadNotifications ? h("span", { class: "dot" }, String(S.me.unreadNotifications)) : null);
     const top = h("header", { class: "topbar" }, h("button", { class: "menu-btn", type: "button", "aria-label": t("Menu"), onclick: function () {
       sidebar.classList.add("open"); document.body.appendChild(h("div", { class: "scrim", onclick: function (e) { sidebar.classList.remove("open"); e.target.remove(); } }));
-    } }, "☰"), h("h1", { id: "page-title" }, ""), h("div", { class: "spacer" }), Tour.button(), themeButton(), langSel, bell,
+    } }, "☰"), h("a", { class: "top-logo", href: "#dashboard", "aria-label": "ImmoPilot" }, brandMark()), h("h1", { id: "page-title" }, ""), h("div", { class: "spacer" }), Tour.button(), themeButton(), langSel, bell,
       h("button", { class: "user-chip", type: "button", onclick: function () { NAV_HASH.v = "settings"; } }, h("div", { class: "avatar" }, (S.me.displayName || "?").slice(0, 1).toUpperCase()), h("div", null, h("span", { class: "uname" }, S.me.displayName), h("small", null, roleTxt))));
     const imp = S.me.impersonator ? h("div", { class: "imp-banner", role: "status" },
       h("span", null, "👁 ", t("Vous êtes dans l'espace de"), " ", h("b", null, S.me.displayName), " (", S.me.email, ") — ", t("chaque action est enregistrée à votre nom") + " (" + S.me.impersonator.email + ")."),

@@ -184,6 +184,7 @@ body:has(.modal-back) #rb-fab,body:has(.modal-back) .rb-hint{display:none}
   html[dir=rtl] .sidebar{transform:translateX(100%)}
   .sidebar.open{transform:none}
   .menu-btn{display:block}
+  .top-logo{display:block}
   .topbar{padding:10px 14px}.content{padding:16px 14px 40px}
   .grid.c2,.grid.c3,.form{grid-template-columns:1fr}
   .auth{grid-template-columns:1fr}.auth-side{display:none}
@@ -206,7 +207,8 @@ html[data-theme="dark"]{
   --danger-b:#5A2A22; --field-bg:#0F1A2A; --shadow:0 1px 2px rgba(0,0,0,.45),0 4px 16px rgba(0,0,0,.35); color-scheme:dark;
 }
 html[data-theme="dark"] .brand-mark{background:#E6EBF2}
-.brand-mark.logo{background:none;padding:0;overflow:hidden;width:46px;height:46px;border-radius:11px}.brand-mark.logo svg{width:100%;height:100%;display:block}
+.brand-mark.logo{background:none;padding:0;overflow:hidden;width:58px;height:58px;border-radius:13px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.25)}.brand-mark.logo img{width:100%;height:100%;display:block}
+.top-logo{display:none}.top-logo .brand-mark.logo{width:38px;height:38px;border-radius:9px;box-shadow:none}.brand-mark.logo svg{width:100%;height:100%;display:block}
 html[data-theme="dark"] .leaflet-container{filter:brightness(.85) contrast(1.05)}
 html[data-theme="dark"] .sig{background:#fff}
 html[data-theme="dark"] img{opacity:.95}

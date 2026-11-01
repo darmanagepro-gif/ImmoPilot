@@ -192,6 +192,7 @@ body:has(.modal-back) #rb-fab,body:has(.modal-back) .rb-hint{display:none}
   html[dir=rtl] .sidebar{transform:translateX(100%)}
   .sidebar.open{transform:none}
   .menu-btn{display:block}
+  .top-logo{display:block}
   .topbar{padding:10px 14px}.content{padding:16px 14px 40px}
   .grid.c2,.grid.c3,.form{grid-template-columns:1fr}
   .auth{grid-template-columns:1fr}.auth-side{display:none}
@@ -214,7 +215,8 @@ html[data-theme="dark"]{
   --danger-b:#5A2A22; --field-bg:#0F1A2A; --shadow:0 1px 2px rgba(0,0,0,.45),0 4px 16px rgba(0,0,0,.35); color-scheme:dark;
 }
 html[data-theme="dark"] .brand-mark{background:#E6EBF2}
-.brand-mark.logo{background:none;padding:0;overflow:hidden;width:46px;height:46px;border-radius:11px}.brand-mark.logo svg{width:100%;height:100%;display:block}
+.brand-mark.logo{background:none;padding:0;overflow:hidden;width:58px;height:58px;border-radius:13px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.25)}.brand-mark.logo img{width:100%;height:100%;display:block}
+.top-logo{display:none}.top-logo .brand-mark.logo{width:38px;height:38px;border-radius:9px;box-shadow:none}.brand-mark.logo svg{width:100%;height:100%;display:block}
 html[data-theme="dark"] .leaflet-container{filter:brightness(.85) contrast(1.05)}
 html[data-theme="dark"] .sig{background:#fff}
 html[data-theme="dark"] img{opacity:.95}
@@ -2709,7 +2711,7 @@ const App = window.App = {
     const bell = h("button", { class: "bell", type: "button", "aria-label": t("Notifications"), onclick: function () { NAV_HASH.v = "notifications"; } }, "🔔", S.me.unreadNotifications ? h("span", { class: "dot" }, String(S.me.unreadNotifications)) : null);
     const top = h("header", { class: "topbar" }, h("button", { class: "menu-btn", type: "button", "aria-label": t("Menu"), onclick: function () {
       sidebar.classList.add("open"); document.body.appendChild(h("div", { class: "scrim", onclick: function (e) { sidebar.classList.remove("open"); e.target.remove(); } }));
-    } }, "☰"), h("h1", { id: "page-title" }, ""), h("div", { class: "spacer" }), Tour.button(), themeButton(), langSel, bell,
+    } }, "☰"), h("a", { class: "top-logo", href: "#dashboard", "aria-label": "ImmoPilot" }, brandMark()), h("h1", { id: "page-title" }, ""), h("div", { class: "spacer" }), Tour.button(), themeButton(), langSel, bell,
       h("button", { class: "user-chip", type: "button", onclick: function () { NAV_HASH.v = "settings"; } }, h("div", { class: "avatar" }, (S.me.displayName || "?").slice(0, 1).toUpperCase()), h("div", null, h("span", { class: "uname" }, S.me.displayName), h("small", null, roleTxt))));
     const imp = S.me.impersonator ? h("div", { class: "imp-banner", role: "status" },
       h("span", null, "👁 ", t("Vous êtes dans l'espace de"), " ", h("b", null, S.me.displayName), " (", S.me.email, ") — ", t("chaque action est enregistrée à votre nom") + " (" + S.me.impersonator.email + ")."),
