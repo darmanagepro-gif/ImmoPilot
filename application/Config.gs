@@ -142,8 +142,9 @@ var DEFAULT_SETTINGS = Object.freeze({
   "list.specialties": ["CLEANING", "PLUMBING", "ELECTRICITY", "AC", "PAINTING", "LOCKSMITH", "CARPENTRY", "APPLIANCE", "GARDENING", "POOL", "OTHER"],
   "contractors.platformOnly": true,
   // Identité de l'éditeur pour les pages légales (Paramètres › Plateforme) ; vide = « À compléter » surligné.
-  "legal.publisherName": "ImmoPilot", "legal.legalForm": "", "legal.address": "", "legal.registration": "", "legal.vatNumber": "", "legal.director": "",
-  "legal.contactEmail": "darmanagepro@gmail.com", "legal.phone": "", "legal.hostName": "", "legal.hostAddress": "", "legal.hostPhone": "", "legal.mediator": "",
+  "legal.publisherName": "ECO SYNERGY", "legal.legalForm": "société par actions simplifiée (SAS) au capital de 500 €", "legal.address": "16 chemin de Garrabot, 31770 Colomiers, France",
+  "legal.registration": "immatriculée au RCS de Toulouse sous le n° 932 443 005 (SIRET 932 443 005 00016)", "legal.vatNumber": "FR56932443005", "legal.director": "Abderhman LOULOU",
+  "legal.contactEmail": "ecosynergy31@gmail.com", "legal.phone": "+33 7 49 98 09 18", "legal.hostName": "", "legal.hostAddress": "", "legal.hostPhone": "", "legal.mediator": "",
   "legal.dataAuthorityRef": "", "legal.dpoEmail": ""
 });
 

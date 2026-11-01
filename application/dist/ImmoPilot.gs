@@ -1655,7 +1655,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "cabc0c674f41";
+var IMMO_BUILD_ = "a21b0d017070";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -1791,8 +1791,9 @@ var DEFAULT_SETTINGS = Object.freeze({
   "list.specialties": ["CLEANING", "PLUMBING", "ELECTRICITY", "AC", "PAINTING", "LOCKSMITH", "CARPENTRY", "APPLIANCE", "GARDENING", "POOL", "OTHER"],
   "contractors.platformOnly": true,
   // Identité de l'éditeur pour les pages légales (Paramètres › Plateforme) ; vide = « À compléter » surligné.
-  "legal.publisherName": "ImmoPilot", "legal.legalForm": "", "legal.address": "", "legal.registration": "", "legal.vatNumber": "", "legal.director": "",
-  "legal.contactEmail": "darmanagepro@gmail.com", "legal.phone": "", "legal.hostName": "", "legal.hostAddress": "", "legal.hostPhone": "", "legal.mediator": "",
+  "legal.publisherName": "ECO SYNERGY", "legal.legalForm": "société par actions simplifiée (SAS) au capital de 500 €", "legal.address": "16 chemin de Garrabot, 31770 Colomiers, France",
+  "legal.registration": "immatriculée au RCS de Toulouse sous le n° 932 443 005 (SIRET 932 443 005 00016)", "legal.vatNumber": "FR56932443005", "legal.director": "Abderhman LOULOU",
+  "legal.contactEmail": "ecosynergy31@gmail.com", "legal.phone": "+33 7 49 98 09 18", "legal.hostName": "", "legal.hostAddress": "", "legal.hostPhone": "", "legal.mediator": "",
   "legal.dataAuthorityRef": "", "legal.dpoEmail": ""
 });
 
