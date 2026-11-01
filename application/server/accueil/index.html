@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ImmoPilot — Gestion immobilière</title>
+<meta name="description" content="ImmoPilot : gestion immobilière pour la location courte et longue durée, le ménage, la maintenance, les contrats et les finances. Choisissez votre version : Maroc ou France.">
+<meta name="theme-color" content="#13233d">
+<link rel="icon" href="/logo-ma.png" type="image/png">
+<link rel="apple-touch-icon" href="/logo-ma.png">
+<style>
+:root{--navy:#13233d;--navy-2:#1b3254;--ink:#f4f6fa;--muted:#aab6c9;--gold:#e8b53a;--blue:#3b6fe0;--green:#1f8a4c;--card:#ffffff;--text:#1a2740}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:var(--navy);background-image:radial-gradient(1100px 520px at 50% -120px,var(--navy-2),transparent 70%)}
+header,main,footer{width:100%;max-width:960px;margin:0 auto;padding-left:16px;padding-right:16px}
+header{padding-top:56px;text-align:center}
+h1{margin:0 0 12px;font-size:clamp(2rem,6vw,3rem);letter-spacing:-.02em;line-height:1.1}
+h1 span{color:var(--gold)}
+.lead{margin:0 auto;max-width:34em;color:var(--muted);font-size:1.05rem;line-height:1.55}
+main{flex:1;padding-top:40px;padding-bottom:40px}
+.pick{margin:0 0 16px;text-align:center;font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.card{background:var(--card);color:var(--text);border-radius:20px;padding:28px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.28);border-top:5px solid var(--green)}
+.card.fr{border-top-color:var(--blue)}
+.card img{width:150px;height:150px;border-radius:30px;margin-bottom:16px;box-shadow:0 4px 14px rgba(19,35,61,.15)}
+.card h2{margin:0 0 10px;font-size:1.4rem}
+.card p.d{margin:0 0 22px;font-size:.98rem;line-height:1.5;color:#33415c}
+.btn{display:block;width:100%;padding:14px 18px;border-radius:12px;font-size:1.02rem;font-weight:650;text-decoration:none;background:var(--navy);color:#fff;border:2px solid var(--navy);cursor:pointer}
+.btn:hover{background:var(--navy-2)}
+.btn.alt{margin-top:10px;background:transparent;color:var(--navy);border-color:#c9d2e2;font-weight:600}
+.btn.alt:hover{background:#eef2f9}
+.btn:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+footer{padding-top:8px;padding-bottom:28px;text-align:center;font-size:.85rem;color:var(--muted)}
+footer a{color:var(--ink)}
+/* Vidéo d'ouverture, jouée après le choix de la version, avant l'écran de connexion */
+#intro{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:#ececee;opacity:0;transition:opacity .35s}
+#intro.on{display:flex}
+#intro.show{opacity:1}
+#intro video{width:100%;height:100%;object-fit:contain;background:#ececee}
+#skip{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(20px,env(safe-area-inset-bottom));padding:10px 18px;border:0;border-radius:999px;background:rgba(19,35,61,.82);color:#fff;font:600 .95rem system-ui,sans-serif;cursor:pointer}
+#skip:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+@media (max-width:680px){.cards{grid-template-columns:1fr}header{padding-top:40px}.card img{width:128px;height:128px;border-radius:26px}}
+@media (prefers-reduced-motion:no-preference){.btn{transition:background .15s}}
+</style>
+</head>
+<body>
+<header>
+<h1>Immo<span>Pilot</span></h1>
+<p class="lead">La gestion immobilière au même endroit : locations courte et longue durée, ménage, maintenance, contrats et finances.</p>
+</header>
+<main>
+<p class="pick">Choisissez votre version</p>
+<div class="cards">
+<section class="card ma" aria-labelledby="t-ma">
+<img src="/logo-ma.png" alt="Logo ImmoPilot Maroc" width="150" height="150">
+<h2 id="t-ma">ImmoPilot Maroc</h2>
+<p class="d">Pour les propriétaires, agences et prestataires au Maroc.</p>
+<a class="btn" data-intro="ma" href="https://ma.immopilotapp.fr/">Ouvrir ImmoPilot Maroc</a>
+<a class="btn alt" data-intro="ma" href="https://demo-ma.immopilotapp.fr/">Voir la démo</a>
+</section>
+<section class="card fr" aria-labelledby="t-fr">
+<img src="/logo-fr.png" alt="Logo ImmoPilot France" width="150" height="150">
+<h2 id="t-fr">ImmoPilot France</h2>
+<p class="d">Pour les propriétaires, agences et prestataires en France.</p>
+<a class="btn" data-intro="fr" href="https://fr.immopilotapp.fr/">Ouvrir ImmoPilot France</a>
+<a class="btn alt" data-intro="fr" href="https://demo-fr.immopilotapp.fr/">Voir la démo</a>
+</section>
+</div>
+</main>
+<footer>© ECO SYNERGY — éditeur d'ImmoPilot · <a href="mailto:ecosynergy31@gmail.com">ecosynergy31@gmail.com</a></footer>
+
+<div id="intro" aria-hidden="true">
+<video id="vid" playsinline webkit-playsinline preload="none" disablepictureinpicture disableremoteplayback></video>
+<button id="skip" type="button">Passer ›</button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var box = document.getElementById("intro"), vid = document.getElementById("vid"), skip = document.getElementById("skip");
+  var target = null, gone = false, started = false, timers = [];
+
+  function go() {
+    if (gone || !target) return;
+    gone = true;
+    timers.forEach(clearTimeout);
+    location.href = target;
+  }
+
+  function play(kind, href) {
+    target = href; gone = false; started = false;
+    box.classList.add("on");
+    requestAnimationFrame(function () { box.classList.add("show"); });
+    box.setAttribute("aria-hidden", "false");
+    skip.focus({ preventScroll: true });
+    vid.src = "/intro-" + kind + ".mp4";
+    vid.muted = false; // le clic autorise le son
+    var p = vid.play();
+    if (p && p.catch) p.catch(function () {
+      vid.muted = true; // son refusé par le navigateur : on rejoue sans le son
+      var q = vid.play();
+      if (q && q.catch) q.catch(go); // lecture impossible : on ouvre directement l'application
+    });
+    // Sécurités : la vidéo ne démarre pas (réseau lent) ou se fige.
+    timers.push(setTimeout(function () { if (!started) go(); }, 5000));
+    timers.push(setTimeout(go, 16000));
+  }
+
+  vid.addEventListener("playing", function () { started = true; });
+  vid.addEventListener("ended", go);
+  vid.addEventListener("error", go);
+  skip.addEventListener("click", go);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && box.classList.contains("on")) go(); });
+
+  // Retour arrière depuis l'application : on réaffiche le choix, pas la vidéo figée.
+  window.addEventListener("pageshow", function (e) {
+    if (e.persisted) { box.classList.remove("on", "show"); try { vid.pause(); } catch (x) { /* rien */ } gone = false; }
+  });
+
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  Array.prototype.forEach.call(document.querySelectorAll("a[data-intro]"), function (a) {
+    a.addEventListener("click", function (e) {
+      // Ouverture dans un nouvel onglet (Ctrl, Cmd, clic molette) ou animations désactivées : comportement normal.
+      if (reduce || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+      e.preventDefault();
+      play(a.getAttribute("data-intro"), a.href);
+    });
+  });
+})();
+</script>
+</body>
+</html>

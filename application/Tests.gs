@@ -129,7 +129,7 @@ function TEST_GROUPS_() {
         T.eq([cur_(), DEFAULT_SETTINGS.currency, IMMO_CONFIG.TIMEZONE, getSetting_("currency")], ["EUR", "EUR", "Europe/Paris", "EUR"], "euro et fuseau de Paris");
         T.eq(DEFAULT_PLANS.map(function (p) { return p.price; }), [29, 59, 149], "forfaits en euros");
         const pub = editionPublic_();
-        T.ok(pub.code === "FR" && pub.currency === "EUR" && /<svg/.test(pub.logoSvg) && pub.policeForms === true && pub.phoneCountry === "33", "réglages transmis à l'interface (logo tour Eiffel)");
+        T.ok(pub.code === "FR" && pub.currency === "EUR" && /icon-192\.png/.test(pub.logoSvg) && pub.policeForms === true && pub.phoneCountry === "33", "réglages transmis à l'interface (logo de l'édition)");
         T.ok(T.call(fx.tok.ownerA, "meta.get", {}).idTypes.indexOf("CNI") >= 0, "carte nationale d'identité proposée");
         T.call(fx.tok.ownerA, "property.update", { propertyId: fx.propA, registrationNumber: "7510112345678" });
         T.eq(T.call(fx.tok.ownerA, "property.get", { propertyId: fx.propA }).registrationNumber, "7510112345678", "n° d'enregistrement du meublé de tourisme");

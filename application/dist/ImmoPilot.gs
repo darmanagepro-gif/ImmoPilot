@@ -1655,7 +1655,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "fd31e06b10d2";
+var IMMO_BUILD_ = "752a7507648b";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -1673,7 +1673,7 @@ var EDITIONS_ = {
     idTypes: ["CIN", "CNI", "PASSPORT", "RESIDENCE_PERMIT", "DRIVING_LICENSE", "OTHER"], nationalId: "CIN",
     dataLaw: "loi 09-08 (CNDP)", dataAuthority: "CNDP", leaseLaw: "droit marocain (loi 67-12 notamment)",
     taxIdLabel: "Identifiant fiscal (ICE / IF)", invoiceLegal: "Mentions légales du prestataire (ICE, IF, RC, patente) à compléter dans sa fiche si elles n'apparaissent pas ci-dessus.",
-    quoteLegal: "", policeForms: false, registrationNumber: false, plans: { ESSENTIEL: 199, PRO: 499, BUSINESS: 1299 }, logoSvg: ""
+    quoteLegal: "", policeForms: false, registrationNumber: false, plans: { ESSENTIEL: 199, PRO: 499, BUSINESS: 1299 }, logoSvg: "<img src=\"/icons/icon-192.png\" alt=\"\" width=\"100%\" height=\"100%\" style=\"display:block;border-radius:inherit\">"
   },
   FR: {
     code: "FR", country: "FR", countryName: "France", currency: "EUR", timezone: "Europe/Paris", city: "Paris", mapCenter: [48.8566, 2.3522],
@@ -1683,7 +1683,7 @@ var EDITIONS_ = {
     taxIdLabel: "SIRET / n° de TVA intracommunautaire",
     invoiceLegal: "Mentions obligatoires du prestataire à vérifier : raison sociale, SIRET, n° de TVA intracommunautaire (ou « TVA non applicable, art. 293 B du CGI »), date d'échéance, taux des pénalités de retard ; entre professionnels, indemnité forfaitaire pour frais de recouvrement de 40 € (art. L. 441-10 du Code de commerce).",
     quoteLegal: "Devis gratuit sauf mention contraire. Pour être accepté, le devis doit être daté et signé avec la mention « Bon pour accord ». Prix exprimés en euros.",
-    policeForms: true, registrationNumber: true, plans: { ESSENTIEL: 29, PRO: 59, BUSINESS: 149 }, logoSvg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\" width=\"100%\" height=\"100%\"> <defs> <clipPath id=\"r\"><rect width=\"100%\" height=\"100%\" rx=\"96\"/></clipPath> <linearGradient id=\"tw\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#3A62A8\"/><stop offset=\"1\" stop-color=\"#22417A\"/></linearGradient> </defs> <g clip-path=\"url(#r)\"> <rect width=\"100%\" height=\"100%\" fill=\"#13233D\"/> <g fill=\"url(#tw)\"> <rect x=\"252\" y=\"18\" width=\"8\" height=\"34\" rx=\"3\"/> <path d=\"M244 52h24l4 40h-32z\"/> <rect x=\"232\" y=\"88\" width=\"48\" height=\"10\" rx=\"3\"/> <path d=\"M238 98h36l20 132h-76z\"/> <rect x=\"200\" y=\"226\" width=\"112\" height=\"14\" rx=\"4\"/> <path d=\"M212 240h88C312 292 326 326 340 352H172C186 326 200 292 212 240z\"/> <rect x=\"148\" y=\"348\" width=\"216\" height=\"18\" rx=\"5\"/> <path d=\"M160 366h192C358 420 384 474 420 512H92C128 474 154 420 160 366z\"/> </g> <g fill=\"none\" stroke=\"#13233D\" stroke-width=\"5\" stroke-linecap=\"round\" opacity=\".55\"> <path d=\"M244 112l24 24M268 112l-24 24M240 150l32 32M272 150l-32 32M236 190l40 34M276 190l-40 34\"/> <path d=\"M218 252l76 88M294 252l-76 88\"/> </g> <path d=\"M168 512 C 186 418, 326 418, 344 512 Z\" fill=\"#13233D\"/> <text x=\"256\" y=\"318\" text-anchor=\"middle\" font-family=\"Inter, 'Segoe UI', Arial, sans-serif\" font-weight=\"800\" font-size=\"184\" fill=\"#FFFFFF\" letter-spacing=\"-4\">IP</text> <rect x=\"164\" y=\"344\" width=\"62\" height=\"16\" rx=\"8\" fill=\"#3F6FE0\"/> <rect x=\"225\" y=\"344\" width=\"62\" height=\"16\" fill=\"#FFFFFF\"/> <rect x=\"286\" y=\"344\" width=\"62\" height=\"16\" rx=\"8\" fill=\"#E5484D\"/> <rect x=\"222\" y=\"344\" width=\"10\" height=\"16\" fill=\"#FFFFFF\"/><rect x=\"280\" y=\"344\" width=\"10\" height=\"16\" fill=\"#FFFFFF\"/> </g> </svg>"
+    policeForms: true, registrationNumber: true, plans: { ESSENTIEL: 29, PRO: 59, BUSINESS: 149 }, logoSvg: "<img src=\"/icons/icon-192.png\" alt=\"\" width=\"100%\" height=\"100%\" style=\"display:block;border-radius:inherit\">"
   }
 };
 function edition_() { return EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA; }
@@ -8660,7 +8660,7 @@ function TEST_GROUPS_() {
         T.eq([cur_(), DEFAULT_SETTINGS.currency, IMMO_CONFIG.TIMEZONE, getSetting_("currency")], ["EUR", "EUR", "Europe/Paris", "EUR"], "euro et fuseau de Paris");
         T.eq(DEFAULT_PLANS.map(function (p) { return p.price; }), [29, 59, 149], "forfaits en euros");
         const pub = editionPublic_();
-        T.ok(pub.code === "FR" && pub.currency === "EUR" && /<svg/.test(pub.logoSvg) && pub.policeForms === true && pub.phoneCountry === "33", "réglages transmis à l'interface (logo tour Eiffel)");
+        T.ok(pub.code === "FR" && pub.currency === "EUR" && /icon-192\.png/.test(pub.logoSvg) && pub.policeForms === true && pub.phoneCountry === "33", "réglages transmis à l'interface (logo de l'édition)");
         T.ok(T.call(fx.tok.ownerA, "meta.get", {}).idTypes.indexOf("CNI") >= 0, "carte nationale d'identité proposée");
         T.call(fx.tok.ownerA, "property.update", { propertyId: fx.propA, registrationNumber: "7510112345678" });
         T.eq(T.call(fx.tok.ownerA, "property.get", { propertyId: fx.propA }).registrationNumber, "7510112345678", "n° d'enregistrement du meublé de tourisme");
