@@ -133,7 +133,7 @@ function rentCallPdf_(c, s) {
     table + "<p>Référence à indiquer avec votre règlement : <b>" + escapeHtml_(ref) + "</b></p>" + rentPayInfoHtml_(c, total, ref) +
     "<p class='muted'>Cet appel de loyer ne vaut pas quittance. La quittance vous sera adressée après encaissement de la totalité de l'échéance.</p>" +
     "<p style='margin-top:14px'>Fait le " + pdfDate_(today) + ".<br>Le bailleur, " + escapeHtml_(c.org.name || "") + "</p>" + coupon;
-  return htmlToPdf_(pdfShell_("Appel de loyer — " + rentPeriodLabel_(s), inner, { noHead: true, subtitle: "Échéance du " + pdfDate_(s.dueDate),
+  return htmlToPdf_(pdfShell_("Appel de loyer — " + rentPeriodLabel_(s), inner, { noHead: true, subtitle: "Échéance du " + pdfDate_(s.dueDate), ref: "APL-" + ref.replace(/^LOY-/, ""),
     footer: "Document émis par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Appel_loyer_" + s.period + "_" + String(c.l.leaseId).slice(-6));
 }
 /** Relance : niveau 1 à 3 ; liste toutes les échéances impayées échues du bail. */
@@ -152,7 +152,7 @@ function rentReminderPdf_(c, unpaid, level) {
     "<p><b>Total restant dû : " + escapeHtml_(fmtAmount_(total, cur)) + "</b></p>" + rentPayInfoHtml_(c, total, unpaid.length ? rentReference_(c.l, unpaid[0]) : "") +
     "<p class='muted'>Si votre règlement nous est parvenu entre-temps, merci de ne pas tenir compte de ce courrier.</p>" +
     "<p style='margin-top:18px'>Fait le " + pdfDate_(today) + ".<br>Le bailleur, " + escapeHtml_(c.org.name || "") + "</p>";
-  return htmlToPdf_(pdfShell_(title, inner, { subtitle: (c.prop.name || "") + " · " + unpaid.length + " échéance(s) impayée(s)", issuer: rentIssuer_(c.org),
+  return htmlToPdf_(pdfShell_(title, inner, { subtitle: (c.prop.name || "") + " · " + unpaid.length + " échéance(s) impayée(s)", issuer: rentIssuer_(c.org), ref: "REL" + lvl + "-" + today.replace(/-/g, "") + "-" + String(c.l.leaseId).slice(-6).toUpperCase(),
     footer: "Document émis par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Relance_" + lvl + "_" + today + "_" + String(c.l.leaseId).slice(-6));
 }
 /** Quittance d'une échéance entièrement réglée (modèle de l'organisation, sinon gabarit intégré). */
@@ -170,7 +170,7 @@ function rentReceiptPdf_(c, s) {
     du: y && mo ? "01/" + pad(mo) + "/" + y : "", au: y && mo ? pad(lastDay) + "/" + pad(mo) + "/" + y : "", echeance: pdfDate_(s.dueDate), periode: rentPeriodLabel_(s), loyer: fmtAmount_(s.rentAmount, cur), charges: fmtAmount_(s.chargesAmount, cur), total: fmtAmount_(s.amountDue, cur),
     date_paiement: map.date_paiement, mode_paiement: pays.map(function (z) { return PDF_PAY_METHODS_[z.method] || z.method; }).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).join(", "),
     reference: rentReference_(c.l, s), date: pdfDate_(todayStr_()), ville: c.prop.city || "" },
-    { name: "Quittance_" + s.period + "_" + String(c.l.leaseId).slice(-6), subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org),
+    { name: "Quittance_" + s.period + "_" + String(c.l.leaseId).slice(-6), subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org), ref: "QUIT-" + rentReference_(c.l, s).replace(/^LOY-/, ""),
       footer: "Quittance délivrée gratuitement par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." });
   if (tpl) return docFromTemplate_(tpl, map, propertyFolder_(c.l.organizationId, c.l.propertyId, "LEASE"), "Quittance_" + s.period + "_" + c.l.leaseId).pdf;
   const inner = rentParties_(c) + "<p>Je soussigné(e), <b>" + escapeHtml_(c.org.name || "") + "</b>, bailleur du logement désigné ci-dessus, déclare avoir reçu de <b>" + escapeHtml_(c.t.fullName || "") +
@@ -232,7 +232,8 @@ function rentDeliver_(o) {
   let res = { ok: false, error: error };
   if (!error && RENT_MAIL_DRY_RUN_) res = { ok: true };
   else if (!error) res = sendMailSafe_(to, txt.subject, txt.body, "rentmail:" + base.uniqueKey + ":" + (prev ? num_(prev.attempts) + 1 : 1), c.l.organizationId,
-    { attachments: [blob], bcc: c.cfg.copyEmail || "", replyTo: c.org.billingEmail || "", senderName: c.org.name || IMMO_CONFIG.APP_NAME, plain: true });
+    { attachments: [blob], bcc: c.cfg.copyEmail || "", replyTo: c.org.billingEmail || "", senderName: c.org.name || IMMO_CONFIG.APP_NAME, plain: true,
+      footer: rentIssuer_(c.org).lines.concat(["Logement : " + (c.prop.name || "") + (rentAddress_(c.prop) ? " — " + rentAddress_(c.prop) : "")]) });
   const patch = { status: res.ok ? "SENT" : "FAILED", sentAt: res.ok ? nowIso_() : "", error: res.ok ? "" : String(res.error || error).slice(0, 300), documentId: docId, subject: safeText_(txt.subject, 200) };
   let row;
   if (prev) { patch.attempts = num_(prev.attempts) + 1; dbUpdate_("RentMailings", prev.mailingId, patch); row = prev; }
@@ -420,5 +421,5 @@ function rentMailingsOf_(leaseId) {
   return dbAll_("RentMailings").filter(function (m) { return String(m.leaseId) === String(leaseId); })
     .sort(function (a, b) { return String(b.sentAt || b.createdAt).localeCompare(String(a.sentAt || a.createdAt)); }).slice(0, 100)
     .map(function (m) { return { mailingId: m.mailingId, kind: m.kind, level: num_(m.level), scheduleId: m.scheduleId, recipient: m.recipient, status: m.status, trigger: m.trigger, documentId: m.documentId,
-      subject: m.subject, at: m.sentAt || m.createdAt, error: m.error, attempts: num_(m.attempts) }; });
+      subject: m.subject, at: m.sentAt || m.createdAt, error: m.error, attempts: num_(m.attempts), delivery: m.delivery || "", deliveryLabel: MAIL_DELIVERY_LABELS_[m.delivery] || "", deliveryAt: m.deliveryAt || "", deliveryReason: m.deliveryReason || "" }; });
 }

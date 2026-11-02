@@ -1,5 +1,13 @@
 # Journal des modifications
 
+## 2.5.0 — 2 novembre 2026 — communication centralisée avec l'API Brevo
+
+- Envoi des e-mails par l'API Brevo (`BREVO_API_KEY` dans l'environnement du serveur, jamais dans la base ni le navigateur) ; SMTP conservé en secours si la clé est absente. File d'attente inchangée : jusqu'à 6 essais espacés, erreurs définitives (adresse refusée) sans nouvel essai, anti-doublon par clé d'événement.
+- Suivi de livraison : webhook sécurisé `/hooks/brevo/<BREVO_WEBHOOK_TOKEN>` déclaré automatiquement auprès de Brevo au démarrage ; statuts (envoyé, délivré, ouvert, rejeté, bloqué, indésirable) enregistrés dans l'historique (NotificationLogs, envois de loyers) ; gestionnaire prévenu si un appel, une relance ou une quittance n'est pas délivré ; colonne « Livraison » sur le bail et onglet « E-mails » pour le super administrateur (schéma 14).
+- Gabarit commun de tous les e-mails : HTML adaptatif (téléphone), logo de l'édition, « pour le compte de » l'expéditeur, coordonnées du bailleur ou de l'agence en pied de page.
+- Référence unique imprimée sur chaque PDF (APL-, QUIT-, REL-, BAIL-, EDL…, sinon DOC-date-aléa).
+- SMS de signature : clé Brevo lue dans l'environnement du serveur. Installation : `server/deploy/brevo-api.sh` ; test : `server/brevo-test.js` (faux service Brevo local).
+
 ## 2.4.0 — 1er novembre 2026 — modèles de documents, lien de paiement par carte, signature électronique du contrat
 
 - Modèles de documents intégrés (remplacent les modèles Google Docs, indisponibles sur le serveur dédié) : quittance, bail et fiche de réservation. Chaque organisation écrit son texte avec des balises ({{locataire}}, {{total}}…) et une mise en forme simple (intertitres, gras, trait, cadres de signature), avec aperçu PDF sur données d'exemple. Vide = document standard. Texte toujours échappé (aucun HTML accepté).

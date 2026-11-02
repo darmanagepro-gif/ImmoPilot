@@ -187,6 +187,16 @@ function adminJobs_(p, a) {
   return pageOf_(dbAll_("ScheduledJobs").slice().sort(function (x, y) { return String(y.startedAt).localeCompare(String(x.startedAt)); })
     .map(function (j) { return { jobName: j.jobName, startedAt: j.startedAt, finishedAt: j.finishedAt, status: j.status, result: parseJson_(j.resultJson, {}), error: j.error }; }), a);
 }
+/** Historique des e-mails envoyés (toutes organisations) avec leur statut de livraison Brevo. Super administrateur. */
+function adminMails_(p, a) {
+  requireSuper_(p);
+  a = a || {};
+  const q = String(a.q || "").toLowerCase(), orgs = indexBy_(dbAll_("Organizations"), "organizationId");
+  return pageOf_(dbAll_("NotificationLogs").filter(function (l) { return l.channel === "EMAIL" && (!q || String(l.recipient).toLowerCase().indexOf(q) >= 0 || String(l.eventKey).toLowerCase().indexOf(q) >= 0); })
+    .sort(function (x, y) { return String(y.sentAt).localeCompare(String(x.sentAt)); }).slice(0, 2000).map(function (l) {
+      return { sentAt: l.sentAt, recipient: l.recipient, eventKey: l.eventKey, status: l.status, error: l.error, organizationName: (orgs[String(l.organizationId)] || {}).name || "",
+        delivery: MAIL_DELIVERY_LABELS_[l.delivery] || "", deliveryAt: l.deliveryAt || "", deliveryReason: l.deliveryReason || "" }; }), a);
+}
 /** Paramètres : plateforme (super admin) ou organisation (settings.manage). */
 function settingsGet_(p, a) {
   const orgId = safeText_(a.organizationId || "", 120);

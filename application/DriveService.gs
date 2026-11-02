@@ -229,11 +229,13 @@ var PDF_LOGO_PNG_B64_ = "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAPmUlEQVR
 /**
  * Gabarit commun des PDF : en-tête avec logo et nom de l'application, titre, sous-titre facultatif (organisation),
  * date de génération et pied de page. opts : { subtitle, footer, issuer: { name, lines[] }, noHead } — issuer remplace la marque ImmoPilot ;
- * noHead : aucun en-tête de marque (le modèle affiche lui-même les parties avec le bloc [entete]).
+ * noHead : aucun en-tête de marque (le modèle affiche lui-même les parties avec le bloc [entete]) ; ref : référence unique du document.
  */
 function pdfShell_(title, inner, opts) {
   opts = opts || {};
   const when = Utilities.formatDate(new Date(), tz_(), "dd/MM/yyyy HH:mm");
+  // Référence unique imprimée sur chaque document (fournie par le module, sinon générée : date + aléa).
+  const ref = safeText_(opts.ref || ("DOC-" + Utilities.formatDate(new Date(), tz_(), "yyyyMMdd") + "-" + randomToken_().slice(0, 6).toUpperCase()), 80);
   return "<html><head><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;color:#1d2b3a;font-size:11px}h1{font-size:18px;color:#1b3554;margin:0 0 2px}" +
     "h2{font-size:13px;color:#1b3554;margin:16px 0 6px;border-bottom:2px solid #e9b341;padding-bottom:2px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #c9d3df;padding:4px 6px;text-align:left;vertical-align:top}" +
     "th{background:#e8eef5}.muted{color:#64748b}.right{text-align:right}.head td{border:0;padding:0}.brand{font-size:20px;font-weight:bold;color:#13233d}.gold{color:#c9962b}" +
@@ -244,9 +246,9 @@ function pdfShell_(title, inner, opts) {
       ? "<table class='head'><tr><td><div class='brand'>" + escapeHtml_(opts.issuer.name) + "</div><div class='muted'>" + (opts.issuer.lines || []).filter(String).map(escapeHtml_).join("<br>") + "</div></td>"
       : "<table class='head'><tr><td style='width:62px'><img src='data:image/png;base64," + PDF_LOGO_PNG_B64_ + "' width='54' height='54'></td>" +
         "<td><div class='brand'>Immo<span class='gold'>Pilot</span></div><div class='muted'>Gestion immobilière</div></td>") +
-    "<td class='right muted'>Généré le " + escapeHtml_(when) + "</td></tr></table><hr style='border:0;border-top:3px solid #13233d;margin:8px 0 12px'>" +
+    "<td class='right muted'>Généré le " + escapeHtml_(when) + "<br>Réf. " + escapeHtml_(ref) + "</td></tr></table><hr style='border:0;border-top:3px solid #13233d;margin:8px 0 12px'>" +
     "<h1>" + escapeHtml_(title) + "</h1>" + (opts.subtitle ? "<p class='muted' style='margin:0 0 10px'>" + escapeHtml_(opts.subtitle) + "</p>" : "") + inner +
-    "<div class='foot'>" + escapeHtml_(opts.footer || (IMMO_CONFIG.APP_NAME + " — document généré automatiquement à partir des données enregistrées dans l'application.")) + "</div></body></html>";
+    "<div class='foot'>" + escapeHtml_(opts.footer || (IMMO_CONFIG.APP_NAME + " — document généré automatiquement à partir des données enregistrées dans l'application.")) + " — Réf. " + escapeHtml_(ref) + "</div></body></html>";
 }
 /** Date AAAA-MM-JJ (ou horodatage) au format JJ/MM/AAAA. */
 function pdfDate_(s) { const v = String(s || "").slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v.slice(8, 10) + "/" + v.slice(5, 7) + "/" + v.slice(0, 4) : (v || "—"); }

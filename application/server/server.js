@@ -25,6 +25,8 @@ const TZ = rt.ctx.IMMO_CONFIG.TIMEZONE, EDITION = rt.ctx.IMMO_EDITION_;
 (function initProps() {
   const P = rt.ctx.PropertiesService.getScriptProperties();
   if (!P.getProperty("IMMO_APP_URL")) P.setProperty("IMMO_APP_URL", C.publicUrl);
+  // Secrets lus dans l'environnement du serveur (jamais dans la base ni le navigateur) : SMS de signature via l'API Brevo.
+  rt.ctx.IMMO_SECRETS_ = Object.freeze({ brevoApiKey: C.brevoApiKey });
   if (!P.getProperty("IMMO_ADMIN_EMAILS") && C.adminEmail) P.setProperty("IMMO_ADMIN_EMAILS", C.adminEmail);
   rt.commit();
 })();
@@ -118,6 +120,13 @@ const server = http.createServer(async function (req, res) {
   try {
     if (url.pathname === "/healthz") return send(res, 200, "text/plain; charset=utf-8", "ok");
     if (!allowed(ip)) return send(res, 429, "text/plain; charset=utf-8", "Trop de requêtes.");
+    const hook = /^\/hooks\/brevo\/([A-Za-z0-9_-]{24,128})$/.exec(url.pathname);
+    if (req.method === "POST" && hook) {
+      const ok = C.brevoWebhookToken && hook[1].length === C.brevoWebhookToken.length && crypto.timingSafeEqual(Buffer.from(hook[1]), Buffer.from(C.brevoWebhookToken));
+      if (!ok) return send(res, 404, "text/plain; charset=utf-8", "Introuvable.");
+      let body; try { body = JSON.parse(await readBody(req, 2e6)); } catch (e) { return send(res, 400, "text/plain; charset=utf-8", "JSON invalide."); }
+      return send(res, 200, "application/json; charset=utf-8", JSON.stringify({ ok: true, updated: brevoEvents(body) }));
+    }
     if (req.method === "POST" && url.pathname === "/rpc") {
       if (req.headers["x-immopilot"] !== "1" || !/application\/json/.test(String(req.headers["content-type"] || "")) || !sameOrigin(req)) return send(res, 403, "text/plain; charset=utf-8", "Refusé.");
       const body = JSON.parse(await readBody(req, C.maxBody));
@@ -173,33 +182,88 @@ const server = http.createServer(async function (req, res) {
   }
 });
 
-/* ----------------------------- E-mails (SMTP) ----------------------------- */
+/* ----------------------------- E-mails (API Brevo, sinon SMTP) ----------------------------- */
+// La clé Brevo reste sur le serveur (variable d'environnement BREVO_API_KEY) : jamais transmise au navigateur.
+const BREVO_API = process.env.BREVO_API_URL || "https://api.brevo.com/v3"; // BREVO_API_URL : tests uniquement
 let transport = null, mailBusy = false, mailWarned = false;
-if (nodemailer && C.smtpHost) transport = nodemailer.createTransport({ host: C.smtpHost, port: C.smtpPort, secure: C.smtpSecure, auth: C.smtpUser ? { user: C.smtpUser, pass: C.smtpPass } : undefined });
+if (!C.brevoApiKey && nodemailer && C.smtpHost) transport = nodemailer.createTransport({ host: C.smtpHost, port: C.smtpPort, secure: C.smtpSecure, auth: C.smtpUser ? { user: C.smtpUser, pass: C.smtpPass } : undefined });
+function permanentError(msg) { const e = new Error(msg); e.permanent = true; return e; }
+async function brevoSend(m, attachments) {
+  const payload = { sender: { name: m.sender || "ImmoPilot", email: C.mailFrom }, to: [{ email: m.recipient }], subject: m.subject, textContent: m.body || " ",
+    tags: ["immopilot"], headers: m.ref ? { "X-Mailin-custom": String(m.ref).slice(0, 250) } : undefined };
+  if (m.html) payload.htmlContent = m.html;
+  if (m.bcc) payload.bcc = [{ email: m.bcc }];
+  if (m.replyto) payload.replyTo = { email: m.replyto };
+  if (attachments && attachments.length) payload.attachment = attachments.map(function (a) { return { name: a.name, content: a.base64 }; });
+  const res = await fetch(BREVO_API + "/smtp/email", { method: "POST", headers: { "api-key": C.brevoApiKey, "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(30000) });
+  const txt = await res.text(); let body = {}; try { body = JSON.parse(txt); } catch (e) { body = {}; }
+  if (res.ok) return body.messageId || (Array.isArray(body.messageIds) ? body.messageIds[0] : "") || "";
+  const msg = "Brevo " + res.status + " : " + String(body.message || txt).slice(0, 200);
+  // Erreurs définitives (adresse ou contenu refusé) : inutile de réessayer. 401/403 (clé) et 429/5xx : nouvel essai plus tard.
+  if (res.status === 400 || res.status === 404 || res.status === 413) throw permanentError(msg);
+  throw new Error(msg);
+}
 async function mailTick() {
   if (mailBusy) return; mailBusy = true;
   try {
-    if (!transport) { if (!mailWarned) { console.warn("SMTP non configuré : les e-mails restent en file d'attente (table outbox)."); mailWarned = true; } return; }
+    if (!C.brevoApiKey && !transport) { if (!mailWarned) { console.warn("Ni BREVO_API_KEY ni SMTP configurés : les e-mails restent en file d'attente (table outbox)."); mailWarned = true; } return; }
     const now = new Date().toISOString();
     const rows = rt.db.prepare("SELECT * FROM outbox WHERE status = 'QUEUED' AND (next IS NULL OR next <= ?) ORDER BY id LIMIT 20").all(now);
     for (const m of rows) {
       try {
         m.body = rt.vault.untext(m.body, "mail:body"); m.html = rt.vault.untext(m.html, "mail:html"); m.attachments = rt.vault.untext(m.attachments, "mail:att");
-        let attachments; try { attachments = m.attachments ? JSON.parse(m.attachments).map(function (a) { return { filename: a.name, contentType: a.type, content: Buffer.from(a.base64, "base64") }; }) : undefined; } catch (e) { attachments = undefined; }
-        await transport.sendMail({ from: { name: m.sender || "ImmoPilot", address: C.mailFrom }, to: m.recipient, bcc: m.bcc || undefined, replyTo: m.replyto || undefined,
-          subject: m.subject, text: m.body, html: m.html || undefined, attachments: attachments });
-        rt.db.prepare("UPDATE outbox SET status = 'SENT', sent = ?, error = NULL WHERE id = ?").run(new Date().toISOString(), m.id);
+        let att; try { att = m.attachments ? JSON.parse(m.attachments) : []; } catch (e) { att = []; }
+        let providerId = "";
+        if (C.brevoApiKey) providerId = await brevoSend(m, att);
+        else {
+          const info = await transport.sendMail({ from: { name: m.sender || "ImmoPilot", address: C.mailFrom }, to: m.recipient, bcc: m.bcc || undefined, replyTo: m.replyto || undefined,
+            subject: m.subject, text: m.body, html: m.html || undefined, headers: m.ref ? { "X-Mailin-custom": String(m.ref).slice(0, 250) } : undefined,
+            attachments: att.map(function (a) { return { filename: a.name, contentType: a.type, content: Buffer.from(a.base64, "base64") }; }) });
+          providerId = (info && info.messageId) || "";
+        }
+        rt.db.prepare("UPDATE outbox SET status = 'SENT', sent = ?, error = NULL, provider_id = ?, delivery = COALESCE(delivery, 'SENT') WHERE id = ?").run(new Date().toISOString(), String(providerId || ""), m.id);
       } catch (e) {
-        const tries = (m.tries || 0) + 1;
-        rt.db.prepare("UPDATE outbox SET tries = ?, error = ?, status = ?, next = ? WHERE id = ?").run(tries, String(e.message).slice(0, 300), tries >= 6 ? "FAILED" : "QUEUED", new Date(Date.now() + tries * tries * 60000).toISOString(), m.id);
+        const tries = (m.tries || 0) + 1, dead = e.permanent || tries >= 6;
+        rt.db.prepare("UPDATE outbox SET tries = ?, error = ?, status = ?, next = ? WHERE id = ?").run(tries, String(e.message).slice(0, 300), dead ? "FAILED" : "QUEUED", new Date(Date.now() + tries * tries * 60000).toISOString(), m.id);
         console.error("E-mail vers " + m.recipient + " : " + e.message);
+        if (dead && m.ref) { try { rt.call("mailDeliveryUpdate", [m.ref, m.recipient, "error", new Date().toISOString(), String(e.message).slice(0, 200), ""]); } catch (e2) { console.error(e2.message); } }
       }
     }
     rt.db.prepare("DELETE FROM outbox WHERE status = 'SENT' AND sent < ?").run(new Date(Date.now() - 30 * 86400000).toISOString()); // corps des e-mails : 30 jours
     rt.db.prepare("UPDATE outbox SET attachments = NULL WHERE status = 'SENT' AND attachments IS NOT NULL").run(); // les PDF restent dans les documents de l'application
   } finally { mailBusy = false; }
 }
-setInterval(mailTick, 30000).unref();
+/** Événements de livraison envoyés par Brevo (webhook) : délivré, ouvert, rejeté, bloqué, indésirable… */
+function brevoEvents(body) {
+  const list = Array.isArray(body) ? body : [body];
+  let n = 0;
+  list.slice(0, 500).forEach(function (ev) {
+    if (!ev || typeof ev !== "object") return;
+    const pid = String(ev["message-id"] || ev.messageId || ""), email = String(ev.email || "").toLowerCase();
+    let ref = String(ev["X-Mailin-custom"] || "");
+    const row = pid ? rt.db.prepare("SELECT id, ref FROM outbox WHERE provider_id = ?").get(pid) : null;
+    if (!ref && row) ref = row.ref || "";
+    const at = ev.date ? new Date(String(ev.date).replace(" ", "T") + (/[Z+]/.test(String(ev.date)) ? "" : "Z")).toISOString() : new Date().toISOString();
+    if (row) rt.db.prepare("UPDATE outbox SET delivery = ?, delivery_at = ?, delivery_reason = ? WHERE id = ?").run(String(ev.event || ""), at, String(ev.reason || "").slice(0, 300), row.id);
+    if (ref) { try { rt.call("mailDeliveryUpdate", [ref, email, String(ev.event || ""), at, String(ev.reason || ""), pid]); n++; } catch (e) { console.error("Webhook Brevo : " + e.message); } }
+  });
+  return n;
+}
+/** Au démarrage : déclare (une seule fois) l'adresse du webhook de cette instance auprès de Brevo. */
+async function brevoWebhookEnsure() {
+  if (!C.brevoApiKey || !C.brevoWebhookToken || !C.publicUrl) return;
+  const url = C.publicUrl.replace(/\/+$/, "") + "/hooks/brevo/" + C.brevoWebhookToken;
+  try {
+    const h = { "api-key": C.brevoApiKey, accept: "application/json", "content-type": "application/json" };
+    const list = await (await fetch(BREVO_API + "/webhooks?type=transactional", { headers: h, signal: AbortSignal.timeout(20000) })).json();
+    if ((list.webhooks || []).some(function (w) { return w.url === url; })) return;
+    const r = await fetch(BREVO_API + "/webhooks", { method: "POST", headers: h, signal: AbortSignal.timeout(20000), body: JSON.stringify({ url: url, description: "ImmoPilot " + C.publicUrl, type: "transactional",
+      events: ["delivered", "hardBounce", "softBounce", "blocked", "spam", "invalid", "deferred", "opened", "click", "uniqueOpened"] }) });
+    console.log("Webhook Brevo : " + (r.ok ? "déclaré" : "refus " + r.status + " " + (await r.text()).slice(0, 200)));
+  } catch (e) { console.error("Webhook Brevo : " + e.message); }
+}
+setTimeout(brevoWebhookEnsure, 5000).unref();
+setInterval(mailTick, Number(process.env.MAIL_TICK_MS || 30000)).unref();
 
 /* ----------------------------- Tâches planifiées ----------------------------- */
 function localNow() {

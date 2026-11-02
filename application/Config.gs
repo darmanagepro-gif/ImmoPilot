@@ -44,8 +44,8 @@ function cur_() { return edition_().currency; }
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
-  VERSION: "2.4.0",
-  SCHEMA_VERSION: 13,
+  VERSION: "2.5.0",
+  SCHEMA_VERSION: 14,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -250,7 +250,7 @@ var TABLES_SRC = {
   // Envois au locataire (appels de loyer, relances, quittances, documents) : une ligne par envoi, clé unique contre les doublons.
   RentMailings: { pk: "mailingId", idp: "rml", org: "organizationId", req: "leaseId,kind",
     enums: { kind: ["CALL", "REMINDER", "RECEIPT", "DOCUMENT"], status: ["SENT", "FAILED", "SKIPPED"], trigger: ["AUTO", "MANUAL"] },
-    cols: "mailingId,organizationId,propertyId,leaseId,scheduleId,kind,level#n,recipient,status,trigger,documentId,subject,sentAt#t,error,attempts#n,uniqueKey,createdAt#t,createdBy" },
+    cols: "mailingId,organizationId,propertyId,leaseId,scheduleId,kind,level#n,recipient,status,trigger,documentId,subject,sentAt#t,error,attempts#n,uniqueKey,createdAt#t,createdBy|delivery,deliveryAt#t,deliveryReason" },
   // Documents rédigés par l'agent (IA ou modèle intégré) : contrat de bail, courriers. Brouillon modifiable, puis PDF définitif.
   LeaseDocs: { pk: "leaseDocId", idp: "ldc", org: "organizationId", req: "leaseId,docType",
     enums: { docType: ["LEASE_CONTRACT", "LETTER"], status: ["DRAFT", "FINAL", "CANCELLED"] },
@@ -266,7 +266,7 @@ var TABLES_SRC = {
   Documents: { pk: "documentId", idp: "doc", org: "organizationId", req: "fileId,ownerType,category", enums: { status: ["ACTIVE", "ARCHIVED", "PURGED"] },
     cols: "documentId,organizationId,propertyId,ownerType,ownerId,category,fileId,fileName,mimeType,sizeBytes#n,sha256,sensitive#b,status,createdAt#t,createdBy,retainUntil#d,purgedAt#t,legacy#b" },
   Notifications: { pk: "notificationId", idp: "ntf", org: "organizationId", req: "userId,title", cols: "notificationId,organizationId,userId,type,title,body,link,createdAt#t,readAt#t,eventKey" },
-  NotificationLogs: { pk: "logId", idp: "nlg", org: "organizationId", req: "eventKey,channel", cols: "logId,eventKey,channel,recipient,type,status,sentAt#t,error,organizationId" },
+  NotificationLogs: { pk: "logId", idp: "nlg", org: "organizationId", req: "eventKey,channel", cols: "logId,eventKey,channel,recipient,type,status,sentAt#t,error,organizationId|delivery,deliveryAt#t,deliveryReason,providerId" },
   ScheduledJobs: { pk: "jobRunId", idp: "job", req: "jobName", cols: "jobRunId,jobName,startedAt#t,finishedAt#t,status,resultJson#j,error" },
   MigrationHistory: { pk: "migrationId", idp: "mig", req: "version", cols: "migrationId,version#n,name,appliedAt#t,appliedBy,status,detailsJson#j" },
   SubscriptionPlans: { pk: "planCode", idp: "pln", req: "planCode,name", enums: { status: ["ACTIVE", "RETIRED"], periodicity: ["MONTHLY", "QUARTERLY", "YEARLY"] },

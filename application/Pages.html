@@ -954,6 +954,8 @@ function rentAutomationPanel(l, go) {
       ["Prochain appel", a.nextCall ? fmtDate(a.nextCall) : "—"], ["Prochaine relance", a.nextReminder ? fmtDate(a.nextReminder) : "—"]]),
     h("h4", { style: { margin: "16px 0 6px" } }, t("Historique des envois")),
     table([{ l: "Date", dt: true, k: "at" }, { l: "Envoi", f: rentMailLabel }, { l: "Destinataire", k: "recipient" }, { l: "Statut", f: function (m) { return h("span", null, stTag(m.status), m.error ? h("div", { class: "small muted" }, m.error) : null); } },
+      { l: "Livraison", f: function (m) { if (!m.delivery) return h("span", { class: "muted small" }, "—"); const bad = ["BOUNCED", "BLOCKED", "SPAM", "ERROR", "SOFT_BOUNCE"].indexOf(m.delivery) >= 0;
+        return h("span", null, tag(t(m.deliveryLabel), bad ? "bad" : ["DELIVERED", "OPENED", "CLICKED"].indexOf(m.delivery) >= 0 ? "good" : ""), m.deliveryAt ? h("div", { class: "small muted" }, fmtDT(m.deliveryAt)) : null, m.deliveryReason ? h("div", { class: "small muted" }, m.deliveryReason) : null); } },
       { l: "Origine", f: function (m) { return m.trigger === "AUTO" ? t("Automatique") : t("Manuel"); } }, { l: "", f: function (m) { return m.documentId ? btn("PDF", function () { openDoc(m.documentId); }, "sm") : null; } }], l.mailings, { empty: "Aucun envoi pour ce bail." }));
   const tools = [btn(t("Régler pour ce bail"), function () { leaseAutomationDialog(l).then(function (x) { if (x) go(); }); }, "sm")];
   if (l.arrears > 0) tools.push(btn("✉ " + t("Relancer"), function () { rentMailConfirm("REMINDER", { leaseId: l.leaseId }, l).then(function (x) { if (x) go(); }); }, "sm"));

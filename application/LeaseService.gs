@@ -327,7 +327,7 @@ function leaseDocument_(p, a) {
       conditions: x.l.terms, date: pdfDate_(todayStr_()), ville: x.prop.city || "",
       __bienHtml: laPropertyLines_(x.prop, furnished, IMMO_EDITION_ === "MA").map(escapeHtml_).join("<br>"),
       __clausesHtml: sections.map(function (sc) { return "<h2>" + escapeHtml_(sc.title) + "</h2>" + laParas_(sc.body); }).join("") },
-    { name: "Bail_" + x.l.leaseId, subtitle: x.prop.name || "", title: base.title, issuer: rentIssuer_(org), footer: "Paraphe du bailleur : __________          Paraphe du locataire : __________" });
+    { name: "Bail_" + x.l.leaseId, subtitle: x.prop.name || "", title: base.title, issuer: rentIssuer_(org), ref: "BAIL-" + String(x.l.leaseId).slice(-6).toUpperCase() + "-" + todayStr_().replace(/-/g, ""), footer: "Paraphe du bailleur : __________          Paraphe du locataire : __________" });
   else if (tpl) pdf = docFromTemplate_(tpl, map, propertyFolder_(x.l.organizationId, x.l.propertyId, "LEASE"), "Bail_" + x.l.leaseId).pdf;
   else pdf = htmlToPdf_(leaseDocHtml_(c, { docType: "LEASE_CONTRACT", status: "FINAL", engine: "MODELE", title: base.title, sectionsJson: JSON.stringify(sections), finalizedAt: todayStr_() }), "Bail_" + x.l.leaseId);
   const out = storeGeneratedPdf_(p, pdf, { propertyId: x.l.propertyId, organizationId: x.l.organizationId }, "LEASE", x.l.leaseId, "CONTRACT");

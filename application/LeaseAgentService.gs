@@ -319,7 +319,7 @@ function leaseDocHtml_(c, d) {
   if (d.docType === "LEASE_CONTRACT") inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + (draft ? "____________" : pdfDate_(String(d.finalizedAt || todayStr_()).slice(0, 10))) + ", en deux exemplaires originaux" + (ma ? "." : ", dont un remis à chaque partie.") + "</p>" +
     "<table class='sign'><tr><td><b>Le bailleur</b><br><span class='muted'>« Lu et approuvé », signature</span></td><td><b>Le locataire</b><br><span class='muted'>« Lu et approuvé », signature</span></td></tr></table>";
   else inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + pdfDate_(todayStr_()) + ".</p>";
-  return pdfShell_(d.title || "Document", inner, { subtitle: (prop.name || "") + (d.docType === "LETTER" ? " · à l'attention de " + (t.fullName || "") : ""), issuer: rentIssuer_(org),
+  return pdfShell_(d.title || "Document", inner, { subtitle: (prop.name || "") + (d.docType === "LETTER" ? " · à l'attention de " + (t.fullName || "") : ""), issuer: rentIssuer_(org), ref: (d.docType === "LEASE_CONTRACT" ? "BAIL-" : "COUR-") + String(d.leaseDocId || d.leaseId || "").slice(-8).toUpperCase(),
     footer: draft ? "PROJET — document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; ImmoPilot ne garantit pas sa conformité juridique."
       : d.docType === "LEASE_CONTRACT" ? "Paraphe du bailleur : __________          Paraphe du locataire : __________" : " " });
 }
@@ -591,7 +591,7 @@ function inspectionHtml_(c, r, withPhotos) {
   };
   inner += "<p style='margin-top:14px'>Fait à " + escapeHtml_(c.prop.city || edition_().city) + ", le " + pdfDate_(r.inspectionDate) + ", en deux exemplaires.</p><table class='sign'><tr>" +
     sig("Le bailleur ou son représentant", r.landlordSignDocId, r.landlordSignName, r.landlordSignedAt) + sig("Le locataire", r.tenantSignDocId, r.tenantSignName, r.tenantSignedAt) + "</tr></table>";
-  return pdfShell_(exit ? "État des lieux de sortie" : "État des lieux d'entrée", inner, { noHead: true, subtitle: (c.prop.name || "") + " · " + pdfDate_(r.inspectionDate),
+  return pdfShell_(exit ? "État des lieux de sortie" : "État des lieux d'entrée", inner, { noHead: true, subtitle: (c.prop.name || "") + " · " + pdfDate_(r.inspectionDate), ref: "EDL" + (exit ? "S" : "E") + "-" + String(r.inspectionId || "").slice(-8).toUpperCase(),
     footer: draft ? "PROJET — état des lieux non validé." : "Paraphe du bailleur : __________          Paraphe du locataire : __________" });
 }
 function inspectionPdf_(p, a) {

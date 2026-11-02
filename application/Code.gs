@@ -29,7 +29,7 @@ function routes_() { return {
   "user.list": "userList_", "user.setStatus": "userSetStatus_", "user.sendActivation": "userSendActivation_", "user.erase": "userErase_", "role.setStatus": "roleSetStatus_", "role.setPermissions": "roleSetPermissions_", "role.caps": "roleCapsCatalog_",
   "notif.list": "notifList_", "notif.read": "notifRead_", "notif.whatsapp": "notifWhatsApp_", "notif.email": "notifSendEmail_",
   "doc.upload": "docUpload_", "doc.list": "docList_", "doc.get": "docGet_", "doc.archive": "docArchive_",
-  "admin.diagnostics": "adminDiagnostics_", "admin.backup": "adminBackup_", "admin.backups": "adminBackups_", "admin.errors": "adminErrors_", "admin.jobs": "adminJobs_",
+  "admin.diagnostics": "adminDiagnostics_", "admin.backup": "adminBackup_", "admin.backups": "adminBackups_", "admin.errors": "adminErrors_", "admin.jobs": "adminJobs_", "admin.mails": "adminMails_",
   "settings.get": "settingsGet_", "settings.set": "settingsSet_", "audit.list": "auditList_",
   "property.list": "propertyList_", "property.choices": "propertyChoices_", "property.get": "propertyGet_", "property.orgChoices": function (p) { return propertyOrgChoices_(p); },
   "property.create": "propertyCreate_", "property.update": "propertyUpdate_", "property.archive": "propertyArchive_", "property.import": "propertyImport_", "property.export": "propertyExport_",

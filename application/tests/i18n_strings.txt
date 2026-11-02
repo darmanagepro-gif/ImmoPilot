@@ -1551,3 +1551,7 @@ Longue durée : loyers (appels de loyer, relances, quittances, encaissements)|Lo
 Longue durée : états des lieux d'entrée et de sortie|Long-term: move-in and move-out inspections|الكراء الطويل: محاضر معاينة الدخول والخروج|Larga duración: actas de entrada y salida|Lungo termine: verbali di ingresso e uscita|Lange termijn: plaatsbeschrijvingen bij intrek en vertrek
 Missions confiées|Assigned tasks|المهام المسندة|Tareas encomendadas|Compiti affidati|Toevertrouwde taken
 États des lieux|Inspection reports|محاضر المعاينة|Actas de estado|Verbali di stato|Plaatsbeschrijvingen
+E-mails|Emails|الرسائل الإلكترونية|Correos|E-mail|E-mails
+Livraison|Delivery|التسليم|Entrega|Consegna|Aflevering
+Livraison (Brevo)|Delivery (Brevo)|التسليم (Brevo)|Entrega (Brevo)|Consegna (Brevo)|Aflevering (Brevo)
+Événement|Event|الحدث|Evento|Evento|Gebeurtenis

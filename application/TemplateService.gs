@@ -114,7 +114,7 @@ function docTemplateOf_(kind, orgId) { return String(getSetting_(DOC_TEMPLATES_[
 function docTemplatePdf_(kind, text, map, opts) {
   opts = opts || {};
   const own = /^\s*\[entete\]\s*$/im.test(String(text || ""));
-  return htmlToPdf_(pdfShell_(opts.title || DOC_TEMPLATES_[kind].title, docTemplateHtml_(kind, text, map), { subtitle: opts.subtitle, issuer: own ? null : opts.issuer, noHead: own, footer: opts.footer }), opts.name || kind);
+  return htmlToPdf_(pdfShell_(opts.title || DOC_TEMPLATES_[kind].title, docTemplateHtml_(kind, text, map), { subtitle: opts.subtitle, issuer: own ? null : opts.issuer, noHead: own, footer: opts.footer, ref: opts.ref }), opts.name || kind);
 }
 
 function validateDocTemplate_(v) {

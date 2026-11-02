@@ -1,5 +1,5 @@
 /**
- * ImmoPilot 2.4.0 (édition FR) — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
+ * ImmoPilot 2.5.0 (édition FR) — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
  * Contient les 39 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SignatureService.gs, SubscriptionService.gs, SumUpService.gs, TemplateService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
  * À coller seul dans le projet Apps Script (aucun autre fichier .gs ne doit rester dans le projet).
  */
@@ -195,6 +195,16 @@ function adminJobs_(p, a) {
   requireSuper_(p);
   return pageOf_(dbAll_("ScheduledJobs").slice().sort(function (x, y) { return String(y.startedAt).localeCompare(String(x.startedAt)); })
     .map(function (j) { return { jobName: j.jobName, startedAt: j.startedAt, finishedAt: j.finishedAt, status: j.status, result: parseJson_(j.resultJson, {}), error: j.error }; }), a);
+}
+/** Historique des e-mails envoyés (toutes organisations) avec leur statut de livraison Brevo. Super administrateur. */
+function adminMails_(p, a) {
+  requireSuper_(p);
+  a = a || {};
+  const q = String(a.q || "").toLowerCase(), orgs = indexBy_(dbAll_("Organizations"), "organizationId");
+  return pageOf_(dbAll_("NotificationLogs").filter(function (l) { return l.channel === "EMAIL" && (!q || String(l.recipient).toLowerCase().indexOf(q) >= 0 || String(l.eventKey).toLowerCase().indexOf(q) >= 0); })
+    .sort(function (x, y) { return String(y.sentAt).localeCompare(String(x.sentAt)); }).slice(0, 2000).map(function (l) {
+      return { sentAt: l.sentAt, recipient: l.recipient, eventKey: l.eventKey, status: l.status, error: l.error, organizationName: (orgs[String(l.organizationId)] || {}).name || "",
+        delivery: MAIL_DELIVERY_LABELS_[l.delivery] || "", deliveryAt: l.deliveryAt || "", deliveryReason: l.deliveryReason || "" }; }), a);
 }
 /** Paramètres : plateforme (super admin) ou organisation (settings.manage). */
 function settingsGet_(p, a) {
@@ -1431,7 +1441,7 @@ function routes_() { return {
   "user.list": "userList_", "user.setStatus": "userSetStatus_", "user.sendActivation": "userSendActivation_", "user.erase": "userErase_", "role.setStatus": "roleSetStatus_", "role.setPermissions": "roleSetPermissions_", "role.caps": "roleCapsCatalog_",
   "notif.list": "notifList_", "notif.read": "notifRead_", "notif.whatsapp": "notifWhatsApp_", "notif.email": "notifSendEmail_",
   "doc.upload": "docUpload_", "doc.list": "docList_", "doc.get": "docGet_", "doc.archive": "docArchive_",
-  "admin.diagnostics": "adminDiagnostics_", "admin.backup": "adminBackup_", "admin.backups": "adminBackups_", "admin.errors": "adminErrors_", "admin.jobs": "adminJobs_",
+  "admin.diagnostics": "adminDiagnostics_", "admin.backup": "adminBackup_", "admin.backups": "adminBackups_", "admin.errors": "adminErrors_", "admin.jobs": "adminJobs_", "admin.mails": "adminMails_",
   "settings.get": "settingsGet_", "settings.set": "settingsSet_", "audit.list": "auditList_",
   "property.list": "propertyList_", "property.choices": "propertyChoices_", "property.get": "propertyGet_", "property.orgChoices": function (p) { return propertyOrgChoices_(p); },
   "property.create": "propertyCreate_", "property.update": "propertyUpdate_", "property.archive": "propertyArchive_", "property.import": "propertyImport_", "property.export": "propertyExport_",
@@ -1662,7 +1672,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "beae7f23ddc7";
+var IMMO_BUILD_ = "909757f0962a";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -1700,8 +1710,8 @@ function cur_() { return edition_().currency; }
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
-  VERSION: "2.4.0",
-  SCHEMA_VERSION: 13,
+  VERSION: "2.5.0",
+  SCHEMA_VERSION: 14,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -1906,7 +1916,7 @@ var TABLES_SRC = {
   // Envois au locataire (appels de loyer, relances, quittances, documents) : une ligne par envoi, clé unique contre les doublons.
   RentMailings: { pk: "mailingId", idp: "rml", org: "organizationId", req: "leaseId,kind",
     enums: { kind: ["CALL", "REMINDER", "RECEIPT", "DOCUMENT"], status: ["SENT", "FAILED", "SKIPPED"], trigger: ["AUTO", "MANUAL"] },
-    cols: "mailingId,organizationId,propertyId,leaseId,scheduleId,kind,level#n,recipient,status,trigger,documentId,subject,sentAt#t,error,attempts#n,uniqueKey,createdAt#t,createdBy" },
+    cols: "mailingId,organizationId,propertyId,leaseId,scheduleId,kind,level#n,recipient,status,trigger,documentId,subject,sentAt#t,error,attempts#n,uniqueKey,createdAt#t,createdBy|delivery,deliveryAt#t,deliveryReason" },
   // Documents rédigés par l'agent (IA ou modèle intégré) : contrat de bail, courriers. Brouillon modifiable, puis PDF définitif.
   LeaseDocs: { pk: "leaseDocId", idp: "ldc", org: "organizationId", req: "leaseId,docType",
     enums: { docType: ["LEASE_CONTRACT", "LETTER"], status: ["DRAFT", "FINAL", "CANCELLED"] },
@@ -1922,7 +1932,7 @@ var TABLES_SRC = {
   Documents: { pk: "documentId", idp: "doc", org: "organizationId", req: "fileId,ownerType,category", enums: { status: ["ACTIVE", "ARCHIVED", "PURGED"] },
     cols: "documentId,organizationId,propertyId,ownerType,ownerId,category,fileId,fileName,mimeType,sizeBytes#n,sha256,sensitive#b,status,createdAt#t,createdBy,retainUntil#d,purgedAt#t,legacy#b" },
   Notifications: { pk: "notificationId", idp: "ntf", org: "organizationId", req: "userId,title", cols: "notificationId,organizationId,userId,type,title,body,link,createdAt#t,readAt#t,eventKey" },
-  NotificationLogs: { pk: "logId", idp: "nlg", org: "organizationId", req: "eventKey,channel", cols: "logId,eventKey,channel,recipient,type,status,sentAt#t,error,organizationId" },
+  NotificationLogs: { pk: "logId", idp: "nlg", org: "organizationId", req: "eventKey,channel", cols: "logId,eventKey,channel,recipient,type,status,sentAt#t,error,organizationId|delivery,deliveryAt#t,deliveryReason,providerId" },
   ScheduledJobs: { pk: "jobRunId", idp: "job", req: "jobName", cols: "jobRunId,jobName,startedAt#t,finishedAt#t,status,resultJson#j,error" },
   MigrationHistory: { pk: "migrationId", idp: "mig", req: "version", cols: "migrationId,version#n,name,appliedAt#t,appliedBy,status,detailsJson#j" },
   SubscriptionPlans: { pk: "planCode", idp: "pln", req: "planCode,name", enums: { status: ["ACTIVE", "RETIRED"], periodicity: ["MONTHLY", "QUARTERLY", "YEARLY"] },
@@ -3713,11 +3723,13 @@ var PDF_LOGO_PNG_B64_ = "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAABGUElEQVR
 /**
  * Gabarit commun des PDF : en-tête avec logo et nom de l'application, titre, sous-titre facultatif (organisation),
  * date de génération et pied de page. opts : { subtitle, footer, issuer: { name, lines[] }, noHead } — issuer remplace la marque ImmoPilot ;
- * noHead : aucun en-tête de marque (le modèle affiche lui-même les parties avec le bloc [entete]).
+ * noHead : aucun en-tête de marque (le modèle affiche lui-même les parties avec le bloc [entete]) ; ref : référence unique du document.
  */
 function pdfShell_(title, inner, opts) {
   opts = opts || {};
   const when = Utilities.formatDate(new Date(), tz_(), "dd/MM/yyyy HH:mm");
+  // Référence unique imprimée sur chaque document (fournie par le module, sinon générée : date + aléa).
+  const ref = safeText_(opts.ref || ("DOC-" + Utilities.formatDate(new Date(), tz_(), "yyyyMMdd") + "-" + randomToken_().slice(0, 6).toUpperCase()), 80);
   return "<html><head><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;color:#1d2b3a;font-size:11px}h1{font-size:18px;color:#1b3554;margin:0 0 2px}" +
     "h2{font-size:13px;color:#1b3554;margin:16px 0 6px;border-bottom:2px solid #e9b341;padding-bottom:2px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #c9d3df;padding:4px 6px;text-align:left;vertical-align:top}" +
     "th{background:#e8eef5}.muted{color:#64748b}.right{text-align:right}.head td{border:0;padding:0}.brand{font-size:20px;font-weight:bold;color:#13233d}.gold{color:#c9962b}" +
@@ -3728,9 +3740,9 @@ function pdfShell_(title, inner, opts) {
       ? "<table class='head'><tr><td><div class='brand'>" + escapeHtml_(opts.issuer.name) + "</div><div class='muted'>" + (opts.issuer.lines || []).filter(String).map(escapeHtml_).join("<br>") + "</div></td>"
       : "<table class='head'><tr><td style='width:62px'><img src='data:image/png;base64," + PDF_LOGO_PNG_B64_ + "' width='54' height='54'></td>" +
         "<td><div class='brand'>Immo<span class='gold'>Pilot</span></div><div class='muted'>Gestion immobilière</div></td>") +
-    "<td class='right muted'>Généré le " + escapeHtml_(when) + "</td></tr></table><hr style='border:0;border-top:3px solid #13233d;margin:8px 0 12px'>" +
+    "<td class='right muted'>Généré le " + escapeHtml_(when) + "<br>Réf. " + escapeHtml_(ref) + "</td></tr></table><hr style='border:0;border-top:3px solid #13233d;margin:8px 0 12px'>" +
     "<h1>" + escapeHtml_(title) + "</h1>" + (opts.subtitle ? "<p class='muted' style='margin:0 0 10px'>" + escapeHtml_(opts.subtitle) + "</p>" : "") + inner +
-    "<div class='foot'>" + escapeHtml_(opts.footer || (IMMO_CONFIG.APP_NAME + " — document généré automatiquement à partir des données enregistrées dans l'application.")) + "</div></body></html>";
+    "<div class='foot'>" + escapeHtml_(opts.footer || (IMMO_CONFIG.APP_NAME + " — document généré automatiquement à partir des données enregistrées dans l'application.")) + " — Réf. " + escapeHtml_(ref) + "</div></body></html>";
 }
 /** Date AAAA-MM-JJ (ou horodatage) au format JJ/MM/AAAA. */
 function pdfDate_(s) { const v = String(s || "").slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v.slice(8, 10) + "/" + v.slice(5, 7) + "/" + v.slice(0, 4) : (v || "—"); }
@@ -4952,7 +4964,7 @@ function leaseDocHtml_(c, d) {
   if (d.docType === "LEASE_CONTRACT") inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + (draft ? "____________" : pdfDate_(String(d.finalizedAt || todayStr_()).slice(0, 10))) + ", en deux exemplaires originaux" + (ma ? "." : ", dont un remis à chaque partie.") + "</p>" +
     "<table class='sign'><tr><td><b>Le bailleur</b><br><span class='muted'>« Lu et approuvé », signature</span></td><td><b>Le locataire</b><br><span class='muted'>« Lu et approuvé », signature</span></td></tr></table>";
   else inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + pdfDate_(todayStr_()) + ".</p>";
-  return pdfShell_(d.title || "Document", inner, { subtitle: (prop.name || "") + (d.docType === "LETTER" ? " · à l'attention de " + (t.fullName || "") : ""), issuer: rentIssuer_(org),
+  return pdfShell_(d.title || "Document", inner, { subtitle: (prop.name || "") + (d.docType === "LETTER" ? " · à l'attention de " + (t.fullName || "") : ""), issuer: rentIssuer_(org), ref: (d.docType === "LEASE_CONTRACT" ? "BAIL-" : "COUR-") + String(d.leaseDocId || d.leaseId || "").slice(-8).toUpperCase(),
     footer: draft ? "PROJET — document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; ImmoPilot ne garantit pas sa conformité juridique."
       : d.docType === "LEASE_CONTRACT" ? "Paraphe du bailleur : __________          Paraphe du locataire : __________" : " " });
 }
@@ -5224,7 +5236,7 @@ function inspectionHtml_(c, r, withPhotos) {
   };
   inner += "<p style='margin-top:14px'>Fait à " + escapeHtml_(c.prop.city || edition_().city) + ", le " + pdfDate_(r.inspectionDate) + ", en deux exemplaires.</p><table class='sign'><tr>" +
     sig("Le bailleur ou son représentant", r.landlordSignDocId, r.landlordSignName, r.landlordSignedAt) + sig("Le locataire", r.tenantSignDocId, r.tenantSignName, r.tenantSignedAt) + "</tr></table>";
-  return pdfShell_(exit ? "État des lieux de sortie" : "État des lieux d'entrée", inner, { noHead: true, subtitle: (c.prop.name || "") + " · " + pdfDate_(r.inspectionDate),
+  return pdfShell_(exit ? "État des lieux de sortie" : "État des lieux d'entrée", inner, { noHead: true, subtitle: (c.prop.name || "") + " · " + pdfDate_(r.inspectionDate), ref: "EDL" + (exit ? "S" : "E") + "-" + String(r.inspectionId || "").slice(-8).toUpperCase(),
     footer: draft ? "PROJET — état des lieux non validé." : "Paraphe du bailleur : __________          Paraphe du locataire : __________" });
 }
 function inspectionPdf_(p, a) {
@@ -5632,7 +5644,7 @@ function leaseDocument_(p, a) {
       conditions: x.l.terms, date: pdfDate_(todayStr_()), ville: x.prop.city || "",
       __bienHtml: laPropertyLines_(x.prop, furnished, IMMO_EDITION_ === "MA").map(escapeHtml_).join("<br>"),
       __clausesHtml: sections.map(function (sc) { return "<h2>" + escapeHtml_(sc.title) + "</h2>" + laParas_(sc.body); }).join("") },
-    { name: "Bail_" + x.l.leaseId, subtitle: x.prop.name || "", title: base.title, issuer: rentIssuer_(org), footer: "Paraphe du bailleur : __________          Paraphe du locataire : __________" });
+    { name: "Bail_" + x.l.leaseId, subtitle: x.prop.name || "", title: base.title, issuer: rentIssuer_(org), ref: "BAIL-" + String(x.l.leaseId).slice(-6).toUpperCase() + "-" + todayStr_().replace(/-/g, ""), footer: "Paraphe du bailleur : __________          Paraphe du locataire : __________" });
   else if (tpl) pdf = docFromTemplate_(tpl, map, propertyFolder_(x.l.organizationId, x.l.propertyId, "LEASE"), "Bail_" + x.l.leaseId).pdf;
   else pdf = htmlToPdf_(leaseDocHtml_(c, { docType: "LEASE_CONTRACT", status: "FINAL", engine: "MODELE", title: base.title, sectionsJson: JSON.stringify(sections), finalizedAt: todayStr_() }), "Bail_" + x.l.leaseId);
   const out = storeGeneratedPdf_(p, pdf, { propertyId: x.l.propertyId, organizationId: x.l.organizationId }, "LEASE", x.l.leaseId, "CONTRACT");
@@ -6137,8 +6149,9 @@ function listBackups_() {
  * WhatsApp : ImmoPilot génère un lien qui OUVRE une conversation pré-remplie. Aucun message n'est envoyé automatiquement.
  */
 /**
- * opts (facultatif) : { attachments: [Blob] (PDF joints), bcc: "copie@…", replyTo: "…", senderName: "…", plain: true (pas de bouton
- * « Ouvrir ImmoPilot » pour les liens : e-mails adressés à un locataire sans compte) }.
+ * opts (facultatif) : { attachments: [Blob] (PDF joints), bcc: "copie@…", replyTo: "…", senderName: "…", footer: [coordonnées de l'expéditeur],
+ * plain: true (pas de bouton « Ouvrir ImmoPilot » pour les liens : e-mails adressés à un locataire sans compte) }.
+ * Tous les e-mails passent par le gabarit commun (mailLayout_) ; ref = clé d'événement, renvoyée par Brevo pour le suivi de livraison.
  */
 function sendMailSafe_(to, subject, body, eventKey, orgId, opts) {
   opts = opts || {};
@@ -6149,8 +6162,8 @@ function sendMailSafe_(to, subject, body, eventKey, orgId, opts) {
   try {
     const quota = TEST_HOOKS_.mailQuota !== null ? TEST_HOOKS_.mailQuota : MailApp.getRemainingDailyQuota();
     if (quota < 1) throw new Error("Quota quotidien MailApp épuisé.");
-    const text = String(body || "").slice(0, 20000), html = opts.plain ? mailHtmlPlain_(text) : mailHtml_(text);
-    const msg = { to: to, subject: safeText_(subject, 200), body: text, htmlBody: html, name: safeText_(opts.senderName || IMMO_CONFIG.APP_NAME, 80) };
+    const text = String(body || "").slice(0, 20000), lay = { senderName: opts.senderName, footer: opts.footer }, html = opts.plain ? mailHtmlPlain_(text, lay) : mailHtml_(text, lay);
+    const msg = { to: to, subject: safeText_(subject, 200), body: text, htmlBody: html, name: safeText_(opts.senderName || IMMO_CONFIG.APP_NAME, 80), ref: key };
     if (opts.attachments && opts.attachments.length) msg.attachments = opts.attachments;
     if (opts.bcc) msg.bcc = validateEmail_(opts.bcc);
     if (opts.replyTo) msg.replyTo = validateEmail_(opts.replyTo);
@@ -6167,24 +6180,89 @@ function sendMailSafe_(to, subject, body, eventKey, orgId, opts) {
  * en lien cliquable (bouton pour les liens de l'application). Certaines messageries ne rendent pas cliquables les liens
  * d'un e-mail en texte brut ; la version texte reste jointe pour les autres.
  */
-function mailHtml_(text) {
+function mailHtml_(text, opts) {
   const parts = String(text || "").split(/(https:\/\/[^\s<>"]+)/);
   const inner = parts.map(function (part, i) {
     if (i % 2 === 0) return escapeHtml_(part).replace(/\n/g, "<br>");
     const url = escapeHtml_(part);
-    return "<br><a href=\"" + url + "\" style=\"display:inline-block;background:#2f4fd8;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:bold\">Ouvrir ImmoPilot</a>" +
+    return "<br><a href=\"" + url + "\" style=\"display:inline-block;background:#2f4fd8;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold\">Ouvrir ImmoPilot</a>" +
       "<br><span style=\"font-size:12px;color:#64748b\">Si le bouton ne fonctionne pas, copiez ce lien en entier dans la barre d'adresse de votre navigateur :<br><a href=\"" + url + "\" style=\"color:#2f4fd8;word-break:break-all\">" + url + "</a></span><br>";
   }).join("");
-  return "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1d2b3a\">" + inner + "</div>";
+  return mailLayout_(inner, opts);
 }
 
-/** Version HTML simple (texte échappé, liens cliquables tels quels) pour les e-mails adressés à des personnes sans compte. */
-function mailHtmlPlain_(text) {
+/** Version HTML simple (liens cliquables tels quels) pour les e-mails adressés à des personnes sans compte (locataires, voyageurs). */
+function mailHtmlPlain_(text, opts) {
   const parts = String(text || "").split(/(https:\/\/[^\s<>"]+)/);
-  return "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1d2b3a\">" + parts.map(function (part, i) {
+  return mailLayout_(parts.map(function (part, i) {
     if (i % 2 === 0) return escapeHtml_(part).replace(/\n/g, "<br>");
-    const url = escapeHtml_(part); return "<a href=\"" + url + "\" style=\"color:#2f4fd8\">" + url + "</a>";
-  }).join("") + "</div>";
+    const url = escapeHtml_(part); return "<a href=\"" + url + "\" style=\"color:#2f4fd8;word-break:break-all\">" + url + "</a>";
+  }).join(""), opts);
+}
+
+/** Adresse publique du logo de l'édition (servi par le serveur ImmoPilot). */
+function mailLogoUrl_() {
+  try { const m = /^(https:\/\/[^\/?#]+)/.exec(appUrl_()); return m ? m[1] + "/icons/icon-192.png" : ""; } catch (e) { return ""; }
+}
+/**
+ * Gabarit commun de tous les e-mails ImmoPilot : en-tête avec logo, contenu, pied de page de l'expéditeur.
+ * Tableaux et styles en ligne (compatibles Gmail, Outlook, Apple Mail), largeur fluide jusqu'à 600 px (téléphone).
+ * opts : { senderName, footer: [lignes de coordonnées de l'expéditeur] }
+ */
+function mailLayout_(innerHtml, opts) {
+  opts = opts || {};
+  const logo = mailLogoUrl_(), from = opts.senderName && opts.senderName !== IMMO_CONFIG.APP_NAME ? String(opts.senderName) : "";
+  const foot = (opts.footer || []).filter(function (x) { return String(x || "").trim(); }).map(escapeHtml_).join("<br>");
+  return "<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"color-scheme\" content=\"light\"></head>" +
+    "<body style=\"margin:0;padding:0;background:#eef2f7\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#eef2f7\"><tr><td align=\"center\" style=\"padding:20px 10px\">" +
+    "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #dbe3ee\">" +
+    "<tr><td style=\"background:#13233d;padding:16px 22px\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\"><tr>" +
+      (logo ? "<td style=\"padding-right:12px\"><img src=\"" + escapeHtml_(logo) + "\" width=\"44\" height=\"44\" alt=\"ImmoPilot\" style=\"display:block;border-radius:9px;background:#ffffff\"></td>" : "") +
+      "<td style=\"font-family:Arial,Helvetica,sans-serif;color:#ffffff\"><div style=\"font-size:19px;font-weight:bold\">Immo<span style=\"color:#e9b341\">Pilot</span></div>" +
+      (from ? "<div style=\"font-size:12px;color:#c7d2e3\">pour le compte de " + escapeHtml_(from) + "</div>" : "<div style=\"font-size:12px;color:#c7d2e3\">Gestion immobilière</div>") + "</td></tr></table></td></tr>" +
+    "<tr><td style=\"padding:24px 22px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1d2b3a\">" + innerHtml + "</td></tr>" +
+    (foot ? "<tr><td style=\"padding:14px 22px;background:#f6f8fb;border-top:1px solid #e3e9f1;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#475569\"><b>" + escapeHtml_(from || IMMO_CONFIG.APP_NAME) + "</b><br>" + foot + "</td></tr>" : "") +
+    "<tr><td style=\"padding:12px 22px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.5;color:#94a3b8;text-align:center\">Message envoyé via ImmoPilot, logiciel de gestion immobilière édité par ECO SYNERGY. " +
+      "Les pièces jointes éventuelles sont également disponibles dans votre espace ImmoPilot.</td></tr>" +
+    "</table></td></tr></table></body></html>";
+}
+
+/* ------------------------- Suivi de livraison (Brevo) ------------------------- */
+var MAIL_DELIVERY_RANK_ = { QUEUED: 0, SENT: 1, DEFERRED: 2, DELIVERED: 3, OPENED: 4, CLICKED: 5, SOFT_BOUNCE: 6, BOUNCED: 7, BLOCKED: 7, SPAM: 7, ERROR: 7 };
+var MAIL_DELIVERY_EVENTS_ = { request: "SENT", deferred: "DEFERRED", delivered: "DELIVERED", opened: "OPENED", unique_opened: "OPENED", proxy_open: "OPENED", click: "CLICKED",
+  soft_bounce: "SOFT_BOUNCE", hard_bounce: "BOUNCED", invalid_email: "BOUNCED", blocked: "BLOCKED", spam: "SPAM", complaint: "SPAM", error: "ERROR" };
+var MAIL_DELIVERY_LABELS_ = { SENT: "Envoyé", DEFERRED: "Différé", DELIVERED: "Délivré", OPENED: "Ouvert", CLICKED: "Ouvert (lien cliqué)", SOFT_BOUNCE: "Boîte pleine ou indisponible",
+  BOUNCED: "Adresse invalide (rejeté)", BLOCKED: "Bloqué", SPAM: "Signalé comme indésirable", ERROR: "Erreur d'envoi" };
+/**
+ * Appelée par le serveur à la réception d'un événement Brevo (webhook) : met à jour l'historique d'envoi
+ * (NotificationLogs et, pour les loyers, RentMailings) et prévient le gestionnaire si l'e-mail n'a pas pu être délivré.
+ */
+function mailDeliveryUpdate(ref, email, event, at, reason, providerId) {
+  ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0; dbcBegin_("request");
+  try { return mailDeliveryApply_(ref, email, event, at, reason, providerId); } finally { dbcCommit_(); }
+}
+function mailDeliveryApply_(ref, email, event, at, reason, providerId) {
+  const st = MAIL_DELIVERY_EVENTS_[String(event || "")]; ref = String(ref || ""); email = String(email || "").toLowerCase();
+  if (!st || !ref) return { ok: false };
+  const when = /^\d{4}-\d{2}-\d{2}T/.test(String(at || "")) ? String(at) : nowIso_(), why = safeText_(reason || "", 300);
+  const better = function (cur) { return !cur || (MAIL_DELIVERY_RANK_[st] || 0) >= (MAIL_DELIVERY_RANK_[cur] || 0); };
+  let n = 0;
+  dbAll_("NotificationLogs").filter(function (l) { return l.eventKey === ref && l.channel === "EMAIL" && String(l.recipient).toLowerCase() === email; }).forEach(function (l) {
+    if (better(l.delivery)) { dbUpdate_("NotificationLogs", l.logId, { delivery: st, deliveryAt: when, deliveryReason: why, providerId: safeText_(providerId || l.providerId || "", 200) }); n++; }
+  });
+  const m = /^rentmail:(.+):\d+$/.exec(ref);
+  if (m) {
+    const row = dbAll_("RentMailings").filter(function (r) { return r.uniqueKey === m[1]; })[0];
+    if (row && better(row.delivery)) {
+      dbUpdate_("RentMailings", row.mailingId, { delivery: st, deliveryAt: when, deliveryReason: why }); n++;
+      if (["BOUNCED", "BLOCKED", "SPAM"].indexOf(st) >= 0) {
+        const prop = dbGet_("Properties", row.propertyId);
+        if (prop) notify_({ eventKey: "rentmail-undelivered:" + row.mailingId + ":" + st, userIds: propertyManagers_(prop, "canManageRent"), type: "RENT_MAIL_FAILED", organizationId: row.organizationId,
+          title: "E-mail non délivré au locataire : " + (prop.name || ""), body: (row.subject || "") + " — " + MAIL_DELIVERY_LABELS_[st] + (why ? " (" + why + ")" : "") + ". Vérifiez l'adresse e-mail du locataire.", link: "#lease/" + row.leaseId });
+      }
+    }
+  }
+  return { ok: true, updated: n, status: st };
 }
 
 /**
@@ -7411,7 +7489,7 @@ function rentCallPdf_(c, s) {
     table + "<p>Référence à indiquer avec votre règlement : <b>" + escapeHtml_(ref) + "</b></p>" + rentPayInfoHtml_(c, total, ref) +
     "<p class='muted'>Cet appel de loyer ne vaut pas quittance. La quittance vous sera adressée après encaissement de la totalité de l'échéance.</p>" +
     "<p style='margin-top:14px'>Fait le " + pdfDate_(today) + ".<br>Le bailleur, " + escapeHtml_(c.org.name || "") + "</p>" + coupon;
-  return htmlToPdf_(pdfShell_("Appel de loyer — " + rentPeriodLabel_(s), inner, { noHead: true, subtitle: "Échéance du " + pdfDate_(s.dueDate),
+  return htmlToPdf_(pdfShell_("Appel de loyer — " + rentPeriodLabel_(s), inner, { noHead: true, subtitle: "Échéance du " + pdfDate_(s.dueDate), ref: "APL-" + ref.replace(/^LOY-/, ""),
     footer: "Document émis par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Appel_loyer_" + s.period + "_" + String(c.l.leaseId).slice(-6));
 }
 /** Relance : niveau 1 à 3 ; liste toutes les échéances impayées échues du bail. */
@@ -7430,7 +7508,7 @@ function rentReminderPdf_(c, unpaid, level) {
     "<p><b>Total restant dû : " + escapeHtml_(fmtAmount_(total, cur)) + "</b></p>" + rentPayInfoHtml_(c, total, unpaid.length ? rentReference_(c.l, unpaid[0]) : "") +
     "<p class='muted'>Si votre règlement nous est parvenu entre-temps, merci de ne pas tenir compte de ce courrier.</p>" +
     "<p style='margin-top:18px'>Fait le " + pdfDate_(today) + ".<br>Le bailleur, " + escapeHtml_(c.org.name || "") + "</p>";
-  return htmlToPdf_(pdfShell_(title, inner, { subtitle: (c.prop.name || "") + " · " + unpaid.length + " échéance(s) impayée(s)", issuer: rentIssuer_(c.org),
+  return htmlToPdf_(pdfShell_(title, inner, { subtitle: (c.prop.name || "") + " · " + unpaid.length + " échéance(s) impayée(s)", issuer: rentIssuer_(c.org), ref: "REL" + lvl + "-" + today.replace(/-/g, "") + "-" + String(c.l.leaseId).slice(-6).toUpperCase(),
     footer: "Document émis par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Relance_" + lvl + "_" + today + "_" + String(c.l.leaseId).slice(-6));
 }
 /** Quittance d'une échéance entièrement réglée (modèle de l'organisation, sinon gabarit intégré). */
@@ -7448,7 +7526,7 @@ function rentReceiptPdf_(c, s) {
     du: y && mo ? "01/" + pad(mo) + "/" + y : "", au: y && mo ? pad(lastDay) + "/" + pad(mo) + "/" + y : "", echeance: pdfDate_(s.dueDate), periode: rentPeriodLabel_(s), loyer: fmtAmount_(s.rentAmount, cur), charges: fmtAmount_(s.chargesAmount, cur), total: fmtAmount_(s.amountDue, cur),
     date_paiement: map.date_paiement, mode_paiement: pays.map(function (z) { return PDF_PAY_METHODS_[z.method] || z.method; }).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).join(", "),
     reference: rentReference_(c.l, s), date: pdfDate_(todayStr_()), ville: c.prop.city || "" },
-    { name: "Quittance_" + s.period + "_" + String(c.l.leaseId).slice(-6), subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org),
+    { name: "Quittance_" + s.period + "_" + String(c.l.leaseId).slice(-6), subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org), ref: "QUIT-" + rentReference_(c.l, s).replace(/^LOY-/, ""),
       footer: "Quittance délivrée gratuitement par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." });
   if (tpl) return docFromTemplate_(tpl, map, propertyFolder_(c.l.organizationId, c.l.propertyId, "LEASE"), "Quittance_" + s.period + "_" + c.l.leaseId).pdf;
   const inner = rentParties_(c) + "<p>Je soussigné(e), <b>" + escapeHtml_(c.org.name || "") + "</b>, bailleur du logement désigné ci-dessus, déclare avoir reçu de <b>" + escapeHtml_(c.t.fullName || "") +
@@ -7510,7 +7588,8 @@ function rentDeliver_(o) {
   let res = { ok: false, error: error };
   if (!error && RENT_MAIL_DRY_RUN_) res = { ok: true };
   else if (!error) res = sendMailSafe_(to, txt.subject, txt.body, "rentmail:" + base.uniqueKey + ":" + (prev ? num_(prev.attempts) + 1 : 1), c.l.organizationId,
-    { attachments: [blob], bcc: c.cfg.copyEmail || "", replyTo: c.org.billingEmail || "", senderName: c.org.name || IMMO_CONFIG.APP_NAME, plain: true });
+    { attachments: [blob], bcc: c.cfg.copyEmail || "", replyTo: c.org.billingEmail || "", senderName: c.org.name || IMMO_CONFIG.APP_NAME, plain: true,
+      footer: rentIssuer_(c.org).lines.concat(["Logement : " + (c.prop.name || "") + (rentAddress_(c.prop) ? " — " + rentAddress_(c.prop) : "")]) });
   const patch = { status: res.ok ? "SENT" : "FAILED", sentAt: res.ok ? nowIso_() : "", error: res.ok ? "" : String(res.error || error).slice(0, 300), documentId: docId, subject: safeText_(txt.subject, 200) };
   let row;
   if (prev) { patch.attempts = num_(prev.attempts) + 1; dbUpdate_("RentMailings", prev.mailingId, patch); row = prev; }
@@ -7698,7 +7777,7 @@ function rentMailingsOf_(leaseId) {
   return dbAll_("RentMailings").filter(function (m) { return String(m.leaseId) === String(leaseId); })
     .sort(function (a, b) { return String(b.sentAt || b.createdAt).localeCompare(String(a.sentAt || a.createdAt)); }).slice(0, 100)
     .map(function (m) { return { mailingId: m.mailingId, kind: m.kind, level: num_(m.level), scheduleId: m.scheduleId, recipient: m.recipient, status: m.status, trigger: m.trigger, documentId: m.documentId,
-      subject: m.subject, at: m.sentAt || m.createdAt, error: m.error, attempts: num_(m.attempts) }; });
+      subject: m.subject, at: m.sentAt || m.createdAt, error: m.error, attempts: num_(m.attempts), delivery: m.delivery || "", deliveryLabel: MAIL_DELIVERY_LABELS_[m.delivery] || "", deliveryAt: m.deliveryAt || "", deliveryReason: m.deliveryReason || "" }; });
 }
 
 /* ======================================================================
@@ -8241,7 +8320,8 @@ function requestMeta_() {
 /* ------------------------------- SMS (Brevo) ------------------------------- */
 function smsConf_() {
   if (TEST_HOOKS_.smsSink) return { key: "test", sender: "ImmoPilot" };
-  const P = PropertiesService.getScriptProperties(), key = String(P.getProperty("BREVO_API_KEY") || "").trim();
+  const g = typeof globalThis !== "undefined" ? globalThis : this, env = g.IMMO_SECRETS_ || {};
+  const P = PropertiesService.getScriptProperties(), key = String(env.brevoApiKey || P.getProperty("BREVO_API_KEY") || "").trim();
   if (!key) return null;
   const sender = String(P.getProperty("SMS_SENDER") || "ImmoPilot").replace(/[^A-Za-z0-9]/g, "").slice(0, 11) || "ImmoPilot";
   return { key: key, sender: sender };
@@ -9029,7 +9109,7 @@ function docTemplateOf_(kind, orgId) { return String(getSetting_(DOC_TEMPLATES_[
 function docTemplatePdf_(kind, text, map, opts) {
   opts = opts || {};
   const own = /^\s*\[entete\]\s*$/im.test(String(text || ""));
-  return htmlToPdf_(pdfShell_(opts.title || DOC_TEMPLATES_[kind].title, docTemplateHtml_(kind, text, map), { subtitle: opts.subtitle, issuer: own ? null : opts.issuer, noHead: own, footer: opts.footer }), opts.name || kind);
+  return htmlToPdf_(pdfShell_(opts.title || DOC_TEMPLATES_[kind].title, docTemplateHtml_(kind, text, map), { subtitle: opts.subtitle, issuer: own ? null : opts.issuer, noHead: own, footer: opts.footer, ref: opts.ref }), opts.name || kind);
 }
 
 function validateDocTemplate_(v) {
@@ -10145,6 +10225,17 @@ function TEST_GROUPS_() {
         T.ok(call && call.attachments.length === 1 && /^Appel_loyer_.*\.pdf$/.test(call.attachments[0].name) && call.attachments[0].mimeType === "application/pdf", "PDF de l'appel en pièce jointe");
         T.eq(call.bcc, "compta@example.test", "copie cachée au gestionnaire");
         T.ok(/Virement au compte du bailleur/.test(call.body) && /4\s?200,00/.test(call.body.replace(/ | /g, " ")), "montant et modalités dans l'e-mail");
+        T.ok(/<!DOCTYPE html>/.test(call.htmlBody) && /icons\/icon-192\.png/.test(call.htmlBody) && /max-width:600px/.test(call.htmlBody) && /pour le compte de/.test(call.htmlBody), "gabarit e-mail commun (logo, adaptatif, expéditeur)");
+        // Suivi de livraison Brevo (webhook) : délivré, puis rejet → historique mis à jour et gestionnaire prévenu
+        const lg = dbAll_("NotificationLogs").filter(function (x) { return /^rentmail:/.test(x.eventKey) && x.recipient === email; }).pop();
+        T.ok(mailDeliveryApply_(lg.eventKey, email, "delivered", "2026-11-02T08:00:00.000Z", "", "<m1@brevo>").ok, "événement « délivré » appliqué");
+        T.eq(dbGet_("NotificationLogs", lg.logId).delivery, "DELIVERED", "journal : délivré");
+        mailDeliveryApply_(lg.eventKey, email, "request", "", "", "");
+        T.eq(dbGet_("NotificationLogs", lg.logId).delivery, "DELIVERED", "pas de retour en arrière sur un statut moins avancé");
+        mailDeliveryApply_(lg.eventKey, email, "hard_bounce", "2026-11-02T08:01:00.000Z", "mailbox does not exist", "<m1@brevo>");
+        const rm = dbAll_("RentMailings").filter(function (x) { return x.uniqueKey === /^rentmail:(.+):\d+$/.exec(lg.eventKey)[1]; })[0];
+        T.ok(rm && rm.delivery === "BOUNCED" && /mailbox/.test(rm.deliveryReason), "envoi de loyer : rejet enregistré");
+        T.ok(dbAll_("Notifications").some(function (x) { return x.type === "RENT_MAIL_FAILED" && /non délivré/.test(x.title); }), "gestionnaire prévenu du rejet");
         const n = TEST_HOOKS_.mailSink.length;
         T.eq(rentAutomationJob_({ force: true, batch: 50 }).calls, 0, "aucun doublon au passage suivant");
         T.eq(TEST_HOOKS_.mailSink.filter(function (m, i) { return i >= n && m.to === email; }).length, 0, "aucun nouvel e-mail");

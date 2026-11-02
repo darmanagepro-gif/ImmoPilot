@@ -20,7 +20,8 @@ function requestMeta_() {
 /* ------------------------------- SMS (Brevo) ------------------------------- */
 function smsConf_() {
   if (TEST_HOOKS_.smsSink) return { key: "test", sender: "ImmoPilot" };
-  const P = PropertiesService.getScriptProperties(), key = String(P.getProperty("BREVO_API_KEY") || "").trim();
+  const g = typeof globalThis !== "undefined" ? globalThis : this, env = g.IMMO_SECRETS_ || {};
+  const P = PropertiesService.getScriptProperties(), key = String(env.brevoApiKey || P.getProperty("BREVO_API_KEY") || "").trim();
   if (!key) return null;
   const sender = String(P.getProperty("SMS_SENDER") || "ImmoPilot").replace(/[^A-Za-z0-9]/g, "").slice(0, 11) || "ImmoPilot";
   return { key: key, sender: sender };

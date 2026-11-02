@@ -1052,6 +1052,17 @@ function TEST_GROUPS_() {
         T.ok(call && call.attachments.length === 1 && /^Appel_loyer_.*\.pdf$/.test(call.attachments[0].name) && call.attachments[0].mimeType === "application/pdf", "PDF de l'appel en pièce jointe");
         T.eq(call.bcc, "compta@example.test", "copie cachée au gestionnaire");
         T.ok(/Virement au compte du bailleur/.test(call.body) && /4\s?200,00/.test(call.body.replace(/ | /g, " ")), "montant et modalités dans l'e-mail");
+        T.ok(/<!DOCTYPE html>/.test(call.htmlBody) && /icons\/icon-192\.png/.test(call.htmlBody) && /max-width:600px/.test(call.htmlBody) && /pour le compte de/.test(call.htmlBody), "gabarit e-mail commun (logo, adaptatif, expéditeur)");
+        // Suivi de livraison Brevo (webhook) : délivré, puis rejet → historique mis à jour et gestionnaire prévenu
+        const lg = dbAll_("NotificationLogs").filter(function (x) { return /^rentmail:/.test(x.eventKey) && x.recipient === email; }).pop();
+        T.ok(mailDeliveryApply_(lg.eventKey, email, "delivered", "2026-11-02T08:00:00.000Z", "", "<m1@brevo>").ok, "événement « délivré » appliqué");
+        T.eq(dbGet_("NotificationLogs", lg.logId).delivery, "DELIVERED", "journal : délivré");
+        mailDeliveryApply_(lg.eventKey, email, "request", "", "", "");
+        T.eq(dbGet_("NotificationLogs", lg.logId).delivery, "DELIVERED", "pas de retour en arrière sur un statut moins avancé");
+        mailDeliveryApply_(lg.eventKey, email, "hard_bounce", "2026-11-02T08:01:00.000Z", "mailbox does not exist", "<m1@brevo>");
+        const rm = dbAll_("RentMailings").filter(function (x) { return x.uniqueKey === /^rentmail:(.+):\d+$/.exec(lg.eventKey)[1]; })[0];
+        T.ok(rm && rm.delivery === "BOUNCED" && /mailbox/.test(rm.deliveryReason), "envoi de loyer : rejet enregistré");
+        T.ok(dbAll_("Notifications").some(function (x) { return x.type === "RENT_MAIL_FAILED" && /non délivré/.test(x.title); }), "gestionnaire prévenu du rejet");
         const n = TEST_HOOKS_.mailSink.length;
         T.eq(rentAutomationJob_({ force: true, batch: 50 }).calls, 0, "aucun doublon au passage suivant");
         T.eq(TEST_HOOKS_.mailSink.filter(function (m, i) { return i >= n && m.to === email; }).length, 0, "aucun nouvel e-mail");

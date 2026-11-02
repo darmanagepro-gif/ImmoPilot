@@ -542,6 +542,10 @@ PAGES.admin = function (el) {
       }).catch(function (e) { clear(b).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
     } },
     { id: "errors", label: "Erreurs techniques", render: function (b) { listView(b, { route: "admin.errors", search: false, columns: [{ l: "Date", dt: true, k: "timestamp" }, { l: "Référence", k: "errorId" }, { l: "Route", k: "route" }, { l: "Message", k: "message" }, { l: "Utilisateur", k: "actorEmail" }] }); } },
+    { id: "mails", label: "E-mails", render: function (b) { listView(b, { route: "admin.mails", columns: [{ l: "Date", dt: true, k: "sentAt" }, { l: "Destinataire", k: "recipient" }, { l: "Organisation", k: "organizationName" },
+      { l: "Envoi", f: function (x) { return h("span", null, stTag(x.status), x.error ? h("div", { class: "small muted" }, x.error) : null); } },
+      { l: "Livraison (Brevo)", f: function (x) { return x.delivery ? h("span", null, t(x.delivery), x.deliveryAt ? h("div", { class: "small muted" }, fmtDT(x.deliveryAt)) : null, x.deliveryReason ? h("div", { class: "small muted" }, x.deliveryReason) : null) : "—"; } },
+      { l: "Événement", f: function (x) { return h("span", { class: "small muted" }, String(x.eventKey || "").slice(0, 60)); } }] }); } },
     { id: "jobs", label: "Tâches planifiées", render: function (b) { listView(b, { route: "admin.jobs", search: false, columns: [{ l: "Tâche", k: "jobName" }, { l: "Début", dt: true, k: "startedAt" }, { l: "Fin", dt: true, k: "finishedAt" }, { l: "Statut", status: true, k: "status" }, { l: "Résultat", f: function (j) { return h("code", { class: "small" }, JSON.stringify(j.result)); } }, { l: "Erreur", k: "error" }] }); } },
     { id: "backups", label: "Sauvegardes", render: function (b) {
       const box = h("div");

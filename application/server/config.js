@@ -29,6 +29,7 @@ function config() {
     dataKeyFile: E.DATA_KEY_FILE ? path.resolve(E.DATA_KEY_FILE) : "", // chiffrement au repos (facultatif) : fichier contenant 32 octets en base64 ou en hexadécimal
     host: E.HOST || "127.0.0.1", port: Number(E.PORT || 8080),
     adminEmail: String(E.ADMIN_EMAIL || "").trim().toLowerCase(), adminToken: E.ADMIN_TOKEN || "",
+    brevoApiKey: (E.BREVO_API_KEY || "").trim(), brevoWebhookToken: (E.BREVO_WEBHOOK_TOKEN || "").trim(),
     smtpHost: E.SMTP_HOST || "", smtpPort: Number(E.SMTP_PORT || 587), smtpSecure: /^(1|true|yes)$/i.test(E.SMTP_SECURE || ""), smtpUser: E.SMTP_USER || "", smtpPass: E.SMTP_PASS || "",
     mailFrom: E.MAIL_FROM || E.SMTP_USER || "no-reply@localhost", mailDailyQuota: Number(E.MAIL_DAILY_QUOTA || 2000),
     chromium: findChromium(), trustProxy: !/^(0|false|no)$/i.test(E.TRUST_PROXY || "1"),
