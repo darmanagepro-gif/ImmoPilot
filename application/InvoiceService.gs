@@ -82,10 +82,13 @@ function invApprove_(p, a) {
     assert_(v.status === "SUBMITTED", "Facture déjà traitée (statut " + v.status + ").");
     assert_(!bool_(v.commissionLocked), "Commission déjà calculée.");
     const w = dbGet_("WorkOrders", v.workOrderId);
-    const rate = v.commissionRate !== null && v.commissionRate !== "" ? Number(v.commissionRate) : resolveCommissionRate_(undefined, dbGet_("Artisans", v.artisanId), v.organizationId);
-    const comVat = Number(getSetting_("commission.vatRate", v.organizationId));
+    const artisan = dbGet_("Artisans", v.artisanId), pf = !!artisan && isPlatformContractor_(artisan);
+    const rate = !pf && v.commissionRate !== null && v.commissionRate !== "" ? Number(v.commissionRate) : resolveCommissionRate_(undefined, artisan, v.organizationId);
+    const comVat = Number(pf ? getSetting_("commission.vatRate") : getSetting_("commission.vatRate", v.organizationId));
     const split = computeInvoiceSplit_(v.amountHT, v.vatRate, rate, isFinite(comVat) ? comVat : 20);
-    const beneficiary = commissionBeneficiary_(w || { createdBy: "" }, x.prop);
+    // Artisan de la plateforme : le commanditaire règle la totalité de la facture à l'artisan ; la commission est due par l'artisan à la plateforme.
+    if (pf) split.netToContractor = split.amountTTC;
+    const beneficiary = pf ? platformOrgId_() : commissionBeneficiary_(w || { createdBy: "" }, x.prop);
     dbUpdate_("Invoices", v.invoiceId, { status: "APPROVED", approvedAt: nowIso_(), approvedBy: p.email, commissionRate: rate, commissionBase: split.commissionBase, commissionAmount: split.commissionAmount,
       commissionVatRate: isFinite(comVat) ? comVat : 20, commissionVatAmount: split.commissionVatAmount, commissionBeneficiaryOrgId: beneficiary, commissionLocked: true, netToContractor: split.netToContractor });
     dbInsertUnique_("Expenses", "uniqueKey", "invoice:" + v.invoiceId, { organizationId: v.organizationId, propertyId: v.propertyId, category: "MAINTENANCE", description: "Facture " + v.invoiceNumber + " — intervention " + v.workOrderId,
@@ -96,7 +99,8 @@ function invApprove_(p, a) {
     audit_("INVOICE_APPROVED", "Invoice", v.invoiceId, v.organizationId, { amountTTC: v.amountTTC, commissionRate: rate, commissionAmount: split.commissionAmount, beneficiary: beneficiary });
     const art = dbGet_("Artisans", v.artisanId);
     if (art && art.userId) notify_({ eventKey: "invoice-approved:" + v.invoiceId, userIds: [art.userId], type: "INVOICE_APPROVED", organizationId: v.organizationId, title: "Facture approuvée : " + v.invoiceNumber,
-      body: "Net à percevoir : " + split.netToContractor + " MAD (commission " + rate + " % : " + split.commissionAmount + " MAD HT).", link: "#invoices" });
+      body: pf ? "Montant à recevoir du client : " + split.amountTTC + " " + cur_() + ". Commission ImmoPilot (" + rate + " %) : " + round2_(split.commissionAmount + split.commissionVatAmount) + " " + cur_() + " TTC, prélevée si le client paie par la plateforme, sinon réclamée par lien de paiement une fois la facture réglée."
+        : "Net à percevoir : " + split.netToContractor + " " + cur_() + " (commission " + rate + " % : " + split.commissionAmount + " " + cur_() + " HT).", link: "#invoices" });
     return Object.assign({ ok: true, status: "APPROVED", commissionRate: rate, beneficiaryOrgId: beneficiary }, split);
   });
 }
@@ -132,6 +136,14 @@ function invGet_(p, a) {
   o.canManage = x.manage; o.isMine = x.mine;
   o.payments = dbAll_("Payments").filter(function (z) { return z.refType === "INVOICE" && String(z.refId) === String(x.v.invoiceId); }).map(function (z) { return { paymentId: z.paymentId, amount: z.amount, paidAt: z.paidAt, method: z.method, reference: z.reference, status: z.status }; });
   o.history = auditHistory_("Invoice", x.v.invoiceId, 20);
+  const art = dbGet_("Artisans", x.v.artisanId);
+  o.platformArtisan = !!art && isPlatformContractor_(art);
+  if (o.platformArtisan) {
+    const R = commissionRates_();
+    o.clientCommission = { rate: R.client, amount: round2_(num_(x.v.amountHT) * R.client / 100), vatRate: R.vat };
+    o.fees = dbAll_("PlatformFees").filter(function (f) { return String(f.invoiceId) === String(x.v.invoiceId); }).map(feeOut_).filter(function (f) { return x.manage || p.isSuper || f.kind === "ARTISAN"; });
+    if (x.manage) o.platformPay = invPlatformInfo_(x.v, art);
+  }
   return o;
 }
 /** Met à jour le statut de paiement d'une facture à partir des paiements enregistrés. */
@@ -141,6 +153,7 @@ function invRefreshPaid_(invoiceId) {
   const target = num_(v.netToContractor || v.amountTTC);
   const status = paid <= 0 ? "APPROVED" : (paid + 0.005 >= target ? "PAID" : "PARTIAL");
   dbUpdate_("Invoices", invoiceId, { paidAmount: paid, status: status, paidAt: status === "PAID" ? nowIso_() : "" });
+  if (status === "PAID" && v.status !== "PAID") { try { commissionOnInvoicePaid_(invoiceId); } catch (e) { console.error("Commission : " + e.message); } }
   const exp = dbFind_("Expenses", "uniqueKey", "invoice:" + invoiceId);
   if (exp) dbUpdate_("Expenses", exp.expenseId, { status: status === "PAID" ? "PAID" : "INVOICED", paidAt: status === "PAID" ? nowIso_() : "" });
 }

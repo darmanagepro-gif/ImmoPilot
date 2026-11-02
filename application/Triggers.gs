@@ -53,14 +53,14 @@ function runJob_(name, tasks) {
 
 /** Toutes les 15 minutes : expiration des missions de ménage, retards d'arrivée/départ, envois aux locataires (8 h – 20 h). */
 function jobFrequent() {
-  return jobSummary_(runJob_("jobFrequent", { cleaning: cleaningExpireJob_, checkinAlerts: checkinAlertsJob_, rentMails: function () { return rentAutomationJob_(); } }));
+  return jobSummary_(runJob_("jobFrequent", { cleaning: cleaningExpireJob_, checkinAlerts: checkinAlertsJob_, rentMails: function () { return rentAutomationJob_(); }, commissionPayments: commissionCheckPayments_ }));
 }
 /** Ne renvoie qu'un résumé (le détail est consigné dans ScheduledJobs) : la fonction est aussi appelable depuis le web. */
 function jobSummary_(r) { return { ok: !!(r && r.ok), skipped: !!(r && r.skipped), errorCount: r && r.errors ? r.errors.length : 0 }; }
 /** Chaque jour : baux, abonnements, devis expirés, alertes incidents, rétention, arrivées imminentes, sauvegarde. */
 function jobDaily() {
   return jobSummary_(runJob_("jobDaily", { leases: leaseJob_, cardPayments: sumupChargeJob_, subscriptions: subscriptionJob_, quotes: quoteExpireJob_, incidents: incidentAlertsJob_, retention: purgeExpiredDocuments_,
-    arrivals: upcomingArrivalsJob_, providerInsurance: providerExpiryJob_, guestTokens: guestTokenExpireJob_, backup: function () { return backupDatabase_("quotidien").name; } }));
+    arrivals: upcomingArrivalsJob_, providerInsurance: providerExpiryJob_, commissions: commissionDailyJob_, guestTokens: guestTokenExpireJob_, backup: function () { return backupDatabase_("quotidien").name; } }));
 }
 
 /** Arrivées non enregistrées et départs dépassés (une alerte par réservation). */

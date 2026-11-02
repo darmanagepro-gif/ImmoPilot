@@ -40,7 +40,7 @@ function testEnvSetup_() {
   folder.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
   const env = { ss: ss, folder: folder, previousSs: DB_SS_ };
   dbSetSpreadsheet_(ss);
-  TEST_HOOKS_ = { driveRoot: folder, mailSink: [], appUrl: "https://example.test/exec", pbkdfIters: 50, mailQuota: null, aiConfig: false, aiFetch: null, sumupConfig: null, sumupFetch: null, smsSink: null };
+  TEST_HOOKS_ = { driveRoot: folder, mailSink: [], appUrl: "https://example.test/exec", pbkdfIters: 50, mailQuota: null, aiConfig: false, aiFetch: null, sumupConfig: null, sumupFetch: null, smsSink: null, stripeConfig: null, stripeFetch: null };
   ctxReset_();
   runMigrations_("tests");
   return env;
@@ -49,7 +49,7 @@ function testEnvTeardown_(env) {
   try { DriveApp.getFileById(env.ss.getId()).setTrashed(true); } catch (e) { console.error(e.message); }
   try { env.folder.setTrashed(true); } catch (e) { console.error(e.message); }
   DB_SS_ = null; dbReset_();
-  TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null, sumupConfig: null, sumupFetch: null, smsSink: null };
+  TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null, sumupConfig: null, sumupFetch: null, smsSink: null, stripeConfig: null, stripeFetch: null };
 }
 
 function testKit_(results) {
@@ -941,14 +941,31 @@ function TEST_GROUPS_() {
         const inv = T.call(fx.tok.artisan, "inv.submit", { workOrderId: wo.workOrderId, invoiceNumber: "F-2026-001", amountHT: 1000, vatRate: 20 });
         T.fails(fx.tok.artisan, "inv.approve", { invoiceId: inv.invoiceId }, "FORBIDDEN");
         const ap = T.call(fx.tok.ownerA, "inv.approve", { invoiceId: inv.invoiceId });
-        T.near(ap.amountTTC, 1200, "TTC"); T.near(ap.commissionAmount, 150, "15 % de 1000 HT"); T.near(ap.commissionVatAmount, 30, "TVA 20 % sur commission"); T.near(ap.netToContractor, 1020, "net artisan");
+        T.near(ap.amountTTC, 1200, "TTC"); T.near(ap.commissionAmount, 150, "15 % de 1000 HT"); T.near(ap.commissionVatAmount, 30, "TVA 20 % sur commission"); T.near(ap.netToContractor, 1200, "artisan de la plateforme : le client lui règle tout le TTC");
+        T.eq(ap.beneficiaryOrgId, fx.platform.organizationId, "commission artisan due à la plateforme");
         T.fails(fx.tok.ownerA, "inv.approve", { invoiceId: inv.invoiceId }, "VALIDATION");
         const fin = T.call(fx.tok.ownerA, "fin.summary", { from: addDaysStr_(todayStr_(), -1), to: tDays_(1) });
         T.near(fin.totals.contractorCommissions, 150, "commission comptée une seule fois");
         T.eq(dbAll_("Expenses").filter(function (e) { return e.uniqueKey === "invoice:" + inv.invoiceId; }).length, 1, "une seule dépense de maintenance");
         T.fails(fx.tok.ownerA, "pay.record", { refType: "INVOICE", refId: inv.invoiceId, kind: "INVOICE", amount: 2000 }, "VALIDATION");
-        T.call(fx.tok.ownerA, "pay.record", { refType: "INVOICE", refId: inv.invoiceId, kind: "INVOICE", amount: 1020, reference: "VIR-ART" });
+        T.call(fx.tok.ownerA, "pay.record", { refType: "INVOICE", refId: inv.invoiceId, kind: "INVOICE", amount: 1200, method: "CASH", reference: "ESP-ART" });
         T.eq(dbGet_("Invoices", inv.invoiceId).status, "PAID", "facture payée");
+        // Paiement en espèces : commission artisan due (lien de paiement), commission du commanditaire en attente du récapitulatif mensuel.
+        const fees = dbAll_("PlatformFees").filter(function (f) { return f.invoiceId === inv.invoiceId; });
+        const fa = fees.find(function (f) { return f.kind === "ARTISAN"; }), fc = fees.find(function (f) { return f.kind === "CLIENT"; });
+        T.eq([fa.status, fa.payMode], ["DUE", "CASH"], "commission artisan exigible");
+        T.near(fa.total, 180, "15 % + TVA"); T.near(fc.total, 72, "6 % de 1000 HT + TVA"); T.eq(fc.status, "PENDING", "commanditaire : en attente du récapitulatif");
+        T.eq(T.call(fx.tok.artisan, "commission.mine").fees.length, 1, "l'artisan voit sa commission");
+        T.fails(fx.tok.ownerA, "commission.adminList", {}, "FORBIDDEN");
+        const runM = T.call(fx.tok.superA, "commission.runMonthly");
+        T.ok(runM.created >= 1, "récapitulatif créé");
+        const stm = T.call(fx.tok.ownerA, "commission.statements").statements;
+        T.ok(stm.length >= 1 && stm.some(function (x) { return x.total >= 72; }), "le commanditaire voit son récapitulatif");
+        T.ok(T.call(fx.tok.ownerA, "commission.statementPdf", { statementId: stm[0].statementId }).base64, "récapitulatif PDF");
+        T.fails(fx.tok.ownerB, "commission.statementPdf", { statementId: stm[0].statementId }, "FORBIDDEN");
+        T.call(fx.tok.superA, "commission.markPaid", { feeId: fa.feeId, reference: "VIR-COM-1" });
+        T.eq(dbGet_("PlatformFees", fa.feeId).status, "PAID", "commission artisan réglée");
+        T.eq(dbAll_("PlatformFees").filter(function (f) { return f.invoiceId === inv.invoiceId; }).length, 2, "une seule paire de commissions par facture");
         T.call(fx.tok.ownerA, "inc.update", { incidentId: inc.incidentId, status: "CLOSED" });
         const closed = dbGet_("IncidentsV4", inc.incidentId);
         T.eq(closed.status, "CLOSED", "clôture"); T.near(closed.finalCost, 1200, "coût final = facture TTC");
@@ -1580,6 +1597,68 @@ function TEST_GROUPS_() {
         T.eq(T.call(fx.tok.superA, "provider.decide", { artisanId: me.artisanId, decision: "APPROVE" }).status, "ACTIVE", "référencé");
         T.ok(T.call(fx.tok.ownerA, "ctr.list", { pageSize: 200 }).items.some(function (c) { return c.artisanId === me.artisanId; }), "visible des clients une fois référencé");
         T.ok(/validé/.test(T.lastMailTo(email).subject), "e-mail de validation");
+      }]
+    ] },
+    { name: "Commissions de mise en relation", tests: [
+      ["Lien SumUp à l'artisan (paiement direct), récapitulatif mensuel prélevé sur la carte, paiement en ligne Stripe avec commission retenue", function (T, fx) {
+        const pf = fx.platform.organizationId, sim = { n: 0, checkouts: {}, stripe: [] };
+        const resp = function (code, body) { return { getResponseCode: function () { return code; }, getContentText: function () { return JSON.stringify(body); } }; };
+        const art = dbInsert_("Artisans", { organizationId: pf, name: "Élec Test " + fx.run, email: fx.mail("com-art"), phone: "0600000000", categoriesJson: ["ELECTRICITY"], zonesJson: [], status: "ACTIVE", createdAt: nowIso_(), createdBy: "test", source: "SIGNUP", userId: fx.users.artisan.userId, stripeAccountId: "acct_1", stripeReady: true });
+        const mkInv = function (n) {
+          const w = dbInsert_("WorkOrders", { organizationId: fx.orgA.organizationId, propertyId: fx.propA, incidentId: "inc_x", artisanId: art.artisanId, status: "VERIFIED", createdAt: nowIso_(), createdBy: fx.users.ownerA.email, title: "Test " + n });
+          return dbInsert_("Invoices", { organizationId: fx.orgA.organizationId, propertyId: fx.propA, workOrderId: w.workOrderId, incidentId: "inc_x", artisanId: art.artisanId, invoiceNumber: "C-" + n + "-" + fx.run,
+            issueDate: todayStr_(), amountHT: 500, vatRate: 20, vatAmount: 100, amountTTC: 600, commissionRate: 15, commissionAmount: 75, commissionVatRate: 20, commissionVatAmount: 15, commissionLocked: true,
+            commissionBeneficiaryOrgId: pf, netToContractor: 600, currency: cur_(), status: "APPROVED", createdAt: nowIso_(), createdBy: "test" });
+        };
+        TEST_HOOKS_.sumupConfig = { key: "sup_sk_TEST", merchant: "MTEST", currency: cur_(), rate: 1 };
+        TEST_HOOKS_.sumupFetch = function (url, params) {
+          const path = url.replace(SUMUP_API_, ""), m = String(params.method).toLowerCase(), body = params.payload ? JSON.parse(params.payload) : {};
+          if (m === "post" && path === "/checkouts") { const id = "co" + (++sim.n); sim.checkouts[id] = Object.assign({ id: id, status: "PENDING" }, body, body.hosted_checkout ? { hosted_checkout_url: "https://pay.sumup.test/" + id } : {}); return resp(201, sim.checkouts[id]); }
+          const x = /^\/checkouts\/(co\d+)$/.exec(path);
+          if (m === "get" && x) return resp(200, sim.checkouts[x[1]]);
+          if (m === "put" && x) { sim.checkouts[x[1]].status = "PAID"; sim.checkouts[x[1]].transactions = [{ transaction_code: "TXC" }]; return resp(200, sim.checkouts[x[1]]); }
+          return resp(404, {});
+        };
+        TEST_HOOKS_.stripeConfig = { key: "sk_test_X" };
+        TEST_HOOKS_.stripeFetch = function (url, params) {
+          sim.stripe.push({ url: url, body: params.payload || "" });
+          if (/checkout\/sessions$/.test(url)) return resp(200, { id: "cs_1", url: "https://checkout.stripe.test/cs_1" });
+          return resp(200, {});
+        };
+        try {
+          // 1. Paiement direct : lien SumUp envoyé, puis payé.
+          const v1 = mkInv(1);
+          T.call(fx.tok.ownerA, "pay.record", { refType: "INVOICE", refId: v1.invoiceId, kind: "INVOICE", amount: 600, method: "TRANSFER", reference: "VIR-1" });
+          const fa = dbAll_("PlatformFees").find(function (f) { return f.invoiceId === v1.invoiceId && f.kind === "ARTISAN"; });
+          T.eq(fa.status, "LINK_SENT", "lien de paiement envoyé"); T.ok(/pay\.sumup\.test/.test(fa.payUrl), "lien SumUp hébergé");
+          T.ok(/Commission ImmoPilot à régler/.test(T.lastMailTo(art.email).subject) && T.lastMailTo(art.email).body.indexOf(fa.payUrl) >= 0, "e-mail avec le lien");
+          sim.checkouts[fa.checkoutId].status = "PAID";
+          commissionCheckPayments_();
+          T.eq(dbGet_("PlatformFees", fa.feeId).status, "PAID", "paiement détecté");
+          // 2. Récapitulatif mensuel : prélevé sur la carte de l'abonnement.
+          const card = dbInsert_("BillingCards", { organizationId: fx.orgA.organizationId, status: "ACTIVE", customerId: "cus", token: "tok_1", label: "Visa •• 4242", createdAt: nowIso_(), createdBy: "test" });
+          const r = commissionMonthly_(true);
+          T.ok(r.created >= 1, "récapitulatif créé");
+          const st = dbAll_("CommissionStatements").filter(function (x) { return x.organizationId === fx.orgA.organizationId; }).sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); })[0];
+          T.eq(st.status, "PAID", "prélevé sur la carte");
+          T.ok(dbAll_("PlatformFees").filter(function (f) { return f.statementId === st.statementId; }).every(function (f) { return f.status === "PAID"; }), "commissions du récapitulatif réglées");
+          T.ok((T.lastMailTo(dbGet_("Organizations", fx.orgA.organizationId).billingEmail || "") || { attachments: [{}] }).attachments.length >= 0, "récapitulatif envoyé");
+          dbUpdate_("BillingCards", card.cardId, { status: "REPLACED", token: "" });
+          // 3. Paiement en ligne (Stripe Connect) : commission retenue, aucun lien.
+          if (edition_().code === "FR") {
+            const v2 = mkInv(2);
+            const pay = T.call(fx.tok.ownerA, "inv.payOnline", { invoiceId: v2.invoiceId });
+            T.ok(/checkout\.stripe\.test/.test(pay.url), "page de paiement Stripe");
+            const sent = decodeURIComponent(sim.stripe[sim.stripe.length - 1].body);
+            T.ok(sent.indexOf("application_fee_amount]=9000") >= 0 && sent.indexOf("destination]=acct_1") >= 0, "commission retenue (90,00) et versement à l'artisan");
+            T.fails(fx.tok.ownerB, "inv.payOnline", { invoiceId: v2.invoiceId }, "FORBIDDEN");
+            stripeWebhook({ type: "checkout.session.completed", data: { object: { id: "cs_1", payment_status: "paid", amount_total: 60000, metadata: { invoiceId: v2.invoiceId } } } });
+            stripeWebhook({ type: "checkout.session.completed", data: { object: { id: "cs_1", payment_status: "paid", amount_total: 60000, metadata: { invoiceId: v2.invoiceId } } } });
+            T.eq(dbGet_("Invoices", v2.invoiceId).status, "PAID", "facture payée par le webhook");
+            T.eq(dbAll_("Payments").filter(function (z) { return z.refId === v2.invoiceId; }).length, 1, "webhook rejoué sans double paiement");
+            T.eq(dbAll_("PlatformFees").find(function (f) { return f.invoiceId === v2.invoiceId && f.kind === "ARTISAN"; }).status, "DEDUCTED", "commission artisan retenue en ligne");
+          } else T.ok(!stripeEnabled_(), "Maroc : pas de Stripe Connect");
+        } finally { TEST_HOOKS_.sumupConfig = null; TEST_HOOKS_.sumupFetch = null; TEST_HOOKS_.stripeConfig = null; TEST_HOOKS_.stripeFetch = null; }
       }]
     ] },
     { name: "Données, migration et robustesse", tests: [

@@ -230,6 +230,7 @@ function validateSettingValue_(key, v) {
   const def = DEFAULT_SETTINGS[key];
   if (typeof def === "boolean") return bool_(v);
   if (key === "rent.callDaysBefore") { const n = parseInt(v, 10); assert_(n >= 0 && n <= 31, "Délai de 0 à 31 jours avant l'échéance."); return n; }
+  if (/^commission\.(contractorRate|clientRate|vatRate)$/.test(key)) return rate_(v, "Taux de commission");
   if (typeof def === "number") { const n = Number(v); assert_(isFinite(n) && n >= 0 && n <= 1e7, "Valeur numérique invalide."); return n; }
   if (Array.isArray(def)) {
     const arr = Array.isArray(v) ? v : String(v || "").split(",").map(function (x) { return x.trim(); }).filter(Boolean);

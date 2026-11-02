@@ -9,7 +9,10 @@
 - Super administrateur : page « Référencements artisans », contrôle pièce par pièce (valider / refuser avec motif), validation, demande de compléments ou suspension, e-mails à l'artisan ; l'artisan n'apparaît aux clients qu'une fois référencé.
 - Tâche quotidienne : rappel 30 jours avant l'expiration d'une assurance, suspension automatique après expiration.
 - Documents juridiques : section « Mise en relation » dans les conditions générales et nouvelles « Conditions de référencement des prestataires ».
-- Sécurité : rien n'est créé avant le code (15 min, 5 essais, haché), mot de passe haché dès la demande puis effacé de celle-ci, limitation par IP et par e-mail. Schéma 15.
+- Sécurité : rien n'est créé avant le code (15 min, 5 essais, haché), mot de passe haché dès la demande puis effacé de celle-ci, limitation par IP et par e-mail. Schéma 16.
+- Commissions de mise en relation (artisans référencés, au profit de la plateforme) : artisan 15 % du HT, commanditaire 6 % du HT, TVA en sus (réglables dans les paramètres de la plateforme). Paiement direct ou en espèces : quand le commanditaire marque la facture réglée, l'artisan reçoit un lien de paiement SumUp (relances à 7, 14 et 21 jours, alerte au super administrateur ensuite). Commissions des commanditaires : récapitulatif mensuel PDF le 1er du mois, prélevé sur la carte de l'abonnement (sinon lien SumUp).
+- Paiement en ligne par la plateforme (France) préparé avec Stripe Connect : l'artisan active son compte de paiement Stripe depuis « Mon référencement », le commanditaire paie la facture en ligne, Stripe verse l'artisan et retient la commission (aucun fonds détenu par ECO SYNERGY). Webhook signé /hooks/stripe. S'active en renseignant STRIPE_SECRET_KEY et STRIPE_WEBHOOK_SECRET.
+- Page super administrateur « Commissions » (totaux, relances, règlement manuel, annulation, récapitulatifs) ; « Mes commissions » pour l'artisan ; récapitulatifs dans « Abonnements » pour le commanditaire ; conditions générales et conditions de référencement complétées (commission, modes de paiement, assurance de l'éditeur si renseignée).
 
 ## 2.5.0 — 2 novembre 2026 — communication centralisée avec l'API Brevo
 

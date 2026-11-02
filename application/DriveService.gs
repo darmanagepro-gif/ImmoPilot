@@ -253,7 +253,7 @@ function pdfShell_(title, inner, opts) {
 }
 /** Date AAAA-MM-JJ (ou horodatage) au format JJ/MM/AAAA. */
 function pdfDate_(s) { const v = String(s || "").slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v.slice(8, 10) + "/" + v.slice(5, 7) + "/" + v.slice(0, 4) : (v || "—"); }
-var PDF_PAY_METHODS_ = { TRANSFER: "Virement", CASH: "Espèces", CARD: "Carte", CHEQUE: "Chèque", PLATFORM: "Plateforme de réservation", OTHER: "Autre" };
+var PDF_PAY_METHODS_ = { TRANSFER: "Virement", CASH: "Espèces", CARD: "Carte", CHEQUE: "Chèque", PLATFORM: "Plateforme de réservation", STRIPE: "Paiement en ligne ImmoPilot", OTHER: "Autre" };
 /** Image d'un document (photo) au format data: pour un PDF. Les fichiers de plus de 1,5 Mo ne sont pas intégrés (le PDF resterait trop lourd). */
 function pdfImageData_(documentId) {
   const d = dbGet_("Documents", documentId);

@@ -45,7 +45,7 @@ var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
   VERSION: "2.6.0",
-  SCHEMA_VERSION: 15,
+  SCHEMA_VERSION: 16,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -119,6 +119,7 @@ var DEFAULT_SETTINGS = Object.freeze({
   "cleaning.acceptanceMinutes": 120,
   "cleaning.requirePhotos": true,
   "commission.contractorRate": 15,
+  "commission.clientRate": 6,
   "commission.vatRate": 20,
   "finance.vatRate": 20,
   "quote.agencyApprovalLimit": 0,
@@ -159,7 +160,7 @@ var DEFAULT_SETTINGS = Object.freeze({
   "legal.publisherName": "ECO SYNERGY", "legal.legalForm": "société par actions simplifiée (SAS) au capital de 500 €", "legal.address": "16 chemin de Garrabot, 31770 Colomiers, France",
   "legal.registration": "immatriculée au RCS de Toulouse sous le n° 932 443 005 (SIRET 932 443 005 00016)", "legal.vatNumber": "FR56932443005", "legal.director": "la société RENEWCO, présidente d'ECO SYNERGY",
   "legal.contactEmail": "ecosynergy31@gmail.com", "legal.phone": "+33 7 49 98 09 18", "legal.hostName": "", "legal.hostAddress": "", "legal.hostPhone": "", "legal.mediator": "",
-  "legal.dataAuthorityRef": "", "legal.dpoEmail": ""
+  "legal.dataAuthorityRef": "", "legal.dpoEmail": "", "legal.platformInsurance": ""
 });
 
 var DEFAULT_PLANS = Object.freeze([
@@ -185,6 +186,10 @@ var TABLES_SRC = {
   PlatformSettings: { pk: "settingKey", idp: "set", req: "settingKey", cols: "settingKey,settingValue,updatedAt#t,updatedBy" },
   Settings: { pk: "settingId", idp: "stg", org: "organizationId", req: "organizationId,settingKey", cols: "settingId,organizationId,settingKey,settingValue,updatedAt#t,updatedBy" },
   Sessions: { pk: "sessionId", idp: "ses", req: "userId,tokenHash", cols: "sessionId,userId,tokenHash,createdAt#t,expiresAt#t,lastSeenAt#t,revokedAt#t,userAgent,impersonatorUserId,mode" },
+  PlatformFees: { pk: "feeId", idp: "fee", org: "organizationId", req: "kind,invoiceId", enums: { kind: ["ARTISAN", "CLIENT"], status: ["PENDING", "BILLED", "DUE", "LINK_SENT", "PAID", "DEDUCTED", "CANCELLED"] },
+    cols: "feeId,kind,organizationId,propertyId,invoiceId,workOrderId,artisanId,baseHT#n,rate#n,amount#n,vatAmount#n,total#n,currency,status,payMode,createdAt#t|checkoutId,payUrl,linkSentAt#t,reminders#n,paidAt#t,paidRef,statementId,period,note,updatedAt#t" },
+  CommissionStatements: { pk: "statementId", idp: "cst", org: "organizationId", req: "organizationId,period", enums: { status: ["DUE", "LINK_SENT", "PAID", "CANCELLED"] },
+    cols: "statementId,organizationId,period,count#n,totalHT#n,vatAmount#n,total#n,currency,status,createdAt#t|checkoutId,payUrl,paidAt#t,paidRef,attempts#n,lastError,updatedAt#t" },
   SignupRequests: { pk: "requestId", idp: "sgn", req: "email,kind", enums: { status: ["PENDING", "DONE", "FAILED", "REPLACED", "EXPIRED"] },
     cols: "requestId,kind,email,codeHash,attempts#n,expiresAt#t,payloadJson#j,status,createdAt#t,usedAt#t,ip,sends#n,lastSentAt#t" },
   PasswordResets: { pk: "resetId", idp: "rst", req: "userId,tokenHash", cols: "resetId,userId,tokenHash,createdAt#t,expiresAt#t,usedAt#t,purpose" },
@@ -228,7 +233,7 @@ var TABLES_SRC = {
     cols: "incidentId,organizationId,propertyId,reservationId,category,priority,description,status,photoFileIdsJson#j,createdAt#t,createdBy,updatedAt#t,updatedBy|title,severity,reportedByUserId,assignedToUserId,contractorId,estimatedCost#n,finalCost#n,resolvedAt#t,closedAt#t,missionId,source,alertedAt#t,legacyOrigin" },
   IncidentComments: { pk: "commentId", idp: "icm", org: "organizationId", req: "incidentId,body", cols: "commentId,organizationId,incidentId,authorEmail,body,createdAt#t,visibility" },
   Artisans: { pk: "artisanId", idp: "art", org: "organizationId", req: "name,email", enums: { status: ["ACTIVE", "INACTIVE", "BLOCKED", "PENDING", "REJECTED"] },
-    cols: "artisanId,organizationId,name,email,phone,categoriesJson#j,zonesJson#j,status,createdAt#t,createdBy|userId,notes,legalName,taxId,commissionRate#n,billingInfo,updatedAt#t,businessType,legalJson#j,insuranceJson#j,reviewJson#j,submittedAt#t,verifiedAt#t,verifiedBy,rejectReason,source" },
+    cols: "artisanId,organizationId,name,email,phone,categoriesJson#j,zonesJson#j,status,createdAt#t,createdBy|userId,notes,legalName,taxId,commissionRate#n,billingInfo,updatedAt#t,businessType,legalJson#j,insuranceJson#j,reviewJson#j,submittedAt#t,verifiedAt#t,verifiedBy,rejectReason,source,stripeAccountId,stripeReady#b" },
   Quotes: { pk: "quoteId", idp: "quo", org: "organizationId", req: "propertyId,incidentId,artisanId",
     enums: { status: ["REQUESTED", "PENDING", "APPROVED", "REJECTED", "DECLINED", "EXPIRED", "CANCELLED"] },
     cols: "quoteId,organizationId,propertyId,incidentId,artisanId,status,currency,totalAmount#n,validUntil#d,linesJson#j,decisionAt#t,decisionBy,decisionNote,createdAt#t,createdBy|requestNote,requestedAt#t,requestedBy,submittedAt#t,amountHT#n,vatRate#n,amountTTC#n,estimatedDays#n,commissionRateEst#n,commissionEstimate#n" },

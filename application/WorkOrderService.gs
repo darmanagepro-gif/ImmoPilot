@@ -19,6 +19,8 @@ function woOut_(w) {
     invoiceId: w.invoiceId, legacyInvoiceFileId: w.invoiceFileId, declineReason: w.declineReason };
 }
 function resolveCommissionRate_(override, artisan, orgId) {
+  // Artisan référencé par la plateforme : la commission revient à ECO SYNERGY, au taux fixé par le super administrateur (jamais par le client).
+  if (artisan && isPlatformContractor_(artisan)) { const pr = artisan.commissionRate !== null && artisan.commissionRate !== "" ? Number(artisan.commissionRate) : Number(getSetting_("commission.contractorRate")); return isFinite(pr) ? pr : 15; }
   if (override !== undefined && override !== null && override !== "") return rate_(override, "Commission");
   if (artisan && artisan.commissionRate !== null && artisan.commissionRate !== "") return Number(artisan.commissionRate);
   const s = Number(getSetting_("commission.contractorRate", orgId));

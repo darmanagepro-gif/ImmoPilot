@@ -58,12 +58,13 @@ function platformStatusText_() {
       "ImmoPilot est un logiciel en ligne (SaaS) édité par " + (v.publisherName || "ECO SYNERGY") + " et mis à disposition par abonnement : vous l'utilisez pour gérer vous-même vos biens, vos locations, vos équipes et vos documents.",
       "ImmoPilot est aussi une plateforme de mise en relation avec des artisans et prestataires référencés (ménage, plomberie, électricité…). Les prestations sont commandées, réalisées et facturées directement entre vous et le prestataire.",
       "L'éditeur n'est ni agent immobilier, ni administrateur de biens, ni conciergerie, ni partie à vos contrats (baux, réservations, travaux). Il ne détient pas vos fonds : loyers et paiements des séjours vous sont versés directement.",
-      "Le prix de l'abonnement est le seul montant payé à l'éditeur. Sans engagement : résiliation à tout moment depuis votre espace, effective à la fin de la période payée."
+      "Vous payez à l'éditeur l'abonnement (sans engagement : résiliation à tout moment, effective à la fin de la période payée) et, si vous faites appel à un artisan référencé, une commission de mise en relation de " + commissionRates_().client + " % HT du montant de sa facture, réunie dans un récapitulatif mensuel."
     ],
     providerPoints: [
       "Le référencement est gratuit. Il est accordé après contrôle de vos informations légales et des pièces exigées par la réglementation du pays.",
       "Critères : activité déclarée et immatriculée, pièces lisibles et à jour, assurance en cours de validité lorsqu'elle est exigée. Aucun classement payant : les clients vous choisissent par corps de métier et zone d'intervention.",
       "Vos devis, interventions et factures sont établis par vous, en votre nom, directement avec le client. L'éditeur n'est pas partie à ces contrats et ne garantit ni le paiement ni l'exécution des prestations.",
+      "Commission de mise en relation : " + commissionRates_().artisan + " % HT de chaque facture réglée d'une mission obtenue par la plateforme, retenue automatiquement si le client paie en ligne, sinon réglée par lien de paiement après le règlement du client.",
       "Déréférencement : une pièce expirée, une information inexacte ou un manquement grave entraîne la suspension du référencement, après information par e-mail. Vous pouvez demander votre déréférencement à tout moment."
     ]
   };

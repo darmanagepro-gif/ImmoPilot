@@ -412,3 +412,10 @@ AE_CARD|Attestation d'auto-entrepreneur|Self-employed registration certificate|�
 RC_EXTRACT|Extrait du registre de commerce (modèle J)|Trade register extract (form J)|مستخرج السجل التجاري (نموذج ج)|Extracto del registro mercantil (modelo J)|Estratto del registro di commercio (modello J)|Uittreksel handelsregister (model J)
 CNSS|Attestation CNSS|CNSS certificate|شهادة الانخراط في الضمان الاجتماعي|Certificado CNSS|Attestato CNSS|CNSS-attest
 OTHER_PROOF|Autre justificatif|Other document|وثيقة أخرى|Otro justificante|Altro documento|Ander bewijsstuk
+LINK_SENT|Lien de paiement envoyé|Payment link sent|تم إرسال رابط الدفع|Enlace de pago enviado|Link di pagamento inviato|Betaallink verzonden
+DEDUCTED|Retenue en ligne|Deducted online|مقتطعة عبر الإنترنت|Retenida en línea|Trattenuta online|Online ingehouden
+BILLED|Dans le récapitulatif|On the statement|مدرجة في الكشف|En el resumen|Nel riepilogo|Op het overzicht
+STRIPE|Paiement en ligne ImmoPilot|ImmoPilot online payment|الدفع عبر الإنترنت ImmoPilot|Pago en línea ImmoPilot|Pagamento online ImmoPilot|Online betaling ImmoPilot
+PAYMODE_DIRECT|Paiement direct|Direct payment|دفع مباشر|Pago directo|Pagamento diretto|Rechtstreekse betaling
+PAYMODE_CASH|Espèces|Cash|نقدًا|Efectivo|Contanti|Contant
+PAYMODE_PLATFORM|En ligne (plateforme)|Online (platform)|عبر الإنترنت (المنصة)|En línea (plataforma)|Online (piattaforma)|Online (platform)

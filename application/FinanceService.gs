@@ -16,7 +16,7 @@
  *  - Prix moyen par nuit (ADR) = revenu d'hébergement proratisé / nuits réservées ; RevPAR = revenu d'hébergement / nuits disponibles.
  * Aucun montant n'est marqué encaissé sans paiement explicitement enregistré.
  */
-var PAY_METHODS_ = ["CASH", "TRANSFER", "CARD", "CHEQUE", "PLATFORM", "OTHER"];
+var PAY_METHODS_ = ["CASH", "TRANSFER", "CARD", "CHEQUE", "PLATFORM", "STRIPE", "OTHER"];
 var REVENUE_STATUSES_ = ["CONFIRMED", "IN_PROGRESS", "COMPLETED"];
 
 function finScopeProps_(p, f) {

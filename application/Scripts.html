@@ -38,6 +38,7 @@ const NAV = [
     { r: "settings", l: "Paramètres", i: "⚙", show: function () { return true; } },
     { r: "accounts", l: "Comptes clients", i: "◉", show: function () { return S.me.isSuper; } },
     { r: "referencements", l: "Référencements artisans", i: "✔", show: function () { return S.me.isSuper; } },
+    { r: "commissions", l: "Commissions", i: "%", show: function () { return S.me.isSuper; } },
     { r: "admin", l: "Administration globale", i: "♛", show: function () { return S.me.isSuper; } },
     { r: "audit", l: "Journal d'audit", i: "≡", show: function () { return can("audit.view.org") || S.me.isSuper; } } ] }
 ];
@@ -303,6 +304,13 @@ function assignPlan(orgId) {
 function mySubscriptions(el) {
   api("sub.mine").then(function (list) {
     if (!list.length) { el.appendChild(h("div", { class: "empty" }, t("Aucune organisation à afficher."))); return; }
+    api("commission.statements", {}, { fresh: true }).then(function (cm) {
+      if (!cm.statements.length && !cm.pending.length) return;
+      el.appendChild(panel("Commissions de mise en relation", h("div", null, h("p", { class: "small muted" }, t("Pour chaque mission d'un artisan référencé réglée, une commission de") + " " + cm.rates.client + " % " + t("du HT de sa facture (TVA en sus). Récapitulatif PDF chaque début de mois, prélevé sur votre carte d'abonnement ou réglé par lien de paiement.")),
+        cm.pending.length ? h("p", null, t("Mois en cours") + " : " + cm.pending.length + " " + t("mission(s)") + " · " + fmtMoney(cm.pending.reduce(function (a, f) { return a + f.total; }, 0)) + " " + t("TTC")) : null,
+        table([{ l: "Période", k: "period" }, { l: "Missions", num: true, k: "count" }, { l: "Total TTC", money: true, k: "total" }, { l: "Statut", status: true, k: "status" },
+          { l: "", f: function (s) { return h("span", { class: "actions" }, btn(t("PDF"), function () { api("commission.statementPdf", { statementId: s.statementId }).then(download).catch(showErr); }, "sm"), s.payUrl ? h("a", { class: "btn sm primary", href: s.payUrl, target: "_blank", rel: "noopener" }, t("Payer")) : null); } }], cm.statements, { empty: "Aucun récapitulatif." }))));
+    }).catch(function () { /* facultatif */ });
     list.forEach(function (o) {
       const s = o.subscription, pl = o.plan;
       if (o.includedIn) { el.appendChild(panel(o.organizationName, h("div", null, o.readOnly ? h("div", { class: "alert bad" }, t("Abonnement suspendu ou expiré : votre compte est en lecture seule. Contactez l'administrateur ImmoPilot.")) : null,
@@ -431,6 +439,19 @@ PAGES.referencing = function (el) {
         h("div", { style: { flex: "1", minWidth: "220px" } }, c.missing.length ? h("span", null, t("Pièces manquantes") + " : " + c.missing.length) : h("span", null, "✓ " + t("Toutes les pièces sont déposées."))),
         btn("➤ " + t(c.submittedAt && c.status === "PENDING" ? "Renvoyer mon dossier" : "Envoyer mon dossier pour validation"), function (ev) { const b = ev.currentTarget; b.disabled = true; api("provider.submit").then(function (r) { toast(r.message, "good"); reload(); }).catch(function (e) { b.disabled = false; showErr(e); }); }, canSend ? "primary lg" : "lg")));
       el.appendChild(providerSummary(c));
+      if (c.status === "ACTIVE") {
+        const pay = h("div", null, h("div", { class: "loading" }, t("Chargement…")));
+        el.appendChild(panel("Mes commissions ImmoPilot", pay));
+        Promise.all([api("commission.mine", {}, { fresh: true }), api("provider.payoutInfo", {}, { fresh: true }).catch(function () { return { enabled: false }; })]).then(function (r) {
+          const m = r[0], po = r[1]; clear(pay);
+          pay.appendChild(h("p", { class: "small muted" }, t("Commission de mise en relation") + " : " + m.rates.artisan + " % " + t("du montant HT de chaque facture réglée d'une mission obtenue par ImmoPilot (TVA en sus). Retenue automatiquement si le client paie en ligne ; sinon, un lien de paiement vous est envoyé une fois la facture réglée.")));
+          if (po.enabled) pay.appendChild(h("div", { class: "alert " + (po.ready ? "good" : "info") }, po.ready ? "✓ " + t("Paiement en ligne activé : vos clients peuvent vous payer par la plateforme, Stripe vous verse le montant commission déduite.")
+            : h("span", null, t("Activez le paiement en ligne : vos clients vous paient par carte via la plateforme et Stripe (établissement de paiement agréé) vous verse le montant, commission déduite. Plus de lien de commission à régler."), " ",
+              btn(po.connected ? t("Terminer l'activation chez Stripe") : t("Activer le paiement en ligne"), function (ev) { const b = ev.currentTarget; b.disabled = true; api("provider.payoutSetup").then(function (x) { location.href = x.url; }).catch(function (e) { b.disabled = false; showErr(e); }); }, "sm primary"))));
+          pay.appendChild(table([{ l: "Date", dt: true, k: "createdAt" }, { l: "Facture", k: "invoiceNumber" }, { l: "Bien", k: "propertyName" }, { l: "Base HT", money: true, k: "baseHT" }, { l: "Commission TTC", money: true, k: "total" }, { l: "Statut", status: true, k: "status" },
+            { l: "", f: function (f) { return f.payUrl ? h("a", { class: "btn sm primary", href: f.payUrl, target: "_blank", rel: "noopener" }, t("Payer")) : ""; } }], m.fees, { empty: "Aucune commission." }));
+        }).catch(function (e) { clear(pay).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+      }
       el.appendChild(h("div", { class: "actions" }, btn(t("Modifier mes informations"), function () {
         const ff = providerInfoFields(c);
         formModal(t("Mes informations"), ff.fields, ff.values, function (v) { if (typeof v.zones !== "string") v.zones = ""; return api("provider.save", v).then(reload); },
@@ -440,6 +461,29 @@ PAGES.referencing = function (el) {
     });
   };
   return load();
+};
+
+/* ======================= Super administrateur : commissions ======================= */
+PAGES.commissions = function (el) {
+  el.appendChild(pageHead(t("Commissions"), t("Commissions de mise en relation : artisans (retenues en ligne ou réclamées par lien de paiement) et commanditaires (récapitulatif mensuel prélevé sur carte)."),
+    [btn(t("Générer les récapitulatifs maintenant"), function () { confirmBox(t("Regrouper toutes les commissions commanditaires en attente dans un récapitulatif et lancer leur prélèvement ?")).then(function (ok) { if (ok) api("commission.runMonthly").then(function (r) { toast(r.created + " " + t("récapitulatif(s) créé(s)."), "good"); App.go("commissions"); }).catch(showErr); }); })]));
+  const box = h("div", null, h("div", { class: "loading" }, t("Chargement…"))); el.appendChild(box);
+  api("commission.adminList", {}, { fresh: true }).then(function (r) {
+    clear(box);
+    box.appendChild(kpis([{ l: "Encaissé", v: fmtMoney(r.totals.earned), tone: "good" }, { l: "Dû par les artisans", v: fmtMoney(r.totals.artisanDue), tone: r.totals.artisanDue ? "bad" : "" }, { l: "Commanditaires à facturer", v: fmtMoney(r.totals.clientPending) }]));
+    box.appendChild(h("p", { class: "small muted" }, t("Taux") + " : " + t("artisan") + " " + r.rates.artisan + " %, " + t("commanditaire") + " " + r.rates.client + " %, TVA " + r.rates.vat + " % " + t("(Paramètres de la plateforme).") + " SumUp : " + (r.sumup ? "✓" : "✗") + " · Stripe Connect : " + (r.stripe ? "✓" : "✗")));
+    const actions = function (x, isSt) {
+      const id = isSt ? { statementId: x.statementId } : { feeId: x.feeId }, reload = function () { App.go("commissions"); };
+      const open = isSt ? true : ["DUE", "LINK_SENT", "PENDING"].indexOf(x.status) >= 0;
+      return h("span", { class: "actions" }, isSt ? btn(t("PDF"), function () { api("commission.statementPdf", id).then(download).catch(showErr); }, "sm") : null,
+        open && x.status !== "PAID" && (isSt || x.kind === "ARTISAN") && x.status !== "PENDING" ? btn(t("Relancer"), function () { api("commission.resend", id).then(function (z) { toast(z.ok ? t("Envoyé.") : (z.error || t("Échec")), z.ok ? "good" : "bad"); reload(); }).catch(showErr); }, "sm") : null,
+        open && x.status !== "PAID" ? btn(t("Marquer réglée"), function () { formModal(t("Règlement reçu"), [{ k: "reference", l: "Référence (virement, espèces…)", req: true }], {}, function (v) { return api("commission.markPaid", Object.assign({ reference: v.reference }, id)).then(reload); }); }, "sm") : null,
+        !isSt && open ? btn(t("Annuler"), function () { formModal(t("Annuler la commission"), [{ k: "reason", l: "Motif", req: true }], {}, function (v) { return api("commission.cancel", { feeId: x.feeId, reason: v.reason }).then(reload); }); }, "sm danger") : null);
+    };
+    tabs(box, [{ id: "a", label: "Artisans", render: function (b) { b.appendChild(table([{ l: "Date", dt: true, k: "createdAt" }, { l: "Artisan", k: "artisanName" }, { l: "Facture", k: "invoiceNumber" }, { l: "Mode", f: function (f) { return st("PAYMODE_" + f.payMode); } }, { l: "TTC", money: true, k: "total" }, { l: "Rappels", num: true, k: "reminders" }, { l: "Statut", status: true, k: "status" }, { l: "", f: function (f) { return actions(f, false); } }], r.fees.filter(function (f) { return f.kind === "ARTISAN"; }), { empty: "Aucune commission." })); } },
+      { id: "c", label: "Commanditaires", render: function (b) { b.appendChild(table([{ l: "Date", dt: true, k: "createdAt" }, { l: "Commanditaire", k: "organizationName" }, { l: "Artisan", k: "artisanName" }, { l: "Facture", k: "invoiceNumber" }, { l: "TTC", money: true, k: "total" }, { l: "Statut", status: true, k: "status" }, { l: "", f: function (f) { return actions(f, false); } }], r.fees.filter(function (f) { return f.kind === "CLIENT"; }), { empty: "Aucune commission." })); } },
+      { id: "s", label: "Récapitulatifs mensuels", render: function (b) { b.appendChild(table([{ l: "Période", k: "period" }, { l: "Commanditaire", k: "organizationName" }, { l: "Missions", num: true, k: "count" }, { l: "TTC", money: true, k: "total" }, { l: "Statut", status: true, k: "status" }, { l: "Erreur", k: "lastError" }, { l: "", f: function (s) { return actions(s, true); } }], r.statements, { empty: "Aucun récapitulatif." })); } }]);
+  }).catch(function (e) { clear(box).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
 };
 
 /* ======================= Super administrateur : contrôle des référencements ======================= */

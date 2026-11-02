@@ -1,6 +1,6 @@
 /**
  * ImmoPilot 2.6.0 (édition FR) — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
- * Contient les 40 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SignatureService.gs, SignupService.gs, SubscriptionService.gs, SumUpService.gs, TemplateService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
+ * Contient les 42 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, CommissionService.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SignatureService.gs, SignupService.gs, StripeService.gs, SubscriptionService.gs, SumUpService.gs, TemplateService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
  * À coller seul dans le projet Apps Script (aucun autre fichier .gs ne doit rester dans le projet).
  */
 
@@ -239,6 +239,7 @@ function validateSettingValue_(key, v) {
   const def = DEFAULT_SETTINGS[key];
   if (typeof def === "boolean") return bool_(v);
   if (key === "rent.callDaysBefore") { const n = parseInt(v, 10); assert_(n >= 0 && n <= 31, "Délai de 0 à 31 jours avant l'échéance."); return n; }
+  if (/^commission\.(contractorRate|clientRate|vatRate)$/.test(key)) return rate_(v, "Taux de commission");
   if (typeof def === "number") { const n = Number(v); assert_(isFinite(n) && n >= 0 && n <= 1e7, "Valeur numérique invalide."); return n; }
   if (Array.isArray(def)) {
     const arr = Array.isArray(v) ? v : String(v || "").split(",").map(function (x) { return x.trim(); }).filter(Boolean);
@@ -1472,7 +1473,7 @@ function routes_() { return {
   "inspection.create": "inspectionCreate_", "inspection.get": "inspectionGet_", "inspection.save": "inspectionSave_", "inspection.write": "inspectionWrite_", "inspection.pdf": "inspectionPdf_",
   "inspection.finalize": "inspectionFinalize_", "inspection.send": "inspectionSend_", "inspection.cancel": "inspectionCancel_", "inspection.sign": "inspectionSign_", "inspection.depositLetter": "inspectionDepositLetter_",
   "plan.list": "planList_", "plan.save": "planSave_", "sub.assign": "subAssign_", "sub.recordPayment": "subRecordPayment_", "sub.setStatus": "subSetStatus_", "sub.list": "subList_",
-  "sub.mine": function (p) { return subMine_(p); }, "provider.me": function (p) { return providerMe_(p); }, "provider.save": "providerSave_", "provider.submit": function (p) { return providerSubmit_(p); }, "provider.reviewList": "providerReviewList_", "provider.reviewDoc": "providerReviewDoc_", "provider.decide": "providerDecide_", "sub.requestChange": "subRequestChange_", "sub.cardSetup": "subCardSetup_", "template.info": "templateInfo_", "template.preview": "templatePreview_", "sub.signStart": "subSignStart_", "sub.signConfirm": "subSignConfirm_", "sub.cardConfirm": "subCardConfirm_", "sub.cardRemove": "subCardRemove_", "sub.chargeNow": "subChargeNow_", "sub.contractPdf": "subContractPdf_", "assistant.kb": "assistantKb_", "assistant.ask": "assistantAsk_",
+  "sub.mine": function (p) { return subMine_(p); }, "provider.me": function (p) { return providerMe_(p); }, "provider.payoutInfo": function (p) { return providerPayoutInfo_(p); }, "provider.payoutSetup": function (p) { return providerPayoutSetup_(p); }, "inv.payOnline": "invPayOnline_", "commission.mine": function (p) { return commissionMine_(p); }, "commission.statements": function (p) { return commissionStatements_(p); }, "commission.statementPdf": "commissionStatementPdf_", "commission.adminList": "commissionAdminList_", "commission.resend": "commissionResend_", "commission.markPaid": "commissionMarkPaid_", "commission.cancel": "commissionCancel_", "commission.runMonthly": function (p) { return commissionRunMonthly_(p); }, "provider.save": "providerSave_", "provider.submit": function (p) { return providerSubmit_(p); }, "provider.reviewList": "providerReviewList_", "provider.reviewDoc": "providerReviewDoc_", "provider.decide": "providerDecide_", "sub.requestChange": "subRequestChange_", "sub.cardSetup": "subCardSetup_", "template.info": "templateInfo_", "template.preview": "templatePreview_", "sub.signStart": "subSignStart_", "sub.signConfirm": "subSignConfirm_", "sub.cardConfirm": "subCardConfirm_", "sub.cardRemove": "subCardRemove_", "sub.chargeNow": "subChargeNow_", "sub.contractPdf": "subContractPdf_", "assistant.kb": "assistantKb_", "assistant.ask": "assistantAsk_",
   "dash.get": "dashGet_", "pareto.run": "paretoRun_", "pareto.export": "paretoExport_", "report.run": "reportRun_", "report.export": "reportExport_"
 }; }
 function publicRoutes_() { return {
@@ -1487,7 +1488,7 @@ function publicRoutes_() { return {
  */
 var INSTALL_HTML_FILES_ = ["Index", "Styles", "Components", "I18n", "Login", "Dashboard", "Pages", "Scripts", "Assistant"];
 /* Première et dernière fonction de chaque fichier : détecte un fichier absent ET un fichier collé incomplètement. */
-var INSTALL_GS_SENTINELS_ = { Admin: ["assertEditor_", "auditList_"], Legal: ["legalGet_", "legalValues_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], LeaseAgentService: ["laFill_", "inspectionCancel_"], RentAutomationService: ["rentReminderDays_", "rentMailingsOf_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SubscriptionService: ["planOut_", "subscriptionJob_"], SumUpService: ["sumupConf_", "sumupChargeJob_"], TemplateService: ["docTemplateHtml_", "templatePreview_"], SignatureService: ["subSignStart_", "subSignConfirm_"], SignupService: ["luhnOk_", "providerExpiryJob_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
+var INSTALL_GS_SENTINELS_ = { Admin: ["assertEditor_", "auditList_"], Legal: ["legalGet_", "legalValues_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], LeaseAgentService: ["laFill_", "inspectionCancel_"], RentAutomationService: ["rentReminderDays_", "rentMailingsOf_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SubscriptionService: ["planOut_", "subscriptionJob_"], SumUpService: ["sumupConf_", "sumupChargeJob_"], TemplateService: ["docTemplateHtml_", "templatePreview_"], SignatureService: ["subSignStart_", "subSignConfirm_"], SignupService: ["luhnOk_", "providerExpiryJob_"], CommissionService: ["commissionRates_", "commissionRunMonthly_"], StripeService: ["stripeConf_", "stripeWebhookApply_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
 function installCheck_() {
   const g = typeof globalThis !== "undefined" ? globalThis : this;
   const missingGs = Object.keys(INSTALL_GS_SENTINELS_).filter(function (f) { return INSTALL_GS_SENTINELS_[f].some(function (n) { return typeof g[n] !== "function"; }); });
@@ -1649,6 +1650,267 @@ function metaGet_(p) {
 }
 
 /* ======================================================================
+ * CommissionService.gs
+ * ====================================================================== */
+/**
+ * Commissions de mise en relation (artisans référencés par la plateforme ECO SYNERGY).
+ *
+ * Taux (réglables par le super administrateur, Paramètres de la plateforme) :
+ *  - commission.contractorRate : commission à la charge de l'ARTISAN, en % du HT de sa facture (15 % par défaut) ;
+ *  - commission.clientRate     : commission à la charge du COMMANDITAIRE (propriétaire ou agence), en % du HT (6 % par défaut) ;
+ *  - commission.vatRate        : TVA appliquée aux commissions.
+ * Les deux commissions rémunèrent le service de mise en relation et reviennent entièrement à la plateforme.
+ *
+ * Deux façons de régler l'artisan :
+ *  1. Paiement par la plateforme (Stripe Connect, France) : le client paie en ligne ; Stripe verse directement l'artisan et
+ *     retient la commission artisan pour la plateforme (Stripe est l'établissement de paiement agréé : ECO SYNERGY ne détient pas les fonds).
+ *  2. Paiement direct (virement, chèque) ou en espèces : l'artisan reçoit la totalité ; dès que le commanditaire marque la facture
+ *     « réglée », la commission artisan devient due et un lien de paiement SumUp lui est envoyé (relances à 7, 14 et 21 jours).
+ * Dans les deux cas, la commission du commanditaire s'ajoute à son récapitulatif MENSUEL, envoyé le 1er du mois (PDF) et prélevé sur
+ * la carte enregistrée pour son abonnement (à défaut : lien de paiement SumUp).
+ */
+var COMMISSION_REMINDER_DAYS_ = 7, COMMISSION_MAX_REMINDERS_ = 3;
+
+function commissionRates_() {
+  const n = function (k, d) { const v = Number(getSetting_(k)); return isFinite(v) && v >= 0 ? v : d; };
+  return { artisan: n("commission.contractorRate", 15), client: n("commission.clientRate", 6), vat: n("commission.vatRate", 20) };
+}
+function feeOut_(f) {
+  const art = dbGet_("Artisans", f.artisanId) || {}, org = dbGet_("Organizations", f.organizationId) || {}, inv = dbGet_("Invoices", f.invoiceId) || {}, prop = dbGet_("Properties", f.propertyId) || {};
+  return { feeId: f.feeId, kind: f.kind, status: f.status, payMode: f.payMode, artisanId: f.artisanId, artisanName: art.name || "", organizationId: f.organizationId, organizationName: org.name || "",
+    invoiceId: f.invoiceId, invoiceNumber: inv.invoiceNumber || "", propertyName: prop.name || "", baseHT: f.baseHT, rate: f.rate, amount: f.amount, vatAmount: f.vatAmount, total: f.total,
+    currency: f.currency || cur_(), payUrl: f.status === "LINK_SENT" ? f.payUrl || "" : "", createdAt: f.createdAt, paidAt: f.paidAt || "", period: f.period || "", statementId: f.statementId || "", reminders: Number(f.reminders) || 0 };
+}
+function statementOut_(s) {
+  return { statementId: s.statementId, organizationId: s.organizationId, organizationName: ((dbGet_("Organizations", s.organizationId) || {}).name) || "", period: s.period, count: s.count,
+    totalHT: s.totalHT, vatAmount: s.vatAmount, total: s.total, currency: s.currency || cur_(), status: s.status, payUrl: s.status === "LINK_SENT" ? s.payUrl || "" : "", paidAt: s.paidAt || "",
+    lastError: s.lastError || "", createdAt: s.createdAt };
+}
+
+/** Facture d'un artisan de la plateforme soldée : création des deux commissions (une seule fois par facture). */
+function commissionOnInvoicePaid_(invoiceId) {
+  const v = dbGet_("Invoices", invoiceId); if (!v || v.status !== "PAID") return null;
+  const art = dbGet_("Artisans", v.artisanId); if (!art || !isPlatformContractor_(art)) return null;
+  if (dbAll_("PlatformFees").some(function (f) { return String(f.invoiceId) === String(invoiceId) && f.status !== "CANCELLED"; })) return null;
+  const pays = dbAll_("Payments").filter(function (z) { return z.refType === "INVOICE" && String(z.refId) === String(invoiceId) && z.status === "RECORDED"; });
+  const mode = pays.some(function (z) { return z.method === "STRIPE"; }) ? "PLATFORM" : pays.some(function (z) { return z.method === "CASH"; }) ? "CASH" : "DIRECT";
+  const R = commissionRates_(), w = dbGet_("WorkOrders", v.workOrderId) || { createdBy: "" }, prop = dbGet_("Properties", v.propertyId) || {};
+  const client = commissionBeneficiary_(w, prop), ht = round2_(num_(v.amountHT)), period = todayStr_().slice(0, 7);
+  const base = { invoiceId: v.invoiceId, workOrderId: v.workOrderId, artisanId: v.artisanId, propertyId: v.propertyId, organizationId: client, baseHT: ht, currency: v.currency || cur_(), payMode: mode, createdAt: nowIso_(), period: period };
+  const aAmt = round2_(num_(v.commissionAmount)), aVat = round2_(num_(v.commissionVatAmount));
+  const fa = dbInsert_("PlatformFees", Object.assign({}, base, { kind: "ARTISAN", rate: num_(v.commissionRate), amount: aAmt, vatAmount: aVat, total: round2_(aAmt + aVat),
+    status: mode === "PLATFORM" ? "DEDUCTED" : "DUE", paidAt: mode === "PLATFORM" ? nowIso_() : "", reminders: 0 }));
+  const cAmt = round2_(ht * R.client / 100), cVat = round2_(cAmt * R.vat / 100);
+  if (cAmt > 0) dbInsert_("PlatformFees", Object.assign({}, base, { kind: "CLIENT", rate: R.client, amount: cAmt, vatAmount: cVat, total: round2_(cAmt + cVat), status: "PENDING", reminders: 0 }));
+  audit_("COMMISSION_CREATED", "Invoice", v.invoiceId, v.organizationId, { mode: mode, artisan: fa.total, client: round2_(cAmt + cVat) });
+  if (fa.status === "DUE") { try { commissionSendArtisanLink_(fa, false); } catch (e) { console.error("Lien de commission : " + e.message); } }
+  return { mode: mode };
+}
+
+/** Lien de paiement SumUp (page de paiement hébergée par SumUp). Renvoie { id, url } ou lève une erreur lisible. */
+function sumupPayLink_(ref, localAmount, description) {
+  assert_(sumupEnabled_(), "SumUp n'est pas configuré : lien de paiement impossible.", "PAYMENT");
+  const c = sumupConf_(), amt = sumupAmount_(localAmount);
+  const co = sumupCall_("post", "/checkouts", { checkout_reference: ref, amount: amt.amount, currency: amt.currency, merchant_code: c.merchant, description: String(description).slice(0, 120),
+    hosted_checkout: { enabled: true }, redirect_url: safeAppUrl_() || undefined }).body;
+  const url = co.hosted_checkout_url || (co.hosted_checkout && co.hosted_checkout.url) || "";
+  assert_(co.id && url, "SumUp n'a pas renvoyé de lien de paiement (option « Hosted Checkout » à activer sur le compte SumUp).", "PAYMENT");
+  return { id: co.id, url: url, amount: amt.amount, currency: amt.currency };
+}
+
+/** Envoie (ou renvoie) à l'artisan le lien de paiement de sa commission. */
+function commissionSendArtisanLink_(f, reminder) {
+  const art = dbGet_("Artisans", f.artisanId) || {}, inv = dbGet_("Invoices", f.invoiceId) || {};
+  let link = null, err = "";
+  try { link = sumupPayLink_("COM-" + String(f.feeId).slice(-20) + "-" + ((Number(f.reminders) || 0) + 1), f.total, "Commission ImmoPilot - facture " + (inv.invoiceNumber || "")); }
+  catch (e) { err = e.message; }
+  dbUpdate_("PlatformFees", f.feeId, link ? { status: "LINK_SENT", checkoutId: link.id, payUrl: link.url, linkSentAt: nowIso_(), reminders: reminder ? (Number(f.reminders) || 0) + 1 : Number(f.reminders) || 0, note: "", updatedAt: nowIso_() }
+    : { note: err.slice(0, 300), updatedAt: nowIso_() });
+  if (!art.email) return { ok: !!link };
+  const body = "Bonjour,\n\n" + (reminder ? "Rappel : " : "") + "votre client a réglé la facture n° " + (inv.invoiceNumber || "") + " (" + round2_(num_(inv.amountTTC)) + " " + f.currency + " TTC) en dehors de la plateforme." +
+    "\n\nCommission ImmoPilot de mise en relation (" + f.rate + " % du HT de " + f.baseHT + " " + f.currency + ") : " + f.amount + " " + f.currency + " HT + TVA " + f.vatAmount + " = " + f.total + " " + f.currency + "." +
+    (link ? "\n\nRéglez-la en ligne, par carte (paiement sécurisé SumUp) :\n" + link.url : "\n\nLe lien de paiement vous sera envoyé très prochainement.") +
+    "\n\nMerci de la régler sous " + COMMISSION_REMINDER_DAYS_ + " jours. Au-delà de trois rappels sans règlement, votre référencement peut être suspendu (conditions de référencement).\n\nImmoPilot";
+  sendMailSafe_(art.email, (reminder ? "Rappel — " : "") + "Commission ImmoPilot à régler : " + f.total + " " + f.currency, body, "commission:" + f.feeId + ":" + ((Number(f.reminders) || 0) + (reminder ? 1 : 0)));
+  if (art.userId) notify_({ eventKey: "commission-due:" + f.feeId + ":" + (Number(f.reminders) || 0), userIds: [art.userId], type: "COMMISSION_DUE", organizationId: "", email: false,
+    title: "Commission à régler : " + f.total + " " + f.currency, body: "Facture " + (inv.invoiceNumber || "") + (link ? " — lien de paiement envoyé par e-mail." : ""), link: "#referencing" });
+  return { ok: !!link, error: err };
+}
+
+/** Paiements en ligne : relit chez SumUp les liens en attente (commissions artisans et récapitulatifs mensuels). */
+function commissionCheckPayments_() {
+  if (!sumupEnabled_()) return { skipped: "SumUp non configuré" };
+  let paid = 0;
+  const check = function (id) { try { const co = sumupCall_("get", "/checkouts/" + encodeURIComponent(id), null, [404]).body; return String(co.status) === "PAID" ? co : null; } catch (e) { return null; } };
+  dbAll_("PlatformFees").filter(function (f) { return f.status === "LINK_SENT" && f.checkoutId; }).forEach(function (f) {
+    const co = check(f.checkoutId); if (!co) return;
+    dbUpdate_("PlatformFees", f.feeId, { status: "PAID", paidAt: nowIso_(), paidRef: "SumUp " + (co.transaction_code || co.id), updatedAt: nowIso_() }); paid++;
+    audit_("COMMISSION_PAID", "PlatformFee", f.feeId, "", { total: f.total, via: "SUMUP_LINK" });
+  });
+  dbAll_("CommissionStatements").filter(function (s) { return s.status === "LINK_SENT" && s.checkoutId; }).forEach(function (s) {
+    const co = check(s.checkoutId); if (!co) return;
+    commissionStatementPaid_(s, "SumUp " + (co.transaction_code || co.id)); paid++;
+  });
+  return { paid: paid };
+}
+function commissionStatementPaid_(s, ref) {
+  dbUpdate_("CommissionStatements", s.statementId, { status: "PAID", paidAt: nowIso_(), paidRef: ref, lastError: "", updatedAt: nowIso_() });
+  dbAll_("PlatformFees").filter(function (f) { return String(f.statementId) === String(s.statementId); }).forEach(function (f) { dbUpdate_("PlatformFees", f.feeId, { status: "PAID", paidAt: nowIso_(), paidRef: ref, updatedAt: nowIso_() }); });
+  audit_("COMMISSION_STATEMENT_PAID", "CommissionStatement", s.statementId, s.organizationId, { total: s.total, ref: ref });
+}
+
+/** Chaque jour : relances des commissions d'artisans impayées, et récapitulatifs mensuels des commanditaires (à partir du 1er). */
+function commissionDailyJob_() {
+  const out = { reminded: 0, statements: 0 }, now = Date.now();
+  dbAll_("PlatformFees").filter(function (f) { return f.kind === "ARTISAN" && (f.status === "LINK_SENT" || f.status === "DUE"); }).forEach(function (f) {
+    const last = parseTs_(f.linkSentAt || f.createdAt);
+    if (!last || now - last.getTime() < COMMISSION_REMINDER_DAYS_ * 86400000) return;
+    if ((Number(f.reminders) || 0) >= COMMISSION_MAX_REMINDERS_) {
+      try { notify_({ eventKey: "commission-overdue:" + f.feeId, userIds: superAdminIds_(), type: "COMMISSION_DUE", organizationId: "", title: "Commission impayée après 3 rappels",
+        body: ((dbGet_("Artisans", f.artisanId) || {}).name || "") + " · " + f.total + " " + (f.currency || cur_()), link: "#commissions" }); } catch (e) { /* sans gravité */ }
+      return;
+    }
+    try { commissionSendArtisanLink_(f, true); out.reminded++; } catch (e) { console.error(e.message); }
+  });
+  try { out.statements = commissionMonthly_(false).created; } catch (e) { console.error("Récapitulatifs : " + e.message); }
+  return out;
+}
+function prevPeriod_(today) { const d = new Date(today + "T12:00:00Z"); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); }
+
+/** Récapitulatifs du mois précédent (ou de toutes les commissions en attente si force) : un par commanditaire, PDF, prélèvement. */
+function commissionMonthly_(force) {
+  const period = prevPeriod_(todayStr_());
+  const pending = dbAll_("PlatformFees").filter(function (f) { return f.kind === "CLIENT" && f.status === "PENDING" && (force || String(f.period) <= period); });
+  const byOrg = {};
+  pending.forEach(function (f) { (byOrg[String(f.organizationId)] = byOrg[String(f.organizationId)] || []).push(f); });
+  let created = 0;
+  Object.keys(byOrg).forEach(function (orgId) {
+    const fees = byOrg[orgId];
+    const s = withLock_(function () {
+      const fresh = fees.filter(function (f) { const x = dbGet_("PlatformFees", f.feeId); return x && x.status === "PENDING"; });
+      if (!fresh.length) return null;
+      const totalHT = round2_(sumBy_(fresh, function (f) { return f.amount; })), vat = round2_(sumBy_(fresh, function (f) { return f.vatAmount; }));
+      const st = dbInsert_("CommissionStatements", { organizationId: orgId, period: force ? todayStr_().slice(0, 7) : period, count: fresh.length, totalHT: totalHT, vatAmount: vat, total: round2_(totalHT + vat),
+        currency: fresh[0].currency || cur_(), status: "DUE", createdAt: nowIso_(), attempts: 0 });
+      fresh.forEach(function (f) { dbUpdate_("PlatformFees", f.feeId, { status: "BILLED", statementId: st.statementId, updatedAt: nowIso_() }); });
+      return st;
+    });
+    if (!s) return;
+    created++;
+    try { commissionCollectStatement_(s, true); } catch (e) { console.error("Récapitulatif " + s.statementId + " : " + e.message); }
+  });
+  return { created: created, period: period };
+}
+
+/** Récapitulatif PDF : missions de la période, base HT, taux, commission. */
+function commissionStatementHtml_(s) {
+  const org = dbGet_("Organizations", s.organizationId) || {}, v = legalValues_();
+  const fees = dbAll_("PlatformFees").filter(function (f) { return String(f.statementId) === String(s.statementId); });
+  const rows = fees.map(function (f) {
+    const inv = dbGet_("Invoices", f.invoiceId) || {}, wo = dbGet_("WorkOrders", f.workOrderId) || {}, prop = dbGet_("Properties", f.propertyId) || {}, art = dbGet_("Artisans", f.artisanId) || {};
+    return [pdfDate_(inv.paidAt || f.createdAt), prop.name || "", wo.title || "", art.name || "", inv.invoiceNumber || "", f.baseHT + " " + f.currency, f.rate + " %", f.amount + " " + f.currency];
+  });
+  const inner = "<table class='head'><tr><td><b>" + escapeHtml_(v.publisherName || "ECO SYNERGY") + "</b><br><span class='muted'>" + escapeHtml_(v.address || "") + "<br>" + escapeHtml_(v.registration || "") + (v.vatNumber ? "<br>TVA " + escapeHtml_(v.vatNumber) : "") + "</span></td>" +
+    "<td class='right'><b>" + escapeHtml_(org.name || "") + "</b><br><span class='muted'>" + escapeHtml_(org.address || "") + "<br>" + escapeHtml_(org.billingEmail || "") + "</span></td></tr></table>" +
+    "<h2>Missions de la période " + escapeHtml_(s.period) + "</h2>" + htmlTable_(["Réglée le", "Bien", "Mission", "Artisan", "Facture", "Base HT", "Taux", "Commission HT"], rows) +
+    "<table style='width:45%;margin:12px 0 0 auto'><tr><th>Total HT</th><td class='right'>" + s.totalHT + " " + s.currency + "</td></tr><tr><th>TVA</th><td class='right'>" + s.vatAmount + " " + s.currency + "</td></tr>" +
+    "<tr><th>Total TTC</th><td class='right'><b>" + s.total + " " + s.currency + "</b></td></tr></table>" +
+    "<div class='box'>Commission de mise en relation due par le commanditaire sur les missions réalisées par les artisans référencés sur ImmoPilot et réglées au cours de la période " +
+    "(conditions générales, article « Mise en relation »). Règlement : prélèvement sur la carte enregistrée pour l'abonnement, ou lien de paiement en ligne.</div>";
+  return pdfShell_("Récapitulatif mensuel des commissions", inner, { subtitle: org.name + " — " + s.period, ref: "COM-" + String(s.period).replace("-", "") + "-" + String(s.statementId).slice(-6).toUpperCase() });
+}
+function commissionStatementBlob_(s) { return htmlToPdf_(commissionStatementHtml_(s), "Commissions_" + s.period + "_" + String((dbGet_("Organizations", s.organizationId) || {}).name || "client").replace(/[^\wÀ-ÿ]+/g, "_")); }
+
+/** Prélève le récapitulatif sur la carte de l'abonnement ; sinon envoie un lien de paiement. Envoie le PDF par e-mail. */
+function commissionCollectStatement_(s, sendMail) {
+  s = dbGet_("CommissionStatements", s.statementId);
+  if (!s || s.status === "PAID") return { ok: true, already: true };
+  const org = dbGet_("Organizations", s.organizationId) || {}, card = sumupEnabled_() ? sumupCardOf_(s.organizationId) : null;
+  let charged = false, link = null, err = "";
+  const ref = "CST-" + String(s.statementId).slice(-20) + "-" + ((Number(s.attempts) || 0) + 1);
+  if (card) {
+    try {
+      const c = sumupConf_(), amt = sumupAmount_(s.total);
+      const co = sumupCall_("post", "/checkouts", { checkout_reference: ref, amount: amt.amount, currency: amt.currency, merchant_code: c.merchant, customer_id: card.customerId, description: ("ImmoPilot : commissions " + s.period).slice(0, 120) }).body;
+      const res = sumupCall_("put", "/checkouts/" + encodeURIComponent(co.id), { payment_type: "card", token: card.token, customer_id: card.customerId }).body;
+      if (String(res.status) === "PAID") charged = true; else err = String(res.message || res.status || "refusé");
+      if (charged) commissionStatementPaid_(s, "SumUp " + (((res.transactions || [])[0] || {}).transaction_code || co.id));
+    } catch (e) { err = e.message; }
+  }
+  if (!charged) {
+    try { link = sumupPayLink_(ref + "L", s.total, "ImmoPilot : commissions " + s.period); } catch (e) { err = err || e.message; }
+    dbUpdate_("CommissionStatements", s.statementId, { status: link ? "LINK_SENT" : "DUE", checkoutId: link ? link.id : "", payUrl: link ? link.url : "", attempts: (Number(s.attempts) || 0) + 1, lastError: String(err || "").slice(0, 300), updatedAt: nowIso_() });
+  }
+  if (sendMail && org.billingEmail) {
+    const body = "Bonjour,\n\nVeuillez trouver ci-joint votre récapitulatif des commissions de mise en relation ImmoPilot pour " + s.period + " : " + s.count + " mission(s), " + s.total + " " + s.currency + " TTC." +
+      (charged ? "\n\nLe montant a été prélevé sur votre carte " + card.label + "." : link ? "\n\nRéglez-le en ligne (paiement sécurisé SumUp) :\n" + link.url : "\n\nLes modalités de règlement vous seront communiquées.") + "\n\nImmoPilot";
+    let blob = null; try { blob = commissionStatementBlob_(dbGet_("CommissionStatements", s.statementId)); } catch (e) { console.error(e.message); }
+    sendMailSafe_(org.billingEmail, "Récapitulatif des commissions ImmoPilot — " + s.period, body, "statement:" + s.statementId + ":" + (Number(s.attempts) || 0), s.organizationId, blob ? { attachments: [blob] } : {});
+  }
+  return { ok: charged || !!link, charged: charged, link: link ? link.url : "", error: err };
+}
+
+/* ------------------------------ Routes ------------------------------ */
+/** Artisan : ses commissions. */
+function commissionMine_(p) {
+  const c = myProviderRow_(p) || dbAll_("Artisans").find(function (a) { return String(a.userId) === p.userId && isPlatformContractor_(a); });
+  if (!c) return { fees: [], rates: commissionRates_() };
+  return { fees: dbAll_("PlatformFees").filter(function (f) { return f.kind === "ARTISAN" && String(f.artisanId) === String(c.artisanId); })
+    .sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); }).map(feeOut_), rates: commissionRates_() };
+}
+/** Commanditaire : ses récapitulatifs mensuels et les commissions du mois en cours. */
+function commissionStatements_(p) {
+  const orgIds = memberOrgIds_(p).filter(function (o) { return hasOrgCap_(p, o, "settings.manage") || hasOrgCap_(p, o, "finance.view"); });
+  return { rates: commissionRates_(),
+    statements: dbAll_("CommissionStatements").filter(function (s) { return orgIds.indexOf(String(s.organizationId)) >= 0; }).sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); }).map(statementOut_),
+    pending: dbAll_("PlatformFees").filter(function (f) { return f.kind === "CLIENT" && f.status === "PENDING" && orgIds.indexOf(String(f.organizationId)) >= 0; }).map(feeOut_) };
+}
+function commissionStatementPdf_(p, a) {
+  const s = dbGet_("CommissionStatements", safeText_(a.statementId, 120));
+  assert_(s, "Récapitulatif introuvable.");
+  if (!p.isSuper && !hasOrgCap_(p, s.organizationId, "settings.manage") && !hasOrgCap_(p, s.organizationId, "finance.view")) forbid_("Accès refusé.");
+  const blob = commissionStatementBlob_(s);
+  return { fileName: blob.getName(), mimeType: "application/pdf", base64: Utilities.base64Encode(blob.getBytes()) };
+}
+/** Super administrateur : toutes les commissions. */
+function commissionAdminList_(p, a) {
+  requireSuper_(p); a = a || {};
+  const fees = dbAll_("PlatformFees").filter(function (f) { return (!a.kind || f.kind === a.kind) && (!a.status || String(a.status).split(",").indexOf(f.status) >= 0); })
+    .sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); });
+  const all = dbAll_("PlatformFees").filter(function (f) { return f.status !== "CANCELLED"; });
+  const sum = function (fn) { return round2_(sumBy_(all.filter(fn), function (f) { return f.total; })); };
+  return { fees: fees.slice(0, 500).map(feeOut_), statements: dbAll_("CommissionStatements").sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); }).slice(0, 300).map(statementOut_),
+    totals: { earned: sum(function (f) { return ["PAID", "DEDUCTED"].indexOf(f.status) >= 0; }), artisanDue: sum(function (f) { return f.kind === "ARTISAN" && ["DUE", "LINK_SENT"].indexOf(f.status) >= 0; }),
+      clientPending: sum(function (f) { return f.kind === "CLIENT" && ["PENDING", "BILLED"].indexOf(f.status) >= 0; }) }, rates: commissionRates_(), sumup: sumupEnabled_(), stripe: stripeEnabled_() };
+}
+function commissionResend_(p, a) {
+  requireSuper_(p);
+  if (a.statementId) { const s = dbGet_("CommissionStatements", safeText_(a.statementId, 120)); assert_(s && s.status !== "PAID", "Récapitulatif introuvable ou déjà réglé."); return commissionCollectStatement_(s, true); }
+  const f = dbGet_("PlatformFees", safeText_(a.feeId, 120));
+  assert_(f && f.kind === "ARTISAN" && ["DUE", "LINK_SENT"].indexOf(f.status) >= 0, "Commission introuvable ou déjà réglée.");
+  return commissionSendArtisanLink_(f, true);
+}
+function commissionMarkPaid_(p, a) {
+  requireSuper_(p);
+  const ref = reqText_(a.reference, "Référence du règlement (virement, espèces…)", 2, 120);
+  if (a.statementId) { const s = dbGet_("CommissionStatements", safeText_(a.statementId, 120)); assert_(s && s.status !== "PAID", "Récapitulatif introuvable ou déjà réglé."); commissionStatementPaid_(s, ref); return { ok: true }; }
+  const f = dbGet_("PlatformFees", safeText_(a.feeId, 120));
+  assert_(f && ["DUE", "LINK_SENT", "PENDING"].indexOf(f.status) >= 0, "Commission introuvable ou déjà réglée.");
+  dbUpdate_("PlatformFees", f.feeId, { status: "PAID", paidAt: nowIso_(), paidRef: ref, updatedAt: nowIso_() });
+  audit_("COMMISSION_PAID", "PlatformFee", f.feeId, "", { total: f.total, via: "MANUAL", ref: ref });
+  return { ok: true };
+}
+function commissionCancel_(p, a) {
+  requireSuper_(p);
+  const f = dbGet_("PlatformFees", safeText_(a.feeId, 120));
+  assert_(f && ["DUE", "LINK_SENT", "PENDING"].indexOf(f.status) >= 0, "Commission introuvable ou déjà réglée.");
+  dbUpdate_("PlatformFees", f.feeId, { status: "CANCELLED", note: reqText_(a.reason, "Motif", 3, 300), updatedAt: nowIso_() });
+  audit_("COMMISSION_CANCELLED", "PlatformFee", f.feeId, "", {});
+  return { ok: true };
+}
+function commissionRunMonthly_(p) { requireSuper_(p); return commissionMonthly_(true); }
+
+/* ======================================================================
  * Compat.gs
  * ====================================================================== */
 /**
@@ -1674,7 +1936,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "2ebd595c2578";
+var IMMO_BUILD_ = "5125766c0882";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -1713,7 +1975,7 @@ var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
   VERSION: "2.6.0",
-  SCHEMA_VERSION: 15,
+  SCHEMA_VERSION: 16,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -1787,6 +2049,7 @@ var DEFAULT_SETTINGS = Object.freeze({
   "cleaning.acceptanceMinutes": 120,
   "cleaning.requirePhotos": true,
   "commission.contractorRate": 15,
+  "commission.clientRate": 6,
   "commission.vatRate": 20,
   "finance.vatRate": 20,
   "quote.agencyApprovalLimit": 0,
@@ -1827,7 +2090,7 @@ var DEFAULT_SETTINGS = Object.freeze({
   "legal.publisherName": "ECO SYNERGY", "legal.legalForm": "société par actions simplifiée (SAS) au capital de 500 €", "legal.address": "16 chemin de Garrabot, 31770 Colomiers, France",
   "legal.registration": "immatriculée au RCS de Toulouse sous le n° 932 443 005 (SIRET 932 443 005 00016)", "legal.vatNumber": "FR56932443005", "legal.director": "la société RENEWCO, présidente d'ECO SYNERGY",
   "legal.contactEmail": "ecosynergy31@gmail.com", "legal.phone": "+33 7 49 98 09 18", "legal.hostName": "", "legal.hostAddress": "", "legal.hostPhone": "", "legal.mediator": "",
-  "legal.dataAuthorityRef": "", "legal.dpoEmail": ""
+  "legal.dataAuthorityRef": "", "legal.dpoEmail": "", "legal.platformInsurance": ""
 });
 
 var DEFAULT_PLANS = Object.freeze([
@@ -1853,6 +2116,10 @@ var TABLES_SRC = {
   PlatformSettings: { pk: "settingKey", idp: "set", req: "settingKey", cols: "settingKey,settingValue,updatedAt#t,updatedBy" },
   Settings: { pk: "settingId", idp: "stg", org: "organizationId", req: "organizationId,settingKey", cols: "settingId,organizationId,settingKey,settingValue,updatedAt#t,updatedBy" },
   Sessions: { pk: "sessionId", idp: "ses", req: "userId,tokenHash", cols: "sessionId,userId,tokenHash,createdAt#t,expiresAt#t,lastSeenAt#t,revokedAt#t,userAgent,impersonatorUserId,mode" },
+  PlatformFees: { pk: "feeId", idp: "fee", org: "organizationId", req: "kind,invoiceId", enums: { kind: ["ARTISAN", "CLIENT"], status: ["PENDING", "BILLED", "DUE", "LINK_SENT", "PAID", "DEDUCTED", "CANCELLED"] },
+    cols: "feeId,kind,organizationId,propertyId,invoiceId,workOrderId,artisanId,baseHT#n,rate#n,amount#n,vatAmount#n,total#n,currency,status,payMode,createdAt#t|checkoutId,payUrl,linkSentAt#t,reminders#n,paidAt#t,paidRef,statementId,period,note,updatedAt#t" },
+  CommissionStatements: { pk: "statementId", idp: "cst", org: "organizationId", req: "organizationId,period", enums: { status: ["DUE", "LINK_SENT", "PAID", "CANCELLED"] },
+    cols: "statementId,organizationId,period,count#n,totalHT#n,vatAmount#n,total#n,currency,status,createdAt#t|checkoutId,payUrl,paidAt#t,paidRef,attempts#n,lastError,updatedAt#t" },
   SignupRequests: { pk: "requestId", idp: "sgn", req: "email,kind", enums: { status: ["PENDING", "DONE", "FAILED", "REPLACED", "EXPIRED"] },
     cols: "requestId,kind,email,codeHash,attempts#n,expiresAt#t,payloadJson#j,status,createdAt#t,usedAt#t,ip,sends#n,lastSentAt#t" },
   PasswordResets: { pk: "resetId", idp: "rst", req: "userId,tokenHash", cols: "resetId,userId,tokenHash,createdAt#t,expiresAt#t,usedAt#t,purpose" },
@@ -1896,7 +2163,7 @@ var TABLES_SRC = {
     cols: "incidentId,organizationId,propertyId,reservationId,category,priority,description,status,photoFileIdsJson#j,createdAt#t,createdBy,updatedAt#t,updatedBy|title,severity,reportedByUserId,assignedToUserId,contractorId,estimatedCost#n,finalCost#n,resolvedAt#t,closedAt#t,missionId,source,alertedAt#t,legacyOrigin" },
   IncidentComments: { pk: "commentId", idp: "icm", org: "organizationId", req: "incidentId,body", cols: "commentId,organizationId,incidentId,authorEmail,body,createdAt#t,visibility" },
   Artisans: { pk: "artisanId", idp: "art", org: "organizationId", req: "name,email", enums: { status: ["ACTIVE", "INACTIVE", "BLOCKED", "PENDING", "REJECTED"] },
-    cols: "artisanId,organizationId,name,email,phone,categoriesJson#j,zonesJson#j,status,createdAt#t,createdBy|userId,notes,legalName,taxId,commissionRate#n,billingInfo,updatedAt#t,businessType,legalJson#j,insuranceJson#j,reviewJson#j,submittedAt#t,verifiedAt#t,verifiedBy,rejectReason,source" },
+    cols: "artisanId,organizationId,name,email,phone,categoriesJson#j,zonesJson#j,status,createdAt#t,createdBy|userId,notes,legalName,taxId,commissionRate#n,billingInfo,updatedAt#t,businessType,legalJson#j,insuranceJson#j,reviewJson#j,submittedAt#t,verifiedAt#t,verifiedBy,rejectReason,source,stripeAccountId,stripeReady#b" },
   Quotes: { pk: "quoteId", idp: "quo", org: "organizationId", req: "propertyId,incidentId,artisanId",
     enums: { status: ["REQUESTED", "PENDING", "APPROVED", "REJECTED", "DECLINED", "EXPIRED", "CANCELLED"] },
     cols: "quoteId,organizationId,propertyId,incidentId,artisanId,status,currency,totalAmount#n,validUntil#d,linesJson#j,decisionAt#t,decisionBy,decisionNote,createdAt#t,createdBy|requestNote,requestedAt#t,requestedBy,submittedAt#t,amountHT#n,vatRate#n,amountTTC#n,estimatedDays#n,commissionRateEst#n,commissionEstimate#n" },
@@ -3753,7 +4020,7 @@ function pdfShell_(title, inner, opts) {
 }
 /** Date AAAA-MM-JJ (ou horodatage) au format JJ/MM/AAAA. */
 function pdfDate_(s) { const v = String(s || "").slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v.slice(8, 10) + "/" + v.slice(5, 7) + "/" + v.slice(0, 4) : (v || "—"); }
-var PDF_PAY_METHODS_ = { TRANSFER: "Virement", CASH: "Espèces", CARD: "Carte", CHEQUE: "Chèque", PLATFORM: "Plateforme de réservation", OTHER: "Autre" };
+var PDF_PAY_METHODS_ = { TRANSFER: "Virement", CASH: "Espèces", CARD: "Carte", CHEQUE: "Chèque", PLATFORM: "Plateforme de réservation", STRIPE: "Paiement en ligne ImmoPilot", OTHER: "Autre" };
 /** Image d'un document (photo) au format data: pour un PDF. Les fichiers de plus de 1,5 Mo ne sont pas intégrés (le PDF resterait trop lourd). */
 function pdfImageData_(documentId) {
   const d = dbGet_("Documents", documentId);
@@ -3804,7 +4071,7 @@ function purgeExpiredDocuments_() {
  *  - Prix moyen par nuit (ADR) = revenu d'hébergement proratisé / nuits réservées ; RevPAR = revenu d'hébergement / nuits disponibles.
  * Aucun montant n'est marqué encaissé sans paiement explicitement enregistré.
  */
-var PAY_METHODS_ = ["CASH", "TRANSFER", "CARD", "CHEQUE", "PLATFORM", "OTHER"];
+var PAY_METHODS_ = ["CASH", "TRANSFER", "CARD", "CHEQUE", "PLATFORM", "STRIPE", "OTHER"];
 var REVENUE_STATUSES_ = ["CONFIRMED", "IN_PROGRESS", "COMPLETED"];
 
 function finScopeProps_(p, f) {
@@ -4584,10 +4851,13 @@ function invApprove_(p, a) {
     assert_(v.status === "SUBMITTED", "Facture déjà traitée (statut " + v.status + ").");
     assert_(!bool_(v.commissionLocked), "Commission déjà calculée.");
     const w = dbGet_("WorkOrders", v.workOrderId);
-    const rate = v.commissionRate !== null && v.commissionRate !== "" ? Number(v.commissionRate) : resolveCommissionRate_(undefined, dbGet_("Artisans", v.artisanId), v.organizationId);
-    const comVat = Number(getSetting_("commission.vatRate", v.organizationId));
+    const artisan = dbGet_("Artisans", v.artisanId), pf = !!artisan && isPlatformContractor_(artisan);
+    const rate = !pf && v.commissionRate !== null && v.commissionRate !== "" ? Number(v.commissionRate) : resolveCommissionRate_(undefined, artisan, v.organizationId);
+    const comVat = Number(pf ? getSetting_("commission.vatRate") : getSetting_("commission.vatRate", v.organizationId));
     const split = computeInvoiceSplit_(v.amountHT, v.vatRate, rate, isFinite(comVat) ? comVat : 20);
-    const beneficiary = commissionBeneficiary_(w || { createdBy: "" }, x.prop);
+    // Artisan de la plateforme : le commanditaire règle la totalité de la facture à l'artisan ; la commission est due par l'artisan à la plateforme.
+    if (pf) split.netToContractor = split.amountTTC;
+    const beneficiary = pf ? platformOrgId_() : commissionBeneficiary_(w || { createdBy: "" }, x.prop);
     dbUpdate_("Invoices", v.invoiceId, { status: "APPROVED", approvedAt: nowIso_(), approvedBy: p.email, commissionRate: rate, commissionBase: split.commissionBase, commissionAmount: split.commissionAmount,
       commissionVatRate: isFinite(comVat) ? comVat : 20, commissionVatAmount: split.commissionVatAmount, commissionBeneficiaryOrgId: beneficiary, commissionLocked: true, netToContractor: split.netToContractor });
     dbInsertUnique_("Expenses", "uniqueKey", "invoice:" + v.invoiceId, { organizationId: v.organizationId, propertyId: v.propertyId, category: "MAINTENANCE", description: "Facture " + v.invoiceNumber + " — intervention " + v.workOrderId,
@@ -4598,7 +4868,8 @@ function invApprove_(p, a) {
     audit_("INVOICE_APPROVED", "Invoice", v.invoiceId, v.organizationId, { amountTTC: v.amountTTC, commissionRate: rate, commissionAmount: split.commissionAmount, beneficiary: beneficiary });
     const art = dbGet_("Artisans", v.artisanId);
     if (art && art.userId) notify_({ eventKey: "invoice-approved:" + v.invoiceId, userIds: [art.userId], type: "INVOICE_APPROVED", organizationId: v.organizationId, title: "Facture approuvée : " + v.invoiceNumber,
-      body: "Net à percevoir : " + split.netToContractor + " MAD (commission " + rate + " % : " + split.commissionAmount + " MAD HT).", link: "#invoices" });
+      body: pf ? "Montant à recevoir du client : " + split.amountTTC + " " + cur_() + ". Commission ImmoPilot (" + rate + " %) : " + round2_(split.commissionAmount + split.commissionVatAmount) + " " + cur_() + " TTC, prélevée si le client paie par la plateforme, sinon réclamée par lien de paiement une fois la facture réglée."
+        : "Net à percevoir : " + split.netToContractor + " " + cur_() + " (commission " + rate + " % : " + split.commissionAmount + " " + cur_() + " HT).", link: "#invoices" });
     return Object.assign({ ok: true, status: "APPROVED", commissionRate: rate, beneficiaryOrgId: beneficiary }, split);
   });
 }
@@ -4634,6 +4905,14 @@ function invGet_(p, a) {
   o.canManage = x.manage; o.isMine = x.mine;
   o.payments = dbAll_("Payments").filter(function (z) { return z.refType === "INVOICE" && String(z.refId) === String(x.v.invoiceId); }).map(function (z) { return { paymentId: z.paymentId, amount: z.amount, paidAt: z.paidAt, method: z.method, reference: z.reference, status: z.status }; });
   o.history = auditHistory_("Invoice", x.v.invoiceId, 20);
+  const art = dbGet_("Artisans", x.v.artisanId);
+  o.platformArtisan = !!art && isPlatformContractor_(art);
+  if (o.platformArtisan) {
+    const R = commissionRates_();
+    o.clientCommission = { rate: R.client, amount: round2_(num_(x.v.amountHT) * R.client / 100), vatRate: R.vat };
+    o.fees = dbAll_("PlatformFees").filter(function (f) { return String(f.invoiceId) === String(x.v.invoiceId); }).map(feeOut_).filter(function (f) { return x.manage || p.isSuper || f.kind === "ARTISAN"; });
+    if (x.manage) o.platformPay = invPlatformInfo_(x.v, art);
+  }
   return o;
 }
 /** Met à jour le statut de paiement d'une facture à partir des paiements enregistrés. */
@@ -4643,6 +4922,7 @@ function invRefreshPaid_(invoiceId) {
   const target = num_(v.netToContractor || v.amountTTC);
   const status = paid <= 0 ? "APPROVED" : (paid + 0.005 >= target ? "PAID" : "PARTIAL");
   dbUpdate_("Invoices", invoiceId, { paidAmount: paid, status: status, paidAt: status === "PAID" ? nowIso_() : "" });
+  if (status === "PAID" && v.status !== "PAID") { try { commissionOnInvoicePaid_(invoiceId); } catch (e) { console.error("Commission : " + e.message); } }
   const exp = dbFind_("Expenses", "uniqueKey", "invoice:" + invoiceId);
   if (exp) dbUpdate_("Expenses", exp.expenseId, { status: status === "PAID" ? "PAID" : "INVOICED", paidAt: status === "PAID" ? nowIso_() : "" });
 }
@@ -5705,7 +5985,7 @@ var LEGAL_FIELDS_ = {
   publisherName: "Nom ou raison sociale de l'éditeur", legalForm: "Forme juridique et capital social", address: "Adresse du siège",
   registration: "Immatriculation (RCS / SIREN ou RC / ICE)", vatNumber: "N° de TVA intracommunautaire", director: "Directeur ou directrice de la publication",
   contactEmail: "E-mail de contact", phone: "Téléphone", hostName: "Hébergeur", hostAddress: "Adresse de l'hébergeur", hostPhone: "Téléphone de l'hébergeur",
-  mediator: "Médiateur de la consommation (nom et site)", dataAuthorityRef: "Référence de déclaration à l'autorité de protection des données", dpoEmail: "E-mail du délégué à la protection des données (facultatif)"
+  mediator: "Médiateur de la consommation (nom et site)", platformInsurance: "Assurance RC professionnelle de l'éditeur (assureur et n° de police)", dataAuthorityRef: "Référence de déclaration à l'autorité de protection des données", dpoEmail: "E-mail du délégué à la protection des données (facultatif)"
 };
 
 /** Valeurs légales : paramètres de la plateforme, puis valeurs par défaut selon l'hébergement (Google ou serveur dédié). */
@@ -5730,7 +6010,7 @@ function legalRoleSection_() {
     "ImmoPilot est un logiciel en ligne (SaaS) mis à disposition du client pour l'aider à organiser lui-même la gestion de ses biens. L'éditeur fournit uniquement l'outil.",
     "L'éditeur n'est ni agent immobilier, ni administrateur de biens, ni syndic, ni conciergerie, ni mandataire du client. Il n'effectue aucune transaction, ne loue aucun bien, ne détient aucune carte professionnelle immobilière et n'intervient dans aucune négociation.",
     "L'éditeur n'est pas partie aux contrats conclus par le client avec des tiers (baux, réservations, contrats de ménage ou de travaux, contrats avec des agences ou des artisans). Il ne garantit ni leur exécution, ni la solvabilité des locataires ou voyageurs, ni la qualité des prestations des tiers.",
-    "L'éditeur ne détient pas et ne gère pas les fonds du client ni ceux de ses locataires ou voyageurs : loyers, cautions et paiements des séjours sont encaissés directement par le client, en dehors de l'application. Seul le prix de l'abonnement est payé à l'éditeur.",
+    "L'éditeur ne détient pas et ne gère pas les fonds du client ni ceux de ses locataires ou voyageurs : loyers, cautions et paiements des séjours sont encaissés directement par le client, en dehors de l'application. L'éditeur perçoit uniquement le prix de l'abonnement et, lorsque le client fait appel à un prestataire référencé, la commission de mise en relation prévue à l'article « Mise en relation ».",
     "L'éditeur ne contrôle pas les informations saisies par le client et ses utilisateurs, et n'en vérifie ni l'exactitude ni la licéité.",
     "Les modèles de documents (baux, états des lieux, quittances, appels de loyer, devis, factures, fiches de police) et les brouillons rédigés par l'assistant IA sont des aides à la rédaction. Ils ne constituent pas un conseil juridique, fiscal ou comptable. Le client doit les relire, les adapter à sa situation et reste seul responsable de leur contenu et de leur utilisation.",
     "Les automatisations (appels de loyer, relances, quittances, notifications) sont paramétrées et déclenchées sous le contrôle du client. Il lui appartient de vérifier leur paramétrage et les documents envoyés en son nom."] };
@@ -5744,12 +6024,16 @@ function legalClientDutiesSection_(law) {
 }
 
 /* Mise en relation : commune aux deux éditions (complète le rôle de l'éditeur). */
-function legalMarketplaceSection_() {
+function legalMarketplaceSection_(v) {
+  const R = commissionRates_(), fr = edition_().code === "FR";
   return { h: "Mise en relation avec des prestataires référencés", ul: [
     "En plus du logiciel, ImmoPilot propose un annuaire d'artisans et de prestataires (ménage, plomberie, électricité, climatisation…) référencés par l'éditeur. Le client y choisit librement un prestataire par métier et par zone ; l'éditeur ne choisit pas à sa place.",
-    "Les devis, interventions et factures sont établis par le prestataire, en son nom, et conclus directement entre le client et le prestataire. L'éditeur n'est pas partie à ces contrats, ne perçoit pas le prix des prestations et ne garantit ni leur exécution, ni leur qualité, ni leurs délais.",
+    "Les devis, interventions et factures sont établis par le prestataire, en son nom, et conclus directement entre le client et le prestataire. L'éditeur n'est pas partie à ces contrats et ne garantit ni leur exécution, ni leur qualité, ni leurs délais.",
+    "Commission de mise en relation : pour chaque mission réalisée par un prestataire référencé et réglée, le client (commanditaire) doit à l'éditeur une commission de " + R.client + " % du montant hors taxes de la facture du prestataire (TVA en sus au taux de " + R.vat + " %). Elle rémunère le service de mise en relation (sélection et contrôle des prestataires, outils de demande de devis, de suivi et de facturation). Les commissions d'un mois sont réunies dans un récapitulatif envoyé au début du mois suivant et prélevées sur la carte enregistrée pour l'abonnement, ou réglées par lien de paiement.",
+    "Règlement du prestataire : le client règle la facture du prestataire soit directement (virement, chèque, espèces), soit en ligne par la plateforme" + (fr ? " : dans ce cas le paiement est traité par Stripe Payments Europe, établissement de paiement agréé, qui verse le prestataire et retient la commission due par celui-ci ; l'éditeur ne détient jamais les fonds." : " lorsque ce mode est proposé.") + " Le client indique dans l'application que la facture est réglée dès qu'il l'a payée directement.",
     "Avant le référencement, l'éditeur contrôle l'immatriculation du prestataire, son identité et les attestations exigées par la réglementation du pays (assurances notamment). Ce contrôle porte sur la présence et la validité apparente des pièces à la date du contrôle : il ne vaut pas garantie de la compétence ou de la solvabilité du prestataire.",
-    "Aucun prestataire ne paie pour être mieux classé. Les critères de référencement et de déréférencement figurent dans les conditions de référencement des prestataires, consultables dans l'application."] };
+    "Aucun prestataire ne paie pour être mieux classé. Les critères de référencement et de déréférencement figurent dans les conditions de référencement des prestataires, consultables dans l'application."]
+    .concat(v && v.platformInsurance ? ["Assurance de l'éditeur : la responsabilité civile professionnelle de l'éditeur pour son activité de mise en relation et de plateforme est assurée auprès de {{platformInsurance}}. Elle ne se substitue pas aux assurances des prestataires (responsabilité civile professionnelle, décennale) pour les travaux qu'ils réalisent."] : []) };
 }
 /* Conditions de référencement des prestataires (artisans inscrits en ligne). */
 function legalProviderDoc_(fr) {
@@ -5768,7 +6052,10 @@ function legalProviderDoc_(fr) {
     { h: "4. Contrôle et référencement", p: ["L'éditeur contrôle chaque pièce (lisibilité, concordance avec les informations déclarées, validité) et peut demander des compléments. Le prestataire est référencé lorsque toutes les pièces exigées sont validées ; il en est informé par e-mail. Les prestataires apparaissent par métier et par zone d'intervention, sans classement payant."] },
     { h: "5. Déréférencement", p: ["Le référencement est suspendu, après information du prestataire par e-mail, en cas d'expiration d'une attestation obligatoire, d'information inexacte, de pièce falsifiée, de plaintes répétées et fondées de clients ou de manquement grave à la loi. Il est rétabli dès la régularisation, sauf fraude. Le prestataire peut demander son déréférencement à tout moment en écrivant à {{contactEmail}}."] },
     { h: "6. Obligations du prestataire", p: ["Le prestataire exerce en toute indépendance et sous sa seule responsabilité : il établit ses devis et factures conformément à la loi, respecte les règles de son métier, la réglementation sociale et fiscale, et répond de ses prestations envers le client."] },
-    { h: "7. Données personnelles", p: ["Les informations et pièces du prestataire sont traitées par l'éditeur pour le contrôle du référencement et la gestion de l'annuaire, et conservées pendant la durée du référencement puis 3 ans après sa fin (sauf obligation légale). Les pièces d'identité et le RIB ne sont jamais montrés aux clients. Droits d'accès, de rectification et d'effacement : {{contactEmail}}."] }
+    { h: "7. Commission de mise en relation", p: ["Pour chaque mission obtenue par la plateforme, réalisée et réglée par le client, le prestataire doit à l'éditeur une commission de " + commissionRates_().artisan + " % du montant hors taxes de sa facture (TVA en sus au taux de " + commissionRates_().vat + " %), en rémunération du service de mise en relation. Le client doit de son côté sa propre commission, prévue par les conditions générales.",
+      "Si le client paie en ligne par la plateforme" + (fr ? " (Stripe Connect)" : "") + ", la commission est retenue automatiquement sur le paiement et le prestataire reçoit le solde sur son compte de paiement. Si le client paie directement (virement, chèque ou espèces), le prestataire reçoit la totalité et la commission devient exigible dès que le client a indiqué la facture comme réglée : un lien de paiement en ligne lui est alors envoyé, à régler sous 7 jours. Après trois rappels restés sans effet, le référencement peut être suspendu jusqu'au règlement.",
+      "Le prestataire s'interdit de détourner la relation pour éviter la commission (facturation hors plateforme d'une mission obtenue par elle)."] },
+    { h: "8. Données personnelles", p: ["Les informations et pièces du prestataire sont traitées par l'éditeur pour le contrôle du référencement et la gestion de l'annuaire, et conservées pendant la durée du référencement puis 3 ans après sa fin (sauf obligation légale). Les pièces d'identité et le RIB ne sont jamais montrés aux clients. Droits d'accès, de rectification et d'effacement : {{contactEmail}}."] }
   ] };
 }
 
@@ -5787,7 +6074,7 @@ function legalDocsFR_(v) {
     { id: "cgv", title: "Conditions générales d'abonnement et d'utilisation", sections: [
       { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement au logiciel en ligne ImmoPilot (gestion de locations courte et longue durée : biens, réservations, voyageurs, ménage, maintenance, baux, finances) fourni par {{publisherName}} (« l'éditeur ») à ses clients (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne lors de la création du compte ou de la souscription ; la version en vigueur reste consultable à tout moment dans l'application."] },
       legalRoleSection_(),
-      legalMarketplaceSection_(),
+      legalMarketplaceSection_(v),
       { h: "3. Comptes et accès", p: ["L'accès se fait par des comptes personnels protégés par mot de passe. Toute utilisation anormale doit être signalée sans délai à l'éditeur."] },
       { h: "4. Forfaits et prix", p: ["Le service est fourni selon le forfait choisi (fonctionnalités, nombre de biens, d'utilisateurs et stockage indiqués dans l'application). Les prix sont indiqués en euros : toutes taxes comprises pour les consommateurs, hors taxes (TVA en sus au taux en vigueur) pour les professionnels. Une période d'essai gratuite peut être proposée ; aucun prélèvement n'a lieu avant sa fin.",
         "L'éditeur peut modifier ses prix en informant le client au moins 30 jours avant leur application, par e-mail ou dans l'application ; le client qui refuse peut résilier sans frais avant la date d'effet."] },
@@ -5871,7 +6158,7 @@ function legalDocsMA_(v) {
     { id: "cgv", title: "Conditions générales d'abonnement et d'utilisation", sections: [
       { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement à la plateforme en ligne ImmoPilot (gestion de locations courte et longue durée) fournie par {{publisherName}} (« l'éditeur ») à ses clients au Maroc (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne, par un clic de confirmation, lors de la création du compte ou de la souscription ; cette acceptation électronique a la même valeur qu'une signature (loi n° 53-05 relative à l'échange électronique de données juridiques). La version en vigueur reste consultable à tout moment dans l'application."] },
       legalRoleSection_(),
-      legalMarketplaceSection_(),
+      legalMarketplaceSection_(v),
       { h: "3. Forfaits et prix", p: ["Le service est fourni selon le forfait choisi (fonctionnalités, nombre de biens, d'utilisateurs et stockage indiqués dans l'application). Les prix sont indiqués en dirhams marocains (MAD), toutes taxes comprises lorsque le client est un consommateur. Une période d'essai gratuite peut être proposée ; aucun prélèvement n'a lieu avant sa fin.",
         "L'éditeur peut modifier ses prix en informant le client au moins 30 jours avant leur application ; le client qui refuse peut résilier sans frais avant la date d'effet."] },
       { h: "4. Paiement par carte, en euros au cours du jour", p: ["L'abonnement est payable d'avance pour chaque période (mensuelle sauf mention contraire), par prélèvement automatique sur la carte bancaire que le client enregistre une seule fois dans le formulaire sécurisé du prestataire de paiement SumUp (authentification forte 3D Secure). L'éditeur ne reçoit ni ne conserve les numéros de carte.",
@@ -5920,7 +6207,7 @@ function legalGet_(a) {
   const docs = (edition_().code === "FR" ? legalDocsFR_(v) : legalDocsMA_(v)).map(function (d) {
     return { id: d.id, title: d.title, sections: d.sections.map(function (s) { return { h: s.h, p: (s.p || []).map(function (x) { return legalFill_(x, v); }), ul: (s.ul || []).map(function (x) { return legalFill_(x, v); }) }; }) };
   });
-  const missing = Object.keys(LEGAL_FIELDS_).filter(function (k) { return !v[k] && ["vatNumber", "phone", "hostPhone", "dpoEmail", "dataAuthorityRef", "mediator"].indexOf(k) < 0; });
+  const missing = Object.keys(LEGAL_FIELDS_).filter(function (k) { return !v[k] && ["vatNumber", "phone", "hostPhone", "dpoEmail", "dataAuthorityRef", "mediator", "platformInsurance"].indexOf(k) < 0; });
   return { edition: edition_().code, updatedAt: LEGAL_VERSION_, docs: a && a.id ? docs.filter(function (d) { return d.id === a.id; }) : docs, missing: missing.map(function (k) { return LEGAL_FIELDS_[k]; }),
     notice: "Modèles à faire relire par un professionnel du droit avant mise en service. ImmoPilot ne garantit pas leur conformité." };
 }
@@ -8549,12 +8836,13 @@ function platformStatusText_() {
       "ImmoPilot est un logiciel en ligne (SaaS) édité par " + (v.publisherName || "ECO SYNERGY") + " et mis à disposition par abonnement : vous l'utilisez pour gérer vous-même vos biens, vos locations, vos équipes et vos documents.",
       "ImmoPilot est aussi une plateforme de mise en relation avec des artisans et prestataires référencés (ménage, plomberie, électricité…). Les prestations sont commandées, réalisées et facturées directement entre vous et le prestataire.",
       "L'éditeur n'est ni agent immobilier, ni administrateur de biens, ni conciergerie, ni partie à vos contrats (baux, réservations, travaux). Il ne détient pas vos fonds : loyers et paiements des séjours vous sont versés directement.",
-      "Le prix de l'abonnement est le seul montant payé à l'éditeur. Sans engagement : résiliation à tout moment depuis votre espace, effective à la fin de la période payée."
+      "Vous payez à l'éditeur l'abonnement (sans engagement : résiliation à tout moment, effective à la fin de la période payée) et, si vous faites appel à un artisan référencé, une commission de mise en relation de " + commissionRates_().client + " % HT du montant de sa facture, réunie dans un récapitulatif mensuel."
     ],
     providerPoints: [
       "Le référencement est gratuit. Il est accordé après contrôle de vos informations légales et des pièces exigées par la réglementation du pays.",
       "Critères : activité déclarée et immatriculée, pièces lisibles et à jour, assurance en cours de validité lorsqu'elle est exigée. Aucun classement payant : les clients vous choisissent par corps de métier et zone d'intervention.",
       "Vos devis, interventions et factures sont établis par vous, en votre nom, directement avec le client. L'éditeur n'est pas partie à ces contrats et ne garantit ni le paiement ni l'exécution des prestations.",
+      "Commission de mise en relation : " + commissionRates_().artisan + " % HT de chaque facture réglée d'une mission obtenue par la plateforme, retenue automatiquement si le client paie en ligne, sinon réglée par lien de paiement après le règlement du client.",
       "Déréférencement : une pièce expirée, une information inexacte ou un manquement grave entraîne la suspension du référencement, après information par e-mail. Vous pouvez demander votre déréférencement à tout moment."
     ]
   };
@@ -8912,6 +9200,143 @@ function providerExpiryJob_() {
     });
   });
   return { reminded: reminded, suspended: suspended };
+}
+
+/* ======================================================================
+ * StripeService.gs
+ * ====================================================================== */
+/**
+ * Paiement des artisans « par la plateforme » avec Stripe Connect (comptes Express, paiements à destination).
+ *
+ * Pourquoi Stripe Connect : encaisser le prix d'une prestation pour le compte d'un artisan puis le lui reverser est une activité
+ * réservée aux établissements de paiement agréés. Avec Connect, Stripe (agréé) encaisse le paiement du client, verse l'artisan sur
+ * SON compte Stripe et retient la commission de la plateforme (application_fee_amount) : ECO SYNERGY ne détient jamais les fonds.
+ * Disponible pour l'édition France (Stripe ne propose pas Connect pour les comptes au Maroc).
+ *
+ * Configuration (propriétés du script, jamais dans le code) :
+ *   STRIPE_SECRET_KEY       clé secrète de la plateforme (sk_live_… ou sk_test_…)
+ *   STRIPE_WEBHOOK_SECRET   secret de signature du webhook (whsec_…) — l'adresse à déclarer chez Stripe est <adresse>/hooks/stripe
+ * Tant que la clé n'est pas renseignée, le mode plateforme est simplement masqué : rien ne change.
+ */
+var STRIPE_API_ = "https://api.stripe.com/v1";
+
+function stripeConf_() {
+  if (TEST_HOOKS_.stripeConfig) return TEST_HOOKS_.stripeConfig;
+  const P = PropertiesService.getScriptProperties();
+  return { key: String(P.getProperty("STRIPE_SECRET_KEY") || "").trim() };
+}
+function stripeEnabled_() { return edition_().code === "FR" && !!stripeConf_().key; }
+
+/** Encodage application/x-www-form-urlencoded avec clés imbriquées (a[b][0][c]=…), format attendu par l'API Stripe. */
+function stripeForm_(obj, prefix, out) {
+  out = out || [];
+  Object.keys(obj || {}).forEach(function (k) {
+    const v = obj[k], key = prefix ? prefix + "[" + k + "]" : k;
+    if (v === undefined || v === null) return;
+    if (typeof v === "object") stripeForm_(v, key, out);
+    else out.push(encodeURIComponent(key) + "=" + encodeURIComponent(String(v)));
+  });
+  return out.join("&");
+}
+function stripeCall_(method, path, body, idemKey) {
+  const c = stripeConf_();
+  if (!c.key) throw new AppError("PAYMENT", "Stripe n'est pas configuré.");
+  const params = { method: method, muteHttpExceptions: true, headers: { Authorization: "Bearer " + c.key } };
+  if (idemKey) params.headers["Idempotency-Key"] = idemKey;
+  if (body) { params.contentType = "application/x-www-form-urlencoded"; params.payload = stripeForm_(body); }
+  const r = TEST_HOOKS_.stripeFetch ? TEST_HOOKS_.stripeFetch(STRIPE_API_ + path, params) : UrlFetchApp.fetch(STRIPE_API_ + path, params);
+  let j = {}; try { j = JSON.parse(r.getContentText() || "{}"); } catch (e) { j = {}; }
+  if (r.getResponseCode() >= 300) throw new AppError("PAYMENT", "Stripe a refusé l'opération : " + String((j.error && j.error.message) || ("HTTP " + r.getResponseCode())).slice(0, 200));
+  return j;
+}
+function cents_(amount) { return Math.round(round2_(amount) * 100); }
+
+/* ------------------------------ Artisan : compte de paiement ------------------------------ */
+function stripeArtisanOf_(p) {
+  const c = myProviderRow_(p);
+  assert_(c, "Aucune fiche de référencement liée à votre compte.");
+  return c;
+}
+/** Statut du compte Stripe de l'artisan (relu chez Stripe). */
+function providerPayoutInfo_(p) {
+  if (!stripeEnabled_()) return { enabled: false };
+  const c = stripeArtisanOf_(p);
+  if (!c.stripeAccountId) return { enabled: true, connected: false, ready: false };
+  const acc = stripeCall_("get", "/accounts/" + encodeURIComponent(c.stripeAccountId));
+  const ready = !!(acc.charges_enabled && acc.payouts_enabled);
+  if (ready !== bool_(c.stripeReady)) dbUpdate_("Artisans", c.artisanId, { stripeReady: ready, updatedAt: nowIso_() });
+  return { enabled: true, connected: true, ready: ready, pending: (acc.requirements && acc.requirements.currently_due || []).length };
+}
+/** Ouvre (ou reprend) l'inscription de l'artisan chez Stripe : renvoie l'adresse de la page Stripe sécurisée. */
+function providerPayoutSetup_(p) {
+  assert_(stripeEnabled_(), "Le paiement par la plateforme n'est pas encore disponible.");
+  const c = stripeArtisanOf_(p);
+  assert_(c.status === "ACTIVE", "Disponible une fois votre référencement validé.");
+  let acct = c.stripeAccountId;
+  if (!acct) {
+    const L = parseJson_(c.legalJson, {}) || {};
+    const a = stripeCall_("post", "/accounts", { type: "express", country: "FR", email: c.email, business_type: c.businessType === "COMPANY" ? "company" : "individual",
+      capabilities: { card_payments: { requested: true }, transfers: { requested: true } }, business_profile: { name: L.legalName || c.name, mcc: "1520", product_description: "Travaux et services aux propriétaires (ImmoPilot)" },
+      metadata: { artisanId: c.artisanId } }, "acct-" + c.artisanId);
+    acct = a.id;
+    dbUpdate_("Artisans", c.artisanId, { stripeAccountId: acct, stripeReady: false, updatedAt: nowIso_() });
+    audit_("STRIPE_ACCOUNT_CREATED", "Artisan", c.artisanId, c.organizationId, {});
+  }
+  const base = safeAppUrl_() || "";
+  const link = stripeCall_("post", "/account_links", { account: acct, type: "account_onboarding", refresh_url: base + "#referencing", return_url: base + "#referencing" });
+  return { url: link.url };
+}
+
+/* ------------------------------ Commanditaire : payer une facture en ligne ------------------------------ */
+function invPlatformInfo_(v, art) {
+  if (!stripeEnabled_() || !art || !isPlatformContractor_(art)) return null;
+  return { available: !!(art.stripeAccountId && bool_(art.stripeReady)), reason: art.stripeAccountId ? (bool_(art.stripeReady) ? "" : "Le compte de paiement de l'artisan n'est pas encore validé par Stripe.") : "L'artisan n'a pas encore activé le paiement par la plateforme." };
+}
+function invPayOnline_(p, a) {
+  assert_(stripeEnabled_(), "Le paiement par la plateforme n'est pas disponible.");
+  const x = invLoad_(p, a.invoiceId);
+  assert_(x.manage, "Paiement non autorisé.", "FORBIDDEN");
+  const v = x.v, art = dbGet_("Artisans", v.artisanId);
+  assert_(["APPROVED", "PARTIAL"].indexOf(v.status) >= 0, "La facture doit être approuvée.");
+  assert_(art && isPlatformContractor_(art) && art.stripeAccountId && bool_(art.stripeReady), "Paiement par la plateforme indisponible pour cet artisan.");
+  const due = round2_(num_(v.netToContractor || v.amountTTC) - num_(v.paidAmount));
+  assert_(due > 0, "Rien à régler.");
+  const fee = round2_((num_(v.commissionAmount) + num_(v.commissionVatAmount)) * due / Math.max(0.01, num_(v.amountTTC)));
+  const base = safeAppUrl_() || "";
+  const s = stripeCall_("post", "/checkout/sessions", { mode: "payment", customer_email: p.email,
+    line_items: [{ quantity: 1, price_data: { currency: "eur", unit_amount: cents_(due), product_data: { name: "Facture " + (v.invoiceNumber || "") + " — " + (art.name || "artisan") } } }],
+    payment_intent_data: { application_fee_amount: cents_(fee), transfer_data: { destination: art.stripeAccountId }, description: "ImmoPilot facture " + (v.invoiceNumber || v.invoiceId), metadata: { invoiceId: v.invoiceId } },
+    metadata: { invoiceId: v.invoiceId, kind: "INVOICE" }, success_url: base + "#invoice/" + v.invoiceId, cancel_url: base + "#invoice/" + v.invoiceId }, "inv-" + v.invoiceId + "-" + cents_(due) + "-" + todayStr_());
+  audit_("INVOICE_ONLINE_PAYMENT_STARTED", "Invoice", v.invoiceId, v.organizationId, { amount: due, fee: fee });
+  return { url: s.url };
+}
+
+/** Webhook Stripe (signature vérifiée par le serveur avant l'appel) : paiement de facture confirmé, compte d'artisan mis à jour. */
+function stripeWebhook(event) {
+  ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0; dbcBegin_("request");
+  try { return stripeWebhookApply_(event); } finally { dbcCommit_(); }
+}
+function stripeWebhookApply_(ev) {
+  const o = (ev && ev.data && ev.data.object) || {};
+  if (ev.type === "account.updated" && o.id) {
+    const art = dbAll_("Artisans").find(function (a) { return a.stripeAccountId === o.id; });
+    if (art) dbUpdate_("Artisans", art.artisanId, { stripeReady: !!(o.charges_enabled && o.payouts_enabled), updatedAt: nowIso_() });
+    return { ok: true };
+  }
+  if (ev.type !== "checkout.session.completed" || o.payment_status !== "paid" || !(o.metadata && o.metadata.invoiceId)) return { ok: true, ignored: true };
+  const v = dbGet_("Invoices", String(o.metadata.invoiceId)); if (!v) return { ok: false };
+  return withLock_(function () {
+    if (dbAll_("Payments").some(function (z) { return z.refType === "INVOICE" && z.reference === "Stripe " + o.id; })) return { ok: true, duplicate: true };
+    const amount = round2_(Number(o.amount_total || 0) / 100);
+    const pay = dbInsert_("Payments", { organizationId: v.organizationId, propertyId: v.propertyId, kind: "INVOICE", refType: "INVOICE", refId: v.invoiceId, direction: "OUT", amount: amount, currency: v.currency || cur_(),
+      method: "STRIPE", paidAt: todayStr_(), reference: "Stripe " + o.id, proofDocId: "", status: "RECORDED", reconciled: true, note: "Paiement en ligne par la plateforme (Stripe Connect)", recordedBy: "stripe", createdAt: nowIso_() });
+    paymentRefresh_(pay);
+    auditAs_("stripe", "", "INVOICE_PAID_ONLINE", "Invoice", v.invoiceId, v.organizationId, { amount: amount, session: o.id });
+    const art = dbGet_("Artisans", v.artisanId);
+    if (art && art.userId) notify_({ eventKey: "invoice-paid-online:" + v.invoiceId, userIds: [art.userId], type: "INVOICE_PAID", organizationId: v.organizationId, title: "Facture payée en ligne : " + v.invoiceNumber,
+      body: amount + " " + (v.currency || cur_()) + " réglés par le client ; Stripe vous verse le montant, commission ImmoPilot déduite.", link: "#invoices" });
+    return { ok: true, paymentId: pay.paymentId };
+  });
 }
 
 /* ======================================================================
@@ -9688,7 +10113,7 @@ function testEnvSetup_() {
   folder.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
   const env = { ss: ss, folder: folder, previousSs: DB_SS_ };
   dbSetSpreadsheet_(ss);
-  TEST_HOOKS_ = { driveRoot: folder, mailSink: [], appUrl: "https://example.test/exec", pbkdfIters: 50, mailQuota: null, aiConfig: false, aiFetch: null, sumupConfig: null, sumupFetch: null, smsSink: null };
+  TEST_HOOKS_ = { driveRoot: folder, mailSink: [], appUrl: "https://example.test/exec", pbkdfIters: 50, mailQuota: null, aiConfig: false, aiFetch: null, sumupConfig: null, sumupFetch: null, smsSink: null, stripeConfig: null, stripeFetch: null };
   ctxReset_();
   runMigrations_("tests");
   return env;
@@ -9697,7 +10122,7 @@ function testEnvTeardown_(env) {
   try { DriveApp.getFileById(env.ss.getId()).setTrashed(true); } catch (e) { console.error(e.message); }
   try { env.folder.setTrashed(true); } catch (e) { console.error(e.message); }
   DB_SS_ = null; dbReset_();
-  TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null, sumupConfig: null, sumupFetch: null, smsSink: null };
+  TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null, sumupConfig: null, sumupFetch: null, smsSink: null, stripeConfig: null, stripeFetch: null };
 }
 
 function testKit_(results) {
@@ -10589,14 +11014,31 @@ function TEST_GROUPS_() {
         const inv = T.call(fx.tok.artisan, "inv.submit", { workOrderId: wo.workOrderId, invoiceNumber: "F-2026-001", amountHT: 1000, vatRate: 20 });
         T.fails(fx.tok.artisan, "inv.approve", { invoiceId: inv.invoiceId }, "FORBIDDEN");
         const ap = T.call(fx.tok.ownerA, "inv.approve", { invoiceId: inv.invoiceId });
-        T.near(ap.amountTTC, 1200, "TTC"); T.near(ap.commissionAmount, 150, "15 % de 1000 HT"); T.near(ap.commissionVatAmount, 30, "TVA 20 % sur commission"); T.near(ap.netToContractor, 1020, "net artisan");
+        T.near(ap.amountTTC, 1200, "TTC"); T.near(ap.commissionAmount, 150, "15 % de 1000 HT"); T.near(ap.commissionVatAmount, 30, "TVA 20 % sur commission"); T.near(ap.netToContractor, 1200, "artisan de la plateforme : le client lui règle tout le TTC");
+        T.eq(ap.beneficiaryOrgId, fx.platform.organizationId, "commission artisan due à la plateforme");
         T.fails(fx.tok.ownerA, "inv.approve", { invoiceId: inv.invoiceId }, "VALIDATION");
         const fin = T.call(fx.tok.ownerA, "fin.summary", { from: addDaysStr_(todayStr_(), -1), to: tDays_(1) });
         T.near(fin.totals.contractorCommissions, 150, "commission comptée une seule fois");
         T.eq(dbAll_("Expenses").filter(function (e) { return e.uniqueKey === "invoice:" + inv.invoiceId; }).length, 1, "une seule dépense de maintenance");
         T.fails(fx.tok.ownerA, "pay.record", { refType: "INVOICE", refId: inv.invoiceId, kind: "INVOICE", amount: 2000 }, "VALIDATION");
-        T.call(fx.tok.ownerA, "pay.record", { refType: "INVOICE", refId: inv.invoiceId, kind: "INVOICE", amount: 1020, reference: "VIR-ART" });
+        T.call(fx.tok.ownerA, "pay.record", { refType: "INVOICE", refId: inv.invoiceId, kind: "INVOICE", amount: 1200, method: "CASH", reference: "ESP-ART" });
         T.eq(dbGet_("Invoices", inv.invoiceId).status, "PAID", "facture payée");
+        // Paiement en espèces : commission artisan due (lien de paiement), commission du commanditaire en attente du récapitulatif mensuel.
+        const fees = dbAll_("PlatformFees").filter(function (f) { return f.invoiceId === inv.invoiceId; });
+        const fa = fees.find(function (f) { return f.kind === "ARTISAN"; }), fc = fees.find(function (f) { return f.kind === "CLIENT"; });
+        T.eq([fa.status, fa.payMode], ["DUE", "CASH"], "commission artisan exigible");
+        T.near(fa.total, 180, "15 % + TVA"); T.near(fc.total, 72, "6 % de 1000 HT + TVA"); T.eq(fc.status, "PENDING", "commanditaire : en attente du récapitulatif");
+        T.eq(T.call(fx.tok.artisan, "commission.mine").fees.length, 1, "l'artisan voit sa commission");
+        T.fails(fx.tok.ownerA, "commission.adminList", {}, "FORBIDDEN");
+        const runM = T.call(fx.tok.superA, "commission.runMonthly");
+        T.ok(runM.created >= 1, "récapitulatif créé");
+        const stm = T.call(fx.tok.ownerA, "commission.statements").statements;
+        T.ok(stm.length >= 1 && stm.some(function (x) { return x.total >= 72; }), "le commanditaire voit son récapitulatif");
+        T.ok(T.call(fx.tok.ownerA, "commission.statementPdf", { statementId: stm[0].statementId }).base64, "récapitulatif PDF");
+        T.fails(fx.tok.ownerB, "commission.statementPdf", { statementId: stm[0].statementId }, "FORBIDDEN");
+        T.call(fx.tok.superA, "commission.markPaid", { feeId: fa.feeId, reference: "VIR-COM-1" });
+        T.eq(dbGet_("PlatformFees", fa.feeId).status, "PAID", "commission artisan réglée");
+        T.eq(dbAll_("PlatformFees").filter(function (f) { return f.invoiceId === inv.invoiceId; }).length, 2, "une seule paire de commissions par facture");
         T.call(fx.tok.ownerA, "inc.update", { incidentId: inc.incidentId, status: "CLOSED" });
         const closed = dbGet_("IncidentsV4", inc.incidentId);
         T.eq(closed.status, "CLOSED", "clôture"); T.near(closed.finalCost, 1200, "coût final = facture TTC");
@@ -11230,6 +11672,68 @@ function TEST_GROUPS_() {
         T.ok(/validé/.test(T.lastMailTo(email).subject), "e-mail de validation");
       }]
     ] },
+    { name: "Commissions de mise en relation", tests: [
+      ["Lien SumUp à l'artisan (paiement direct), récapitulatif mensuel prélevé sur la carte, paiement en ligne Stripe avec commission retenue", function (T, fx) {
+        const pf = fx.platform.organizationId, sim = { n: 0, checkouts: {}, stripe: [] };
+        const resp = function (code, body) { return { getResponseCode: function () { return code; }, getContentText: function () { return JSON.stringify(body); } }; };
+        const art = dbInsert_("Artisans", { organizationId: pf, name: "Élec Test " + fx.run, email: fx.mail("com-art"), phone: "0600000000", categoriesJson: ["ELECTRICITY"], zonesJson: [], status: "ACTIVE", createdAt: nowIso_(), createdBy: "test", source: "SIGNUP", userId: fx.users.artisan.userId, stripeAccountId: "acct_1", stripeReady: true });
+        const mkInv = function (n) {
+          const w = dbInsert_("WorkOrders", { organizationId: fx.orgA.organizationId, propertyId: fx.propA, incidentId: "inc_x", artisanId: art.artisanId, status: "VERIFIED", createdAt: nowIso_(), createdBy: fx.users.ownerA.email, title: "Test " + n });
+          return dbInsert_("Invoices", { organizationId: fx.orgA.organizationId, propertyId: fx.propA, workOrderId: w.workOrderId, incidentId: "inc_x", artisanId: art.artisanId, invoiceNumber: "C-" + n + "-" + fx.run,
+            issueDate: todayStr_(), amountHT: 500, vatRate: 20, vatAmount: 100, amountTTC: 600, commissionRate: 15, commissionAmount: 75, commissionVatRate: 20, commissionVatAmount: 15, commissionLocked: true,
+            commissionBeneficiaryOrgId: pf, netToContractor: 600, currency: cur_(), status: "APPROVED", createdAt: nowIso_(), createdBy: "test" });
+        };
+        TEST_HOOKS_.sumupConfig = { key: "sup_sk_TEST", merchant: "MTEST", currency: cur_(), rate: 1 };
+        TEST_HOOKS_.sumupFetch = function (url, params) {
+          const path = url.replace(SUMUP_API_, ""), m = String(params.method).toLowerCase(), body = params.payload ? JSON.parse(params.payload) : {};
+          if (m === "post" && path === "/checkouts") { const id = "co" + (++sim.n); sim.checkouts[id] = Object.assign({ id: id, status: "PENDING" }, body, body.hosted_checkout ? { hosted_checkout_url: "https://pay.sumup.test/" + id } : {}); return resp(201, sim.checkouts[id]); }
+          const x = /^\/checkouts\/(co\d+)$/.exec(path);
+          if (m === "get" && x) return resp(200, sim.checkouts[x[1]]);
+          if (m === "put" && x) { sim.checkouts[x[1]].status = "PAID"; sim.checkouts[x[1]].transactions = [{ transaction_code: "TXC" }]; return resp(200, sim.checkouts[x[1]]); }
+          return resp(404, {});
+        };
+        TEST_HOOKS_.stripeConfig = { key: "sk_test_X" };
+        TEST_HOOKS_.stripeFetch = function (url, params) {
+          sim.stripe.push({ url: url, body: params.payload || "" });
+          if (/checkout\/sessions$/.test(url)) return resp(200, { id: "cs_1", url: "https://checkout.stripe.test/cs_1" });
+          return resp(200, {});
+        };
+        try {
+          // 1. Paiement direct : lien SumUp envoyé, puis payé.
+          const v1 = mkInv(1);
+          T.call(fx.tok.ownerA, "pay.record", { refType: "INVOICE", refId: v1.invoiceId, kind: "INVOICE", amount: 600, method: "TRANSFER", reference: "VIR-1" });
+          const fa = dbAll_("PlatformFees").find(function (f) { return f.invoiceId === v1.invoiceId && f.kind === "ARTISAN"; });
+          T.eq(fa.status, "LINK_SENT", "lien de paiement envoyé"); T.ok(/pay\.sumup\.test/.test(fa.payUrl), "lien SumUp hébergé");
+          T.ok(/Commission ImmoPilot à régler/.test(T.lastMailTo(art.email).subject) && T.lastMailTo(art.email).body.indexOf(fa.payUrl) >= 0, "e-mail avec le lien");
+          sim.checkouts[fa.checkoutId].status = "PAID";
+          commissionCheckPayments_();
+          T.eq(dbGet_("PlatformFees", fa.feeId).status, "PAID", "paiement détecté");
+          // 2. Récapitulatif mensuel : prélevé sur la carte de l'abonnement.
+          const card = dbInsert_("BillingCards", { organizationId: fx.orgA.organizationId, status: "ACTIVE", customerId: "cus", token: "tok_1", label: "Visa •• 4242", createdAt: nowIso_(), createdBy: "test" });
+          const r = commissionMonthly_(true);
+          T.ok(r.created >= 1, "récapitulatif créé");
+          const st = dbAll_("CommissionStatements").filter(function (x) { return x.organizationId === fx.orgA.organizationId; }).sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); })[0];
+          T.eq(st.status, "PAID", "prélevé sur la carte");
+          T.ok(dbAll_("PlatformFees").filter(function (f) { return f.statementId === st.statementId; }).every(function (f) { return f.status === "PAID"; }), "commissions du récapitulatif réglées");
+          T.ok((T.lastMailTo(dbGet_("Organizations", fx.orgA.organizationId).billingEmail || "") || { attachments: [{}] }).attachments.length >= 0, "récapitulatif envoyé");
+          dbUpdate_("BillingCards", card.cardId, { status: "REPLACED", token: "" });
+          // 3. Paiement en ligne (Stripe Connect) : commission retenue, aucun lien.
+          if (edition_().code === "FR") {
+            const v2 = mkInv(2);
+            const pay = T.call(fx.tok.ownerA, "inv.payOnline", { invoiceId: v2.invoiceId });
+            T.ok(/checkout\.stripe\.test/.test(pay.url), "page de paiement Stripe");
+            const sent = decodeURIComponent(sim.stripe[sim.stripe.length - 1].body);
+            T.ok(sent.indexOf("application_fee_amount]=9000") >= 0 && sent.indexOf("destination]=acct_1") >= 0, "commission retenue (90,00) et versement à l'artisan");
+            T.fails(fx.tok.ownerB, "inv.payOnline", { invoiceId: v2.invoiceId }, "FORBIDDEN");
+            stripeWebhook({ type: "checkout.session.completed", data: { object: { id: "cs_1", payment_status: "paid", amount_total: 60000, metadata: { invoiceId: v2.invoiceId } } } });
+            stripeWebhook({ type: "checkout.session.completed", data: { object: { id: "cs_1", payment_status: "paid", amount_total: 60000, metadata: { invoiceId: v2.invoiceId } } } });
+            T.eq(dbGet_("Invoices", v2.invoiceId).status, "PAID", "facture payée par le webhook");
+            T.eq(dbAll_("Payments").filter(function (z) { return z.refId === v2.invoiceId; }).length, 1, "webhook rejoué sans double paiement");
+            T.eq(dbAll_("PlatformFees").find(function (f) { return f.invoiceId === v2.invoiceId && f.kind === "ARTISAN"; }).status, "DEDUCTED", "commission artisan retenue en ligne");
+          } else T.ok(!stripeEnabled_(), "Maroc : pas de Stripe Connect");
+        } finally { TEST_HOOKS_.sumupConfig = null; TEST_HOOKS_.sumupFetch = null; TEST_HOOKS_.stripeConfig = null; TEST_HOOKS_.stripeFetch = null; }
+      }]
+    ] },
     { name: "Données, migration et robustesse", tests: [
       ["Installation à partir de rien : base, dossier privé, schéma, forfaits, premier super administrateur", function (T) {
         // Propriétés simulées en mémoire : les vraies propriétés du script (base de production) ne sont jamais touchées.
@@ -11412,14 +11916,14 @@ function runJob_(name, tasks) {
 
 /** Toutes les 15 minutes : expiration des missions de ménage, retards d'arrivée/départ, envois aux locataires (8 h – 20 h). */
 function jobFrequent() {
-  return jobSummary_(runJob_("jobFrequent", { cleaning: cleaningExpireJob_, checkinAlerts: checkinAlertsJob_, rentMails: function () { return rentAutomationJob_(); } }));
+  return jobSummary_(runJob_("jobFrequent", { cleaning: cleaningExpireJob_, checkinAlerts: checkinAlertsJob_, rentMails: function () { return rentAutomationJob_(); }, commissionPayments: commissionCheckPayments_ }));
 }
 /** Ne renvoie qu'un résumé (le détail est consigné dans ScheduledJobs) : la fonction est aussi appelable depuis le web. */
 function jobSummary_(r) { return { ok: !!(r && r.ok), skipped: !!(r && r.skipped), errorCount: r && r.errors ? r.errors.length : 0 }; }
 /** Chaque jour : baux, abonnements, devis expirés, alertes incidents, rétention, arrivées imminentes, sauvegarde. */
 function jobDaily() {
   return jobSummary_(runJob_("jobDaily", { leases: leaseJob_, cardPayments: sumupChargeJob_, subscriptions: subscriptionJob_, quotes: quoteExpireJob_, incidents: incidentAlertsJob_, retention: purgeExpiredDocuments_,
-    arrivals: upcomingArrivalsJob_, providerInsurance: providerExpiryJob_, guestTokens: guestTokenExpireJob_, backup: function () { return backupDatabase_("quotidien").name; } }));
+    arrivals: upcomingArrivalsJob_, providerInsurance: providerExpiryJob_, commissions: commissionDailyJob_, guestTokens: guestTokenExpireJob_, backup: function () { return backupDatabase_("quotidien").name; } }));
 }
 
 /** Arrivées non enregistrées et départs dépassés (une alerte par réservation). */
@@ -11775,7 +12279,7 @@ function userErase_(p, a) {
  * Points d'injection réservés à la suite de tests (Tests.gs). Ce sont des variables d'exécution : elles ne peuvent être
  * modifiées que par du code serveur dans la même exécution (jamais par le navigateur) et reviennent à null à chaque requête.
  */
-var TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null, sumupConfig: null, sumupFetch: null, smsSink: null };
+var TEST_HOOKS_ = { driveRoot: null, mailSink: null, appUrl: null, pbkdfIters: null, mailQuota: null, aiConfig: null, aiFetch: null, sumupConfig: null, sumupFetch: null, smsSink: null, stripeConfig: null, stripeFetch: null };
 class AppError extends Error {
   constructor(code, message) { super(message); this.name = "AppError"; this.code = code; }
 }
@@ -11937,6 +12441,8 @@ function woOut_(w) {
     invoiceId: w.invoiceId, legacyInvoiceFileId: w.invoiceFileId, declineReason: w.declineReason };
 }
 function resolveCommissionRate_(override, artisan, orgId) {
+  // Artisan référencé par la plateforme : la commission revient à ECO SYNERGY, au taux fixé par le super administrateur (jamais par le client).
+  if (artisan && isPlatformContractor_(artisan)) { const pr = artisan.commissionRate !== null && artisan.commissionRate !== "" ? Number(artisan.commissionRate) : Number(getSetting_("commission.contractorRate")); return isFinite(pr) ? pr : 15; }
   if (override !== undefined && override !== null && override !== "") return rate_(override, "Commission");
   if (artisan && artisan.commissionRate !== null && artisan.commissionRate !== "") return Number(artisan.commissionRate);
   const s = Number(getSetting_("commission.contractorRate", orgId));

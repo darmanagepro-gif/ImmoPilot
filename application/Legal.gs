@@ -11,7 +11,7 @@ var LEGAL_FIELDS_ = {
   publisherName: "Nom ou raison sociale de l'éditeur", legalForm: "Forme juridique et capital social", address: "Adresse du siège",
   registration: "Immatriculation (RCS / SIREN ou RC / ICE)", vatNumber: "N° de TVA intracommunautaire", director: "Directeur ou directrice de la publication",
   contactEmail: "E-mail de contact", phone: "Téléphone", hostName: "Hébergeur", hostAddress: "Adresse de l'hébergeur", hostPhone: "Téléphone de l'hébergeur",
-  mediator: "Médiateur de la consommation (nom et site)", dataAuthorityRef: "Référence de déclaration à l'autorité de protection des données", dpoEmail: "E-mail du délégué à la protection des données (facultatif)"
+  mediator: "Médiateur de la consommation (nom et site)", platformInsurance: "Assurance RC professionnelle de l'éditeur (assureur et n° de police)", dataAuthorityRef: "Référence de déclaration à l'autorité de protection des données", dpoEmail: "E-mail du délégué à la protection des données (facultatif)"
 };
 
 /** Valeurs légales : paramètres de la plateforme, puis valeurs par défaut selon l'hébergement (Google ou serveur dédié). */
@@ -36,7 +36,7 @@ function legalRoleSection_() {
     "ImmoPilot est un logiciel en ligne (SaaS) mis à disposition du client pour l'aider à organiser lui-même la gestion de ses biens. L'éditeur fournit uniquement l'outil.",
     "L'éditeur n'est ni agent immobilier, ni administrateur de biens, ni syndic, ni conciergerie, ni mandataire du client. Il n'effectue aucune transaction, ne loue aucun bien, ne détient aucune carte professionnelle immobilière et n'intervient dans aucune négociation.",
     "L'éditeur n'est pas partie aux contrats conclus par le client avec des tiers (baux, réservations, contrats de ménage ou de travaux, contrats avec des agences ou des artisans). Il ne garantit ni leur exécution, ni la solvabilité des locataires ou voyageurs, ni la qualité des prestations des tiers.",
-    "L'éditeur ne détient pas et ne gère pas les fonds du client ni ceux de ses locataires ou voyageurs : loyers, cautions et paiements des séjours sont encaissés directement par le client, en dehors de l'application. Seul le prix de l'abonnement est payé à l'éditeur.",
+    "L'éditeur ne détient pas et ne gère pas les fonds du client ni ceux de ses locataires ou voyageurs : loyers, cautions et paiements des séjours sont encaissés directement par le client, en dehors de l'application. L'éditeur perçoit uniquement le prix de l'abonnement et, lorsque le client fait appel à un prestataire référencé, la commission de mise en relation prévue à l'article « Mise en relation ».",
     "L'éditeur ne contrôle pas les informations saisies par le client et ses utilisateurs, et n'en vérifie ni l'exactitude ni la licéité.",
     "Les modèles de documents (baux, états des lieux, quittances, appels de loyer, devis, factures, fiches de police) et les brouillons rédigés par l'assistant IA sont des aides à la rédaction. Ils ne constituent pas un conseil juridique, fiscal ou comptable. Le client doit les relire, les adapter à sa situation et reste seul responsable de leur contenu et de leur utilisation.",
     "Les automatisations (appels de loyer, relances, quittances, notifications) sont paramétrées et déclenchées sous le contrôle du client. Il lui appartient de vérifier leur paramétrage et les documents envoyés en son nom."] };
@@ -50,12 +50,16 @@ function legalClientDutiesSection_(law) {
 }
 
 /* Mise en relation : commune aux deux éditions (complète le rôle de l'éditeur). */
-function legalMarketplaceSection_() {
+function legalMarketplaceSection_(v) {
+  const R = commissionRates_(), fr = edition_().code === "FR";
   return { h: "Mise en relation avec des prestataires référencés", ul: [
     "En plus du logiciel, ImmoPilot propose un annuaire d'artisans et de prestataires (ménage, plomberie, électricité, climatisation…) référencés par l'éditeur. Le client y choisit librement un prestataire par métier et par zone ; l'éditeur ne choisit pas à sa place.",
-    "Les devis, interventions et factures sont établis par le prestataire, en son nom, et conclus directement entre le client et le prestataire. L'éditeur n'est pas partie à ces contrats, ne perçoit pas le prix des prestations et ne garantit ni leur exécution, ni leur qualité, ni leurs délais.",
+    "Les devis, interventions et factures sont établis par le prestataire, en son nom, et conclus directement entre le client et le prestataire. L'éditeur n'est pas partie à ces contrats et ne garantit ni leur exécution, ni leur qualité, ni leurs délais.",
+    "Commission de mise en relation : pour chaque mission réalisée par un prestataire référencé et réglée, le client (commanditaire) doit à l'éditeur une commission de " + R.client + " % du montant hors taxes de la facture du prestataire (TVA en sus au taux de " + R.vat + " %). Elle rémunère le service de mise en relation (sélection et contrôle des prestataires, outils de demande de devis, de suivi et de facturation). Les commissions d'un mois sont réunies dans un récapitulatif envoyé au début du mois suivant et prélevées sur la carte enregistrée pour l'abonnement, ou réglées par lien de paiement.",
+    "Règlement du prestataire : le client règle la facture du prestataire soit directement (virement, chèque, espèces), soit en ligne par la plateforme" + (fr ? " : dans ce cas le paiement est traité par Stripe Payments Europe, établissement de paiement agréé, qui verse le prestataire et retient la commission due par celui-ci ; l'éditeur ne détient jamais les fonds." : " lorsque ce mode est proposé.") + " Le client indique dans l'application que la facture est réglée dès qu'il l'a payée directement.",
     "Avant le référencement, l'éditeur contrôle l'immatriculation du prestataire, son identité et les attestations exigées par la réglementation du pays (assurances notamment). Ce contrôle porte sur la présence et la validité apparente des pièces à la date du contrôle : il ne vaut pas garantie de la compétence ou de la solvabilité du prestataire.",
-    "Aucun prestataire ne paie pour être mieux classé. Les critères de référencement et de déréférencement figurent dans les conditions de référencement des prestataires, consultables dans l'application."] };
+    "Aucun prestataire ne paie pour être mieux classé. Les critères de référencement et de déréférencement figurent dans les conditions de référencement des prestataires, consultables dans l'application."]
+    .concat(v && v.platformInsurance ? ["Assurance de l'éditeur : la responsabilité civile professionnelle de l'éditeur pour son activité de mise en relation et de plateforme est assurée auprès de {{platformInsurance}}. Elle ne se substitue pas aux assurances des prestataires (responsabilité civile professionnelle, décennale) pour les travaux qu'ils réalisent."] : []) };
 }
 /* Conditions de référencement des prestataires (artisans inscrits en ligne). */
 function legalProviderDoc_(fr) {
@@ -74,7 +78,10 @@ function legalProviderDoc_(fr) {
     { h: "4. Contrôle et référencement", p: ["L'éditeur contrôle chaque pièce (lisibilité, concordance avec les informations déclarées, validité) et peut demander des compléments. Le prestataire est référencé lorsque toutes les pièces exigées sont validées ; il en est informé par e-mail. Les prestataires apparaissent par métier et par zone d'intervention, sans classement payant."] },
     { h: "5. Déréférencement", p: ["Le référencement est suspendu, après information du prestataire par e-mail, en cas d'expiration d'une attestation obligatoire, d'information inexacte, de pièce falsifiée, de plaintes répétées et fondées de clients ou de manquement grave à la loi. Il est rétabli dès la régularisation, sauf fraude. Le prestataire peut demander son déréférencement à tout moment en écrivant à {{contactEmail}}."] },
     { h: "6. Obligations du prestataire", p: ["Le prestataire exerce en toute indépendance et sous sa seule responsabilité : il établit ses devis et factures conformément à la loi, respecte les règles de son métier, la réglementation sociale et fiscale, et répond de ses prestations envers le client."] },
-    { h: "7. Données personnelles", p: ["Les informations et pièces du prestataire sont traitées par l'éditeur pour le contrôle du référencement et la gestion de l'annuaire, et conservées pendant la durée du référencement puis 3 ans après sa fin (sauf obligation légale). Les pièces d'identité et le RIB ne sont jamais montrés aux clients. Droits d'accès, de rectification et d'effacement : {{contactEmail}}."] }
+    { h: "7. Commission de mise en relation", p: ["Pour chaque mission obtenue par la plateforme, réalisée et réglée par le client, le prestataire doit à l'éditeur une commission de " + commissionRates_().artisan + " % du montant hors taxes de sa facture (TVA en sus au taux de " + commissionRates_().vat + " %), en rémunération du service de mise en relation. Le client doit de son côté sa propre commission, prévue par les conditions générales.",
+      "Si le client paie en ligne par la plateforme" + (fr ? " (Stripe Connect)" : "") + ", la commission est retenue automatiquement sur le paiement et le prestataire reçoit le solde sur son compte de paiement. Si le client paie directement (virement, chèque ou espèces), le prestataire reçoit la totalité et la commission devient exigible dès que le client a indiqué la facture comme réglée : un lien de paiement en ligne lui est alors envoyé, à régler sous 7 jours. Après trois rappels restés sans effet, le référencement peut être suspendu jusqu'au règlement.",
+      "Le prestataire s'interdit de détourner la relation pour éviter la commission (facturation hors plateforme d'une mission obtenue par elle)."] },
+    { h: "8. Données personnelles", p: ["Les informations et pièces du prestataire sont traitées par l'éditeur pour le contrôle du référencement et la gestion de l'annuaire, et conservées pendant la durée du référencement puis 3 ans après sa fin (sauf obligation légale). Les pièces d'identité et le RIB ne sont jamais montrés aux clients. Droits d'accès, de rectification et d'effacement : {{contactEmail}}."] }
   ] };
 }
 
@@ -93,7 +100,7 @@ function legalDocsFR_(v) {
     { id: "cgv", title: "Conditions générales d'abonnement et d'utilisation", sections: [
       { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement au logiciel en ligne ImmoPilot (gestion de locations courte et longue durée : biens, réservations, voyageurs, ménage, maintenance, baux, finances) fourni par {{publisherName}} (« l'éditeur ») à ses clients (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne lors de la création du compte ou de la souscription ; la version en vigueur reste consultable à tout moment dans l'application."] },
       legalRoleSection_(),
-      legalMarketplaceSection_(),
+      legalMarketplaceSection_(v),
       { h: "3. Comptes et accès", p: ["L'accès se fait par des comptes personnels protégés par mot de passe. Toute utilisation anormale doit être signalée sans délai à l'éditeur."] },
       { h: "4. Forfaits et prix", p: ["Le service est fourni selon le forfait choisi (fonctionnalités, nombre de biens, d'utilisateurs et stockage indiqués dans l'application). Les prix sont indiqués en euros : toutes taxes comprises pour les consommateurs, hors taxes (TVA en sus au taux en vigueur) pour les professionnels. Une période d'essai gratuite peut être proposée ; aucun prélèvement n'a lieu avant sa fin.",
         "L'éditeur peut modifier ses prix en informant le client au moins 30 jours avant leur application, par e-mail ou dans l'application ; le client qui refuse peut résilier sans frais avant la date d'effet."] },
@@ -177,7 +184,7 @@ function legalDocsMA_(v) {
     { id: "cgv", title: "Conditions générales d'abonnement et d'utilisation", sections: [
       { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement à la plateforme en ligne ImmoPilot (gestion de locations courte et longue durée) fournie par {{publisherName}} (« l'éditeur ») à ses clients au Maroc (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne, par un clic de confirmation, lors de la création du compte ou de la souscription ; cette acceptation électronique a la même valeur qu'une signature (loi n° 53-05 relative à l'échange électronique de données juridiques). La version en vigueur reste consultable à tout moment dans l'application."] },
       legalRoleSection_(),
-      legalMarketplaceSection_(),
+      legalMarketplaceSection_(v),
       { h: "3. Forfaits et prix", p: ["Le service est fourni selon le forfait choisi (fonctionnalités, nombre de biens, d'utilisateurs et stockage indiqués dans l'application). Les prix sont indiqués en dirhams marocains (MAD), toutes taxes comprises lorsque le client est un consommateur. Une période d'essai gratuite peut être proposée ; aucun prélèvement n'a lieu avant sa fin.",
         "L'éditeur peut modifier ses prix en informant le client au moins 30 jours avant leur application ; le client qui refuse peut résilier sans frais avant la date d'effet."] },
       { h: "4. Paiement par carte, en euros au cours du jour", p: ["L'abonnement est payable d'avance pour chaque période (mensuelle sauf mention contraire), par prélèvement automatique sur la carte bancaire que le client enregistre une seule fois dans le formulaire sécurisé du prestataire de paiement SumUp (authentification forte 3D Secure). L'éditeur ne reçoit ni ne conserve les numéros de carte.",
@@ -226,7 +233,7 @@ function legalGet_(a) {
   const docs = (edition_().code === "FR" ? legalDocsFR_(v) : legalDocsMA_(v)).map(function (d) {
     return { id: d.id, title: d.title, sections: d.sections.map(function (s) { return { h: s.h, p: (s.p || []).map(function (x) { return legalFill_(x, v); }), ul: (s.ul || []).map(function (x) { return legalFill_(x, v); }) }; }) };
   });
-  const missing = Object.keys(LEGAL_FIELDS_).filter(function (k) { return !v[k] && ["vatNumber", "phone", "hostPhone", "dpoEmail", "dataAuthorityRef", "mediator"].indexOf(k) < 0; });
+  const missing = Object.keys(LEGAL_FIELDS_).filter(function (k) { return !v[k] && ["vatNumber", "phone", "hostPhone", "dpoEmail", "dataAuthorityRef", "mediator", "platformInsurance"].indexOf(k) < 0; });
   return { edition: edition_().code, updatedAt: LEGAL_VERSION_, docs: a && a.id ? docs.filter(function (d) { return d.id === a.id; }) : docs, missing: missing.map(function (k) { return LEGAL_FIELDS_[k]; }),
     notice: "Modèles à faire relire par un professionnel du droit avant mise en service. ImmoPilot ne garantit pas leur conformité." };
 }

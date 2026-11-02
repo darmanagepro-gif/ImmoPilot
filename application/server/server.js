@@ -93,6 +93,13 @@ function manifest() {
 const LEGAL_PATHS = { "/mentions-legales": "mentions", "/cgv": "cgv", "/cgu": "cgv", "/confidentialite": "confidentialite", "/cookies": "cookies", "/sous-traitance": "dpa" };
 
 /* ----------------------------- Appels (RPC) ----------------------------- */
+function stripeSignatureOk(raw, header, secret, nowSec) {
+  if (!secret || !header) return false;
+  const parts = {}; header.split(",").forEach(function (kv) { const i = kv.indexOf("="); if (i > 0) (parts[kv.slice(0, i).trim()] = parts[kv.slice(0, i).trim()] || []).push(kv.slice(i + 1).trim()); });
+  const t = Number((parts.t || [])[0]); if (!t || Math.abs((nowSec || Date.now() / 1000) - t) > 300) return false;
+  const want = crypto.createHmac("sha256", secret).update(t + "." + raw, "utf8").digest("hex");
+  return (parts.v1 || []).some(function (sig) { return sig.length === want.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(want)); });
+}
 function readBody(req, limit) {
   return new Promise(function (resolve, reject) {
     let size = 0; const chunks = [];
@@ -107,7 +114,7 @@ function sameOrigin(req) {
 }
 const ADMIN_FUNCTIONS = ["setupProject", "createFirstSuperAdmin", "verifierInstallation", "healthCheck", "mesurerPerformance", "viderCache", "creerEnvironnementDemo", "creerHistoriqueDemo",
   "mettreDemoEnVeille", "reveillerDemo", "testerAssistantIA", "testerSumUp", "actualiserTauxSumUp", "backupNow", "restoreFromBackup", "jobFrequent", "jobDaily"];
-const ADMIN_PROPS = ["IMMO_ADMIN_EMAILS", "IMMO_APP_URL", "IMMO_AI_PROVIDER", "IMMO_AI_API_KEY", "IMMO_AI_MODEL", "IMMO_EMBED_ORIGINS", "IMMO_PBKDF_ITERATIONS", "SUMUP_API_KEY", "SUMUP_MERCHANT_CODE", "SUMUP_CURRENCY", "SUMUP_RATE", "SUMUP_RATE_MODE", "BREVO_API_KEY", "SMS_SENDER"];
+const ADMIN_PROPS = ["IMMO_ADMIN_EMAILS", "IMMO_APP_URL", "IMMO_AI_PROVIDER", "IMMO_AI_API_KEY", "IMMO_AI_MODEL", "IMMO_EMBED_ORIGINS", "IMMO_PBKDF_ITERATIONS", "SUMUP_API_KEY", "SUMUP_MERCHANT_CODE", "SUMUP_CURRENCY", "SUMUP_RATE", "SUMUP_RATE_MODE", "BREVO_API_KEY", "SMS_SENDER", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"];
 function adminOk(req) {
   const local = /^(127\.|::1|::ffff:127\.)/.test(req.socket.remoteAddress || "");
   const tok = String(req.headers["x-admin-token"] || ""), want = String(C.adminToken || "");
@@ -126,6 +133,15 @@ const server = http.createServer(async function (req, res) {
       if (!ok) return send(res, 404, "text/plain; charset=utf-8", "Introuvable.");
       let body; try { body = JSON.parse(await readBody(req, 2e6)); } catch (e) { return send(res, 400, "text/plain; charset=utf-8", "JSON invalide."); }
       return send(res, 200, "application/json; charset=utf-8", JSON.stringify({ ok: true, updated: brevoEvents(body) }));
+    }
+    // Stripe Connect : paiements de factures par la plateforme. Signature HMAC vérifiée (horodatage de moins de 5 minutes).
+    if (req.method === "POST" && url.pathname === "/hooks/stripe") {
+      const raw = await readBody(req, 1e6);
+      const secret = String(rt.ctx.PropertiesService.getScriptProperties().getProperty("STRIPE_WEBHOOK_SECRET") || "");
+      if (!stripeSignatureOk(raw, String(req.headers["stripe-signature"] || ""), secret)) return send(res, 400, "text/plain; charset=utf-8", "Signature invalide.");
+      let ev; try { ev = JSON.parse(raw); } catch (e) { return send(res, 400, "text/plain; charset=utf-8", "JSON invalide."); }
+      let out; try { out = rt.call("stripeWebhook", [ev]); } catch (e) { console.error("Webhook Stripe : " + e.message); return send(res, 500, "text/plain; charset=utf-8", "Erreur."); }
+      return send(res, 200, "application/json; charset=utf-8", JSON.stringify(out || { ok: true }));
     }
     if (req.method === "POST" && url.pathname === "/rpc") {
       if (req.headers["x-immopilot"] !== "1" || !/application\/json/.test(String(req.headers["content-type"] || "")) || !sameOrigin(req)) return send(res, 403, "text/plain; charset=utf-8", "Refusé.");
