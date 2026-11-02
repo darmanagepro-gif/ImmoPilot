@@ -1,14 +1,14 @@
 /**
- * Paiement des artisans « par la plateforme » avec Stripe Connect (comptes Express, paiements à destination).
- *
- * Pourquoi Stripe Connect : encaisser le prix d'une prestation pour le compte d'un artisan puis le lui reverser est une activité
- * réservée aux établissements de paiement agréés. Avec Connect, Stripe (agréé) encaisse le paiement du client, verse l'artisan sur
- * SON compte Stripe et retient la commission de la plateforme (application_fee_amount) : ECO SYNERGY ne détient jamais les fonds.
+ * Paiement des artisans « par la plateforme » avec Stripe Connect, en paiements DIRECTS : l'artisan encaisse lui-même sur SON
+ * compte Stripe (tableau de bord Stripe complet), la plateforme ne prélève que sa commission (application_fee_amount).
+ * L'artisan est le vendeur : il apparaît sur le reçu et gère remboursements et litiges ; Stripe gère le risque et assume les pertes.
+ * ECO SYNERGY ne détient jamais les fonds et n'est pas partie à la vente (cohérent avec ses conditions générales).
  * Disponible pour l'édition France (Stripe ne propose pas Connect pour les comptes au Maroc).
  *
  * Configuration (propriétés du script, jamais dans le code) :
  *   STRIPE_SECRET_KEY       clé secrète de la plateforme (sk_live_… ou sk_test_…)
- *   STRIPE_WEBHOOK_SECRET   secret de signature du webhook (whsec_…) — l'adresse à déclarer chez Stripe est <adresse>/hooks/stripe
+ *   STRIPE_WEBHOOK_SECRET   secret de signature du webhook (whsec_…) — à déclarer chez Stripe pour les événements des COMPTES
+ *                           CONNECTÉS (checkout.session.completed, account.updated) à l'adresse <adresse>/hooks/stripe
  * Tant que la clé n'est pas renseignée, le mode plateforme est simplement masqué : rien ne change.
  */
 var STRIPE_API_ = "https://api.stripe.com/v1";
@@ -31,11 +31,12 @@ function stripeForm_(obj, prefix, out) {
   });
   return out.join("&");
 }
-function stripeCall_(method, path, body, idemKey) {
+function stripeCall_(method, path, body, idemKey, account) {
   const c = stripeConf_();
   if (!c.key) throw new AppError("PAYMENT", "Stripe n'est pas configuré.");
   const params = { method: method, muteHttpExceptions: true, headers: { Authorization: "Bearer " + c.key } };
   if (idemKey) params.headers["Idempotency-Key"] = idemKey;
+  if (account) params.headers["Stripe-Account"] = account; // opération réalisée SUR le compte de l'artisan (paiement direct)
   if (body) { params.contentType = "application/x-www-form-urlencoded"; params.payload = stripeForm_(body); }
   const r = TEST_HOOKS_.stripeFetch ? TEST_HOOKS_.stripeFetch(STRIPE_API_ + path, params) : UrlFetchApp.fetch(STRIPE_API_ + path, params);
   let j = {}; try { j = JSON.parse(r.getContentText() || "{}"); } catch (e) { j = {}; }
@@ -68,9 +69,9 @@ function providerPayoutSetup_(p) {
   let acct = c.stripeAccountId;
   if (!acct) {
     const L = parseJson_(c.legalJson, {}) || {};
-    const a = stripeCall_("post", "/accounts", { type: "express", country: "FR", email: c.email, business_type: c.businessType === "COMPANY" ? "company" : "individual",
-      capabilities: { card_payments: { requested: true }, transfers: { requested: true } }, business_profile: { name: L.legalName || c.name, mcc: "1520", product_description: "Travaux et services aux propriétaires (ImmoPilot)" },
-      metadata: { artisanId: c.artisanId } }, "acct-" + c.artisanId);
+    const a = stripeCall_("post", "/accounts", { country: "FR", email: c.email,
+      controller: { stripe_dashboard: { type: "full" }, fees: { payer: "account" }, losses: { payments: "stripe" }, requirement_collection: "stripe" },
+      business_profile: { name: L.legalName || c.name, product_description: "Travaux et services aux propriétaires (ImmoPilot)" }, metadata: { artisanId: c.artisanId } }, "acct-" + c.artisanId);
     acct = a.id;
     dbUpdate_("Artisans", c.artisanId, { stripeAccountId: acct, stripeReady: false, updatedAt: nowIso_() });
     audit_("STRIPE_ACCOUNT_CREATED", "Artisan", c.artisanId, c.organizationId, {});
@@ -96,10 +97,11 @@ function invPayOnline_(p, a) {
   assert_(due > 0, "Rien à régler.");
   const fee = round2_((num_(v.commissionAmount) + num_(v.commissionVatAmount)) * due / Math.max(0.01, num_(v.amountTTC)));
   const base = safeAppUrl_() || "";
+  // Paiement direct sur le compte de l'artisan : il encaisse, la plateforme ne perçoit que sa commission.
   const s = stripeCall_("post", "/checkout/sessions", { mode: "payment", customer_email: p.email,
     line_items: [{ quantity: 1, price_data: { currency: "eur", unit_amount: cents_(due), product_data: { name: "Facture " + (v.invoiceNumber || "") + " — " + (art.name || "artisan") } } }],
-    payment_intent_data: { application_fee_amount: cents_(fee), transfer_data: { destination: art.stripeAccountId }, description: "ImmoPilot facture " + (v.invoiceNumber || v.invoiceId), metadata: { invoiceId: v.invoiceId } },
-    metadata: { invoiceId: v.invoiceId, kind: "INVOICE" }, success_url: base + "#invoice/" + v.invoiceId, cancel_url: base + "#invoice/" + v.invoiceId }, "inv-" + v.invoiceId + "-" + cents_(due) + "-" + todayStr_());
+    payment_intent_data: { application_fee_amount: cents_(fee), description: "Facture " + (v.invoiceNumber || v.invoiceId) + " (via ImmoPilot)", metadata: { invoiceId: v.invoiceId } },
+    metadata: { invoiceId: v.invoiceId, kind: "INVOICE" }, success_url: base + "#invoice/" + v.invoiceId, cancel_url: base + "#invoice/" + v.invoiceId }, "inv-" + v.invoiceId + "-" + cents_(due) + "-" + todayStr_(), art.stripeAccountId);
   audit_("INVOICE_ONLINE_PAYMENT_STARTED", "Invoice", v.invoiceId, v.organizationId, { amount: due, fee: fee });
   return { url: s.url };
 }
@@ -118,6 +120,8 @@ function stripeWebhookApply_(ev) {
   }
   if (ev.type !== "checkout.session.completed" || o.payment_status !== "paid" || !(o.metadata && o.metadata.invoiceId)) return { ok: true, ignored: true };
   const v = dbGet_("Invoices", String(o.metadata.invoiceId)); if (!v) return { ok: false };
+  const artv = dbGet_("Artisans", v.artisanId);
+  if (ev.account && artv && artv.stripeAccountId && ev.account !== artv.stripeAccountId) return { ok: false, reason: "compte inattendu" };
   return withLock_(function () {
     if (dbAll_("Payments").some(function (z) { return z.refType === "INVOICE" && z.reference === "Stripe " + o.id; })) return { ok: true, duplicate: true };
     const amount = round2_(Number(o.amount_total || 0) / 100);

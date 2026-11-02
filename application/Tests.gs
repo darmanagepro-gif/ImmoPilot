@@ -1621,7 +1621,7 @@ function TEST_GROUPS_() {
         };
         TEST_HOOKS_.stripeConfig = { key: "sk_test_X" };
         TEST_HOOKS_.stripeFetch = function (url, params) {
-          sim.stripe.push({ url: url, body: params.payload || "" });
+          sim.stripe.push({ url: url, body: params.payload || "", account: params.headers["Stripe-Account"] || "" });
           if (/checkout\/sessions$/.test(url)) return resp(200, { id: "cs_1", url: "https://checkout.stripe.test/cs_1" });
           return resp(200, {});
         };
@@ -1650,10 +1650,10 @@ function TEST_GROUPS_() {
             const pay = T.call(fx.tok.ownerA, "inv.payOnline", { invoiceId: v2.invoiceId });
             T.ok(/checkout\.stripe\.test/.test(pay.url), "page de paiement Stripe");
             const sent = decodeURIComponent(sim.stripe[sim.stripe.length - 1].body);
-            T.ok(sent.indexOf("application_fee_amount]=9000") >= 0 && sent.indexOf("destination]=acct_1") >= 0, "commission retenue (90,00) et versement à l'artisan");
+            T.ok(sent.indexOf("application_fee_amount]=9000") >= 0 && sent.indexOf("transfer_data") < 0 && sim.stripe[sim.stripe.length - 1].account === "acct_1", "paiement direct sur le compte de l'artisan, commission (90,00) retenue");
             T.fails(fx.tok.ownerB, "inv.payOnline", { invoiceId: v2.invoiceId }, "FORBIDDEN");
-            stripeWebhook({ type: "checkout.session.completed", data: { object: { id: "cs_1", payment_status: "paid", amount_total: 60000, metadata: { invoiceId: v2.invoiceId } } } });
-            stripeWebhook({ type: "checkout.session.completed", data: { object: { id: "cs_1", payment_status: "paid", amount_total: 60000, metadata: { invoiceId: v2.invoiceId } } } });
+            stripeWebhook({ type: "checkout.session.completed", account: "acct_1", data: { object: { id: "cs_1", payment_status: "paid", amount_total: 60000, metadata: { invoiceId: v2.invoiceId } } } });
+            stripeWebhook({ type: "checkout.session.completed", account: "acct_1", data: { object: { id: "cs_1", payment_status: "paid", amount_total: 60000, metadata: { invoiceId: v2.invoiceId } } } });
             T.eq(dbGet_("Invoices", v2.invoiceId).status, "PAID", "facture payée par le webhook");
             T.eq(dbAll_("Payments").filter(function (z) { return z.refId === v2.invoiceId; }).length, 1, "webhook rejoué sans double paiement");
             T.eq(dbAll_("PlatformFees").find(function (f) { return f.invoiceId === v2.invoiceId && f.kind === "ARTISAN"; }).status, "DEDUCTED", "commission artisan retenue en ligne");
