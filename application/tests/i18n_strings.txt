@@ -1555,3 +1555,210 @@ E-mails|Emails|الرسائل الإلكترونية|Correos|E-mail|E-mails
 Livraison|Delivery|التسليم|Entrega|Consegna|Aflevering
 Livraison (Brevo)|Delivery (Brevo)|التسليم (Brevo)|Entrega (Brevo)|Consegna (Brevo)|Aflevering (Brevo)
 Événement|Event|الحدث|Evento|Evento|Gebeurtenis
+14 chiffres, sur votre avis de situation INSEE.|14 digits, shown on your INSEE registration notice.|14 رقمًا، مذكورة في إشعار التسجيل لدى INSEE.|14 dígitos, en su aviso de situación INSEE.|14 cifre, sul suo avviso di situazione INSEE.|14 cijfers, op uw INSEE-inschrijvingsbewijs.
+14 chiffres, visible sur votre Kbis ou l'avis de situation INSEE.|14 digits, shown on your Kbis or INSEE registration notice.|14 رقمًا، مذكورة في مستخرج Kbis أو إشعار INSEE.|14 dígitos, en su Kbis o aviso de situación INSEE.|14 cifre, sulla visura Kbis o sull'avviso INSEE.|14 cijfers, op uw Kbis of INSEE-inschrijvingsbewijs.
+Accéder à mon espace|Go to my workspace|الدخول إلى فضائي|Acceder a mi espacio|Accedi al mio spazio|Naar mijn omgeving
+Adresse de l'assureur|Insurer's address|عنوان شركة التأمين|Dirección de la aseguradora|Indirizzo dell'assicuratore|Adres van de verzekeraar
+Adresse du siège|Registered office address|عنوان المقر|Dirección del domicilio social|Indirizzo della sede|Adres maatschappelijke zetel
+Adresse postale|Postal address|العنوان البريدي|Dirección postal|Indirizzo postale|Postadres
+Adresse professionnelle|Business address|العنوان المهني|Dirección profesional|Indirizzo professionale|Zakelijk adres
+Ajouter un fichier|Add a file|إضافة ملف|Añadir un archivo|Aggiungi un file|Bestand toevoegen
+Artisan|Tradesperson|حرفي|Profesional|Artigiano|Vakman
+Artisan référencé.|Tradesperson listed.|تم إدراج الحرفي.|Profesional referenciado.|Artigiano inserito.|Vakman opgenomen.
+Assurance expirée|Insurance expired|التأمين منتهي الصلاحية|Seguro caducado|Assicurazione scaduta|Verzekering verlopen
+Assurances|Insurance|التأمينات|Seguros|Assicurazioni|Verzekeringen
+Assureur RC Pro|Professional liability insurer|شركة تأمين المسؤولية المهنية|Aseguradora RC profesional|Assicuratore RC professionale|Verzekeraar beroepsaansprakelijkheid
+Assureur décennale|Ten-year liability insurer|شركة تأمين الضمان العشري|Aseguradora decenal|Assicuratore decennale|Verzekeraar tienjarige aansprakelijkheid
+Attestation d'assurance RC professionnelle|Professional liability insurance certificate|شهادة تأمين المسؤولية المدنية المهنية|Certificado de seguro de RC profesional|Attestato di assicurazione RC professionale|Attest beroepsaansprakelijkheidsverzekering
+Attestation d'assurance décennale|Ten-year liability insurance certificate|شهادة تأمين الضمان العشري|Certificado de seguro decenal|Attestato di assicurazione decennale|Attest tienjarige aansprakelijkheidsverzekering
+Aucun abonnement à finaliser.|No subscription to finalise.|لا يوجد اشتراك لإتمامه.|No hay ninguna suscripción por finalizar.|Nessun abbonamento da completare.|Geen abonnement af te ronden.
+Aucun dossier.|No applications.|لا توجد ملفات.|Ningún expediente.|Nessuna pratica.|Geen dossiers.
+Aucun débit avant la fin de l'essai gratuit|No charge before the end of the free trial|لا اقتطاع قبل نهاية الفترة التجريبية المجانية|Ningún cargo antes del fin de la prueba gratuita|Nessun addebito prima della fine della prova gratuita|Geen afschrijving vóór het einde van de gratis proefperiode
+Auto-entrepreneur|Self-employed|مقاول ذاتي|Autónomo|Lavoratore autonomo|Zelfstandige
+Auto-entrepreneur n°|Self-employed no.|مقاول ذاتي رقم|Autónomo n.º|Lavoratore autonomo n.|Zelfstandige nr.
+Autre|Other|أخرى|Otro|Altro|Andere
+Autre justificatif|Other document|وثيقة أخرى|Otro justificante|Altro documento|Ander bewijsstuk
+Autres justificatifs|Other documents|وثائق أخرى|Otros justificantes|Altri documenti|Andere bewijsstukken
+CCI qui a délivré la carte|Chamber of commerce that issued the licence|غرفة التجارة التي أصدرت البطاقة|Cámara de comercio emisora|CCI che ha rilasciato la licenza|Kamer van koophandel die de kaart afgaf
+Capital social|Share capital|رأس المال|Capital social|Capitale sociale|Maatschappelijk kapitaal
+Ces informations figurent sur votre contrat d'abonnement et vos factures.|This information appears on your subscription contract and invoices.|تظهر هذه المعلومات في عقد اشتراكك وفواتيرك.|Estos datos figuran en su contrato de suscripción y sus facturas.|Questi dati compaiono sul contratto di abbonamento e sulle fatture.|Deze gegevens staan op uw abonnementscontract en facturen.
+Choisir|Choose|اختيار|Elegir|Scegli|Kiezen
+Choisissez au moins un corps de métier.|Choose at least one trade.|اختر حرفة واحدة على الأقل.|Elija al menos un oficio.|Scegli almeno un mestiere.|Kies minstens één vak.
+Choisissez un forfait.|Choose a plan.|اختر باقة.|Elija un plan.|Scegli un piano.|Kies een abonnement.
+Choisissez un ou plusieurs métiers : les propriétaires et agences vous trouvent par métier et par zone d'intervention.|Choose one or more trades: owners and agencies find you by trade and service area.|اختر حرفة أو أكثر: يجدك الملاك والوكالات حسب الحرفة ومنطقة التدخل.|Elija uno o varios oficios: propietarios y agencias le encuentran por oficio y zona de intervención.|Scegli uno o più mestieri: proprietari e agenzie ti trovano per mestiere e zona di intervento.|Kies een of meer vakken: eigenaars en bureaus vinden u per vak en werkgebied.
+Choisissez votre forfait|Choose your plan|اختر باقتك|Elija su plan|Scegli il tuo piano|Kies uw abonnement
+Choisissez votre profil.|Choose your profile.|اختر ملفك.|Elija su perfil.|Scegli il tuo profilo.|Kies uw profiel.
+Choisissez votre statut.|Choose your legal status.|اختر وضعك القانوني.|Elija su estatus.|Scegli il tuo status.|Kies uw rechtsvorm.
+Cochez les trois cases d'acceptation pour continuer.|Tick the three acceptance boxes to continue.|ضع علامة على خانات القبول الثلاث للمتابعة.|Marque las tres casillas de aceptación para continuar.|Spunta le tre caselle di accettazione per continuare.|Vink de drie akkoordvakjes aan om verder te gaan.
+Compte créé. Bienvenue sur ImmoPilot !|Account created. Welcome to ImmoPilot!|تم إنشاء الحساب. مرحبًا بك في ImmoPilot!|Cuenta creada. ¡Bienvenido a ImmoPilot!|Account creato. Benvenuto su ImmoPilot!|Account aangemaakt. Welkom bij ImmoPilot!
+Confirmez votre adresse e-mail|Confirm your email address|أكّد عنوان بريدك الإلكتروني|Confirme su correo electrónico|Conferma il tuo indirizzo e-mail|Bevestig uw e-mailadres
+Connectez-vous pour suivre votre référencement, vos demandes de devis et vos interventions.|Sign in to follow your listing, quote requests and jobs.|سجّل الدخول لمتابعة إدراجك وطلبات عروض الأسعار وتدخلاتك.|Inicie sesión para seguir su referenciación, solicitudes de presupuesto e intervenciones.|Accedi per seguire il tuo inserimento, le richieste di preventivo e gli interventi.|Meld u aan om uw vermelding, offerteaanvragen en opdrachten te volgen.
+Connexion propriétaires et agences|Owner and agency sign-in|دخول الملاك والوكالات|Acceso propietarios y agencias|Accesso proprietari e agenzie|Aanmelden eigenaars en bureaus
+Continuer|Continue|متابعة|Continuar|Continua|Doorgaan
+Corps de métier|Trades|الحرف|Oficios|Mestieri|Vakken
+Créer mon compte ImmoPilot|Create my ImmoPilot account|إنشاء حسابي في ImmoPilot|Crear mi cuenta ImmoPilot|Crea il mio account ImmoPilot|Mijn ImmoPilot-account aanmaken
+Demander des compléments|Request more documents|طلب وثائق إضافية|Pedir información adicional|Chiedi integrazioni|Aanvullingen vragen
+Deux étapes pour activer votre abonnement : la signature électronique de votre contrat, puis votre moyen de paiement.|Two steps to activate your subscription: e-sign your contract, then add your payment method.|خطوتان لتفعيل اشتراكك: التوقيع الإلكتروني على العقد ثم وسيلة الدفع.|Dos pasos para activar su suscripción: la firma electrónica del contrato y luego su medio de pago.|Due passaggi per attivare l'abbonamento: firma elettronica del contratto, poi metodo di pagamento.|Twee stappen om uw abonnement te activeren: het contract elektronisch ondertekenen, daarna uw betaalmiddel.
+Dirigeant|Manager|المسير|Gerente|Legale rappresentante|Bestuurder
+Disponible après la signature du contrat.|Available once the contract is signed.|متاح بعد توقيع العقد.|Disponible tras la firma del contrato.|Disponibile dopo la firma del contratto.|Beschikbaar na ondertekening van het contract.
+Document illisible, expiré…|Unreadable, expired document…|وثيقة غير مقروءة أو منتهية الصلاحية…|Documento ilegible, caducado…|Documento illeggibile, scaduto…|Onleesbaar, verlopen document…
+Dossier de référencement|Listing application|ملف الإدراج|Expediente de referenciación|Pratica di inserimento|Aanvraagdossier vermelding
+Dossier envoyé|Application sent|تم إرسال الملف|Expediente enviado|Pratica inviata|Dossier verzonden
+Dossier à compléter|Application to complete|ملف يحتاج إلى استكمال|Expediente por completar|Pratica da completare|Dossier aan te vullen
+Dossiers déposés par les artisans inscrits en ligne : contrôlez chaque pièce, puis validez ou refusez le référencement.|Applications from tradespeople who signed up online: check each document, then approve or refuse the listing.|ملفات الحرفيين المسجلين عبر الإنترنت: راجع كل وثيقة ثم اقبل الإدراج أو ارفضه.|Expedientes de los profesionales inscritos en línea: revise cada documento y valide o rechace la referenciación.|Pratiche degli artigiani iscritti online: controlla ogni documento, poi approva o rifiuta l'inserimento.|Dossiers van online ingeschreven vakmensen: controleer elk stuk en keur de vermelding goed of af.
+Décennale valable jusqu'au|Ten-year insurance valid until|الضمان العشري صالح حتى|Decenal válido hasta|Decennale valida fino al|Tienjarige verzekering geldig tot
+Déposer|Upload|إيداع|Subir|Carica|Uploaden
+Déposée|Uploaded|مودعة|Subido|Caricato|Geüpload
+E-mail (identifiant de connexion)|Email (sign-in ID)|البريد الإلكتروني (معرّف الدخول)|Correo electrónico (identificador)|E-mail (identificativo di accesso)|E-mail (aanmeldnaam)
+En contrôle|Under review|قيد المراجعة|En revisión|In verifica|In controle
+Entreprise|Business|المقاولة|Empresa|Impresa|Onderneming
+Espace artisans|Tradespeople area|فضاء الحرفيين|Espacio profesionales|Area artigiani|Omgeving vakmensen
+Expirée|Expired|منتهية الصلاحية|Caducado|Scaduta|Verlopen
+Facultatif : à défaut, vos prénom et nom.|Optional: otherwise your first and last name.|اختياري: وإلا فاسمك الشخصي والعائلي.|Opcional: si no, su nombre y apellidos.|Facoltativo: altrimenti nome e cognome.|Optioneel: anders uw voor- en achternaam.
+Finaliser|Finish|إتمام|Finalizar|Completa|Afronden
+Finaliser mon inscription|Finish my sign-up|إتمام تسجيلي|Finalizar mi inscripción|Completa la mia iscrizione|Mijn inschrijving afronden
+Finalisez votre inscription : signez votre contrat d'abonnement et choisissez votre moyen de paiement.|Finish your sign-up: sign your subscription contract and choose your payment method.|أتمّ تسجيلك: وقّع عقد الاشتراك واختر وسيلة الدفع.|Finalice su inscripción: firme su contrato de suscripción y elija su medio de pago.|Completa l'iscrizione: firma il contratto di abbonamento e scegli il metodo di pagamento.|Rond uw inschrijving af: onderteken uw abonnementscontract en kies uw betaalmiddel.
+Formats acceptés : PDF, JPEG, PNG (4 Mo maximum). Vous pouvez photographier les documents avec votre téléphone.|Accepted formats: PDF, JPEG, PNG (4 MB max). You can photograph documents with your phone.|الصيغ المقبولة: PDF وJPEG وPNG (4 ميغابايت كحد أقصى). يمكنك تصوير الوثائق بهاتفك.|Formatos aceptados: PDF, JPEG, PNG (4 MB máximo). Puede fotografiar los documentos con su teléfono.|Formati accettati: PDF, JPEG, PNG (max 4 MB). Puoi fotografare i documenti con il telefono.|Toegestane formaten: PDF, JPEG, PNG (max. 4 MB). U kunt documenten met uw telefoon fotograferen.
+Forme juridique|Legal form|الشكل القانوني|Forma jurídica|Forma giuridica|Rechtsvorm
+Formulaire sécurisé SumUp (3D Secure) : ImmoPilot ne voit jamais votre numéro de carte.|Secure SumUp form (3D Secure): ImmoPilot never sees your card number.|نموذج SumUp الآمن (3D Secure): لا يرى ImmoPilot رقم بطاقتك أبدًا.|Formulario seguro SumUp (3D Secure): ImmoPilot nunca ve su número de tarjeta.|Modulo sicuro SumUp (3D Secure): ImmoPilot non vede mai il numero della carta.|Beveiligd SumUp-formulier (3D Secure): ImmoPilot ziet nooit uw kaartnummer.
+Franchise en base (art. 293 B du CGI)|VAT exemption (art. 293 B CGI)|إعفاء من الضريبة على القيمة المضافة (المادة 293 B)|Franquicia de IVA (art. 293 B CGI)|Franchigia IVA (art. 293 B CGI)|Btw-vrijstelling (art. 293 B CGI)
+Garant financier|Financial guarantor|الضامن المالي|Garante financiero|Garante finanziario|Financiële borg
+ICE (identifiant commun de l'entreprise)|ICE (common business identifier)|ICE (المعرّف الموحد للمقاولة)|ICE (identificador común de la empresa)|ICE (identificativo comune dell'impresa)|ICE (gemeenschappelijk ondernemingsnummer)
+Identifiant fiscal (IF)|Tax ID (IF)|التعريف الضريبي (IF)|Identificador fiscal (IF)|Identificativo fiscale (IF)|Fiscaal nummer (IF)
+Il est valable|It is valid for|وهو صالح لمدة|Es válido durante|È valido per|Het is geldig gedurende
+Inscription terminée. Bienvenue !|Sign-up complete. Welcome!|اكتمل التسجيل. مرحبًا!|Inscripción completada. ¡Bienvenido!|Iscrizione completata. Benvenuto!|Inschrijving voltooid. Welkom!
+J'ai lu la politique de confidentialité et j'accepte le traitement de mes données pour la création du compte.|I have read the privacy policy and accept the processing of my data to create the account.|قرأت سياسة الخصوصية وأوافق على معالجة بياناتي لإنشاء الحساب.|He leído la política de privacidad y acepto el tratamiento de mis datos para crear la cuenta.|Ho letto l'informativa sulla privacy e accetto il trattamento dei miei dati per creare l'account.|Ik heb het privacybeleid gelezen en ga akkoord met de verwerking van mijn gegevens voor het account.
+J'ai pris connaissance du statut de la plateforme : mise à disposition d'un logiciel (SaaS) et mise en relation, l'éditeur n'étant pas partie à mes contrats.|I acknowledge the platform's status: software provided as a service (SaaS) and introductions, the publisher not being a party to my contracts.|اطلعت على وضع المنصة: إتاحة برنامج (SaaS) وربط الاتصال، والناشر ليس طرفًا في عقودي.|He tomado conocimiento del estatus de la plataforma: puesta a disposición de un software (SaaS) y puesta en contacto, sin que el editor sea parte de mis contratos.|Ho preso atto dello status della piattaforma: messa a disposizione di un software (SaaS) e messa in contatto, l'editore non è parte dei miei contratti.|Ik ken het statuut van het platform: terbeschikkingstelling van software (SaaS) en bemiddeling, de uitgever is geen partij bij mijn contracten.
+J'ai une assurance responsabilité civile professionnelle (RC Pro)|I have professional liability insurance|لدي تأمين المسؤولية المدنية المهنية|Tengo un seguro de responsabilidad civil profesional|Ho un'assicurazione RC professionale|Ik heb een beroepsaansprakelijkheidsverzekering
+Laissez vide si vous bénéficiez de la franchise en base de TVA (art. 293 B du CGI).|Leave blank if you are VAT-exempt (art. 293 B CGI).|اتركه فارغًا إذا كنت معفى من الضريبة على القيمة المضافة.|Déjelo vacío si está exento de IVA (art. 293 B CGI).|Lascia vuoto se sei in franchigia IVA (art. 293 B CGI).|Laat leeg als u btw-vrijgesteld bent (art. 293 B CGI).
+Le paiement par carte n'est pas encore ouvert : après la signature, l'équipe ImmoPilot vous transmet les coordonnées de virement.|Card payment is not available yet: after signing, the ImmoPilot team will send you bank transfer details.|الدفع بالبطاقة غير متاح بعد: بعد التوقيع، يرسل لك فريق ImmoPilot معلومات التحويل البنكي.|El pago con tarjeta aún no está disponible: tras la firma, el equipo de ImmoPilot le enviará los datos de transferencia.|Il pagamento con carta non è ancora disponibile: dopo la firma il team ImmoPilot ti invierà i dati per il bonifico.|Kaartbetaling is nog niet beschikbaar: na ondertekening stuurt het ImmoPilot-team u de overschrijvingsgegevens.
+Le plus choisi|Most popular|الأكثر اختيارًا|El más elegido|Il più scelto|Meest gekozen
+Lire mon contrat (PDF)|Read my contract (PDF)|قراءة عقدي (PDF)|Leer mi contrato (PDF)|Leggi il mio contratto (PDF)|Mijn contract lezen (PDF)
+Lisez votre contrat, puis signez-le avec le code reçu par e-mail ou par SMS.|Read your contract, then sign it with the code received by email or SMS.|اقرأ عقدك ثم وقّعه بالرمز المستلم عبر البريد الإلكتروني أو الرسائل القصيرة.|Lea su contrato y fírmelo con el código recibido por correo o SMS.|Leggi il contratto, poi firmalo con il codice ricevuto via e-mail o SMS.|Lees uw contract en onderteken het met de code die u per e-mail of sms ontvangt.
+Manquante|Missing|ناقصة|Falta|Mancante|Ontbreekt
+Mention « Gestion immobilière » ou « Transactions » : obligatoire pour gérer ou louer les biens de tiers.|"Property management" or "Transactions" licence: required to manage or let third-party properties.|إشارة «تدبير عقاري» أو «معاملات»: إلزامية لتدبير أو كراء عقارات الغير.|Mención «Gestión inmobiliaria» o «Transacciones»: obligatoria para gestionar o alquilar bienes de terceros.|Dicitura «Gestione immobiliare» o «Transazioni»: obbligatoria per gestire o affittare immobili di terzi.|Vermelding "Vastgoedbeheer" of "Transacties": verplicht om panden van derden te beheren of te verhuren.
+Mes informations|My details|معلوماتي|Mis datos|I miei dati|Mijn gegevens
+Modifier mes informations|Edit my details|تعديل معلوماتي|Modificar mis datos|Modifica i miei dati|Mijn gegevens wijzigen
+Mon référencement|My listing|إدراجي|Mi referenciación|Il mio inserimento|Mijn vermelding
+Motif (envoyé à l'artisan par e-mail)|Reason (emailed to the tradesperson)|السبب (يُرسل إلى الحرفي عبر البريد)|Motivo (enviado al profesional por correo)|Motivo (inviato all'artigiano via e-mail)|Reden (per e-mail aan de vakman)
+Motif (envoyé à l'artisan)|Reason (sent to the tradesperson)|السبب (يُرسل إلى الحرفي)|Motivo (enviado al profesional)|Motivo (inviato all'artigiano)|Reden (aan de vakman)
+Métiers|Trades|الحرف|Oficios|Mestieri|Vakken
+Nom du dirigeant|Manager's name|اسم المسير|Nombre del gerente|Nome del legale rappresentante|Naam bestuurder
+Non déclarée|Not declared|غير مصرّح بها|No declarada|Non dichiarata|Niet aangegeven
+Nous avons envoyé un code à 6 chiffres à|We sent a 6-digit code to|أرسلنا رمزًا من 6 أرقام إلى|Hemos enviado un código de 6 dígitos a|Abbiamo inviato un codice a 6 cifre a|We hebben een 6-cijferige code gestuurd naar
+Nouveau code envoyé à|New code sent to|تم إرسال رمز جديد إلى|Nuevo código enviado a|Nuovo codice inviato a|Nieuwe code verzonden naar
+N° SIRET|SIRET no.|رقم SIRET|N.º SIRET|N. SIRET|SIRET-nr.
+N° d'affiliation CNSS|CNSS membership no.|رقم الانخراط في الضمان الاجتماعي|N.º de afiliación CNSS|N. di iscrizione CNSS|CNSS-aansluitingsnr.
+N° d'inscription au registre de l'auto-entrepreneur|Self-employed register no.|رقم التسجيل في سجل المقاول الذاتي|N.º de inscripción en el registro de autónomos|N. di iscrizione al registro degli autonomi|Inschrijvingsnr. register zelfstandigen
+N° de TVA intracommunautaire|EU VAT no.|رقم الضريبة على القيمة المضافة الأوروبي|N.º de IVA intracomunitario|N. di partita IVA intracomunitaria|Intracommunautair btw-nr.
+N° de carte professionnelle (loi Hoguet)|Professional licence no. (Hoguet law)|رقم البطاقة المهنية (قانون Hoguet)|N.º de tarjeta profesional (ley Hoguet)|N. di licenza professionale (legge Hoguet)|Nr. beroepskaart (wet Hoguet)
+N° de police (contrat)|Policy no.|رقم وثيقة التأمين|N.º de póliza|N. di polizza|Polisnummer
+N° de police décennale|Ten-year policy no.|رقم وثيقة الضمان العشري|N.º de póliza decenal|N. di polizza decennale|Polisnr. tienjarige verzekering
+N° de registre de commerce (RC)|Trade register no. (RC)|رقم السجل التجاري|N.º de registro mercantil (RC)|N. di registro di commercio (RC)|Handelsregisternr. (RC)
+N° de taxe professionnelle (patente)|Business tax no. (patente)|رقم الضريبة المهنية (الباتنتا)|N.º de impuesto profesional (patente)|N. di tassa professionale (patente)|Nr. beroepsbelasting (patente)
+Paiement : après la signature de votre contrat, le règlement se fait par virement selon les instructions qui vous seront transmises.|Payment: after you sign your contract, payment is made by bank transfer following the instructions you will receive.|الدفع: بعد توقيع عقدك، يتم الأداء بالتحويل البنكي وفق التعليمات التي ستصلك.|Pago: tras firmar el contrato, el pago se hace por transferencia según las instrucciones que recibirá.|Pagamento: dopo la firma del contratto si paga con bonifico secondo le istruzioni che riceverai.|Betaling: na ondertekening betaalt u per overschrijving volgens de instructies die u ontvangt.
+Paiement : vous signez votre contrat puis enregistrez votre carte (formulaire sécurisé SumUp). La première échéance est prélevée aussitôt, puis à chaque échéance.|Payment: sign your contract, then save your card (secure SumUp form). The first instalment is charged immediately, then on each due date.|الدفع: توقّع عقدك ثم تسجّل بطاقتك (نموذج SumUp الآمن). يُقتطع القسط الأول فورًا ثم عند كل استحقاق.|Pago: firma su contrato y registra su tarjeta (formulario seguro SumUp). El primer vencimiento se cobra de inmediato y luego en cada vencimiento.|Pagamento: firmi il contratto e registri la carta (modulo sicuro SumUp). La prima rata è addebitata subito, poi a ogni scadenza.|Betaling: u ondertekent uw contract en registreert uw kaart (beveiligd SumUp-formulier). De eerste termijn wordt meteen afgeschreven, daarna op elke vervaldag.
+Paiement : vous signez votre contrat puis enregistrez votre carte (formulaire sécurisé SumUp). Le premier prélèvement a lieu à la fin de l'essai gratuit, puis à chaque échéance.|Payment: sign your contract, then save your card (secure SumUp form). The first charge happens at the end of the free trial, then on each due date.|الدفع: توقّع عقدك ثم تسجّل بطاقتك (نموذج SumUp الآمن). يتم الاقتطاع الأول عند نهاية الفترة التجريبية ثم عند كل استحقاق.|Pago: firma su contrato y registra su tarjeta (formulario seguro SumUp). El primer cargo se hace al final de la prueba gratuita y luego en cada vencimiento.|Pagamento: firmi il contratto e registri la carta (modulo sicuro SumUp). Il primo addebito avviene alla fine della prova gratuita, poi a ogni scadenza.|Betaling: u ondertekent uw contract en registreert uw kaart (beveiligd SumUp-formulier). De eerste afschrijving gebeurt na de gratis proefperiode, daarna op elke vervaldag.
+Pas encore de compte ?|No account yet?|ليس لديك حساب بعد؟|¿Aún no tiene cuenta?|Non hai ancora un account?|Nog geen account?
+Pas encore référencé ?|Not listed yet?|لم يتم إدراجك بعد؟|¿Aún no está referenciado?|Non sei ancora inserito?|Nog niet vermeld?
+Pensez à vérifier vos courriers indésirables.|Remember to check your spam folder.|تحقق من مجلد الرسائل غير المرغوب فيها.|Revise su carpeta de correo no deseado.|Controlla anche la posta indesiderata.|Controleer ook uw spammap.
+Pièce refusée|Document refused|وثيقة مرفوضة|Documento rechazado|Documento rifiutato|Stuk geweigerd
+Pièces exigées pour votre statut dans votre pays. PDF, JPEG ou PNG, 4 Mo maximum ; vous pouvez photographier un document avec votre téléphone.|Documents required for your status in your country. PDF, JPEG or PNG, 4 MB max; you can photograph a document with your phone.|الوثائق المطلوبة لوضعك في بلدك. PDF أو JPEG أو PNG، 4 ميغابايت كحد أقصى؛ يمكنك تصوير الوثيقة بهاتفك.|Documentos exigidos para su estatus en su país. PDF, JPEG o PNG, 4 MB máximo; puede fotografiar un documento con su teléfono.|Documenti richiesti per il tuo status nel tuo paese. PDF, JPEG o PNG, max 4 MB; puoi fotografare un documento con il telefono.|Stukken vereist voor uw rechtsvorm in uw land. PDF, JPEG of PNG, max. 4 MB; u kunt een document met uw telefoon fotograferen.
+Pièces justificatives|Supporting documents|الوثائق الثبوتية|Documentos justificativos|Documenti giustificativi|Bewijsstukken
+Pièces manquantes|Missing documents|وثائق ناقصة|Documentos que faltan|Documenti mancanti|Ontbrekende stukken
+Pièces à fournir après la création de votre compte|Documents to provide after creating your account|الوثائق المطلوبة بعد إنشاء حسابك|Documentos que aportar tras crear su cuenta|Documenti da fornire dopo la creazione dell'account|Stukken aan te leveren na het aanmaken van uw account
+Plus tard|Later|لاحقًا|Más tarde|Più tardi|Later
+Politique de confidentialité|Privacy policy|سياسة الخصوصية|Política de privacidad|Informativa sulla privacy|Privacybeleid
+Pour la signature de votre contrat par SMS et le support.|For signing your contract by SMS and for support.|لتوقيع عقدك عبر الرسائل القصيرة وللدعم.|Para firmar su contrato por SMS y para el soporte.|Per la firma del contratto via SMS e per l'assistenza.|Voor de ondertekening per sms en voor support.
+Prix hors taxes pour les professionnels (TVA en sus), toutes taxes comprises pour les particuliers.|Prices excl. VAT for businesses (VAT extra), incl. VAT for individuals.|الأسعار دون احتساب الضريبة للمهنيين، وشاملة لجميع الضرائب للأفراد.|Precios sin IVA para profesionales (IVA aparte), IVA incluido para particulares.|Prezzi IVA esclusa per i professionisti, IVA inclusa per i privati.|Prijzen excl. btw voor professionals, incl. btw voor particulieren.
+Quel est votre corps de métier ?|What is your trade?|ما هي حرفتك؟|¿Cuál es su oficio?|Qual è il tuo mestiere?|Wat is uw vak?
+RC professionnelle|Professional liability|المسؤولية المدنية المهنية|RC profesional|RC professionale|Beroepsaansprakelijkheid
+Recevoir mon code|Get my code|استلام رمزي|Recibir mi código|Ricevi il codice|Mijn code ontvangen
+Refuser la pièce|Refuse document|رفض الوثيقة|Rechazar el documento|Rifiuta il documento|Stuk weigeren
+Refusée|Refused|مرفوضة|Rechazado|Rifiutato|Geweigerd
+Retour à la connexion|Back to sign-in|العودة إلى تسجيل الدخول|Volver al inicio de sesión|Torna all'accesso|Terug naar aanmelden
+Référencements artisans|Tradesperson listings|إدراج الحرفيين|Referenciaciones de profesionales|Inserimenti artigiani|Vermeldingen vakmensen
+S'inscrire : propriétaire ou agence|Sign up: owner or agency|التسجيل: مالك أو وكالة|Inscribirse: propietario o agencia|Iscriviti: proprietario o agenzia|Inschrijven: eigenaar of bureau
+Sans engagement : changez de forfait ou résiliez à tout moment depuis votre espace.|No commitment: change plan or cancel at any time from your workspace.|بدون التزام: غيّر الباقة أو ألغِ في أي وقت من فضائك.|Sin compromiso: cambie de plan o cancele en cualquier momento desde su espacio.|Senza vincoli: cambia piano o disdici in qualsiasi momento dal tuo spazio.|Zonder verplichting: wijzig of stop op elk moment vanuit uw omgeving.
+Se référencer comme artisan|Get listed as a tradesperson|الإدراج كحرفي|Referenciarse como profesional|Iscriviti come artigiano|Vermelding als vakman aanvragen
+Signer mon contrat|Sign my contract|توقيع عقدي|Firmar mi contrato|Firma il mio contratto|Mijn contract ondertekenen
+Signé le|Signed on|تم التوقيع في|Firmado el|Firmato il|Ondertekend op
+Société|Company|شركة|Sociedad|Società|Vennootschap
+Suspendre le référencement|Suspend listing|تعليق الإدراج|Suspender la referenciación|Sospendi l'inserimento|Vermelding opschorten
+Sélectionné|Selected|تم الاختيار|Seleccionado|Selezionato|Geselecteerd
+Toutes les pièces sont déposées.|All documents are uploaded.|تم إيداع جميع الوثائق.|Todos los documentos están subidos.|Tutti i documenti sono caricati.|Alle stukken zijn geüpload.
+Tribunal (ville du RC)|Court (trade register city)|المحكمة (مدينة السجل التجاري)|Tribunal (ciudad del registro)|Tribunale (città del registro)|Rechtbank (stad handelsregister)
+Téléphone mobile|Mobile phone|الهاتف المحمول|Teléfono móvil|Cellulare|Mobiele telefoon
+Un particulier|An individual|شخص ذاتي|Un particular|Un privato|Een particulier
+Une société (SCI, SARL…)|A company (SCI, SARL…)|شركة (SCI، SARL…)|Una sociedad (SCI, SARL…)|Una società (SCI, SARL…)|Een vennootschap (SCI, SARL…)
+Valider et créer mon compte|Confirm and create my account|تأكيد وإنشاء حسابي|Validar y crear mi cuenta|Conferma e crea il mio account|Bevestigen en account aanmaken
+Valider le référencement|Approve listing|قبول الإدراج|Validar la referenciación|Approva l'inserimento|Vermelding goedkeuren
+Valider le référencement ? L'artisan apparaîtra dans l'annuaire proposé aux propriétaires et agences.|Approve the listing? The tradesperson will appear in the directory offered to owners and agencies.|قبول الإدراج؟ سيظهر الحرفي في الدليل المقترح على الملاك والوكالات.|¿Validar la referenciación? El profesional aparecerá en el directorio ofrecido a propietarios y agencias.|Approvare l'inserimento? L'artigiano comparirà nell'elenco proposto a proprietari e agenzie.|Vermelding goedkeuren? De vakman verschijnt in de gids voor eigenaars en bureaus.
+Validée|Approved|مقبولة|Validado|Approvato|Goedgekeurd
+Ville du RCS|Trade register city (RCS)|مدينة السجل التجاري|Ciudad del registro (RCS)|Città del registro (RCS)|Stad handelsregister (RCS)
+Vos informations|Your details|معلوماتك|Sus datos|I tuoi dati|Uw gegevens
+Vos informations légales, vos assurances et vos pièces justificatives.|Your legal details, insurance and supporting documents.|معلوماتك القانونية وتأميناتك ووثائقك الثبوتية.|Sus datos legales, seguros y documentos justificativos.|I tuoi dati legali, le assicurazioni e i documenti giustificativi.|Uw wettelijke gegevens, verzekeringen en bewijsstukken.
+Vos métiers relèvent des travaux du bâtiment : l'assurance décennale est obligatoire en France (art. L. 241-1 du Code des assurances).|Your trades involve building work: ten-year liability insurance is mandatory in France (art. L. 241-1 Insurance Code).|حرفك تتعلق بأشغال البناء: تأمين الضمان العشري إلزامي في فرنسا.|Sus oficios son obras de construcción: el seguro decenal es obligatorio en Francia (art. L. 241-1 del Código de seguros).|I tuoi mestieri riguardano lavori edili: l'assicurazione decennale è obbligatoria in Francia (art. L. 241-1 Codice delle assicurazioni).|Uw vakken betreffen bouwwerken: de tienjarige verzekering is verplicht in Frankrijk (art. L. 241-1 Verzekeringswetboek).
+Votre agence et vous|Your agency and you|وكالتك وأنت|Su agencia y usted|La tua agenzia e tu|Uw bureau en u
+Votre entreprise|Your business|مقاولتك|Su empresa|La tua impresa|Uw onderneming
+Votre espace est prêt.|Your workspace is ready.|فضاؤك جاهز.|Su espacio está listo.|Il tuo spazio è pronto.|Uw omgeving is klaar.
+Votre société|Your company|شركتك|Su sociedad|La tua società|Uw vennootschap
+Votre statut|Your status|وضعك القانوني|Su estatus|Il tuo status|Uw rechtsvorm
+Vous êtes|You are|أنت|Usted es|Sei|U bent
+Vous êtes artisan ou prestataire ?|Are you a tradesperson or service provider?|هل أنت حرفي أو مقدم خدمات؟|¿Es usted profesional o proveedor?|Sei un artigiano o un fornitore?|Bent u vakman of dienstverlener?
+Vous êtes référencé(e) : seuls le téléphone, les zones et les assurances sont modifiables. Pour changer d'entreprise, contactez l'équipe ImmoPilot.|You are listed: only phone, areas and insurance can be changed. To change business, contact the ImmoPilot team.|أنت مُدرج: يمكن تعديل الهاتف والمناطق والتأمينات فقط. لتغيير المقاولة، اتصل بفريق ImmoPilot.|Está referenciado: solo se pueden modificar el teléfono, las zonas y los seguros. Para cambiar de empresa, contacte con el equipo de ImmoPilot.|Sei inserito: solo telefono, zone e assicurazioni sono modificabili. Per cambiare impresa, contatta il team ImmoPilot.|U bent vermeld: alleen telefoon, gebieden en verzekeringen zijn wijzigbaar. Neem contact op met ImmoPilot om van onderneming te veranderen.
+Vous êtes…|You are…|أنت…|Usted es…|Sei…|U bent…
+Zones d'intervention|Service areas|مناطق التدخل|Zonas de intervención|Zone di intervento|Werkgebieden
+Zones d'intervention (villes ou quartiers, séparés par des virgules)|Service areas (cities or districts, comma-separated)|مناطق التدخل (مدن أو أحياء، مفصولة بفواصل)|Zonas de intervención (ciudades o barrios, separados por comas)|Zone di intervento (città o quartieri, separati da virgole)|Werkgebieden (steden of wijken, gescheiden door komma's)
+de stockage|of storage|من التخزين|de almacenamiento|di spazio|opslag
+dossier envoyé le|application sent on|أُرسل الملف في|expediente enviado el|pratica inviata il|dossier verzonden op
+dossier pas encore envoyé|application not sent yet|لم يُرسل الملف بعد|expediente aún no enviado|pratica non ancora inviata|dossier nog niet verzonden
+jours d'essai gratuit|days free trial|يومًا تجربة مجانية|días de prueba gratuita|giorni di prova gratuita|dagen gratis proef
+jusqu'au|until|حتى|hasta el|fino al|tot
+manquante(s)|missing|ناقصة|que faltan|mancante/i|ontbrekend
+obligatoire pour vos métiers du bâtiment.|mandatory for your building trades.|إلزامي لحرف البناء الخاصة بك.|obligatorio para sus oficios de la construcción.|obbligatoria per i tuoi mestieri edili.|verplicht voor uw bouwvakken.
+si vous en avez une (recommandée).|if you have one (recommended).|إن كان لديك واحد (موصى به).|si tiene uno (recomendado).|se ne hai una (consigliata).|als u er een hebt (aanbevolen).
+à contrôler|to review|للمراجعة|por revisar|da verificare|te controleren
+Votre profil|Your profile|ملفك|Su perfil|Il tuo profilo|Uw profiel
+Votre forfait|Your plan|باقتك|Su plan|Il tuo piano|Uw abonnement
+Confirmation de l'e-mail|Email confirmation|تأكيد البريد الإلكتروني|Confirmación del correo|Conferma e-mail|E-mailbevestiging
+Contrat et paiement|Contract and payment|العقد والدفع|Contrato y pago|Contratto e pagamento|Contract en betaling
+Agence ou conciergerie|Agency or concierge service|وكالة أو خدمة كونسيرج|Agencia o conserjería|Agenzia o concierge|Bureau of conciërgedienst
+Vous possédez un ou plusieurs biens (location courte ou longue durée) et les gérez vous-même, ou avec une agence.|You own one or more properties (short or long-term rental) and manage them yourself or with an agency.|تملك عقارًا أو أكثر (كراء قصير أو طويل المدة) وتدبره بنفسك أو مع وكالة.|Posee uno o varios inmuebles (alquiler de corta o larga duración) y los gestiona usted o con una agencia.|Possiedi uno o più immobili (affitto breve o lungo) e li gestisci da solo o con un'agenzia.|U bezit een of meer panden (korte of lange verhuur) en beheert ze zelf of met een bureau.
+Agence immobilière, conciergerie ou gestionnaire : vous gérez les biens de vos clients (mandants) et vos équipes.|Estate agency, concierge or manager: you manage your clients' properties and your teams.|وكالة عقارية أو كونسيرج أو مسير: تدبر عقارات زبنائك وفرقك.|Agencia inmobiliaria, conserjería o gestor: gestiona los inmuebles de sus clientes y sus equipos.|Agenzia immobiliare, concierge o gestore: gestisci gli immobili dei tuoi clienti e i tuoi team.|Makelaar, conciërgedienst of beheerder: u beheert de panden van uw klanten en uw teams.
+Auto-entrepreneur (micro-entreprise)|Self-employed (micro-business)|مقاول ذاتي (مقاولة صغيرة)|Autónomo (microempresa)|Lavoratore autonomo (micro-impresa)|Zelfstandige (micro-onderneming)
+Entreprise individuelle au régime micro : SIRET, sans société.|Sole trader under the micro scheme: SIRET, no company.|مقاولة فردية بالنظام المبسط: SIRET دون شركة.|Empresa individual en régimen micro: SIRET, sin sociedad.|Impresa individuale in regime micro: SIRET, senza società.|Eenmanszaak onder het microregime: SIRET, geen vennootschap.
+Inscrit au Registre national de l'auto-entrepreneur.|Registered in the national self-employed register.|مسجل في السجل الوطني للمقاول الذاتي.|Inscrito en el Registro nacional de autónomos.|Iscritto al registro nazionale dei lavoratori autonomi.|Ingeschreven in het nationaal register van zelfstandigen.
+SARL, EURL, SAS, SASU… immatriculée au RCS.|SARL, EURL, SAS, SASU… registered with the RCS.|SARL، EURL، SAS، SASU… مسجلة في السجل التجاري.|SARL, EURL, SAS, SASU… inscrita en el RCS.|SARL, EURL, SAS, SASU… iscritta al RCS.|SARL, EURL, SAS, SASU… ingeschreven in het RCS.
+SARL, SARL AU, SA… immatriculée au registre de commerce.|SARL, SARL AU, SA… registered in the trade register.|SARL، SARL AU، SA… مسجلة في السجل التجاري.|SARL, SARL AU, SA… inscrita en el registro mercantil.|SARL, SARL AU, SA… iscritta al registro di commercio.|SARL, SARL AU, SA… ingeschreven in het handelsregister.
+Le référencement ImmoPilot|The ImmoPilot listing|الإدراج في ImmoPilot|La referenciación ImmoPilot|L'inserimento ImmoPilot|De ImmoPilot-vermelding
+Ce qu'est ImmoPilot|What ImmoPilot is|ما هو ImmoPilot|Qué es ImmoPilot|Cos'è ImmoPilot|Wat ImmoPilot is
+Lire les conditions de référencement|Read the listing terms|قراءة شروط الإدراج|Leer las condiciones de referenciación|Leggi le condizioni di inserimento|Vermeldingsvoorwaarden lezen
+Lire les conditions générales|Read the terms and conditions|قراءة الشروط العامة|Leer las condiciones generales|Leggi le condizioni generali|Algemene voorwaarden lezen
+trimestre|quarter|ربع سنة|trimestre|trimestre|kwartaal
+an|year|سنة|año|anno|jaar
+Compte créé|Account created|تم إنشاء الحساب|Cuenta creada|Account creato|Account aangemaakt
+Enregistrer ma carte bancaire|Save my bank card|تسجيل بطاقتي البنكية|Registrar mi tarjeta bancaria|Registra la mia carta|Mijn bankkaart registreren
+À contrôler|To review|للمراجعة|Por revisar|Da verificare|Te controleren
+À compléter|To complete|للاستكمال|Por completar|Da completare|Aan te vullen
+Suspendus|Suspended|معلّقون|Suspendidos|Sospesi|Opgeschort
+Référencés|Listed|مُدرجون|Referenciados|Inseriti|Vermeld
+Fin de l'essai gratuit|End of free trial|نهاية الفترة التجريبية المجانية|Fin de la prueba gratuita|Fine della prova gratuita|Einde gratis proefperiode
+Renvoyer mon dossier|Resend my application|إعادة إرسال ملفي|Reenviar mi expediente|Rinvia la mia pratica|Mijn dossier opnieuw verzenden
+Envoyer mon dossier pour validation|Send my application for review|إرسال ملفي للمراجعة|Enviar mi expediente para validación|Invia la pratica per la verifica|Mijn dossier ter controle verzenden
+Votre dossier n'est pas encore validé. Déposez toutes les pièces demandées, puis envoyez votre dossier pour contrôle.|Your application is not approved yet. Upload all requested documents, then send your application for review.|ملفك لم يُقبل بعد. أودع جميع الوثائق المطلوبة ثم أرسل ملفك للمراجعة.|Su expediente aún no está validado. Suba todos los documentos solicitados y envíelo para su revisión.|La tua pratica non è ancora approvata. Carica tutti i documenti richiesti, poi inviala per la verifica.|Uw dossier is nog niet goedgekeurd. Upload alle gevraagde stukken en verzend het ter controle.
+Dossier envoyé : il est en cours de contrôle par l'équipe ImmoPilot (en général sous 2 jours ouvrés). Vous serez prévenu(e) par e-mail.|Application sent: the ImmoPilot team is reviewing it (usually within 2 working days). You will be notified by email.|تم إرسال الملف: يراجعه فريق ImmoPilot (عادة خلال يومي عمل). سيتم إشعارك عبر البريد الإلكتروني.|Expediente enviado: el equipo de ImmoPilot lo está revisando (normalmente en 2 días hábiles). Se le avisará por correo.|Pratica inviata: il team ImmoPilot la sta verificando (di solito entro 2 giorni lavorativi). Riceverai un'e-mail.|Dossier verzonden: het ImmoPilot-team controleert het (meestal binnen 2 werkdagen). U krijgt bericht per e-mail.
+Votre dossier est à compléter|Your application needs more information|ملفك يحتاج إلى استكمال|Su expediente debe completarse|La tua pratica è da completare|Uw dossier moet worden aangevuld
+Vous êtes référencé(e) : les propriétaires et agences peuvent vous envoyer des demandes de devis et d'intervention.|You are listed: owners and agencies can send you quote and job requests.|أنت مُدرج: يمكن للملاك والوكالات إرسال طلبات عروض أسعار وتدخلات إليك.|Está referenciado: propietarios y agencias pueden enviarle solicitudes de presupuesto e intervención.|Sei inserito: proprietari e agenzie possono inviarti richieste di preventivo e di intervento.|U bent vermeld: eigenaars en bureaus kunnen u offerte- en opdrachtaanvragen sturen.
+Votre référencement est suspendu|Your listing is suspended|إدراجك معلّق|Su referenciación está suspendida|Il tuo inserimento è sospeso|Uw vermelding is opgeschort
+SIRET|SIRET|SIRET|SIRET|SIRET|SIRET
+ICE|ICE|ICE|ICE|ICE|ICE
+RC|Trade register|السجل التجاري|Registro mercantil|Registro di commercio|Handelsregister
+Capital|Capital|رأس المال|Capital|Capitale|Kapitaal
+Alerte|Alert|تنبيه|Alerta|Avviso|Waarschuwing
+Décennale|Ten-year insurance|الضمان العشري|Decenal|Decennale|Tienjarige verzekering
+TVA intracommunautaire|EU VAT|الضريبة على القيمة المضافة الأوروبية|IVA intracomunitario|IVA intracomunitaria|Intracommunautaire btw
+IF / patente / CNSS|IF / business tax / CNSS|IF / الباتنتا / CNSS|IF / patente / CNSS|IF / patente / CNSS|IF / patente / CNSS
+RCS|RCS|السجل التجاري|RCS|RCS|RCS
+J'accepte les conditions générales d'abonnement et d'utilisation.|I accept the subscription and use terms and conditions.|أوافق على الشروط العامة للاشتراك والاستعمال.|Acepto las condiciones generales de suscripción y uso.|Accetto le condizioni generali di abbonamento e di utilizzo.|Ik aanvaard de algemene abonnements- en gebruiksvoorwaarden.
+J'accepte les conditions de référencement des prestataires et je certifie l'exactitude de mes informations.|I accept the provider listing terms and certify that my information is accurate.|أوافق على شروط إدراج مقدمي الخدمات وأشهد بصحة معلوماتي.|Acepto las condiciones de referenciación de proveedores y certifico la exactitud de mis datos.|Accetto le condizioni di inserimento dei fornitori e certifico l'esattezza dei miei dati.|Ik aanvaard de vermeldingsvoorwaarden voor dienstverleners en verklaar dat mijn gegevens juist zijn.

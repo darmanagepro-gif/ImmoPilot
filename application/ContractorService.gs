@@ -117,6 +117,8 @@ function ctrGet_(p, a) {
   const visible = function (w) { if (mgr && !pf) return true; if (self) return true; const pr = dbGet_("Properties", w.propertyId); return !!pr && canProp_(p, pr, "workorder.manage"); };
   o.workOrders = dbAll_("WorkOrders").filter(function (w) { return String(w.artisanId) === String(c.artisanId) && visible(w); }).sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); }).slice(0, 50).map(woOut_);
   o.documents = (mgr || self) ? docList_(p, { ownerType: "CONTRACTOR", ownerId: c.artisanId }) : [];
+  // Dossier de référencement (inscription en ligne) : contrôle des pièces par le super administrateur.
+  if (pf && p.isSuper && c.source === "SIGNUP") o.verification = providerOut_(c, true);
   return o;
 }
 function ctrCreate_(p, a) {

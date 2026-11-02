@@ -1,5 +1,16 @@
 # Journal des modifications
 
+## 2.6.0 — Inscription en ligne et référencement des artisans (France et Maroc)
+
+- Écran de connexion : boutons « S'inscrire : propriétaire ou agence » et « Espace artisans » (aussi accessibles par `?action=signup` et `?action=artisans`, et depuis la page d'accueil).
+- Inscription client en 5 étapes : profil (propriétaire ou agence), forfait (prix, limites, fonctionnalités, essai), informations (particulier ou société ; identifiants légaux contrôlés : SIRET avec clé de Luhn en France, ICE à 15 chiffres au Maroc ; carte professionnelle loi Hoguet pour les agences en France), acceptation expresse du statut de la plateforme (SaaS et mise en relation), des conditions et de la confidentialité, code de confirmation par e-mail, puis signature électronique du contrat et enregistrement de la carte (page « Finaliser mon inscription » et bandeau tant que ce n'est pas fait).
+- Une agence inscrite seule reçoit les rôles d'administration d'agence et de propriétaire (biens de ses mandants).
+- Référencement des artisans : corps de métier et zones, statut (auto-entrepreneur ou société), informations légales selon le pays, RC Pro (assureur, n° de police, adresse, validité) et décennale obligatoire en France pour les métiers du bâtiment ; pièces exigées selon le pays (France : identité, avis SIRENE ou Kbis, attestation URSSAF, décennale, RC Pro, RIB ; Maroc : CIN, attestation auto-entrepreneur ou modèle J et CNSS, RC Pro, RIB) ; dépôt depuis « Mon référencement », envoi du dossier.
+- Super administrateur : page « Référencements artisans », contrôle pièce par pièce (valider / refuser avec motif), validation, demande de compléments ou suspension, e-mails à l'artisan ; l'artisan n'apparaît aux clients qu'une fois référencé.
+- Tâche quotidienne : rappel 30 jours avant l'expiration d'une assurance, suspension automatique après expiration.
+- Documents juridiques : section « Mise en relation » dans les conditions générales et nouvelles « Conditions de référencement des prestataires ».
+- Sécurité : rien n'est créé avant le code (15 min, 5 essais, haché), mot de passe haché dès la demande puis effacé de celle-ci, limitation par IP et par e-mail. Schéma 15.
+
 ## 2.5.0 — 2 novembre 2026 — communication centralisée avec l'API Brevo
 
 - Envoi des e-mails par l'API Brevo (`BREVO_API_KEY` dans l'environnement du serveur, jamais dans la base ni le navigateur) ; SMTP conservé en secours si la clé est absente. File d'attente inchangée : jusqu'à 6 essais espacés, erreurs définitives (adresse refusée) sans nouvel essai, anti-doublon par clé d'événement.

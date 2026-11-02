@@ -98,7 +98,8 @@ function docOwnerCtx_(p, ownerType, ownerId, category) {
     ctx.canWrite = hasOrgCap_(p, t.organizationId, "lease.manage");
   } else if (ownerType === "CONTRACTOR") {
     const c = dbGet_("Artisans", ownerId); if (!c) return ctx; ctx.organizationId = c.organizationId;
-    ctx.canRead = hasOrgCap_(p, c.organizationId, "contractor.manage") || myArtisanIds_(p).indexOf(String(c.artisanId)) >= 0;
+    ctx.canRead = hasOrgCap_(p, c.organizationId, "contractor.manage") || myArtisanIds_(p).indexOf(String(c.artisanId)) >= 0 || (c.source === "SIGNUP" && String(c.userId) === p.userId) || (p.isSuper && isPlatformContractor_(c));
+    ctx.sensitive = PROVIDER_DOC_CODES_.indexOf(category) >= 0 && ["ID_DOCUMENT", "CIN", "RIB"].indexOf(category) >= 0;
     ctx.canWrite = ctx.canRead;
   } else if (ownerType === "REPORT") {
     ctx.canRead = ownerId === p.userId; ctx.canWrite = ownerId === p.userId; ctx.organizationId = "";

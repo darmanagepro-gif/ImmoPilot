@@ -402,3 +402,13 @@ set.template.lease|Modèle de document : bail|Document template: lease|نموذ�
 set.template.reservation|Modèle de document : fiche de réservation|Document template: reservation sheet|نموذج المستند: بطاقة الحجز|Plantilla de documento: ficha de reserva|Modello di documento: scheda di prenotazione|Documentsjabloon: reserveringsfiche
 set.rent.cardPaymentUrl|Lien de paiement par carte (appels et relances)|Card payment link (notices and reminders)|رابط الأداء بالبطاقة (الإشعارات والتذكيرات)|Enlace de pago con tarjeta (avisos y recordatorios)|Link di pagamento con carta (avvisi e solleciti)|Betaallink met kaart (berichten en aanmaningen)
 set.rent.paymentInstructions|Modalités de paiement (sur les appels et relances)|Payment instructions (on notices and reminders)|طرق الأداء (في الإشعارات والتذكيرات)|Modalidades de pago (en avisos y recordatorios)|Modalità di pagamento (su avvisi e solleciti)|Betaalinstructies (op berichten en aanmaningen)
+SIRENE|Avis de situation SIRENE|SIRENE registration notice|إشعار التسجيل في SIRENE|Aviso de situación SIRENE|Avviso di situazione SIRENE|SIRENE-inschrijvingsbewijs
+URSSAF|Attestation de vigilance URSSAF|URSSAF compliance certificate|شهادة اليقظة URSSAF|Certificado de vigilancia URSSAF|Attestato di vigilanza URSSAF|URSSAF-nalevingsattest
+DECENNALE|Assurance décennale|Ten-year liability insurance|تأمين الضمان العشري|Seguro decenal|Assicurazione decennale|Tienjarige aansprakelijkheidsverzekering
+RC_PRO|Assurance RC professionnelle|Professional liability insurance|تأمين المسؤولية المدنية المهنية|Seguro de responsabilidad civil profesional|Assicurazione RC professionale|Beroepsaansprakelijkheidsverzekering
+RIB|RIB|Bank details (RIB)|بيان الهوية البنكية (RIB)|Datos bancarios (RIB)|Coordinate bancarie (RIB)|Bankgegevens (RIB)
+KBIS|Extrait Kbis|Kbis extract|مستخرج Kbis|Extracto Kbis|Visura Kbis|Kbis-uittreksel
+AE_CARD|Attestation d'auto-entrepreneur|Self-employed registration certificate|شهادة المقاول الذاتي|Certificado de autónomo|Attestato di lavoratore autonomo|Bewijs van inschrijving als zelfstandige
+RC_EXTRACT|Extrait du registre de commerce (modèle J)|Trade register extract (form J)|مستخرج السجل التجاري (نموذج ج)|Extracto del registro mercantil (modelo J)|Estratto del registro di commercio (modello J)|Uittreksel handelsregister (model J)
+CNSS|Attestation CNSS|CNSS certificate|شهادة الانخراط في الضمان الاجتماعي|Certificado CNSS|Attestato CNSS|CNSS-attest
+OTHER_PROOF|Autre justificatif|Other document|وثيقة أخرى|Otro justificante|Altro documento|Ander bewijsstuk

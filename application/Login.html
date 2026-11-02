@@ -62,7 +62,7 @@ const Public = {
       return [i ? " · " : "", h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.legal(x[0]); } }, t(x[1]))];
     }));
   },
-  login: function (msg) {
+  login: function (msg, opts) {
     const err = h("div", { class: msg ? "alert bad" : "alert bad hidden" }, msg || "");
     const f = buildForm([{ k: "email", l: "E-mail", t: "email", req: true, ac: "username" }, { k: "password", l: "Mot de passe", t: "password", req: true, ac: "current-password" }]);
     const go = h("button", { class: "btn primary lg", type: "submit", style: { width: "100%", justifyContent: "center", marginTop: "14px" } }, t("Se connecter"));
@@ -75,7 +75,234 @@ const Public = {
       }).catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); go.disabled = false; go.textContent = t("Se connecter"); });
     });
     const forgot = h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.forgot(); } }, t("Mot de passe oublié ou compte à activer ?"));
-    Public.frame(t("Connexion"), t("Accédez à votre espace ImmoPilot."), h("div", null, ED.publicDemo ? Public.demoPicker() : null, err, f.el, h("p", { class: "small", style: { marginTop: "16px" } }, forgot), Public.legalLinks()));
+    const join = ED.publicDemo ? null : h("div", { class: "join-box" },
+      h("p", { class: "join-title" }, t("Pas encore de compte ?")),
+      btn(t("S'inscrire : propriétaire ou agence"), function () { Public.signup(); }, "primary join-btn"),
+      h("p", { class: "join-title", style: { marginTop: "14px" } }, t("Vous êtes artisan ou prestataire ?")),
+      btn("⚒ " + t("Espace artisans"), function () { Public.artisans(); }, "join-btn"));
+    Public.frame(opts && opts.artisan ? t("Espace artisans") : t("Connexion"), opts && opts.artisan ? t("Connectez-vous pour suivre votre référencement, vos demandes de devis et vos interventions.") : t("Accédez à votre espace ImmoPilot."),
+      h("div", null, ED.publicDemo ? Public.demoPicker() : null, err, f.el, h("p", { class: "small", style: { marginTop: "16px" } }, forgot),
+        opts && opts.artisan ? h("div", { class: "join-box" }, h("p", { class: "join-title" }, t("Pas encore référencé ?")), btn("⚒ " + t("Se référencer comme artisan"), function () { Public.providerSignup(); }, "primary join-btn"),
+          h("p", { class: "small", style: { marginTop: "12px" } }, h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.login(); } }, "← " + t("Connexion propriétaires et agences")))) : join,
+        Public.legalLinks()));
+  },
+  artisans: function () { Public.login("", { artisan: true }); },
+
+  /* ----------------------------- Inscription en ligne ----------------------------- */
+  /** Page large (inscription) : en-tête de marque, étapes, contenu. */
+  wide: function (title, steps, current, body) {
+    const app = clear($("app"));
+    const langSel = h("select", { class: "lang", "aria-label": t("Langue"), onchange: function (e) { setLang(e.target.value); Public._redraw && Public._redraw(); } }, langOpts().map(function (l) { return h("option", { value: l[0] }, l[1]); }));
+    langSel.value = S.lang;
+    app.appendChild(h("div", { class: "signup-page" },
+      h("header", { class: "legal-head" }, h("div", { class: "brand", style: { padding: 0 } }, brandMark(), h("div", null, h("b", null, "ImmoPilot"), h("small", null, ED.tagline))),
+        h("div", { class: "actions" }, themeButton(), langSel, btn("← " + t("Retour à la connexion"), function () { Public._redraw = null; Public.login(); }))),
+      h("h1", { class: "signup-title" }, title),
+      steps ? h("ol", { class: "stepper" }, steps.map(function (s, i) { return h("li", { class: i < current ? "done" : (i === current ? "on" : "") }, h("span", { class: "n" }, i < current ? "✓" : String(i + 1)), h("span", { class: "l" }, t(s))); })) : null,
+      body));
+    window.scrollTo(0, 0);
+  },
+  statusBox: function (info, provider) {
+    return h("div", { class: "status-box" }, h("h3", null, "ⓘ " + t(provider ? "Le référencement ImmoPilot" : info.status.title)),
+      h("ul", null, (provider ? info.status.providerPoints : info.status.points).map(function (x) { return h("li", null, x); })),
+      h("p", { class: "small" }, h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.legal(provider ? "referencement" : "cgv", function () { Public._redraw ? Public._redraw() : Public.login(); }); } }, t(provider ? "Lire les conditions de référencement" : "Lire les conditions générales")), " · ",
+        h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.legal("confidentialite", function () { Public._redraw ? Public._redraw() : Public.login(); }); } }, t("Politique de confidentialité"))));
+  },
+  choiceCards: function (items, value, onPick) {
+    return h("div", { class: "choice-cards" }, items.map(function (it) {
+      return h("button", { type: "button", class: "choice" + (value === it.v ? " on" : ""), "aria-pressed": value === it.v ? "true" : "false", onclick: function () { onPick(it.v); } },
+        h("span", { class: "ico", "aria-hidden": "true" }, it.i), h("b", null, t(it.t)), h("span", { class: "small muted" }, t(it.d)));
+    }));
+  },
+  navRow: function (back, next, nextLabel) {
+    return h("div", { class: "actions signup-nav" }, back ? btn("← " + t("Précédent"), back) : h("span"), next ? btn((nextLabel || t("Continuer")) + " →", next, "primary lg") : null);
+  },
+  /** Champs légaux de la structure selon le pays (France : SIRET… ; Maroc : ICE, RC…). show : condition d'affichage. */
+  companyFields: function (info, kind, show) {
+    const fr = info.country === "FR", forms = (info.legalForms[kind === "AGENCY" ? "AGENCY" : "COMPANY"] || []).map(function (x) { return [x, x === "AUTRE" ? t("Autre") : x]; });
+    const f = [{ k: "legalName", l: "Raison sociale", req: true }, { k: "legalForm", l: "Forme juridique", t: "select", req: true, opts: forms }, { k: "capital", l: "Capital social", ph: fr ? "1 000 €" : "10 000 MAD" },
+      { k: "managerName", l: "Nom du dirigeant", req: true }, { k: "address", l: "Adresse du siège", req: true, full: true }];
+    if (fr) f.push({ k: "siret", l: "N° SIRET", req: true, ph: "123 456 789 00012", help: "14 chiffres, visible sur votre Kbis ou l'avis de situation INSEE." }, { k: "rcsCity", l: "Ville du RCS", ph: "Toulouse" }, { k: "vatNumber", l: "N° de TVA intracommunautaire", ph: "FR12345678901" });
+    else f.push({ k: "ice", l: "ICE (identifiant commun de l'entreprise)", req: true, ph: "15 chiffres" }, { k: "rcNumber", l: "N° de registre de commerce (RC)", req: true }, { k: "rcCity", l: "Tribunal (ville du RC)", ph: "Marrakech" },
+      { k: "ifNumber", l: "Identifiant fiscal (IF)" }, { k: "patente", l: "N° de taxe professionnelle (patente)" }, { k: "cnss", l: "N° d'affiliation CNSS" });
+    return f.map(function (x) { return Object.assign(x, show ? { show: show } : {}); });
+  },
+  accountFields: function (provider) {
+    return [{ k: "email", l: "E-mail (identifiant de connexion)", t: "email", req: true, ac: "email" },
+      { k: "password", l: "Choisissez un mot de passe", t: "password", req: true, ac: "new-password", help: "10 caractères minimum, avec lettres et chiffres." },
+      { k: "password2", l: "Confirmez le mot de passe", t: "password", req: true, ac: "new-password" },
+      { k: "acceptStatus", l: "J'ai pris connaissance du statut de la plateforme : mise à disposition d'un logiciel (SaaS) et mise en relation, l'éditeur n'étant pas partie à mes contrats.", t: "checkbox", full: true },
+      { k: "acceptTerms", l: provider ? "J'accepte les conditions de référencement des prestataires et je certifie l'exactitude de mes informations." : "J'accepte les conditions générales d'abonnement et d'utilisation.", t: "checkbox", full: true },
+      { k: "acceptPrivacy", l: "J'ai lu la politique de confidentialité et j'accepte le traitement de mes données pour la création du compte.", t: "checkbox", full: true }];
+  },
+  checkAccount: function (v) {
+    if (v.password !== v.password2) return t("Les mots de passe ne correspondent pas.");
+    if (!v.acceptStatus || !v.acceptTerms || !v.acceptPrivacy) return t("Cochez les trois cases d'acceptation pour continuer.");
+    return "";
+  },
+  signupInfo: function () { if (!Public._info) Public._info = apiP("signup.info", {}); return Public._info.catch(function (e) { Public._info = null; throw e; }); },
+
+  /** Inscription d'un client : 1. profil, 2. forfait, 3. informations, 4. code e-mail ; puis contrat et paiement dans l'espace. */
+  signup: function () {
+    const steps = ["Votre profil", "Votre forfait", "Vos informations", "Confirmation de l'e-mail", "Contrat et paiement"];
+    const st8 = { step: 0, profile: "", planCode: "", values: { ownerType: "INDIVIDUAL" } };
+    Public.wide(t("Créer mon compte ImmoPilot"), steps, 0, h("div", { class: "loading" }, t("Chargement…")));
+    Public.signupInfo().then(function (info) {
+      const draw = function () {
+        Public._redraw = draw;
+        const body = h("div", { class: "signup-body" });
+        if (st8.step === 0) {
+          body.appendChild(h("h2", null, t("Vous êtes…")));
+          body.appendChild(Public.choiceCards([
+            { v: "OWNER", i: "⌂", t: "Propriétaire", d: "Vous possédez un ou plusieurs biens (location courte ou longue durée) et les gérez vous-même, ou avec une agence." },
+            { v: "AGENCY", i: "⌘", t: "Agence ou conciergerie", d: "Agence immobilière, conciergerie ou gestionnaire : vous gérez les biens de vos clients (mandants) et vos équipes." }], st8.profile, function (v) { st8.profile = v; draw(); }));
+          body.appendChild(Public.statusBox(info, false));
+          body.appendChild(Public.navRow(null, function () { if (!st8.profile) return toast(t("Choisissez votre profil."), "bad"); st8.step = 1; draw(); }));
+        } else if (st8.step === 1) {
+          body.appendChild(h("h2", null, t("Choisissez votre forfait")));
+          body.appendChild(h("p", { class: "muted" }, t("Sans engagement : changez de forfait ou résiliez à tout moment depuis votre espace.") + (info.country === "FR" ? " " + t("Prix hors taxes pour les professionnels (TVA en sus), toutes taxes comprises pour les particuliers.") : "")));
+          body.appendChild(h("div", { class: "plan-cards" }, info.plans.map(function (pl) {
+            const on = st8.planCode === pl.planCode;
+            return h("button", { type: "button", class: "plan-card" + (on ? " on" : "") + (pl.planCode === "PRO" ? " best" : ""), "aria-pressed": on ? "true" : "false", onclick: function () { st8.planCode = pl.planCode; draw(); } },
+              pl.planCode === "PRO" ? h("span", { class: "ribbon" }, t("Le plus choisi")) : null,
+              h("b", { class: "pname" }, pl.name), h("span", { class: "price" }, fmtMoney(pl.price, pl.currency), h("small", null, " / " + t({ MONTHLY: "mois", QUARTERLY: "trimestre", YEARLY: "an" }[pl.periodicity] || pl.periodicity))),
+              pl.trialDays ? h("span", { class: "trial" }, pl.trialDays + " " + t("jours d'essai gratuit")) : null,
+              h("ul", { class: "limits" }, h("li", null, h("b", null, String(pl.maxProperties)), " " + t("biens")), h("li", null, h("b", null, String(pl.maxUsers)), " " + t("utilisateurs")), h("li", null, h("b", null, pl.storageMb >= 1000 ? Math.round(pl.storageMb / 1000) + " Go" : pl.storageMb + " Mo"), " " + t("de stockage"))),
+              h("ul", { class: "feats" }, pl.features.map(function (f) { return h("li", null, "✓ " + st("feat." + f)); })),
+              h("span", { class: "btn " + (on ? "primary" : "") }, on ? "✓ " + t("Sélectionné") : t("Choisir")));
+          })));
+          const pl = info.plans.filter(function (x) { return x.planCode === st8.planCode; })[0];
+          body.appendChild(h("div", { class: "alert info" }, info.cardPayment ? (pl && pl.trialDays ? t("Paiement : vous signez votre contrat puis enregistrez votre carte (formulaire sécurisé SumUp). Le premier prélèvement a lieu à la fin de l'essai gratuit, puis à chaque échéance.") : t("Paiement : vous signez votre contrat puis enregistrez votre carte (formulaire sécurisé SumUp). La première échéance est prélevée aussitôt, puis à chaque échéance."))
+            : t("Paiement : après la signature de votre contrat, le règlement se fait par virement selon les instructions qui vous seront transmises.")));
+          body.appendChild(Public.navRow(function () { st8.step = 0; draw(); }, function () { if (!st8.planCode) return toast(t("Choisissez un forfait."), "bad"); st8.step = 2; draw(); }));
+        } else if (st8.step === 2) {
+          const ag = st8.profile === "AGENCY", isCo = function (v) { return ag || v.ownerType === "COMPANY"; };
+          const fields = [];
+          if (!ag) fields.push({ k: "ownerType", l: "Vous êtes", t: "select", req: true, opts: [["INDIVIDUAL", t("Un particulier")], ["COMPANY", t("Une société (SCI, SARL…)")]], full: true });
+          fields.push({ k: "firstName", l: "Prénom", req: true, ac: "given-name" }, { k: "lastName", l: "Nom", req: true, ac: "family-name" }, { k: "phone", l: "Téléphone mobile", t: "tel", req: true, ac: "tel", help: "Pour la signature de votre contrat par SMS et le support." },
+            { k: "city", l: "Ville", req: true, def: ED.city || "" });
+          if (!ag) fields.push({ k: "homeAddress", l: "Adresse postale", req: true, full: true, show: function (v) { return v.ownerType !== "COMPANY"; } });
+          Public.companyFields(info, ag ? "AGENCY" : "COMPANY", ag ? null : isCo).forEach(function (x) { fields.push(x); });
+          if (ag && info.country === "FR") fields.push({ k: "cardNumber", l: "N° de carte professionnelle (loi Hoguet)", help: "Mention « Gestion immobilière » ou « Transactions » : obligatoire pour gérer ou louer les biens de tiers." },
+            { k: "cardIssuer", l: "CCI qui a délivré la carte" }, { k: "guarantor", l: "Garant financier" });
+          Public.accountFields().forEach(function (x) { fields.push(x); });
+          const f = buildForm(fields, st8.values), err = h("div", { class: "alert bad hidden" });
+          body.appendChild(h("h2", null, ag ? t("Votre agence et vous") : t("Vos informations")));
+          body.appendChild(h("p", { class: "muted" }, t("Ces informations figurent sur votre contrat d'abonnement et vos factures.")));
+          body.appendChild(f.el); body.appendChild(err);
+          const go = function (b) {
+            const v = f.get(); st8.values = v;
+            let m = f.validate() || Public.checkAccount(v);
+            if (m) { err.textContent = m; err.classList.remove("hidden"); err.scrollIntoView({ block: "center" }); return; }
+            err.classList.add("hidden"); b.disabled = true;
+            apiP("signup.start", Object.assign({}, v, { kind: "CLIENT", profile: st8.profile, planCode: st8.planCode, locale: S.lang })).then(function (r) {
+              st8.request = r; st8.email = v.email; st8.step = 3; draw();
+            }).catch(function (e) { b.disabled = false; err.textContent = errMsg(e); err.classList.remove("hidden"); err.scrollIntoView({ block: "center" }); });
+          };
+          body.appendChild(Public.navRow(function () { st8.values = f.get(); st8.step = 1; draw(); }, function (ev) { go(ev && ev.currentTarget ? ev.currentTarget : this); }, t("Recevoir mon code")));
+        } else {
+          body.appendChild(Public.codeStep(st8.request, function (r) { Public._redraw = null; Public.enterAfterSignup(r, "onboarding"); }, function () { st8.step = 2; draw(); }));
+        }
+        Public.wide(t("Créer mon compte ImmoPilot"), steps, st8.step, body);
+      };
+      draw();
+    }).catch(function (e) { Public.wide(t("Créer mon compte ImmoPilot"), steps, 0, h("div", { class: "alert bad" }, errMsg(e))); });
+  },
+  /** Saisie du code reçu par e-mail (commune aux deux parcours). */
+  codeStep: function (req, done, back) {
+    const code = h("input", { type: "text", inputmode: "numeric", autocomplete: "one-time-code", maxlength: 6, placeholder: "123456", class: "code-input", "aria-label": t("Code reçu") });
+    const err = h("div", { class: "alert bad hidden" }), info = h("div", { class: "alert info" }, t("Nous avons envoyé un code à 6 chiffres à") + " " + req.destination + ". " + t("Il est valable") + " " + req.expiresInMinutes + " min. " + t("Pensez à vérifier vos courriers indésirables."));
+    const confirm = btn(t("Valider et créer mon compte"), function () {
+      if (!/^\d{6}$/.test(code.value.trim())) { err.textContent = t("Saisissez le code à 6 chiffres."); err.classList.remove("hidden"); return; }
+      confirm.disabled = true; err.classList.add("hidden");
+      apiP("signup.confirm", { requestId: req.requestId, code: code.value.trim() }).then(done).catch(function (e) { confirm.disabled = false; err.textContent = errMsg(e); err.classList.remove("hidden"); });
+    }, "primary lg");
+    const resend = btn(t("Renvoyer un code"), function () { resend.disabled = true; apiP("signup.resend", { requestId: req.requestId }).then(function (r) { toast(t("Nouveau code envoyé à") + " " + r.destination, "good"); setTimeout(function () { resend.disabled = false; }, 30000); }).catch(function (e) { resend.disabled = false; showErr(e); }); });
+    code.addEventListener("keydown", function (e) { if (e.key === "Enter") confirm.click(); });
+    setTimeout(function () { code.focus(); }, 50);
+    return h("div", { class: "code-step" }, h("h2", null, t("Confirmez votre adresse e-mail")), info, h("div", { class: "field" }, code), err,
+      h("div", { class: "actions signup-nav" }, btn("← " + t("Modifier mes informations"), back), resend, confirm));
+  },
+  enterAfterSignup: function (r, hash) {
+    apiCacheClear(); S.token = r.token; store("ip_token", r.token); S.me = r.me; S.meta = r.meta || null; S.onboard = true;
+    history.replaceState(null, "", location.pathname + "#" + hash);
+    App.enter();
+    toast(t("Compte créé. Bienvenue sur ImmoPilot !"), "good");
+  },
+
+  /** Référencement d'un artisan : 1. métiers, 2. statut, 3. informations légales et assurance, 4. code ; puis dépôt des pièces. */
+  providerSignup: function () {
+    const steps = ["Corps de métier", "Votre statut", "Informations légales", "Confirmation de l'e-mail", "Pièces justificatives"];
+    const st8 = { step: 0, trades: [], businessType: "", zones: "", values: { hasRcPro: false } };
+    Public.wide(t("Se référencer comme artisan"), steps, 0, h("div", { class: "loading" }, t("Chargement…")));
+    Public.signupInfo().then(function (info) {
+      const fr = info.country === "FR";
+      const needDec = function () { return fr && st8.trades.some(function (x) { return info.decennaleTrades.indexOf(x) >= 0; }); };
+      const draw = function () {
+        Public._redraw = draw;
+        const body = h("div", { class: "signup-body" });
+        if (st8.step === 0) {
+          body.appendChild(h("h2", null, t("Quel est votre corps de métier ?")));
+          body.appendChild(h("p", { class: "muted" }, t("Choisissez un ou plusieurs métiers : les propriétaires et agences vous trouvent par métier et par zone d'intervention.")));
+          body.appendChild(h("div", { class: "trade-grid" }, info.trades.map(function (code) {
+            const on = st8.trades.indexOf(code) >= 0;
+            return h("button", { type: "button", class: "trade" + (on ? " on" : ""), "aria-pressed": on ? "true" : "false", onclick: function () { if (on) st8.trades.splice(st8.trades.indexOf(code), 1); else st8.trades.push(code); draw(); } }, (on ? "✓ " : "") + st(code));
+          })));
+          const zones = h("input", { type: "text", value: st8.zones || "", placeholder: fr ? "Toulouse, Blagnac, Colomiers" : "Marrakech, Guéliz, Palmeraie", id: "zones" });
+          zones.addEventListener("input", function () { st8.zones = zones.value; });
+          body.appendChild(h("div", { class: "field", style: { maxWidth: "560px", margin: "14px 0" } }, h("label", { for: "zones" }, t("Zones d'intervention (villes ou quartiers, séparés par des virgules)")), zones));
+          body.appendChild(Public.statusBox(info, true));
+          body.appendChild(Public.navRow(null, function () { if (!st8.trades.length) return toast(t("Choisissez au moins un corps de métier."), "bad"); st8.step = 1; draw(); }));
+        } else if (st8.step === 1) {
+          body.appendChild(h("h2", null, t("Votre statut")));
+          body.appendChild(Public.choiceCards([
+            { v: "AE", i: "◔", t: fr ? "Auto-entrepreneur (micro-entreprise)" : "Auto-entrepreneur", d: fr ? "Entreprise individuelle au régime micro : SIRET, sans société." : "Inscrit au Registre national de l'auto-entrepreneur." },
+            { v: "COMPANY", i: "▣", t: "Société", d: fr ? "SARL, EURL, SAS, SASU… immatriculée au RCS." : "SARL, SARL AU, SA… immatriculée au registre de commerce." }], st8.businessType, function (v) { st8.businessType = v; draw(); }));
+          if (st8.businessType) {
+            const rules = info.docRules[st8.businessType].slice();
+            body.appendChild(h("div", { class: "panel", style: { marginTop: "16px" } }, h("h3", { style: { marginTop: 0 } }, t("Pièces à fournir après la création de votre compte")),
+              h("ul", { class: "doc-rules" }, rules.map(function (r) { return h("li", null, h("b", null, r.label), r.help ? h("span", { class: "small muted" }, " — " + r.help) : null); }),
+                h("li", null, h("b", null, t("Attestation d'assurance RC professionnelle")), h("span", { class: "small muted" }, " — " + t("si vous en avez une (recommandée)."))),
+                needDec() ? h("li", null, h("b", null, t("Attestation d'assurance décennale")), h("span", { class: "small muted" }, " — " + t("obligatoire pour vos métiers du bâtiment."))) : null),
+              h("p", { class: "small muted" }, t("Formats acceptés : PDF, JPEG, PNG (4 Mo maximum). Vous pouvez photographier les documents avec votre téléphone."))));
+          }
+          body.appendChild(Public.navRow(function () { st8.step = 0; draw(); }, function () { if (!st8.businessType) return toast(t("Choisissez votre statut."), "bad"); st8.step = 2; draw(); }));
+        } else if (st8.step === 2) {
+          const co = st8.businessType === "COMPANY";
+          const fields = [{ k: "firstName", l: "Prénom", req: true, ac: "given-name" }, { k: "lastName", l: "Nom", req: true, ac: "family-name" }, { k: "phone", l: "Téléphone mobile", t: "tel", req: true, ac: "tel" }];
+          if (co) Public.companyFields(info, "COMPANY").forEach(function (x) { fields.push(x); });
+          else {
+            fields.push({ k: "legalName", l: "Nom commercial", help: "Facultatif : à défaut, vos prénom et nom." }, { k: "address", l: "Adresse professionnelle", req: true, full: true });
+            if (fr) fields.push({ k: "siret", l: "N° SIRET", req: true, ph: "123 456 789 00012", help: "14 chiffres, sur votre avis de situation INSEE." }, { k: "vatNumber", l: "N° de TVA intracommunautaire", help: "Laissez vide si vous bénéficiez de la franchise en base de TVA (art. 293 B du CGI)." });
+            else fields.push({ k: "aeNumber", l: "N° d'inscription au registre de l'auto-entrepreneur", req: true }, { k: "ice", l: "ICE (identifiant commun de l'entreprise)", req: true, ph: "15 chiffres" }, { k: "ifNumber", l: "Identifiant fiscal (IF)" });
+          }
+          fields.push({ k: "hasRcPro", l: "J'ai une assurance responsabilité civile professionnelle (RC Pro)", t: "checkbox", full: true });
+          const rc = function (v) { return !!v.hasRcPro; };
+          fields.push({ k: "rcInsurer", l: "Assureur RC Pro", req: true, show: rc }, { k: "rcPolicy", l: "N° de police (contrat)", req: true, show: rc }, { k: "rcValidUntil", l: "Valable jusqu'au", t: "date", req: true, show: rc },
+            { k: "rcInsurerAddress", l: "Adresse de l'assureur", req: true, full: true, show: rc });
+          if (needDec()) fields.push({ k: "decInsurer", l: "Assureur décennale", req: true }, { k: "decPolicy", l: "N° de police décennale", req: true }, { k: "decValidUntil", l: "Décennale valable jusqu'au", t: "date", req: true });
+          Public.accountFields(true).forEach(function (x) { fields.push(x); });
+          const f = buildForm(fields, st8.values), err = h("div", { class: "alert bad hidden" });
+          body.appendChild(h("h2", null, co ? t("Votre société") : t("Votre entreprise")));
+          if (needDec()) body.appendChild(h("div", { class: "alert warn" }, t("Vos métiers relèvent des travaux du bâtiment : l'assurance décennale est obligatoire en France (art. L. 241-1 du Code des assurances).")));
+          body.appendChild(f.el); body.appendChild(err);
+          const go = function (b) {
+            const v = f.get(); st8.values = v;
+            const m = f.validate() || Public.checkAccount(v);
+            if (m) { err.textContent = m; err.classList.remove("hidden"); err.scrollIntoView({ block: "center" }); return; }
+            err.classList.add("hidden"); b.disabled = true;
+            apiP("signup.start", Object.assign({}, v, { kind: "PROVIDER", trades: st8.trades, businessType: st8.businessType, zones: st8.zones || "", locale: S.lang })).then(function (r) {
+              st8.request = r; st8.step = 3; draw();
+            }).catch(function (e) { b.disabled = false; err.textContent = errMsg(e); err.classList.remove("hidden"); err.scrollIntoView({ block: "center" }); });
+          };
+          body.appendChild(Public.navRow(function () { st8.values = Object.assign(st8.values, f.get()); st8.step = 1; draw(); }, function (ev) { go(ev && ev.currentTarget ? ev.currentTarget : this); }, t("Recevoir mon code")));
+        } else {
+          body.appendChild(Public.codeStep(st8.request, function (r) { Public._redraw = null; Public.enterAfterSignup(r, "referencing"); }, function () { st8.step = 2; draw(); }));
+        }
+        Public.wide(t("Se référencer comme artisan"), steps, st8.step, body);
+      };
+      draw();
+    }).catch(function (e) { Public.wide(t("Se référencer comme artisan"), steps, 0, h("div", { class: "alert bad" }, errMsg(e))); });
   },
   forgot: function () {
     formModal(t("Mot de passe oublié"), [{ k: "email", l: "E-mail", t: "email", req: true }], {}, function (v) {

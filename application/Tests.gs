@@ -1523,6 +1523,65 @@ function TEST_GROUPS_() {
         T.fails(tok, "pareto.run", { type: "INCIDENTS_BY_CATEGORY" }, "PLAN");
       }]
     ] },
+    { name: "Inscription en ligne et référencement", tests: [
+      ["Inscription propriétaire : code e-mail, compte + organisation + essai, contrat à signer ; e-mail déjà pris refusé ; mauvais code", function (T, fx) {
+        const fr = IMMO_EDITION_ === "FR", email = fx.mail("signup-owner");
+        const base = { kind: "CLIENT", profile: "OWNER", ownerType: "INDIVIDUAL", planCode: "PRO", firstName: "Sara", lastName: "Test", phone: fr ? "0612345678" : "0612345678", city: "Ville",
+          homeAddress: "1 rue du Test, Ville", email: email, password: "MotDePasse2026", acceptTerms: true, acceptStatus: true, acceptPrivacy: true };
+        T.fails(null, "signup.start", Object.assign({}, base, { acceptStatus: false }), "VALIDATION");
+        const r = T.pub("signup.start", base);
+        T.ok(!dbAll_("Users").some(function (u) { return normalizeEmail_(u.email) === email; }), "aucun compte avant le code");
+        const code = (/: (\d{6})/.exec(T.lastMailTo(email).subject) || [])[1];
+        T.ok(code, "code envoyé par e-mail");
+        T.fails(null, "signup.confirm", { requestId: r.requestId, code: code === "000000" ? "111111" : "000000" }, "VALIDATION");
+        const out = T.pub("signup.confirm", { requestId: r.requestId, code: code });
+        T.ok(out.token && out.next === "onboarding" && out.me.onboarding === true, "connecté, finalisation demandée");
+        const org = dbAll_("Organizations").find(function (o) { return o.billingEmail === email; });
+        T.eq([org.type, org.signupSource], ["OWNER_ORG", "SELF"], "organisation propriétaire");
+        T.eq(entitlement_(org.organizationId).subscription.status, "TRIAL", "essai du forfait");
+        T.ok(!JSON.stringify(dbGet_("SignupRequests", r.requestId).payloadJson).match(/hash|salt/), "hachage du mot de passe effacé de la demande");
+        T.fails(null, "signup.start", base, "VALIDATION");
+        T.fails(null, "signup.confirm", { requestId: r.requestId, code: code }, "VALIDATION");
+      }],
+      ["Agence : rôles agence + propriétaire, identifiant légal contrôlé (SIRET / ICE)", function (T, fx) {
+        const fr = IMMO_EDITION_ === "FR", email = fx.mail("signup-agency");
+        const a = { kind: "CLIENT", profile: "AGENCY", planCode: "ESSENTIEL", firstName: "Ali", lastName: "Agence", phone: "0612345678", city: "Ville", legalName: "Agence Test " + fx.run, legalForm: "SARL",
+          managerName: "Ali Agence", address: "2 avenue du Test, Ville", email: email, password: "MotDePasse2026", acceptTerms: true, acceptStatus: true, acceptPrivacy: true };
+        if (fr) a.siret = "12345678901234"; else { a.ice = "123"; a.rcNumber = "RC1"; }
+        T.fails(null, "signup.start", a, "VALIDATION");
+        if (fr) a.siret = "73282932000074"; else a.ice = "001234567000089";
+        const r = T.pub("signup.start", a), code = (/: (\d{6})/.exec(T.lastMailTo(email).subject) || [])[1];
+        const out = T.pub("signup.confirm", { requestId: r.requestId, code: code });
+        T.eq(out.me.roles.map(function (x) { return x.role; }).sort(), ["AGENCY_ADMIN", "OWNER"], "rôles");
+        T.call(out.token, "property.create", { organizationId: out.me.roles[0].organizationId, name: "Bien mandant", city: "Ville" });
+      }],
+      ["Artisan : fiche en attente, invisible des clients, pièces exigées, contrôle et référencement par le super administrateur", function (T, fx) {
+        const fr = IMMO_EDITION_ === "FR", email = fx.mail("signup-artisan");
+        const a = { kind: "PROVIDER", trades: ["PLUMBING"], businessType: "AE", zones: "Ville", firstName: "Omar", lastName: "Artisan", phone: "0611223344", address: "3 rue des Artisans, Ville",
+          hasRcPro: true, rcInsurer: "Assureur", rcPolicy: "P1", rcInsurerAddress: "1 place de l'Assurance", rcValidUntil: tDays_(300),
+          email: email, password: "MotDePasse2026", acceptTerms: true, acceptStatus: true, acceptPrivacy: true };
+        if (fr) Object.assign(a, { siret: "73282932000074", decInsurer: "Assureur", decPolicy: "D1", decValidUntil: tDays_(300) }); else Object.assign(a, { aeNumber: "AE1", ice: "001234567000089" });
+        const r = T.pub("signup.start", a), code = (/: (\d{6})/.exec(T.lastMailTo(email).subject) || [])[1];
+        const out = T.pub("signup.confirm", { requestId: r.requestId, code: code });
+        T.eq(out.next, "referencing", "vers mon référencement");
+        const me = T.call(out.token, "provider.me");
+        T.eq(me.status, "PENDING", "en attente");
+        T.ok(me.checklist.some(function (x) { return x.code === "RC_PRO"; }) && me.checklist.some(function (x) { return x.code === (fr ? "DECENNALE" : "CIN"); }), "pièces selon le pays");
+        T.fails(out.token, "provider.submit", {}, "VALIDATION");
+        T.ok(!T.call(fx.tok.ownerA, "ctr.list", { pageSize: 200 }).items.some(function (c) { return c.artisanId === me.artisanId; }), "invisible des clients tant qu'il n'est pas référencé");
+        const pdf = Utilities.base64Encode(Utilities.newBlob("%PDF-1.4\n%%EOF\n").getBytes());
+        me.checklist.forEach(function (x) { T.call(out.token, "doc.upload", { ownerType: "CONTRACTOR", ownerId: me.artisanId, category: x.code, fileName: x.code + ".pdf", mimeType: "application/pdf", base64: pdf }); });
+        T.ok(T.call(out.token, "provider.submit").ok, "dossier envoyé");
+        T.fails(fx.tok.ownerA, "provider.decide", { artisanId: me.artisanId, decision: "APPROVE" }, "FORBIDDEN");
+        T.fails(fx.tok.superA, "provider.decide", { artisanId: me.artisanId, decision: "APPROVE" }, "VALIDATION");
+        T.call(fx.tok.superA, "provider.reviewList", {}).filter(function (x) { return x.artisanId === me.artisanId; }).length === 1 || T.ok(false, "dans la liste à contrôler");
+        const v = T.call(fx.tok.superA, "ctr.get", { artisanId: me.artisanId }).verification;
+        v.checklist.forEach(function (x) { x.docs.forEach(function (d) { T.call(fx.tok.superA, "provider.reviewDoc", { artisanId: me.artisanId, documentId: d.documentId, decision: "APPROVED" }); }); });
+        T.eq(T.call(fx.tok.superA, "provider.decide", { artisanId: me.artisanId, decision: "APPROVE" }).status, "ACTIVE", "référencé");
+        T.ok(T.call(fx.tok.ownerA, "ctr.list", { pageSize: 200 }).items.some(function (c) { return c.artisanId === me.artisanId; }), "visible des clients une fois référencé");
+        T.ok(/validé/.test(T.lastMailTo(email).subject), "e-mail de validation");
+      }]
+    ] },
     { name: "Données, migration et robustesse", tests: [
       ["Installation à partir de rien : base, dossier privé, schéma, forfaits, premier super administrateur", function (T) {
         // Propriétés simulées en mémoire : les vraies propriétés du script (base de production) ne sont jamais touchées.

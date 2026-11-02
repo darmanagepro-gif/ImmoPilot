@@ -76,15 +76,20 @@ function subAssign_(p, a) {
   const start = a.startDate ? dateOnly_(a.startDate, "Date de début") : todayStr_();
   const trial = a.trial === true && Number(plan.trialDays) > 0;
   return withLock_(function () {
-    dbAll_("Subscriptions").filter(function (s) { return String(s.organizationId) === orgId && ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0; })
-      .forEach(function (s) { dbUpdate_("Subscriptions", s.subscriptionId, { status: "CANCELLED", canceledAt: nowIso_(), updatedAt: nowIso_(), updatedBy: p.email }); });
-    const trialEnd = trial ? addDaysStr_(start, Number(plan.trialDays)) : "";
-    const s = dbInsert_("Subscriptions", { organizationId: orgId, planCode: plan.planCode, status: trial ? "TRIAL" : "PAST_DUE", startDate: start, nextDueDate: trial ? trialEnd : start, periodEnd: trial ? trialEnd : start,
-      trialEnd: trialEnd, price: plan.price, agencyOptionPrice: num_(plan.agencyOptionPrice), currency: plan.currency || cur_(), periodicity: plan.periodicity, cancelAtPeriodEnd: false, createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email });
-    dbUpdate_("Organizations", orgId, { planCode: plan.planCode, updatedAt: nowIso_() });
-    audit_("SUBSCRIPTION_ASSIGNED", "Subscription", s.subscriptionId, orgId, { planCode: plan.planCode, trial: trial });
+    const s = subCreate_(orgId, plan, trial, start, p.email);
     return { ok: true, subscriptionId: s.subscriptionId, status: s.status, note: trial ? "" : "En attente du premier paiement (enregistrez-le pour activer)." };
   });
+}
+/** Crée l'abonnement d'une organisation (remplace l'abonnement en cours). Utilisé par le super administrateur et l'inscription en ligne. */
+function subCreate_(orgId, plan, trial, start, actorEmail) {
+  dbAll_("Subscriptions").filter(function (s) { return String(s.organizationId) === String(orgId) && ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0; })
+    .forEach(function (s) { dbUpdate_("Subscriptions", s.subscriptionId, { status: "CANCELLED", canceledAt: nowIso_(), updatedAt: nowIso_(), updatedBy: actorEmail }); });
+  const trialEnd = trial ? addDaysStr_(start, Number(plan.trialDays)) : "";
+  const s = dbInsert_("Subscriptions", { organizationId: orgId, planCode: plan.planCode, status: trial ? "TRIAL" : "PAST_DUE", startDate: start, nextDueDate: trial ? trialEnd : start, periodEnd: trial ? trialEnd : start,
+    trialEnd: trialEnd, price: plan.price, agencyOptionPrice: num_(plan.agencyOptionPrice), currency: plan.currency || cur_(), periodicity: plan.periodicity, cancelAtPeriodEnd: false, createdAt: nowIso_(), createdBy: actorEmail, updatedAt: nowIso_(), updatedBy: actorEmail });
+  dbUpdate_("Organizations", orgId, { planCode: plan.planCode, updatedAt: nowIso_() });
+  audit_("SUBSCRIPTION_ASSIGNED", "Subscription", s.subscriptionId, orgId, { planCode: plan.planCode, trial: trial });
+  return s;
 }
 /** Applique un paiement d'abonnement (manuel aujourd'hui, prestataire demain) et prolonge la période. */
 function subApplyPayment_(s, amount, paidAt, method, reference, proofDocId, periods, actorEmail) {

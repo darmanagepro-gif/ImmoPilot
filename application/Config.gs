@@ -44,8 +44,8 @@ function cur_() { return edition_().currency; }
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "ImmoPilot",
-  VERSION: "2.5.0",
-  SCHEMA_VERSION: 14,
+  VERSION: "2.6.0",
+  SCHEMA_VERSION: 15,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -173,7 +173,7 @@ var DEFAULT_PLANS = Object.freeze([
 
 var TABLES_SRC = {
   Organizations: { pk: "organizationId", idp: "org", org: "organizationId", req: "name", enums: { status: ["ACTIVE", "SUSPENDED", "INACTIVE"], type: ["OWNER_ORG", "AGENCY", "PROVIDER", "PLATFORM"] },
-    cols: "organizationId,name,status,createdAt#t,createdBy|type,country,city,timezone,locale,planCode,billingEmail,suspendedAt#t,suspensionReason,updatedAt#t,isDemo#b,managedByOrgId,phone,address,contactName" },
+    cols: "organizationId,name,status,createdAt#t,createdBy|type,country,city,timezone,locale,planCode,billingEmail,suspendedAt#t,suspensionReason,updatedAt#t,isDemo#b,managedByOrgId,phone,address,contactName,legalJson#j,signupSource" },
   Users: { pk: "userId", idp: "usr", req: "email", enums: { status: ["ACTIVE", "SUSPENDED", "DISABLED", "INVITED"] },
     cols: "userId,email,displayName,status,createdAt#t,createdBy|passwordHash,passwordSalt,passwordIters#n,failedAttempts#n,lockedUntil#t,lastLoginAt#t,locale,phone,notifPrefsJson#j,updatedAt#t,pwChangedAt#t" },
   Invitations: { pk: "invitationId", idp: "inv", org: "organizationId", req: "email,role", enums: { status: ["PENDING", "ACCEPTED", "REVOKED", "EXPIRED", "EMAIL_FAILED"] },
@@ -185,6 +185,8 @@ var TABLES_SRC = {
   PlatformSettings: { pk: "settingKey", idp: "set", req: "settingKey", cols: "settingKey,settingValue,updatedAt#t,updatedBy" },
   Settings: { pk: "settingId", idp: "stg", org: "organizationId", req: "organizationId,settingKey", cols: "settingId,organizationId,settingKey,settingValue,updatedAt#t,updatedBy" },
   Sessions: { pk: "sessionId", idp: "ses", req: "userId,tokenHash", cols: "sessionId,userId,tokenHash,createdAt#t,expiresAt#t,lastSeenAt#t,revokedAt#t,userAgent,impersonatorUserId,mode" },
+  SignupRequests: { pk: "requestId", idp: "sgn", req: "email,kind", enums: { status: ["PENDING", "DONE", "FAILED", "REPLACED", "EXPIRED"] },
+    cols: "requestId,kind,email,codeHash,attempts#n,expiresAt#t,payloadJson#j,status,createdAt#t,usedAt#t,ip,sends#n,lastSentAt#t" },
   PasswordResets: { pk: "resetId", idp: "rst", req: "userId,tokenHash", cols: "resetId,userId,tokenHash,createdAt#t,expiresAt#t,usedAt#t,purpose" },
   SupportGrants: { pk: "grantId", idp: "sgr", org: "organizationId", req: "superAdminUserId,organizationId,justification",
     enums: { status: ["REQUESTED", "ACTIVE", "DENIED", "REVOKED", "EXPIRED"] },
@@ -225,8 +227,8 @@ var TABLES_SRC = {
       status: ["OPEN", "QUALIFIED", "ASSIGNED", "QUOTE_PENDING", "AWAITING_OWNER", "APPROVED", "IN_PROGRESS", "RESOLVED", "CLOSED", "CANCELLED"] },
     cols: "incidentId,organizationId,propertyId,reservationId,category,priority,description,status,photoFileIdsJson#j,createdAt#t,createdBy,updatedAt#t,updatedBy|title,severity,reportedByUserId,assignedToUserId,contractorId,estimatedCost#n,finalCost#n,resolvedAt#t,closedAt#t,missionId,source,alertedAt#t,legacyOrigin" },
   IncidentComments: { pk: "commentId", idp: "icm", org: "organizationId", req: "incidentId,body", cols: "commentId,organizationId,incidentId,authorEmail,body,createdAt#t,visibility" },
-  Artisans: { pk: "artisanId", idp: "art", org: "organizationId", req: "name,email", enums: { status: ["ACTIVE", "INACTIVE", "BLOCKED"] },
-    cols: "artisanId,organizationId,name,email,phone,categoriesJson#j,zonesJson#j,status,createdAt#t,createdBy|userId,notes,legalName,taxId,commissionRate#n,billingInfo,updatedAt#t" },
+  Artisans: { pk: "artisanId", idp: "art", org: "organizationId", req: "name,email", enums: { status: ["ACTIVE", "INACTIVE", "BLOCKED", "PENDING", "REJECTED"] },
+    cols: "artisanId,organizationId,name,email,phone,categoriesJson#j,zonesJson#j,status,createdAt#t,createdBy|userId,notes,legalName,taxId,commissionRate#n,billingInfo,updatedAt#t,businessType,legalJson#j,insuranceJson#j,reviewJson#j,submittedAt#t,verifiedAt#t,verifiedBy,rejectReason,source" },
   Quotes: { pk: "quoteId", idp: "quo", org: "organizationId", req: "propertyId,incidentId,artisanId",
     enums: { status: ["REQUESTED", "PENDING", "APPROVED", "REJECTED", "DECLINED", "EXPIRED", "CANCELLED"] },
     cols: "quoteId,organizationId,propertyId,incidentId,artisanId,status,currency,totalAmount#n,validUntil#d,linesJson#j,decisionAt#t,decisionBy,decisionNote,createdAt#t,createdBy|requestNote,requestedAt#t,requestedBy,submittedAt#t,amountHT#n,vatRate#n,amountTTC#n,estimatedDays#n,commissionRateEst#n,commissionEstimate#n" },

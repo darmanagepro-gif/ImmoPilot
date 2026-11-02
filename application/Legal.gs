@@ -5,6 +5,8 @@
  * tant qu'une valeur manque, elle apparaît surlignée « À compléter ».
  * Ces textes sont des modèles : ils doivent être relus par un professionnel du droit avant la mise en service. ImmoPilot ne garantit pas leur conformité.
  */
+/** Date de la version en vigueur des documents juridiques (conservée comme preuve à chaque acceptation ou signature). */
+var LEGAL_VERSION_ = "2026-11-02";
 var LEGAL_FIELDS_ = {
   publisherName: "Nom ou raison sociale de l'éditeur", legalForm: "Forme juridique et capital social", address: "Adresse du siège",
   registration: "Immatriculation (RCS / SIREN ou RC / ICE)", vatNumber: "N° de TVA intracommunautaire", director: "Directeur ou directrice de la publication",
@@ -47,6 +49,35 @@ function legalClientDutiesSection_(law) {
     "Ne pas porter atteinte à la sécurité ou au fonctionnement du service, ne pas tenter d'accéder aux données d'autres clients, ne pas revendre ni sous-licencier l'accès."] };
 }
 
+/* Mise en relation : commune aux deux éditions (complète le rôle de l'éditeur). */
+function legalMarketplaceSection_() {
+  return { h: "Mise en relation avec des prestataires référencés", ul: [
+    "En plus du logiciel, ImmoPilot propose un annuaire d'artisans et de prestataires (ménage, plomberie, électricité, climatisation…) référencés par l'éditeur. Le client y choisit librement un prestataire par métier et par zone ; l'éditeur ne choisit pas à sa place.",
+    "Les devis, interventions et factures sont établis par le prestataire, en son nom, et conclus directement entre le client et le prestataire. L'éditeur n'est pas partie à ces contrats, ne perçoit pas le prix des prestations et ne garantit ni leur exécution, ni leur qualité, ni leurs délais.",
+    "Avant le référencement, l'éditeur contrôle l'immatriculation du prestataire, son identité et les attestations exigées par la réglementation du pays (assurances notamment). Ce contrôle porte sur la présence et la validité apparente des pièces à la date du contrôle : il ne vaut pas garantie de la compétence ou de la solvabilité du prestataire.",
+    "Aucun prestataire ne paie pour être mieux classé. Les critères de référencement et de déréférencement figurent dans les conditions de référencement des prestataires, consultables dans l'application."] };
+}
+/* Conditions de référencement des prestataires (artisans inscrits en ligne). */
+function legalProviderDoc_(fr) {
+  return { id: "referencement", title: "Conditions de référencement des prestataires", sections: [
+    { h: "1. Objet", p: ["Les présentes conditions s'appliquent aux artisans et prestataires (« le prestataire ») qui demandent leur référencement dans l'annuaire ImmoPilot édité par {{publisherName}} (« l'éditeur »). Elles sont acceptées en ligne lors de l'inscription. Le référencement est gratuit."] },
+    { h: "2. Rôle de l'éditeur", p: ["L'éditeur met à disposition un logiciel et un annuaire permettant aux propriétaires et agences abonnés de trouver un prestataire et de lui adresser des demandes de devis et d'intervention. L'éditeur n'est ni employeur, ni donneur d'ordre, ni mandataire du prestataire ou du client ; il n'est pas partie aux contrats de prestation, ne fixe pas les prix et n'encaisse pas les paiements."] },
+    { h: "3. Conditions et pièces exigées", ul: fr ? [
+      "Être immatriculé : SIRET actif (auto-entrepreneur) ou société immatriculée au RCS.",
+      "Pièces : pièce d'identité du dirigeant ; avis de situation SIRENE ou extrait RNE (auto-entrepreneur), ou extrait Kbis de moins de 3 mois (société) ; attestation de vigilance URSSAF de moins de 6 mois (art. L. 8222-1 et D. 8222-5 du Code du travail) ; RIB.",
+      "Assurances : attestation de responsabilité civile professionnelle si le prestataire en déclare une ; attestation d'assurance décennale en cours de validité pour les travaux de construction et de rénovation (art. L. 241-1 du Code des assurances).",
+      "Le prestataire certifie l'exactitude des informations et l'authenticité des pièces ; il s'engage à les tenir à jour."] : [
+      "Être inscrit au Registre national de l'auto-entrepreneur, ou disposer d'une société immatriculée au registre de commerce (ICE et identifiant fiscal).",
+      "Pièces : carte nationale d'identité (CIN) du dirigeant ; attestation d'inscription au registre de l'auto-entrepreneur, ou extrait du registre de commerce (modèle J) de moins de 3 mois et attestation d'affiliation à la CNSS (société) ; RIB.",
+      "Assurance : attestation de responsabilité civile professionnelle si le prestataire en déclare une.",
+      "Le prestataire certifie l'exactitude des informations et l'authenticité des pièces ; il s'engage à les tenir à jour."] },
+    { h: "4. Contrôle et référencement", p: ["L'éditeur contrôle chaque pièce (lisibilité, concordance avec les informations déclarées, validité) et peut demander des compléments. Le prestataire est référencé lorsque toutes les pièces exigées sont validées ; il en est informé par e-mail. Les prestataires apparaissent par métier et par zone d'intervention, sans classement payant."] },
+    { h: "5. Déréférencement", p: ["Le référencement est suspendu, après information du prestataire par e-mail, en cas d'expiration d'une attestation obligatoire, d'information inexacte, de pièce falsifiée, de plaintes répétées et fondées de clients ou de manquement grave à la loi. Il est rétabli dès la régularisation, sauf fraude. Le prestataire peut demander son déréférencement à tout moment en écrivant à {{contactEmail}}."] },
+    { h: "6. Obligations du prestataire", p: ["Le prestataire exerce en toute indépendance et sous sa seule responsabilité : il établit ses devis et factures conformément à la loi, respecte les règles de son métier, la réglementation sociale et fiscale, et répond de ses prestations envers le client."] },
+    { h: "7. Données personnelles", p: ["Les informations et pièces du prestataire sont traitées par l'éditeur pour le contrôle du référencement et la gestion de l'annuaire, et conservées pendant la durée du référencement puis 3 ans après sa fin (sauf obligation légale). Les pièces d'identité et le RIB ne sont jamais montrés aux clients. Droits d'accès, de rectification et d'effacement : {{contactEmail}}."] }
+  ] };
+}
+
 function legalDocsFR_(v) {
   const google = v.runtime === "google";
   const hosting = google ? "Google (Google Apps Script, Google Sheets, Google Drive), qui agit comme sous-traitant ; les données peuvent être traitées hors de l'Union européenne, dans le cadre des clauses contractuelles types et des engagements de Google."
@@ -62,6 +93,7 @@ function legalDocsFR_(v) {
     { id: "cgv", title: "Conditions générales d'abonnement et d'utilisation", sections: [
       { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement au logiciel en ligne ImmoPilot (gestion de locations courte et longue durée : biens, réservations, voyageurs, ménage, maintenance, baux, finances) fourni par {{publisherName}} (« l'éditeur ») à ses clients (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne lors de la création du compte ou de la souscription ; la version en vigueur reste consultable à tout moment dans l'application."] },
       legalRoleSection_(),
+      legalMarketplaceSection_(),
       { h: "3. Comptes et accès", p: ["L'accès se fait par des comptes personnels protégés par mot de passe. Toute utilisation anormale doit être signalée sans délai à l'éditeur."] },
       { h: "4. Forfaits et prix", p: ["Le service est fourni selon le forfait choisi (fonctionnalités, nombre de biens, d'utilisateurs et stockage indiqués dans l'application). Les prix sont indiqués en euros : toutes taxes comprises pour les consommateurs, hors taxes (TVA en sus au taux en vigueur) pour les professionnels. Une période d'essai gratuite peut être proposée ; aucun prélèvement n'a lieu avant sa fin.",
         "L'éditeur peut modifier ses prix en informant le client au moins 30 jours avant leur application, par e-mail ou dans l'application ; le client qui refuse peut résilier sans frais avant la date d'effet."] },
@@ -87,6 +119,7 @@ function legalDocsFR_(v) {
         "Le client consommateur peut recourir gratuitement au médiateur de la consommation : {{mediator}} (art. L. 612-1 du Code de la consommation).",
         "Les présentes conditions sont soumises au droit français. Le consommateur peut saisir la juridiction de son domicile ou celle du lieu d'exécution ; entre professionnels, les tribunaux du ressort du siège de l'éditeur sont seuls compétents après tentative de règlement amiable."] }
     ] },
+    legalProviderDoc_(true),
     { id: "confidentialite", title: "Politique de confidentialité", sections: [
       { h: "Responsable de traitement", p: ["{{publisherName}}, {{address}}, contact : {{contactEmail}}" + (v.dpoEmail ? " — délégué à la protection des données : {{dpoEmail}}" : "") + ", pour les comptes des utilisateurs, l'abonnement, la facturation et la sécurité du service.",
         "Pour les données que les clients enregistrent sur leurs voyageurs, locataires et prestataires, chaque client est responsable de traitement et l'éditeur est son sous-traitant."] },
@@ -144,6 +177,7 @@ function legalDocsMA_(v) {
     { id: "cgv", title: "Conditions générales d'abonnement et d'utilisation", sections: [
       { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement à la plateforme en ligne ImmoPilot (gestion de locations courte et longue durée) fournie par {{publisherName}} (« l'éditeur ») à ses clients au Maroc (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne, par un clic de confirmation, lors de la création du compte ou de la souscription ; cette acceptation électronique a la même valeur qu'une signature (loi n° 53-05 relative à l'échange électronique de données juridiques). La version en vigueur reste consultable à tout moment dans l'application."] },
       legalRoleSection_(),
+      legalMarketplaceSection_(),
       { h: "3. Forfaits et prix", p: ["Le service est fourni selon le forfait choisi (fonctionnalités, nombre de biens, d'utilisateurs et stockage indiqués dans l'application). Les prix sont indiqués en dirhams marocains (MAD), toutes taxes comprises lorsque le client est un consommateur. Une période d'essai gratuite peut être proposée ; aucun prélèvement n'a lieu avant sa fin.",
         "L'éditeur peut modifier ses prix en informant le client au moins 30 jours avant leur application ; le client qui refuse peut résilier sans frais avant la date d'effet."] },
       { h: "4. Paiement par carte, en euros au cours du jour", p: ["L'abonnement est payable d'avance pour chaque période (mensuelle sauf mention contraire), par prélèvement automatique sur la carte bancaire que le client enregistre une seule fois dans le formulaire sécurisé du prestataire de paiement SumUp (authentification forte 3D Secure). L'éditeur ne reçoit ni ne conserve les numéros de carte.",
@@ -167,6 +201,7 @@ function legalDocsMA_(v) {
       { h: "13. Réclamations et droit applicable", p: ["Toute réclamation est adressée à {{contactEmail}} ; réponse sous 15 jours. Les parties recherchent d'abord une solution amiable.",
         "Les présentes conditions sont soumises au droit marocain. Le client consommateur peut saisir le tribunal de son domicile ou du lieu du fait dommageable (article 202 de la loi n° 31-08) ; entre professionnels, les tribunaux de commerce de Marrakech sont compétents."] }
     ] },
+    legalProviderDoc_(false),
     { id: "confidentialite", title: "Politique de confidentialité", sections: [
       { h: "Responsable du traitement", p: ["{{publisherName}}, {{address}} — {{contactEmail}}, pour les comptes des utilisateurs, l'abonnement, la facturation et la sécurité. Pour les données que les clients enregistrent sur leurs locataires, voyageurs et prestataires, chaque client est responsable du traitement et l'éditeur est son sous-traitant.",
         "Traitements conformes à la loi n° 09-08. Référence CNDP : {{dataAuthorityRef}}."] },
@@ -192,6 +227,6 @@ function legalGet_(a) {
     return { id: d.id, title: d.title, sections: d.sections.map(function (s) { return { h: s.h, p: (s.p || []).map(function (x) { return legalFill_(x, v); }), ul: (s.ul || []).map(function (x) { return legalFill_(x, v); }) }; }) };
   });
   const missing = Object.keys(LEGAL_FIELDS_).filter(function (k) { return !v[k] && ["vatNumber", "phone", "hostPhone", "dpoEmail", "dataAuthorityRef", "mediator"].indexOf(k) < 0; });
-  return { edition: edition_().code, updatedAt: "2026-11-01", docs: a && a.id ? docs.filter(function (d) { return d.id === a.id; }) : docs, missing: missing.map(function (k) { return LEGAL_FIELDS_[k]; }),
+  return { edition: edition_().code, updatedAt: LEGAL_VERSION_, docs: a && a.id ? docs.filter(function (d) { return d.id === a.id; }) : docs, missing: missing.map(function (k) { return LEGAL_FIELDS_[k]; }),
     notice: "Modèles à faire relire par un professionnel du droit avant mise en service. ImmoPilot ne garantit pas leur conformité." };
 }

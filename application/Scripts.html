@@ -30,12 +30,14 @@ const NAV = [
     { r: "invoices", l: "Factures", i: "€", show: function () { return can("invoice.view") || can("invoice.submit"); } } ] },
   { g: "Mon espace", items: [
     { r: "mylease", l: "Mon bail", i: "✉", show: function () { return can("lease.self"); } },
+    { r: "referencing", l: "Mon référencement", i: "✔", show: function () { return !!S.me.provider; } },
     { r: "notifications", l: "Notifications", i: "🔔", show: function () { return true; }, badge: function () { return S.me.unreadNotifications; } } ] },
   { g: "Administration", items: [
     { r: "users", l: "Utilisateurs", i: "☰", show: function () { return can("user.invite") || can("user.manage") || S.me.isSuper; } },
     { r: "subscriptions", l: "Abonnements", i: "◈", show: function () { return can("subscription.view") || S.me.isSuper; } },
     { r: "settings", l: "Paramètres", i: "⚙", show: function () { return true; } },
     { r: "accounts", l: "Comptes clients", i: "◉", show: function () { return S.me.isSuper; } },
+    { r: "referencements", l: "Référencements artisans", i: "✔", show: function () { return S.me.isSuper; } },
     { r: "admin", l: "Administration globale", i: "♛", show: function () { return S.me.isSuper; } },
     { r: "audit", l: "Journal d'audit", i: "≡", show: function () { return can("audit.view.org") || S.me.isSuper; } } ] }
 ];
@@ -65,6 +67,8 @@ const App = window.App = {
     if (b.mode === "guest" && b.token) return Public.guest(b.token);
     if (b.mode === "legal") return Public.legal(b.doc || "mentions");
     S.token = store("ip_token");
+    if (!S.token && b.mode === "signup") { b.mode = "app"; return Public.signup(); }
+    if (!S.token && b.mode === "artisans") { b.mode = "app"; return Public.artisans(); }
     if (!S.token) return Public.login();
     clear($("app")).appendChild(h("div", { class: "loading" }, t("Chargement…")));
     api("me.boot").then(function (b) { S.me = b.me; S.meta = b.meta; App.enter(); }).catch(function (e) { if (e.code !== "AUTH") Public.login(errMsg(e)); });
@@ -72,7 +76,8 @@ const App = window.App = {
   renderLogin: function (msg) { Public.login(msg); },
   enter: function () {
     if (!lstore("ip_lang") && S.me.locale) setLang(S.me.locale);
-    const show = function () { App.shell(); App.go(location.hash.replace(/^#/, "") || "dashboard"); Tour.maybeStart(); };
+    const home = S.me.provider && S.me.provider.status !== "ACTIVE" ? "referencing" : (S.me.onboarding ? "onboarding" : "dashboard");
+    const show = function () { App.shell(); App.go(location.hash.replace(/^#/, "") || home); if (!S.onboard) Tour.maybeStart(); };
     if (S.meta) { show(); return; }
     api("meta.get").then(function (m) { S.meta = m; show(); }).catch(showErr);
   },
@@ -108,7 +113,9 @@ const App = window.App = {
       (function () { const sel = h("select", { "aria-label": t("Changer de vue"), onchange: function (e) { Public.enterDemo(e.target.value); } },
         (S.me.demoViews || []).map(function (v) { return h("option", { value: v.id }, t(v.label) + " · " + v.name); })); sel.value = S.me.demoView; return sel; })(),
       h("button", { type: "button", class: "btn sm", onclick: function () { api("me.logout").catch(function () {}).then(function () { localLogout(); }); } }, t("Quitter la démo"))) : null;
-    app.appendChild(h("div", { class: "shell" + (imp ? " impersonating" : "") }, sidebar, h("div", { class: "main" }, imp, demo, top, h("main", { class: "content", id: "content" }))));
+    const onb = S.me.onboarding && !S.me.impersonator ? h("div", { class: "onb-banner", role: "status" }, h("span", null, "✍ ", t("Finalisez votre inscription : signez votre contrat d'abonnement et choisissez votre moyen de paiement.")),
+      h("a", { class: "btn sm", href: "#onboarding" }, t("Finaliser"))) : null;
+    app.appendChild(h("div", { class: "shell" + (imp ? " impersonating" : "") }, sidebar, h("div", { class: "main" }, imp, demo, onb, top, h("main", { class: "content", id: "content" }))));
   },
   go: function (hash) {
     destroyCharts();
@@ -321,6 +328,146 @@ function mySubscriptions(el) {
         }, "danger") : null))));
     });
   }).catch(function (e) { el.appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+}
+
+/* ======================= Finalisation de l'inscription (contrat et paiement) ======================= */
+TITLES.onboarding = "Finaliser mon inscription";
+PAGES.onboarding = function (el) {
+  el.appendChild(pageHead(t("Finaliser mon inscription"), t("Deux étapes pour activer votre abonnement : la signature électronique de votre contrat, puis votre moyen de paiement.")));
+  return api("sub.mine", {}, { fresh: true }).then(function (list) {
+    const o = list.filter(function (x) { return x.subscription; })[0];
+    if (!o) { el.appendChild(h("div", { class: "alert info" }, t("Aucun abonnement à finaliser."))); return; }
+    const s = o.subscription, signed = o.sign && o.sign.signed, card = o.card || {}, paid = !card.enabled || card.active;
+    const stepBox = function (n, done, title, text, action) {
+      return h("div", { class: "onb-step" + (done ? " done" : "") }, h("span", { class: "n" }, done ? "✓" : String(n)), h("div", null, h("b", null, t(title)), h("p", { class: "small muted" }, text), done ? null : action));
+    };
+    const amount = fmtMoney(s.agencyOption ? s.agencyOption.totalPrice : s.price);
+    el.appendChild(panel(o.organizationName, h("div", null,
+      kv([["Forfait", (o.plan ? o.plan.name : s.planCode) + " · " + amount + " / " + st(s.periodicity)], ["Statut", stTag(s.status)], s.trialEnd ? ["Fin de l'essai gratuit", fmtDate(s.trialEnd)] : null]),
+      h("div", { class: "onb-steps" },
+        stepBox(1, true, "Compte créé", t("Votre espace est prêt.")),
+        stepBox(2, signed, "Signer le contrat d'abonnement", signed ? t("Signé le") + " " + fmtDate(o.sign.signedAt) + "." : t("Lisez votre contrat, puis signez-le avec le code reçu par e-mail ou par SMS."),
+          btn("✍ " + t("Signer mon contrat"), function () { signContractDialog(o).then(function (ok) { if (ok) { App.refreshMe().then(function () { App.shell(); App.go("onboarding"); }); } }); }, "primary")),
+        card.enabled ? stepBox(3, card.active, "Enregistrer ma carte bancaire", card.active ? t("Carte enregistrée") + " : " + card.label + "." :
+          (s.trialEnd ? t("Aucun débit avant la fin de l'essai gratuit") + " (" + fmtDate(s.trialEnd) + "). " : "") + t("Formulaire sécurisé SumUp (3D Secure) : ImmoPilot ne voit jamais votre numéro de carte."),
+          signed ? btn("💳 " + t("Enregistrer ma carte"), function () { cardSetupDialog(o); }, "primary") : h("span", { class: "small muted" }, t("Disponible après la signature du contrat.")))
+          : stepBox(3, false, "Paiement", t("Le paiement par carte n'est pas encore ouvert : après la signature, l'équipe ImmoPilot vous transmet les coordonnées de virement."), null)),
+      signed && paid ? h("div", { class: "alert good" }, "✓ " + t("Inscription terminée. Bienvenue !")) : null,
+      h("div", { class: "actions", style: { marginTop: "12px" } }, btn(t("Lire mon contrat (PDF)"), function () { api("sub.contractPdf", { organizationId: o.organizationId }).then(download).catch(showErr); }),
+        btn(signed && paid ? t("Accéder à mon espace") + " →" : t("Plus tard"), function () { NAV_HASH.v = "dashboard"; }, signed && paid ? "primary" : "")))));
+    if (S.onboard && !signed) { S.onboard = false; setTimeout(function () { signContractDialog(o).then(function (ok) { if (ok) App.refreshMe().then(function () { App.shell(); App.go("onboarding"); if (card.enabled) cardSetupDialog(o); }); }); }, 400); }
+  });
+};
+
+/* ======================= Espace artisan : mon référencement ======================= */
+const PROVIDER_STATUS_TXT = {
+  PENDING: ["info", "Votre dossier n'est pas encore validé. Déposez toutes les pièces demandées, puis envoyez votre dossier pour contrôle."],
+  SUBMITTED: ["info", "Dossier envoyé : il est en cours de contrôle par l'équipe ImmoPilot (en général sous 2 jours ouvrés). Vous serez prévenu(e) par e-mail."],
+  REJECTED: ["bad", "Votre dossier est à compléter"],
+  ACTIVE: ["good", "Vous êtes référencé(e) : les propriétaires et agences peuvent vous envoyer des demandes de devis et d'intervention."],
+  INACTIVE: ["bad", "Votre référencement est suspendu"]
+};
+function providerDocRow(r, artisanId, reload, admin) {
+  const tagOf = function (d) { return d.review === "APPROVED" ? tag(t("Validée"), "good") : d.review === "REJECTED" ? tag(t("Refusée"), "bad") : tag(t("En contrôle"), "info"); };
+  const files = h("div", { class: "doc-files" }, (r.docs || []).map(function (d) {
+    return h("div", { class: "doc-file" }, h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); openDoc(d.documentId); } }, "📄 " + d.fileName), tagOf(d), d.reason ? h("span", { class: "small muted" }, d.reason) : null,
+      admin && d.review !== "APPROVED" ? btn("✓ " + t("Valider"), function () { api("provider.reviewDoc", { artisanId: artisanId, documentId: d.documentId, decision: "APPROVED" }).then(reload).catch(showErr); }, "sm") : null,
+      admin && d.review !== "REJECTED" ? btn(t("Refuser"), function () { formModal(t("Refuser la pièce"), [{ k: "reason", l: "Motif (envoyé à l'artisan)", req: true, ph: t("Document illisible, expiré…") }], {}, function (v) { return api("provider.reviewDoc", { artisanId: artisanId, documentId: d.documentId, decision: "REJECTED", reason: v.reason }).then(reload); }); }, "sm danger") : null);
+  }));
+  const state = r.approved ? tag("✓ " + t("Validée"), "good") : r.provided ? tag(t("Déposée"), "info") : tag(t("Manquante"), "bad");
+  return h("div", { class: "doc-req" + (r.approved ? " ok" : "") }, h("div", { class: "doc-req-head" }, h("div", null, h("b", null, r.label), r.help ? h("div", { class: "small muted" }, r.help) : null,
+      r.lastRejection ? h("div", { class: "small", style: { color: "var(--clay)" } }, t("Pièce refusée") + " : " + r.lastRejection) : null), h("div", { class: "actions" }, state,
+      admin ? null : btn(r.provided ? t("Ajouter un fichier") : "⬆ " + t("Déposer"), function () {
+        pickFiles({ accept: "image/*,application/pdf", multiple: true }).then(function (f) { if (!f.length) return; return uploadFiles(f, "CONTRACTOR", artisanId, r.code).then(reload); }).catch(showErr);
+      }, r.provided ? "sm" : "sm primary"))), files);
+}
+function providerInfoFields(c) {
+  const fr = c.country === "FR", co = c.businessType === "COMPANY", locked = c.status === "ACTIVE", L = c.legal || {}, I = c.insurance || {};
+  const f = [];
+  if (!locked) {
+    if (co) { f.push({ k: "legalName", l: "Raison sociale", req: true }, { k: "legalForm", l: "Forme juridique", t: "select", req: true, opts: (c.legalForms || []).map(function (x) { return [x, x === "AUTRE" ? t("Autre") : x]; }) }, { k: "capital", l: "Capital social" }, { k: "managerName", l: "Nom du dirigeant", req: true }); }
+    else f.push({ k: "legalName", l: "Nom commercial" });
+    f.push({ k: "address", l: co ? "Adresse du siège" : "Adresse professionnelle", req: true, full: true });
+    if (fr) { f.push({ k: "siret", l: "N° SIRET", req: true }, { k: "vatNumber", l: "N° de TVA intracommunautaire" }); if (co) f.push({ k: "rcsCity", l: "Ville du RCS" }); }
+    else if (co) f.push({ k: "ice", l: "ICE", req: true }, { k: "rcNumber", l: "N° de registre de commerce (RC)", req: true }, { k: "rcCity", l: "Tribunal (ville du RC)" }, { k: "ifNumber", l: "Identifiant fiscal (IF)" }, { k: "patente", l: "N° de taxe professionnelle (patente)" }, { k: "cnss", l: "N° d'affiliation CNSS" });
+    else f.push({ k: "aeNumber", l: "N° d'inscription au registre de l'auto-entrepreneur", req: true }, { k: "ice", l: "ICE", req: true }, { k: "ifNumber", l: "Identifiant fiscal (IF)" });
+    f.push({ k: "trades", l: "Corps de métier", t: "multi", req: true, opts: ["CLEANING", "PLUMBING", "ELECTRICITY", "AC", "PAINTING", "LOCKSMITH", "CARPENTRY", "APPLIANCE", "GARDENING", "POOL", "OTHER"].map(function (x) { return [x, st(x)]; }) });
+  }
+  f.push({ k: "phone", l: "Téléphone", req: true }, { k: "zones", l: "Zones d'intervention", full: true },
+    { k: "hasRcPro", l: "J'ai une assurance responsabilité civile professionnelle (RC Pro)", t: "checkbox", full: true });
+  const rc = function (v) { return !!v.hasRcPro; };
+  f.push({ k: "rcInsurer", l: "Assureur RC Pro", req: true, show: rc }, { k: "rcPolicy", l: "N° de police (contrat)", req: true, show: rc }, { k: "rcValidUntil", l: "Valable jusqu'au", t: "date", req: true, show: rc }, { k: "rcInsurerAddress", l: "Adresse de l'assureur", req: true, full: true, show: rc });
+  if (fr && (c.trades || []).some(function (x) { return (c.decennaleTrades || []).indexOf(x) >= 0; })) f.push({ k: "decInsurer", l: "Assureur décennale", req: true }, { k: "decPolicy", l: "N° de police décennale", req: true }, { k: "decValidUntil", l: "Décennale valable jusqu'au", t: "date", req: true });
+  const vals = Object.assign({}, L, { phone: c.phone, zones: (c.zones || []).join(", "), trades: c.trades, hasRcPro: !!I.hasRcPro }, I.rcPro ? { rcInsurer: I.rcPro.insurer, rcPolicy: I.rcPro.policy, rcValidUntil: I.rcPro.validUntil, rcInsurerAddress: I.rcPro.insurerAddress } : {},
+    I.decennale ? { decInsurer: I.decennale.insurer, decPolicy: I.decennale.policy, decValidUntil: I.decennale.validUntil } : {});
+  return { fields: f, values: vals };
+}
+function providerSummary(c) {
+  const L = c.legal || {}, I = c.insurance || {}, fr = c.country === "FR";
+  return h("div", { class: "grid c2" },
+    panel("Entreprise", kv([["Statut", c.businessType === "COMPANY" ? t("Société") + (L.legalForm ? " (" + L.legalForm + ")" : "") : t("Auto-entrepreneur")], ["Raison sociale", L.legalName], ["Dirigeant", L.managerName],
+      fr ? ["SIRET", L.siret] : ["ICE", L.ice], fr ? ["TVA intracommunautaire", L.vatNumber || (c.businessType === "AE" ? t("Franchise en base (art. 293 B du CGI)") : "—")] : ["RC", L.rcNumber ? L.rcNumber + (L.rcCity ? " · " + L.rcCity : "") : (L.aeNumber ? t("Auto-entrepreneur n°") + " " + L.aeNumber : "—")],
+      fr ? (L.rcsCity ? ["RCS", L.rcsCity] : null) : ["IF / patente / CNSS", [L.ifNumber, L.patente, L.cnss].filter(Boolean).join(" · ") || "—"], L.capital ? ["Capital", L.capital] : null, ["Adresse", L.address],
+      ["Corps de métier", (c.trades || []).map(st).join(", ")], ["Zones", (c.zones || []).join(", ") || "—"], ["Téléphone", c.phone], ["E-mail", c.email]])),
+    panel("Assurances", kv([["RC professionnelle", I.hasRcPro && I.rcPro ? I.rcPro.insurer + " · n° " + I.rcPro.policy + " · " + t("jusqu'au") + " " + fmtDate(I.rcPro.validUntil) : t("Non déclarée")],
+      I.rcPro ? ["Adresse de l'assureur", I.rcPro.insurerAddress] : null, I.decennale ? ["Décennale", I.decennale.insurer + " · n° " + I.decennale.policy + " · " + t("jusqu'au") + " " + fmtDate(I.decennale.validUntil)] : null,
+      (c.expired || []).length ? ["Alerte", h("span", { class: "tag bad" }, t("Expirée") + " : " + c.expired.join(", "))] : null])));
+}
+TITLES.referencing = "Mon référencement";
+PAGES.referencing = function (el) {
+  const load = function () {
+    return api("provider.me", {}, { fresh: true }).then(function (c) {
+      clear(el);
+      const key = c.status === "PENDING" && c.submittedAt ? "SUBMITTED" : c.status;
+      const m = PROVIDER_STATUS_TXT[key] || ["info", ""];
+      el.appendChild(pageHead(t("Mon référencement"), t("Vos informations légales, vos assurances et vos pièces justificatives."), [stTag(c.status === "PENDING" && c.submittedAt ? "SUBMITTED" : c.status)]));
+      el.appendChild(h("div", { class: "alert " + m[0] }, t(m[1]) + (c.rejectReason && (key === "REJECTED" || key === "INACTIVE") ? " : " + c.rejectReason : "")));
+      const reload = function () { apiCacheClear(); load(); };
+      el.appendChild(panel("Pièces justificatives", h("div", null, h("p", { class: "small muted" }, t("Pièces exigées pour votre statut dans votre pays. PDF, JPEG ou PNG, 4 Mo maximum ; vous pouvez photographier un document avec votre téléphone.")),
+        c.checklist.map(function (r) { return providerDocRow(r, c.artisanId, reload, false); }),
+        h("div", { class: "actions", style: { marginTop: "12px" } }, btn("+ " + t("Autre justificatif"), function () { pickFiles({ accept: "image/*,application/pdf" }).then(function (f) { if (f.length) return uploadFiles(f, "CONTRACTOR", c.artisanId, "OTHER_PROOF").then(reload); }).catch(showErr); }, "sm")))));
+      const canSend = !c.missing.length && !(c.expired || []).length && !(c.status === "PENDING" && c.submittedAt);
+      if (c.status !== "ACTIVE") el.appendChild(h("div", { class: "panel", style: { display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" } },
+        h("div", { style: { flex: "1", minWidth: "220px" } }, c.missing.length ? h("span", null, t("Pièces manquantes") + " : " + c.missing.length) : h("span", null, "✓ " + t("Toutes les pièces sont déposées."))),
+        btn("➤ " + t(c.submittedAt && c.status === "PENDING" ? "Renvoyer mon dossier" : "Envoyer mon dossier pour validation"), function (ev) { const b = ev.currentTarget; b.disabled = true; api("provider.submit").then(function (r) { toast(r.message, "good"); reload(); }).catch(function (e) { b.disabled = false; showErr(e); }); }, canSend ? "primary lg" : "lg")));
+      el.appendChild(providerSummary(c));
+      el.appendChild(h("div", { class: "actions" }, btn(t("Modifier mes informations"), function () {
+        const ff = providerInfoFields(c);
+        formModal(t("Mes informations"), ff.fields, ff.values, function (v) { if (typeof v.zones !== "string") v.zones = ""; return api("provider.save", v).then(reload); },
+          { intro: c.status === "ACTIVE" ? t("Vous êtes référencé(e) : seuls le téléphone, les zones et les assurances sont modifiables. Pour changer d'entreprise, contactez l'équipe ImmoPilot.") : "" });
+      })));
+      el.appendChild(Public.statusBox({ status: { providerPoints: c.status_ } }, true));
+    });
+  };
+  return load();
+};
+
+/* ======================= Super administrateur : contrôle des référencements ======================= */
+PAGES.referencements = function (el) {
+  el.appendChild(pageHead(t("Référencements artisans"), t("Dossiers déposés par les artisans inscrits en ligne : contrôlez chaque pièce, puis validez ou refusez le référencement.")));
+  tabs(el, [["PENDING", "À contrôler"], ["REJECTED", "À compléter"], ["INACTIVE", "Suspendus"], ["ACTIVE", "Référencés"]].map(function (x) {
+    return { id: x[0], label: x[1], render: function (b) {
+      b.appendChild(h("div", { class: "loading" }, t("Chargement…")));
+      api("provider.reviewList", { status: x[0] }, { fresh: true }).then(function (list) {
+        clear(b).appendChild(table([{ l: "Artisan", k: "name" }, { l: "Statut", f: function (r) { return r.businessType === "COMPANY" ? t("Société") : t("Auto-entrepreneur"); } }, { l: "Métiers", f: function (r) { return r.trades.map(st).join(", "); } },
+          { l: "Téléphone", k: "phone" }, { l: "Dossier envoyé", dt: true, k: "submittedAt" }, { l: "Pièces", f: function (r) { return r.missing ? tag(r.missing + " " + t("manquante(s)"), "bad") : r.toReview ? tag(r.toReview + " " + t("à contrôler"), "info") : tag("✓", "good"); } },
+          { l: "", f: function (r) { return (r.expired || []).length ? tag(t("Assurance expirée"), "bad") : ""; } }], list, { empty: "Aucun dossier.", onRow: function (r) { NAV_HASH.v = "contractors/" + r.artisanId; } }));
+      }).catch(function (e) { clear(b).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+    } };
+  }));
+};
+function providerReviewPanel(el, c) {
+  const v = c.verification, reload = function () { apiCacheClear(); App.go("contractors/" + c.artisanId); };
+  const box = h("div");
+  box.appendChild(h("div", { class: "alert " + (v.status === "ACTIVE" ? "good" : v.status === "PENDING" ? "info" : "bad") }, st(v.status) + (v.submittedAt ? " · " + t("dossier envoyé le") + " " + fmtDT(v.submittedAt) : " · " + t("dossier pas encore envoyé")) + (v.rejectReason ? " · " + v.rejectReason : "")));
+  box.appendChild(providerSummary(v));
+  v.checklist.forEach(function (r) { box.appendChild(providerDocRow(r, c.artisanId, reload, true)); });
+  if ((v.otherDocs || []).length) box.appendChild(providerDocRow({ label: t("Autres justificatifs"), docs: v.otherDocs, provided: true, approved: true }, c.artisanId, reload, true));
+  box.appendChild(h("div", { class: "actions", style: { marginTop: "12px" } },
+    v.status !== "ACTIVE" ? btn("✓ " + t("Valider le référencement"), function () { confirmBox(t("Valider le référencement ? L'artisan apparaîtra dans l'annuaire proposé aux propriétaires et agences.")).then(function (ok) { if (ok) api("provider.decide", { artisanId: c.artisanId, decision: "APPROVE" }).then(function () { toast(t("Artisan référencé."), "good"); reload(); }).catch(showErr); }); }, v.allApproved ? "primary" : "") : null,
+    v.status !== "REJECTED" && v.status !== "ACTIVE" ? btn(t("Demander des compléments"), function () { formModal(t("Dossier à compléter"), [{ k: "reason", l: "Motif (envoyé à l'artisan par e-mail)", t: "textarea", req: true }], {}, function (x) { return api("provider.decide", { artisanId: c.artisanId, decision: "REJECT", reason: x.reason }).then(reload); }); }, "danger") : null,
+    v.status === "ACTIVE" ? btn(t("Suspendre le référencement"), function () { formModal(t("Suspendre le référencement"), [{ k: "reason", l: "Motif (envoyé à l'artisan par e-mail)", t: "textarea", req: true }], {}, function (x) { return api("provider.decide", { artisanId: c.artisanId, decision: "SUSPEND", reason: x.reason }).then(reload); }); }, "danger") : null));
+  el.appendChild(panel("Dossier de référencement", box));
 }
 
 /* Prélèvement automatique par carte (SumUp) : le formulaire de carte est celui de SumUp (aucune donnée de carte chez ImmoPilot). */
