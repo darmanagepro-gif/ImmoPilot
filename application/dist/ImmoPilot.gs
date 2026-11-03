@@ -1972,7 +1972,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "524768aad37d";
+var IMMO_BUILD_ = "ef37586099f5";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -3921,7 +3921,8 @@ function storeFile_(ctx, ownerType, ownerId, category, input, uploaderEmail) {
   assert_(bytes.length > 0 && bytes.length <= IMMO_CONFIG.MAX_UPLOAD_BYTES, "Fichier trop volumineux (4 Mo maximum).");
   assert_(MIME_SIGNATURES_[mime](bytes), "Le contenu du fichier ne correspond pas au type annoncé.");
   const ext = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "application/pdf": ".pdf" }[mime];
-  const cleanName = (safeText_(input.fileName || "fichier", 120).replace(/[^\w.\- ()À-ÿ]/g, "_").replace(/\.[a-z0-9]{2,5}$/i, "") || "fichier") + ext;
+  // Nom nettoyé : extension annoncée retirée, points restants neutralisés (« photo.php.exe » → « photo_php.png »), seule l'extension du type réel est ajoutée.
+  const cleanName = (safeText_(input.fileName || "fichier", 120).replace(/[^\w.\- ()À-ÿ]/g, "_").replace(/\.[a-z0-9]{2,5}$/i, "").replace(/\./g, "_").replace(/^[_ ]+/, "") || "fichier") + ext;
   const folder = ownerType === "REPORT" ? subFolder_(systemFolder_("Exports"), "user_" + ownerId) :
     (ctx.propertyId ? propertyFolder_(ctx.organizationId, ctx.propertyId, ownerType) : subFolder_(orgFolder_(ctx.organizationId || "platform"), "Documents_administratifs"));
   let file;
@@ -10854,6 +10855,12 @@ function TEST_GROUPS_() {
       ["Fichier refusé si le contenu ne correspond pas au type annoncé", function (T, fx) {
         T.fails(fx.tok.ownerA, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propA, category: "PHOTO", fileName: "x.jpg", mimeType: "image/jpeg", base64: Utilities.base64Encode(Utilities.newBlob("<script>").getBytes()) }, "VALIDATION");
         T.fails(fx.tok.ownerA, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propA, category: "PHOTO", fileName: "x.exe", mimeType: "application/x-msdownload", base64: "TVo=" }, "VALIDATION");
+        // Page web déguisée en PDF, fichier trop lourd, double extension.
+        T.fails(fx.tok.ownerA, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propA, category: "PHOTO", fileName: "facture.pdf", mimeType: "application/pdf", base64: Utilities.base64Encode(Utilities.newBlob("<html><script>alert(1)</script>").getBytes()) }, "VALIDATION");
+        const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], big = png.concat(new Array(IMMO_CONFIG.MAX_UPLOAD_BYTES).fill(0));
+        T.fails(fx.tok.ownerA, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propA, category: "PHOTO", fileName: "gros.png", mimeType: "image/png", base64: Utilities.base64Encode(big) }, "VALIDATION");
+        const ok = T.call(fx.tok.ownerA, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propA, category: "PHOTO", fileName: "photo.php.exe", mimeType: "image/png", base64: Utilities.base64Encode(png.concat([0, 0, 0, 0])) });
+        T.ok(/\.png$/.test(dbGet_("Documents", ok.documentId).fileName) && !/\.(php|exe)/.test(dbGet_("Documents", ok.documentId).fileName), "nom renommé avec l'extension du type réel");
       }],
       ["Injection de formule neutralisée (Sheets et CSV)", function (T, fx) {
         const r = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(400), checkOut: tDays_(401), guestName: "=HYPERLINK(\"http://x\")" });

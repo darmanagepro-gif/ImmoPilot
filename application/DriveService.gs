@@ -117,7 +117,8 @@ function storeFile_(ctx, ownerType, ownerId, category, input, uploaderEmail) {
   assert_(bytes.length > 0 && bytes.length <= IMMO_CONFIG.MAX_UPLOAD_BYTES, "Fichier trop volumineux (4 Mo maximum).");
   assert_(MIME_SIGNATURES_[mime](bytes), "Le contenu du fichier ne correspond pas au type annoncé.");
   const ext = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "application/pdf": ".pdf" }[mime];
-  const cleanName = (safeText_(input.fileName || "fichier", 120).replace(/[^\w.\- ()À-ÿ]/g, "_").replace(/\.[a-z0-9]{2,5}$/i, "") || "fichier") + ext;
+  // Nom nettoyé : extension annoncée retirée, points restants neutralisés (« photo.php.exe » → « photo_php.png »), seule l'extension du type réel est ajoutée.
+  const cleanName = (safeText_(input.fileName || "fichier", 120).replace(/[^\w.\- ()À-ÿ]/g, "_").replace(/\.[a-z0-9]{2,5}$/i, "").replace(/\./g, "_").replace(/^[_ ]+/, "") || "fichier") + ext;
   const folder = ownerType === "REPORT" ? subFolder_(systemFolder_("Exports"), "user_" + ownerId) :
     (ctx.propertyId ? propertyFolder_(ctx.organizationId, ctx.propertyId, ownerType) : subFolder_(orgFolder_(ctx.organizationId || "platform"), "Documents_administratifs"));
   let file;

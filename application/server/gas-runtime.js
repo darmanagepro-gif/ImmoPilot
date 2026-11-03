@@ -219,7 +219,9 @@ function createRuntime(opts) {
       // Politique de sécurité du document : aucun script, aucune ressource externe (images intégrées en data: uniquement).
       const csp = "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:\">";
       fs.writeFileSync(inp, /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, function (m) { return m + csp; }) : csp + html);
+      // Seconde barrière : le navigateur d'impression n'a aucun accès réseau (proxy vers un port fermé), même pour une adresse locale.
       const args = ["--headless", "--disable-gpu", "--no-sandbox", "--no-first-run", "--disable-extensions", "--disable-background-networking", "--disable-sync", "--mute-audio",
+        "--proxy-server=http://127.0.0.1:9", "--proxy-bypass-list=<-loopback>",
         "--user-data-dir=" + path.join(dir, "profile"), "--no-pdf-header-footer", "--print-to-pdf=" + out, "file://" + inp];
       cp.execFileSync(opts.chromium, args, { timeout: 60000, stdio: "ignore" });
       return fs.readFileSync(out);

@@ -740,6 +740,12 @@ function TEST_GROUPS_() {
       ["Fichier refusé si le contenu ne correspond pas au type annoncé", function (T, fx) {
         T.fails(fx.tok.ownerA, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propA, category: "PHOTO", fileName: "x.jpg", mimeType: "image/jpeg", base64: Utilities.base64Encode(Utilities.newBlob("<script>").getBytes()) }, "VALIDATION");
         T.fails(fx.tok.ownerA, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propA, category: "PHOTO", fileName: "x.exe", mimeType: "application/x-msdownload", base64: "TVo=" }, "VALIDATION");
+        // Page web déguisée en PDF, fichier trop lourd, double extension.
+        T.fails(fx.tok.ownerA, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propA, category: "PHOTO", fileName: "facture.pdf", mimeType: "application/pdf", base64: Utilities.base64Encode(Utilities.newBlob("<html><script>alert(1)</script>").getBytes()) }, "VALIDATION");
+        const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], big = png.concat(new Array(IMMO_CONFIG.MAX_UPLOAD_BYTES).fill(0));
+        T.fails(fx.tok.ownerA, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propA, category: "PHOTO", fileName: "gros.png", mimeType: "image/png", base64: Utilities.base64Encode(big) }, "VALIDATION");
+        const ok = T.call(fx.tok.ownerA, "doc.upload", { ownerType: "PROPERTY", ownerId: fx.propA, category: "PHOTO", fileName: "photo.php.exe", mimeType: "image/png", base64: Utilities.base64Encode(png.concat([0, 0, 0, 0])) });
+        T.ok(/\.png$/.test(dbGet_("Documents", ok.documentId).fileName) && !/\.(php|exe)/.test(dbGet_("Documents", ok.documentId).fileName), "nom renommé avec l'extension du type réel");
       }],
       ["Injection de formule neutralisée (Sheets et CSV)", function (T, fx) {
         const r = T.call(fx.tok.ownerA, "resv.create", { propertyId: fx.propA, checkIn: tDays_(400), checkOut: tDays_(401), guestName: "=HYPERLINK(\"http://x\")" });
