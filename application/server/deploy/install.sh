@@ -23,7 +23,7 @@ echo "== ImmoPilot ($EDITION) sur $DOMAIN — $PRETTY_NAME"
 echo "== 1/8 Paquets système"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y ca-certificates curl gnupg git ufw fonts-dejavu-core fonts-liberation unattended-upgrades debian-keyring debian-archive-keyring apt-transport-https
+apt-get install -y cron ca-certificates curl gnupg git ufw fonts-dejavu-core fonts-liberation unattended-upgrades debian-keyring debian-archive-keyring apt-transport-https
 dpkg-reconfigure -f noninteractive unattended-upgrades || true   # mises à jour de sécurité automatiques
 
 echo "== 2/8 Node.js 22 (LTS)"
@@ -94,6 +94,10 @@ install -m 0755 "$APP/server/deploy/backup.sh" /usr/local/sbin/immopilot-backup
 install -m 0755 "$APP/server/deploy/update.sh" /usr/local/sbin/immopilot-update
 printf '#!/bin/sh\nset -a; . /etc/immopilot/immopilot.env; set +a\nexec node %s/server/cli.js "$@"\n' "$APP" > /usr/local/bin/immopilot; chmod 0750 /usr/local/bin/immopilot
 echo "15 3 * * * root /usr/local/sbin/immopilot-backup >> /var/log/immopilot-backup.log 2>&1" > /etc/cron.d/immopilot-backup
+# Planificateur actif (sans lui, aucune sauvegarde de nuit ne tourne) et contrôle quotidien des sauvegardes avec alerte e-mail.
+systemctl enable --now cron
+install -m 0750 "$APP/server/deploy/backup-check.sh" /usr/local/sbin/immopilot-backup-check
+echo "10 5 * * * root /usr/local/sbin/immopilot-backup-check" > /etc/cron.d/immopilot-backup-check
 ufw allow OpenSSH >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ufw --force enable >/dev/null
 systemctl daemon-reload
 systemctl enable --now immopilot
