@@ -15,7 +15,7 @@ fail() {
   K=$(grep -m1 '^BREVO_API_KEY=' "$ENV" 2>/dev/null | cut -d= -f2-)
   TO=$(grep -m1 '^ADMIN_EMAIL=' "$ENV" 2>/dev/null | cut -d= -f2-)
   FROM=$(grep -m1 '^MAIL_FROM=' "$ENV" 2>/dev/null | cut -d= -f2-)
-  if [ -n "$K" ] && [ -n "$TO" ]; then
+  if [ -z "${NO_ALERT:-}" ] && [ -n "$K" ] && [ -n "$TO" ]; then  # NO_ALERT=1 : appelé par le contrôle quotidien, qui fait son propre rapport
     curl -s -m 20 -o /dev/null -X POST https://api.brevo.com/v3/smtp/email -H "api-key: $K" -H "content-type: application/json" \
       -d "$(node -e 'console.log(JSON.stringify({ sender: { email: process.argv[1], name: "DarPilot" }, to: [{ email: process.argv[2] }],
         subject: "ALERTE : sauvegarde DarPilot en échec",
