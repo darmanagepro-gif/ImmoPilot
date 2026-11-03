@@ -1972,7 +1972,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "64f0dc69e5c5";
+var IMMO_BUILD_ = "78d9ec02a225";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -3927,7 +3927,12 @@ function storeFile_(ctx, ownerType, ownerId, category, input, uploaderEmail) {
     (ctx.propertyId ? propertyFolder_(ctx.organizationId, ctx.propertyId, ownerType) : subFolder_(orgFolder_(ctx.organizationId || "platform"), "Documents_administratifs"));
   let file;
   try { file = folder.createFile(Utilities.newBlob(bytes, mime, cleanName)); file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE); }
-  catch (e) { throw new AppError("DRIVE", "Enregistrement Drive impossible (quota ou autorisation) : " + e.message); }
+  catch (e) {
+    // Détail technique (chemins, système) uniquement dans le journal du serveur ; l'utilisateur reçoit une référence.
+    const ref = "ERR-" + Utilities.getUuid().slice(0, 8).toUpperCase();
+    console.error(ref + " enregistrement de fichier : " + (e && e.stack ? e.stack : e));
+    throw new AppError("DRIVE", "Enregistrement du fichier impossible pour le moment. Réessayez plus tard (réf. " + ref + ").");
+  }
   const sensitive = ctx.sensitive || ["ID_DOCUMENT", "PASSPORT", "CIN", "CNI", "POLICE_FORM"].indexOf(category) >= 0;
   // Fiches de police : conservation de 6 mois au moins après le départ (obligation de l'hébergeur en France).
   const retDays = Math.max(Number(getSetting_("retention.sensitiveDocDays", ctx.organizationId)) || 30, category === "POLICE_FORM" ? 183 : 0);
@@ -7603,7 +7608,7 @@ function propertyImport_(p, a) {
     const o = {}; headers.forEach(function (h, j) { if (PROPERTY_CSV_COLS_.indexOf(h) >= 0) o[h] = r[j] === undefined ? "" : String(r[j]).trim(); });
     if (!o.propertyType) delete o.propertyType; if (!o.rentalMode) delete o.rentalMode;
     try { valid.push(propertyInput_(o, true)); results.push({ line: i + 2, ok: true, name: o.name }); }
-    catch (e) { results.push({ line: i + 2, ok: false, error: e.message }); }
+    catch (e) { results.push({ line: i + 2, ok: false, error: (e instanceof AppError || (e && e.name === "AppError")) ? e.message : "Ligne invalide." }); }
   });
   if (a.dryRun !== false) return { dryRun: true, valid: valid.length, invalid: results.filter(function (x) { return !x.ok; }).length, results: results };
   assert_(results.every(function (x) { return x.ok; }), "Corrigez les lignes en erreur avant l'import réel.");

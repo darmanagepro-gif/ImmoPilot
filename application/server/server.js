@@ -110,7 +110,8 @@ function readBody(req, limit) {
 }
 function sameOrigin(req) {
   const o = req.headers.origin; if (!o) return true;
-  try { return new URL(o).host === new URL(C.publicUrl).host || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o); } catch (e) { return false; }
+  // Seule l'adresse publique de l'instance est acceptée ; « localhost » uniquement si l'instance elle-même tourne en local (développement).
+  try { const pub = new URL(C.publicUrl); return new URL(o).host === pub.host || (/^(localhost|127\.0\.0\.1)$/.test(pub.hostname) && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o)); } catch (e) { return false; }
 }
 const ADMIN_FUNCTIONS = ["setupProject", "createFirstSuperAdmin", "verifierInstallation", "healthCheck", "mesurerPerformance", "viderCache", "creerEnvironnementDemo", "creerHistoriqueDemo",
   "mettreDemoEnVeille", "reveillerDemo", "testerAssistantIA", "testerSumUp", "actualiserTauxSumUp", "backupNow", "restoreFromBackup", "jobFrequent", "jobDaily"];

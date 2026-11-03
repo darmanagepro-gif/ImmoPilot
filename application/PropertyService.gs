@@ -153,7 +153,7 @@ function propertyImport_(p, a) {
     const o = {}; headers.forEach(function (h, j) { if (PROPERTY_CSV_COLS_.indexOf(h) >= 0) o[h] = r[j] === undefined ? "" : String(r[j]).trim(); });
     if (!o.propertyType) delete o.propertyType; if (!o.rentalMode) delete o.rentalMode;
     try { valid.push(propertyInput_(o, true)); results.push({ line: i + 2, ok: true, name: o.name }); }
-    catch (e) { results.push({ line: i + 2, ok: false, error: e.message }); }
+    catch (e) { results.push({ line: i + 2, ok: false, error: (e instanceof AppError || (e && e.name === "AppError")) ? e.message : "Ligne invalide." }); }
   });
   if (a.dryRun !== false) return { dryRun: true, valid: valid.length, invalid: results.filter(function (x) { return !x.ok; }).length, results: results };
   assert_(results.every(function (x) { return x.ok; }), "Corrigez les lignes en erreur avant l'import réel.");

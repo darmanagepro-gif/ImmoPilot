@@ -123,7 +123,12 @@ function storeFile_(ctx, ownerType, ownerId, category, input, uploaderEmail) {
     (ctx.propertyId ? propertyFolder_(ctx.organizationId, ctx.propertyId, ownerType) : subFolder_(orgFolder_(ctx.organizationId || "platform"), "Documents_administratifs"));
   let file;
   try { file = folder.createFile(Utilities.newBlob(bytes, mime, cleanName)); file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE); }
-  catch (e) { throw new AppError("DRIVE", "Enregistrement Drive impossible (quota ou autorisation) : " + e.message); }
+  catch (e) {
+    // Détail technique (chemins, système) uniquement dans le journal du serveur ; l'utilisateur reçoit une référence.
+    const ref = "ERR-" + Utilities.getUuid().slice(0, 8).toUpperCase();
+    console.error(ref + " enregistrement de fichier : " + (e && e.stack ? e.stack : e));
+    throw new AppError("DRIVE", "Enregistrement du fichier impossible pour le moment. Réessayez plus tard (réf. " + ref + ").");
+  }
   const sensitive = ctx.sensitive || ["ID_DOCUMENT", "PASSPORT", "CIN", "CNI", "POLICE_FORM"].indexOf(category) >= 0;
   // Fiches de police : conservation de 6 mois au moins après le départ (obligation de l'hébergeur en France).
   const retDays = Math.max(Number(getSetting_("retention.sensitiveDocDays", ctx.organizationId)) || 30, category === "POLICE_FORM" ? 183 : 0);
