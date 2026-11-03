@@ -271,7 +271,11 @@ function createRuntime(opts) {
     gzip: function (blob) { return newBlob(require("zlib").gzipSync(toBuf(blob.getBytes())), "application/x-gzip", "data.gz"); },
     ungzip: function (blob) { return newBlob(require("zlib").gunzipSync(toBuf(blob.getBytes())), "application/octet-stream", "data"); },
     newBlob: newBlob, formatDate: formatDate, parseDate: parseDate,
-    sleep: function (ms) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.min(Number(ms) || 0, 5000)); }
+    sleep: function (ms) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.min(Number(ms) || 0, 5000)); },
+    /** Extension serveur dédié : PBKDF2-HMAC-SHA256 natif (OpenSSL), ~100 fois plus rapide que le calcul en JavaScript pur. */
+    pbkdf2Sha256Hex: function (password, saltHex, iters) {
+      return crypto.pbkdf2Sync(Buffer.from(String(password), "utf8"), Buffer.from(String(saltHex), "hex"), Math.max(1, Number(iters) || 1), 32, "sha256").toString("hex");
+    }
   };
 
   /* ------------------------------ Services divers ------------------------------ */

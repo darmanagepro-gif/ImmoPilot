@@ -276,6 +276,12 @@ function TEST_GROUPS_() {
       ["Mot de passe haché (PBKDF2 vecteurs RFC) et jamais stocké en clair", function (T, fx) {
         T.eq(pbkdf2Hex_("password", "73616c74", 1), "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b", "PBKDF2 c=1");
         T.eq(pbkdf2Hex_("password", "73616c74", 2), "ae4d0c95af6b46d32d0adff928f06dd02a303f8ef3c251dfd6e2d85a95474c43", "PBKDF2 c=2");
+        // Calcul natif (serveur dédié) et calcul JavaScript : résultats identiques, y compris accents et sel long.
+        [["Mot2passe-é€", "0a1b2c3d4e5f60718293a4b5c6d7e8f9", 3000], ["x".repeat(100), "00", 7]].forEach(function (c) { T.eq(pbkdf2Hex_(c[0], c[1], c[2]), pbkdf2Js_(c[0], c[1], c[2]), "natif = JavaScript"); });
+        if (typeof Utilities.pbkdf2Sha256Hex === "function") {
+          const keep = TEST_HOOKS_.pbkdfIters; TEST_HOOKS_.pbkdfIters = null;
+          try { T.ok(pbkdfIters_() >= 600000, "600 000 itérations au minimum sur le serveur (OWASP)"); } finally { TEST_HOOKS_.pbkdfIters = keep; }
+        }
         const u = dbGet_("Users", fx.users.ownerA.userId);
         T.ok(u.passwordHash && u.passwordHash.length === 64 && JSON.stringify(u).indexOf(fx.pw) < 0, "le mot de passe ne doit apparaître nulle part");
       }],
@@ -1790,6 +1796,41 @@ function TEST_GROUPS_() {
         notify_({ eventKey: "dup-test", userIds: [fx.users.ownerA.userId], type: "INFO", title: "x", email: false });
         notify_({ eventKey: "dup-test", userIds: [fx.users.ownerA.userId], type: "INFO", title: "x", email: false });
         T.eq(dbAll_("Notifications").length, n0 + 1, "une seule notification");
+      }]
+    ] },
+    { name: "Cloisonnement entre clients (attaque de toutes les routes)", tests: [
+      ["Un autre client et une agence sans mandat appellent TOUTES les routes avec les identifiants du client A : aucune donnée de A ne sort", function (T, fx) {
+        const A = String(fx.orgA.organizationId), S = schema_();
+        const aProps = {}; dbAll_("Properties").forEach(function (x) { if (String(x.organizationId) === A) aProps[String(x.propertyId)] = true; });
+        // Identifiants réels du client A, pris dans toutes les tables (réservations, baux, factures, documents…).
+        const args = { organizationId: A, propertyId: fx.propA, id: fx.propA, ids: [fx.propA], userId: fx.users.ownerA.userId, tenantUserId: fx.users.tenant.userId };
+        Object.keys(S).forEach(function (t) {
+          let rows; try { rows = dbAll_(t); } catch (e) { return; }
+          rows.forEach(function (r) {
+            if (String(r.organizationId) !== A && !aProps[String(r.propertyId)]) return;
+            Object.keys(r).forEach(function (k) { if (/Id$/.test(k) && r[k] && args[k] === undefined && typeof r[k] !== "object") args[k] = String(r[k]); });
+          });
+        });
+        const ownerA = dbGet_("Users", fx.users.ownerA.userId);
+        const secrets = [String(fx.orgA.name), "Riad Test A", "Appartement Gueliz", String(ownerA.email), String(fx.users.tenant.email)];
+        const skip = { "me.logout": 1, "me.logoutAll": 1, "me.changePassword": 1, "demo.enter": 1, "demo.views": 1 };
+        const routes = Object.keys(routes_()).filter(function (r) { return !skip[r]; }), leaks = [];
+        // Attaquants neufs, sans aucun lien passé avec A (un mandat retiré laisse légitimement d'anciennes notifications).
+        const k = Utilities.getUuid().slice(0, 6), attackers = { proprietaire: tLeaseOwner_(T, fx).tok };
+        const ag = tOrg_("Agence intruse " + k, "AGENCY"), agu = tMakeUser_(fx.mail("intrus." + k), "AGENCY_ADMIN", ag.organizationId, fx.pw);
+        attackers.agence = T.pub("auth.login", { email: agu.email, password: fx.pw }).token;
+        Object.keys(attackers).forEach(function (who) {
+          routes.forEach(function (route) {
+            let r; try { r = api(attackers[who], route, JSON.parse(JSON.stringify(args))); } catch (e) { return; }
+            if (!r || !r.ok) return;
+            const out = JSON.stringify(r.data || "");
+            secrets.forEach(function (s) { if (s && out.indexOf(s) >= 0) leaks.push(who + " → " + route + " expose « " + s + " »"); });
+          });
+        });
+        T.ok(routes.length > 200, "toutes les routes testées (" + routes.length + ")");
+        // Contrôle du détecteur : le propriétaire légitime, lui, voit bien ses données avec les mêmes appels.
+        T.ok(JSON.stringify(api(fx.tok.ownerA, "property.get", JSON.parse(JSON.stringify(args))).data || "").indexOf("Riad Test A") >= 0, "le détecteur repère bien les données de A");
+        T.eq(leaks, [], "fuites de données entre clients");
       }]
     ] }
   ];

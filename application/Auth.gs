@@ -13,7 +13,15 @@
 var LOGIN_MAX_FAILS_ = 5;
 var LOGIN_LOCK_MINUTES_ = 15;
 
-function pbkdfIters_() { if (TEST_HOOKS_.pbkdfIters) return TEST_HOOKS_.pbkdfIters; return Math.max(1000, parseInt(PropertiesService.getScriptProperties().getProperty(IMMO_CONFIG.PBKDF_ITERATIONS_PROPERTY), 10) || 10000); }
+/**
+ * Nombre d'itérations PBKDF2. Serveur dédié (calcul natif) : 600 000 au minimum, niveau recommandé par l'OWASP pour
+ * PBKDF2-HMAC-SHA256. Les mots de passe existants sont re-hachés automatiquement à la connexion suivante (authLogin_).
+ */
+function pbkdfIters_() {
+  if (TEST_HOOKS_.pbkdfIters) return TEST_HOOKS_.pbkdfIters;
+  const floor = typeof Utilities.pbkdf2Sha256Hex === "function" ? 600000 : 10000;
+  return Math.max(floor, parseInt(PropertiesService.getScriptProperties().getProperty(IMMO_CONFIG.PBKDF_ITERATIONS_PROPERTY), 10) || 0);
+}
 function hexToBytes_(hex) { const out = []; for (let i = 0; i < hex.length; i += 2) { let v = parseInt(hex.substr(i, 2), 16); if (v > 127) v -= 256; out.push(v); } return out; }
 
 /**
@@ -57,6 +65,11 @@ function sha256Finish_(st, bytes, prefixLen) {
   return s;
 }
 function pbkdf2Hex_(password, saltHex, iters) {
+  // Serveur dédié : calcul natif (mêmes résultats, beaucoup plus rapide), ce qui permet le niveau recommandé par l'OWASP.
+  if (typeof Utilities.pbkdf2Sha256Hex === "function" && /^([0-9a-f]{2})+$/i.test(String(saltHex))) return Utilities.pbkdf2Sha256Hex(password, saltHex, iters);
+  return pbkdf2Js_(password, saltHex, iters);
+}
+function pbkdf2Js_(password, saltHex, iters) {
   let key = Utilities.newBlob(String(password)).getBytes().map(function (b) { return b & 0xff; });
   if (key.length > 64) key = sha256Finish_(SHA256_IV_, key, 0).reduce(function (o, x) { o.push((x >>> 24) & 0xff, (x >>> 16) & 0xff, (x >>> 8) & 0xff, x & 0xff); return o; }, []);
   const ipad = [], opad = [], w = new Array(64);
