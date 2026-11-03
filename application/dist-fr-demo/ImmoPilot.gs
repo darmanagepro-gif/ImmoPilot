@@ -679,6 +679,11 @@ function rateLimit_(bucket, max, seconds) {
   c.put(k, String(n), seconds);
   if (n > max) throw new AppError("RATE_LIMIT", "Trop de tentatives. Patientez quelques minutes.");
 }
+/** Même limite, comptée par adresse IP (serveur dédié) : bloque les essais en série sur de nombreux comptes depuis une même machine. */
+function rateLimitIp_(bucket, max, seconds) {
+  const ip = requestMeta_().ip;
+  if (ip) rateLimit_(bucket + "-ip:" + ip, max, seconds);
+}
 
 function createSession_(user, userAgent) {
   const token = randomToken_(), hours = Number(getSetting_("session.hours")) || 12;
@@ -718,6 +723,7 @@ function principalFromToken_(token) {
 /* ---------------------- Points d'entrée publics (via apiPublic) ---------------------- */
 function authLogin_(args) {
   const email = validateEmail_(args.email), pw = String(args.password || "");
+  rateLimitIp_("login", 30, 600);
   rateLimit_("login:" + email, 10, 600);
   const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });
   const generic = new AppError("AUTH", "Identifiants invalides.");
@@ -750,6 +756,7 @@ function authLogin_(args) {
 
 function authRequestReset_(args) {
   const email = validateEmail_(args.email);
+  rateLimitIp_("reset", 10, 3600);
   rateLimit_("reset:" + email, 3, 3600);
   const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email && u.status === "ACTIVE"; });
   if (user) sendPasswordLink_(user, user.passwordHash ? "RESET" : "ACTIVATION");
@@ -775,6 +782,7 @@ function sendPasswordLink_(user, purpose) {
 function authResetPassword_(args) {
   const token = String(args.token || "");
   assert_(/^[a-f0-9]{64}$/.test(token), "Lien invalide.");
+  rateLimitIp_("resetuse", 30, 3600);
   rateLimit_("resetuse:" + token.slice(0, 16), 10, 3600);
   return withLock_(function () {
     const h = sha256Hex_(token);
@@ -1936,7 +1944,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "beaf377997f7";
+var IMMO_BUILD_ = "ff4d8913f35f";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -11618,6 +11626,16 @@ function TEST_GROUPS_() {
       }]
     ] },
     { name: "Inscription en ligne et référencement", tests: [
+      ["Limite par adresse IP : essais de connexion et de « mot de passe oublié » sur de nombreux comptes bloqués", function (T, fx) {
+        const g = typeof globalThis !== "undefined" ? globalThis : this, prev = g.REQUEST_META_;
+        g.REQUEST_META_ = { ip: "203.0.113." + (parseInt(fx.run, 16) % 250), userAgent: "test" };
+        try {
+          for (let i = 0; i < 30; i++) T.fails(null, "auth.login", { email: fx.mail("ipspray" + i), password: "Mauvais2026x" }, "AUTH");
+          T.fails(null, "auth.login", { email: fx.mail("ipspray-last"), password: "Mauvais2026x" }, "RATE_LIMIT");
+          for (let j = 0; j < 10; j++) T.pub("auth.requestReset", { email: fx.mail("ipreset" + j) });
+          T.fails(null, "auth.requestReset", { email: fx.mail("ipreset-last") }, "RATE_LIMIT");
+        } finally { g.REQUEST_META_ = prev; }
+      }],
       ["Inscription propriétaire : code e-mail, compte + organisation + essai, contrat à signer ; e-mail déjà pris refusé ; mauvais code", function (T, fx) {
         const fr = IMMO_EDITION_ === "FR", email = fx.mail("signup-owner");
         const base = { kind: "CLIENT", profile: "OWNER", ownerType: "INDIVIDUAL", planCode: "PRO", firstName: "Sara", lastName: "Test", phone: fr ? "0612345678" : "0612345678", city: "Ville",

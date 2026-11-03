@@ -1,0 +1,24 @@
+# Filet de sécurité : aucun secret ni aucune donnée client ne doit jamais partir sur GitHub.
+# Secrets (clés API, mots de passe) : uniquement sur le serveur, dans /etc/immopilot/*.env
+.env
+.env.*
+*.env
+!.env.example
+# Clés de chiffrement et certificats
+*.key
+*.pem
+*.p12
+*.pfx
+*.gpg
+# Données clients et sauvegardes
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.tar.gz
+# Dépendances et fichiers locaux
+node_modules/
+.DS_Store
+Thumbs.db

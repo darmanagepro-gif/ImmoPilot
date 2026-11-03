@@ -1541,6 +1541,16 @@ function TEST_GROUPS_() {
       }]
     ] },
     { name: "Inscription en ligne et référencement", tests: [
+      ["Limite par adresse IP : essais de connexion et de « mot de passe oublié » sur de nombreux comptes bloqués", function (T, fx) {
+        const g = typeof globalThis !== "undefined" ? globalThis : this, prev = g.REQUEST_META_;
+        g.REQUEST_META_ = { ip: "203.0.113." + (parseInt(fx.run, 16) % 250), userAgent: "test" };
+        try {
+          for (let i = 0; i < 30; i++) T.fails(null, "auth.login", { email: fx.mail("ipspray" + i), password: "Mauvais2026x" }, "AUTH");
+          T.fails(null, "auth.login", { email: fx.mail("ipspray-last"), password: "Mauvais2026x" }, "RATE_LIMIT");
+          for (let j = 0; j < 10; j++) T.pub("auth.requestReset", { email: fx.mail("ipreset" + j) });
+          T.fails(null, "auth.requestReset", { email: fx.mail("ipreset-last") }, "RATE_LIMIT");
+        } finally { g.REQUEST_META_ = prev; }
+      }],
       ["Inscription propriétaire : code e-mail, compte + organisation + essai, contrat à signer ; e-mail déjà pris refusé ; mauvais code", function (T, fx) {
         const fr = IMMO_EDITION_ === "FR", email = fx.mail("signup-owner");
         const base = { kind: "CLIENT", profile: "OWNER", ownerType: "INDIVIDUAL", planCode: "PRO", firstName: "Sara", lastName: "Test", phone: fr ? "0612345678" : "0612345678", city: "Ville",

@@ -106,6 +106,11 @@ function rateLimit_(bucket, max, seconds) {
   c.put(k, String(n), seconds);
   if (n > max) throw new AppError("RATE_LIMIT", "Trop de tentatives. Patientez quelques minutes.");
 }
+/** Même limite, comptée par adresse IP (serveur dédié) : bloque les essais en série sur de nombreux comptes depuis une même machine. */
+function rateLimitIp_(bucket, max, seconds) {
+  const ip = requestMeta_().ip;
+  if (ip) rateLimit_(bucket + "-ip:" + ip, max, seconds);
+}
 
 function createSession_(user, userAgent) {
   const token = randomToken_(), hours = Number(getSetting_("session.hours")) || 12;
@@ -145,6 +150,7 @@ function principalFromToken_(token) {
 /* ---------------------- Points d'entrée publics (via apiPublic) ---------------------- */
 function authLogin_(args) {
   const email = validateEmail_(args.email), pw = String(args.password || "");
+  rateLimitIp_("login", 30, 600);
   rateLimit_("login:" + email, 10, 600);
   const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });
   const generic = new AppError("AUTH", "Identifiants invalides.");
@@ -177,6 +183,7 @@ function authLogin_(args) {
 
 function authRequestReset_(args) {
   const email = validateEmail_(args.email);
+  rateLimitIp_("reset", 10, 3600);
   rateLimit_("reset:" + email, 3, 3600);
   const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email && u.status === "ACTIVE"; });
   if (user) sendPasswordLink_(user, user.passwordHash ? "RESET" : "ACTIVATION");
@@ -202,6 +209,7 @@ function sendPasswordLink_(user, purpose) {
 function authResetPassword_(args) {
   const token = String(args.token || "");
   assert_(/^[a-f0-9]{64}$/.test(token), "Lien invalide.");
+  rateLimitIp_("resetuse", 30, 3600);
   rateLimit_("resetuse:" + token.slice(0, 16), 10, 3600);
   return withLock_(function () {
     const h = sha256Hex_(token);
