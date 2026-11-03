@@ -125,8 +125,13 @@ function rateLimitIp_(bucket, max, seconds) {
   if (ip) rateLimit_(bucket + "-ip:" + ip, max, seconds);
 }
 
+/** Durée maximale d'une session : 12 h par défaut, bornée entre 1 h et 24 h quel que soit le réglage. */
+function sessionHours_() { const h = Number(getSetting_("session.hours")) || 12; return Math.min(24, Math.max(1, h)); }
+/** Délai d'inactivité : 120 min par défaut, borné entre 15 min et 12 h. */
+function sessionIdleMinutes_() { const m = Number(getSetting_("session.idleMinutes")) || 120; return Math.min(720, Math.max(15, m)); }
+
 function createSession_(user, userAgent) {
-  const token = randomToken_(), hours = Number(getSetting_("session.hours")) || 12;
+  const token = randomToken_(), hours = sessionHours_();
   dbInsert_("Sessions", { userId: user.userId, tokenHash: sha256Hex_(token), createdAt: nowIso_(), expiresAt: new Date(Date.now() + hours * 3600000).toISOString(), lastSeenAt: nowIso_(), userAgent: safeText_(userAgent || "", 200) });
   return token;
 }
@@ -139,6 +144,16 @@ function principalFromToken_(token) {
   let s = dbcSessionGet_(h);
   if (!s) { s = dbFindFast_("Sessions", "tokenHash", h); if (s && !s.revokedAt) dbcSessionPut_(h, s); }
   if (!s || s.revokedAt || !parseTs_(s.expiresAt) || parseTs_(s.expiresAt).getTime() < Date.now()) throw new AppError("AUTH", "Session expirée. Veuillez vous reconnecter.");
+  // Expiration après inactivité (en plus de la durée maximale) : une session oubliée sur un poste partagé ne reste pas ouverte.
+  const idleMs = sessionIdleMinutes_() * 60000;
+  if (Date.now() - (parseTs_(s.lastSeenAt) || parseTs_(s.createdAt) || new Date(0)).getTime() > idleMs) {
+    const fresh = dbFindFast_("Sessions", "tokenHash", h); // le cache peut avoir quelques minutes de retard sur la dernière activité
+    if (fresh) s = fresh;
+    if (s.revokedAt || Date.now() - (parseTs_(s.lastSeenAt) || parseTs_(s.createdAt) || new Date(0)).getTime() > idleMs) {
+      if (!s.revokedAt) dbUpdate_("Sessions", s.sessionId, { revokedAt: nowIso_() });
+      throw new AppError("AUTH", "Session expirée après une période d'inactivité. Veuillez vous reconnecter.");
+    }
+  }
   const user = dbGet_("Users", s.userId);
   if (!user || user.status !== "ACTIVE") throw new AppError("AUTH", "Compte inactif ou suspendu.");
   const p = buildPrincipal_(user);

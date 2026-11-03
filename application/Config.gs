@@ -135,6 +135,7 @@ var DEFAULT_SETTINGS = Object.freeze({
   "retention.logDays": 730,
   "guests.storeIdReference": false,
   "session.hours": 12,
+  "session.idleMinutes": 120,
   "backup.keep": 14,
   "billing.enforce": true,
   "notify.emailEnabled": true,

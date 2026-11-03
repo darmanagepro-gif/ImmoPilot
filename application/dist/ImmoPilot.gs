@@ -698,8 +698,13 @@ function rateLimitIp_(bucket, max, seconds) {
   if (ip) rateLimit_(bucket + "-ip:" + ip, max, seconds);
 }
 
+/** Durée maximale d'une session : 12 h par défaut, bornée entre 1 h et 24 h quel que soit le réglage. */
+function sessionHours_() { const h = Number(getSetting_("session.hours")) || 12; return Math.min(24, Math.max(1, h)); }
+/** Délai d'inactivité : 120 min par défaut, borné entre 15 min et 12 h. */
+function sessionIdleMinutes_() { const m = Number(getSetting_("session.idleMinutes")) || 120; return Math.min(720, Math.max(15, m)); }
+
 function createSession_(user, userAgent) {
-  const token = randomToken_(), hours = Number(getSetting_("session.hours")) || 12;
+  const token = randomToken_(), hours = sessionHours_();
   dbInsert_("Sessions", { userId: user.userId, tokenHash: sha256Hex_(token), createdAt: nowIso_(), expiresAt: new Date(Date.now() + hours * 3600000).toISOString(), lastSeenAt: nowIso_(), userAgent: safeText_(userAgent || "", 200) });
   return token;
 }
@@ -712,6 +717,16 @@ function principalFromToken_(token) {
   let s = dbcSessionGet_(h);
   if (!s) { s = dbFindFast_("Sessions", "tokenHash", h); if (s && !s.revokedAt) dbcSessionPut_(h, s); }
   if (!s || s.revokedAt || !parseTs_(s.expiresAt) || parseTs_(s.expiresAt).getTime() < Date.now()) throw new AppError("AUTH", "Session expirée. Veuillez vous reconnecter.");
+  // Expiration après inactivité (en plus de la durée maximale) : une session oubliée sur un poste partagé ne reste pas ouverte.
+  const idleMs = sessionIdleMinutes_() * 60000;
+  if (Date.now() - (parseTs_(s.lastSeenAt) || parseTs_(s.createdAt) || new Date(0)).getTime() > idleMs) {
+    const fresh = dbFindFast_("Sessions", "tokenHash", h); // le cache peut avoir quelques minutes de retard sur la dernière activité
+    if (fresh) s = fresh;
+    if (s.revokedAt || Date.now() - (parseTs_(s.lastSeenAt) || parseTs_(s.createdAt) || new Date(0)).getTime() > idleMs) {
+      if (!s.revokedAt) dbUpdate_("Sessions", s.sessionId, { revokedAt: nowIso_() });
+      throw new AppError("AUTH", "Session expirée après une période d'inactivité. Veuillez vous reconnecter.");
+    }
+  }
   const user = dbGet_("Users", s.userId);
   if (!user || user.status !== "ACTIVE") throw new AppError("AUTH", "Compte inactif ou suspendu.");
   const p = buildPrincipal_(user);
@@ -1957,7 +1972,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "8217d7aab38c";
+var IMMO_BUILD_ = "524768aad37d";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -2086,6 +2101,7 @@ var DEFAULT_SETTINGS = Object.freeze({
   "retention.logDays": 730,
   "guests.storeIdReference": false,
   "session.hours": 12,
+  "session.idleMinutes": 120,
   "backup.keep": 14,
   "billing.enforce": true,
   "notify.emailEnabled": true,
@@ -11645,6 +11661,19 @@ function TEST_GROUPS_() {
       }]
     ] },
     { name: "Inscription en ligne et référencement", tests: [
+      ["Sessions : expiration après 2 h d'inactivité, durée maximale bornée (1 à 24 h), jeton stocké seulement haché", function (T, fx) {
+        const lo = tLeaseOwner_(T, fx), h = sha256Hex_(lo.tok);
+        const s = dbAll_("Sessions").find(function (x) { return x.tokenHash === h; });
+        T.ok(s && JSON.stringify(s).indexOf(lo.tok) < 0, "jeton jamais stocké en clair");
+        const life = (parseTs_(s.expiresAt).getTime() - parseTs_(s.createdAt).getTime()) / 3600000;
+        T.ok(life > 11.9 && life <= 12.01, "durée par défaut 12 h");
+        T.call(lo.tok, "me.boot", {});
+        dbUpdate_("Sessions", s.sessionId, { lastSeenAt: new Date(Date.now() - 3 * 3600000).toISOString() });
+        dbcBumpEpoch_();
+        T.fails(lo.tok, "me.boot", {}, "AUTH");
+        T.ok(dbGet_("Sessions", s.sessionId).revokedAt, "session inactive révoquée");
+        T.ok(sessionHours_() >= 1 && sessionHours_() <= 24 && sessionIdleMinutes_() >= 15 && sessionIdleMinutes_() <= 720, "bornes");
+      }],
       ["Limite par adresse IP : essais de connexion et de « mot de passe oublié » sur de nombreux comptes bloqués", function (T, fx) {
         const g = typeof globalThis !== "undefined" ? globalThis : this, prev = g.REQUEST_META_;
         g.REQUEST_META_ = { ip: "203.0.113." + (parseInt(fx.run, 16) % 250), userAgent: "test" };

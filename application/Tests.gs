@@ -1547,6 +1547,19 @@ function TEST_GROUPS_() {
       }]
     ] },
     { name: "Inscription en ligne et référencement", tests: [
+      ["Sessions : expiration après 2 h d'inactivité, durée maximale bornée (1 à 24 h), jeton stocké seulement haché", function (T, fx) {
+        const lo = tLeaseOwner_(T, fx), h = sha256Hex_(lo.tok);
+        const s = dbAll_("Sessions").find(function (x) { return x.tokenHash === h; });
+        T.ok(s && JSON.stringify(s).indexOf(lo.tok) < 0, "jeton jamais stocké en clair");
+        const life = (parseTs_(s.expiresAt).getTime() - parseTs_(s.createdAt).getTime()) / 3600000;
+        T.ok(life > 11.9 && life <= 12.01, "durée par défaut 12 h");
+        T.call(lo.tok, "me.boot", {});
+        dbUpdate_("Sessions", s.sessionId, { lastSeenAt: new Date(Date.now() - 3 * 3600000).toISOString() });
+        dbcBumpEpoch_();
+        T.fails(lo.tok, "me.boot", {}, "AUTH");
+        T.ok(dbGet_("Sessions", s.sessionId).revokedAt, "session inactive révoquée");
+        T.ok(sessionHours_() >= 1 && sessionHours_() <= 24 && sessionIdleMinutes_() >= 15 && sessionIdleMinutes_() <= 720, "bornes");
+      }],
       ["Limite par adresse IP : essais de connexion et de « mot de passe oublié » sur de nombreux comptes bloqués", function (T, fx) {
         const g = typeof globalThis !== "undefined" ? globalThis : this, prev = g.REQUEST_META_;
         g.REQUEST_META_ = { ip: "203.0.113." + (parseInt(fx.run, 16) % 250), userAgent: "test" };
