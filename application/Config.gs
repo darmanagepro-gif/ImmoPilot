@@ -1,5 +1,5 @@
 /**
- * ImmoPilot — configuration centrale et schéma des données.
+ * DarPilot — configuration centrale et schéma des données.
  * Les colonnes situées AVANT le séparateur "|" sont les colonnes historiques (phases 2 à 4) :
  * elles ne doivent jamais être renommées ni réordonnées. Les colonnes après "|" sont ajoutées
  * en fin de feuille par la migration (non destructif).
@@ -43,8 +43,8 @@ function cur_() { return edition_().currency; }
 /** Langues de l'interface : français, anglais, arabe, espagnol, italien, néerlandais. */
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
-  APP_NAME: "ImmoPilot",
-  VERSION: "2.6.0",
+  APP_NAME: "DarPilot",
+  VERSION: "2.7.0",
   SCHEMA_VERSION: 16,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",

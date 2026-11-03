@@ -1,11 +1,11 @@
 /**
  * Notifications centralisées : in-app (feuille Notifications), e-mail (MailApp/Gmail), liens WhatsApp wa.me.
  * Anti-doublon : chaque envoi porte une clé d'événement ; NotificationLogs garde (eventKey, canal, destinataire).
- * WhatsApp : ImmoPilot génère un lien qui OUVRE une conversation pré-remplie. Aucun message n'est envoyé automatiquement.
+ * WhatsApp : DarPilot génère un lien qui OUVRE une conversation pré-remplie. Aucun message n'est envoyé automatiquement.
  */
 /**
  * opts (facultatif) : { attachments: [Blob] (PDF joints), bcc: "copie@…", replyTo: "…", senderName: "…", footer: [coordonnées de l'expéditeur],
- * plain: true (pas de bouton « Ouvrir ImmoPilot » pour les liens : e-mails adressés à un locataire sans compte) }.
+ * plain: true (pas de bouton « Ouvrir DarPilot » pour les liens : e-mails adressés à un locataire sans compte) }.
  * Tous les e-mails passent par le gabarit commun (mailLayout_) ; ref = clé d'événement, renvoyée par Brevo pour le suivi de livraison.
  */
 function sendMailSafe_(to, subject, body, eventKey, orgId, opts) {
@@ -40,7 +40,7 @@ function mailHtml_(text, opts) {
   const inner = parts.map(function (part, i) {
     if (i % 2 === 0) return escapeHtml_(part).replace(/\n/g, "<br>");
     const url = escapeHtml_(part);
-    return "<br><a href=\"" + url + "\" style=\"display:inline-block;background:#2f4fd8;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold\">Ouvrir ImmoPilot</a>" +
+    return "<br><a href=\"" + url + "\" style=\"display:inline-block;background:#2f4fd8;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold\">Ouvrir DarPilot</a>" +
       "<br><span style=\"font-size:12px;color:#64748b\">Si le bouton ne fonctionne pas, copiez ce lien en entier dans la barre d'adresse de votre navigateur :<br><a href=\"" + url + "\" style=\"color:#2f4fd8;word-break:break-all\">" + url + "</a></span><br>";
   }).join("");
   return mailLayout_(inner, opts);
@@ -55,12 +55,12 @@ function mailHtmlPlain_(text, opts) {
   }).join(""), opts);
 }
 
-/** Adresse publique du logo de l'édition (servi par le serveur ImmoPilot). */
+/** Adresse publique du logo de l'édition (servi par le serveur DarPilot). */
 function mailLogoUrl_() {
   try { const m = /^(https:\/\/[^\/?#]+)/.exec(appUrl_()); return m ? m[1] + "/icons/icon-192.png" : ""; } catch (e) { return ""; }
 }
 /**
- * Gabarit commun de tous les e-mails ImmoPilot : en-tête avec logo, contenu, pied de page de l'expéditeur.
+ * Gabarit commun de tous les e-mails DarPilot : en-tête avec logo, contenu, pied de page de l'expéditeur.
  * Tableaux et styles en ligne (compatibles Gmail, Outlook, Apple Mail), largeur fluide jusqu'à 600 px (téléphone).
  * opts : { senderName, footer: [lignes de coordonnées de l'expéditeur] }
  */
@@ -72,13 +72,13 @@ function mailLayout_(innerHtml, opts) {
     "<body style=\"margin:0;padding:0;background:#eef2f7\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#eef2f7\"><tr><td align=\"center\" style=\"padding:20px 10px\">" +
     "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #dbe3ee\">" +
     "<tr><td style=\"background:#13233d;padding:16px 22px\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\"><tr>" +
-      (logo ? "<td style=\"padding-right:12px\"><img src=\"" + escapeHtml_(logo) + "\" width=\"44\" height=\"44\" alt=\"ImmoPilot\" style=\"display:block;border-radius:9px;background:#ffffff\"></td>" : "") +
-      "<td style=\"font-family:Arial,Helvetica,sans-serif;color:#ffffff\"><div style=\"font-size:19px;font-weight:bold\">Immo<span style=\"color:#e9b341\">Pilot</span></div>" +
+      (logo ? "<td style=\"padding-right:12px\"><img src=\"" + escapeHtml_(logo) + "\" width=\"44\" height=\"44\" alt=\"DarPilot\" style=\"display:block;border-radius:9px;background:#ffffff\"></td>" : "") +
+      "<td style=\"font-family:Arial,Helvetica,sans-serif;color:#ffffff\"><div style=\"font-size:19px;font-weight:bold\">Dar<span style=\"color:#e9b341\">Pilot</span></div>" +
       (from ? "<div style=\"font-size:12px;color:#c7d2e3\">pour le compte de " + escapeHtml_(from) + "</div>" : "<div style=\"font-size:12px;color:#c7d2e3\">Gestion immobilière</div>") + "</td></tr></table></td></tr>" +
     "<tr><td style=\"padding:24px 22px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1d2b3a\">" + innerHtml + "</td></tr>" +
     (foot ? "<tr><td style=\"padding:14px 22px;background:#f6f8fb;border-top:1px solid #e3e9f1;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#475569\"><b>" + escapeHtml_(from || IMMO_CONFIG.APP_NAME) + "</b><br>" + foot + "</td></tr>" : "") +
-    "<tr><td style=\"padding:12px 22px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.5;color:#94a3b8;text-align:center\">Message envoyé via ImmoPilot, logiciel de gestion immobilière édité par ECO SYNERGY. " +
-      "Les pièces jointes éventuelles sont également disponibles dans votre espace ImmoPilot.</td></tr>" +
+    "<tr><td style=\"padding:12px 22px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.5;color:#94a3b8;text-align:center\">Message envoyé via DarPilot, logiciel de gestion immobilière édité par ECO SYNERGY. " +
+      "Les pièces jointes éventuelles sont également disponibles dans votre espace DarPilot.</td></tr>" +
     "</table></td></tr></table></body></html>";
 }
 
@@ -143,7 +143,7 @@ function notify_(opts) {
       sent++;
     }
     if (opts.email !== false && orgEmail && prefs.email !== false) {
-      sendMailSafe_(u.email, "[ImmoPilot] " + opts.title, (opts.body || "") + "\n\nOuvrir ImmoPilot : " + safeAppUrl_() + (opts.link || ""), opts.eventKey, opts.organizationId);
+      sendMailSafe_(u.email, "[DarPilot] " + opts.title, (opts.body || "") + "\n\nOuvrir DarPilot : " + safeAppUrl_() + (opts.link || ""), opts.eventKey, opts.organizationId);
     }
   });
   return { sent: sent };
@@ -194,7 +194,7 @@ function notifWhatsApp_(p, a) {
 function notifSendEmail_(p, a) {
   const prop = assertPropAny_(p, a.propertyId, ["reservation.edit", "cleaning.manage", "incident.manage", "lease.manage"]);
   rateLimit_("mail:" + p.userId, 30, 3600);
-  const r = sendMailSafe_(a.to, "[ImmoPilot] " + reqText_(a.subject, "Objet", 2, 150), reqText_(a.body, "Message", 2, 5000), "manual:" + newId_("m"), prop.organizationId);
+  const r = sendMailSafe_(a.to, "[DarPilot] " + reqText_(a.subject, "Objet", 2, 150), reqText_(a.body, "Message", 2, 5000), "manual:" + newId_("m"), prop.organizationId);
   audit_("EMAIL_SENT", "Notification", prop.propertyId, prop.organizationId, { ok: r.ok });
   if (!r.ok) throw new AppError("EMAIL", "Envoi impossible : " + r.error);
   return { ok: true };

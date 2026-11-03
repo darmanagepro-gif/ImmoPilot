@@ -85,10 +85,10 @@ function invitationInsertAndSend_(p, a, org) {
 }
 function sendInvitationEmail_(inv, token, org, p) {
   const url = appUrl_() + "?action=accept&token=" + token;
-  const body = "Bonjour " + inv.displayName + ",\n\n" + p.displayName + " vous invite à rejoindre ImmoPilot.\n\nOrganisation : " + org.name + "\nRôle : " + inv.role +
+  const body = "Bonjour " + inv.displayName + ",\n\n" + p.displayName + " vous invite à rejoindre DarPilot.\n\nOrganisation : " + org.name + "\nRôle : " + inv.role +
     "\n\nAcceptez l'invitation avec ce lien personnel, à usage unique, valable " + inviteDays_() + " jours :\n" + url +
-    "\n\nSi vous n'attendiez pas cette invitation, ignorez ce message.\n\nImmoPilot";
-  const r = sendMailSafe_(inv.email, "Invitation à rejoindre ImmoPilot — " + org.name, body, "invite:" + inv.invitationId + ":" + inv.tokenHash.slice(0, 8));
+    "\n\nSi vous n'attendiez pas cette invitation, ignorez ce message.\n\nDarPilot";
+  const r = sendMailSafe_(inv.email, "Invitation à rejoindre DarPilot — " + org.name, body, "invite:" + inv.invitationId + ":" + inv.tokenHash.slice(0, 8));
   if (!r.ok) dbUpdate_("Invitations", inv.invitationId, { status: "EMAIL_FAILED" });
   return r;
 }

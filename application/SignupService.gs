@@ -53,10 +53,10 @@ var PROVIDER_DOC_CODES_ = ["ID_DOCUMENT", "SIRENE", "KBIS", "URSSAF", "DECENNALE
 function platformStatusText_() {
   const v = legalValues_();
   return {
-    title: "Ce qu'est ImmoPilot",
+    title: "Ce qu'est DarPilot",
     points: [
-      "ImmoPilot est un logiciel en ligne (SaaS) édité par " + (v.publisherName || "ECO SYNERGY") + " et mis à disposition par abonnement : vous l'utilisez pour gérer vous-même vos biens, vos locations, vos équipes et vos documents.",
-      "ImmoPilot est aussi une plateforme de mise en relation avec des artisans et prestataires référencés (ménage, plomberie, électricité…). Les prestations sont commandées, réalisées et facturées directement entre vous et le prestataire.",
+      "DarPilot est un logiciel en ligne (SaaS) édité par " + (v.publisherName || "ECO SYNERGY") + " et mis à disposition par abonnement : vous l'utilisez pour gérer vous-même vos biens, vos locations, vos équipes et vos documents.",
+      "DarPilot est aussi une plateforme de mise en relation avec des artisans et prestataires référencés (ménage, plomberie, électricité…). Les prestations sont commandées, réalisées et facturées directement entre vous et le prestataire.",
       "L'éditeur n'est ni agent immobilier, ni administrateur de biens, ni conciergerie, ni partie à vos contrats (baux, réservations, travaux). Il ne détient pas vos fonds : loyers et paiements des séjours vous sont versés directement.",
       "Vous payez à l'éditeur l'abonnement (sans engagement : résiliation à tout moment, effective à la fin de la période payée) et, si vous faites appel à un artisan référencé, une commission de mise en relation de " + commissionRates_().client + " % HT du montant de sa facture, réunie dans un récapitulatif mensuel."
     ],
@@ -180,9 +180,9 @@ function signupStart_(a) {
 }
 function signupCode_() { return (parseInt(randomToken_().slice(0, 12), 16) % 1000000 + 1000000).toString().slice(1); }
 function signupSendCode_(email, code, kind, requestId) {
-  const body = "Bonjour,\n\nVoici votre code de confirmation pour " + (kind === "PROVIDER" ? "votre référencement artisan" : "la création de votre compte") + " ImmoPilot :\n\n" + code +
-    "\n\nIl est valable " + SIGNUP_CODE_MINUTES_ + " minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : aucun compte ne sera créé.\n\nImmoPilot";
-  sendMailSafe_(email, "Votre code de confirmation ImmoPilot : " + code, body, "signup:" + requestId + ":" + Date.now());
+  const body = "Bonjour,\n\nVoici votre code de confirmation pour " + (kind === "PROVIDER" ? "votre référencement artisan" : "la création de votre compte") + " DarPilot :\n\n" + code +
+    "\n\nIl est valable " + SIGNUP_CODE_MINUTES_ + " minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : aucun compte ne sera créé.\n\nDarPilot";
+  sendMailSafe_(email, "Votre code de confirmation DarPilot : " + code, body, "signup:" + requestId + ":" + Date.now());
 }
 function signupLoad_(requestId) {
   const r = dbGet_("SignupRequests", safeText_(requestId, 120));
@@ -388,14 +388,14 @@ function providerDecide_(p, a) {
     assert_(st.allApproved, "Validez d'abord chaque pièce exigée.");
     assert_(!st.expired.length, "Assurance expirée : le prestataire doit la mettre à jour.");
     dbUpdate_("Artisans", c.artisanId, { status: "ACTIVE", verifiedAt: nowIso_(), verifiedBy: p.email, rejectReason: "", updatedAt: nowIso_() });
-    sendMailSafe_(c.email, "Votre référencement ImmoPilot est validé", "Bonjour,\n\nBonne nouvelle : votre dossier est validé. Vous êtes désormais référencé(e) dans l'annuaire ImmoPilot pour : " +
-      parseJson_(c.categoriesJson, []).join(", ") + ".\n\nLes propriétaires et agences peuvent vous envoyer des demandes de devis et d'intervention. Connectez-vous : " + url + "\n\nPensez à mettre à jour vos attestations avant leur expiration.\n\nImmoPilot", "provider-approved:" + c.artisanId + ":" + Date.now());
+    sendMailSafe_(c.email, "Votre référencement DarPilot est validé", "Bonjour,\n\nBonne nouvelle : votre dossier est validé. Vous êtes désormais référencé(e) dans l'annuaire DarPilot pour : " +
+      parseJson_(c.categoriesJson, []).join(", ") + ".\n\nLes propriétaires et agences peuvent vous envoyer des demandes de devis et d'intervention. Connectez-vous : " + url + "\n\nPensez à mettre à jour vos attestations avant leur expiration.\n\nDarPilot", "provider-approved:" + c.artisanId + ":" + Date.now());
   } else {
     const reason = reqText_(a.reason, "Motif", 3, 500);
     dbUpdate_("Artisans", c.artisanId, { status: decision === "REJECT" ? "REJECTED" : "INACTIVE", rejectReason: reason, updatedAt: nowIso_() });
-    sendMailSafe_(c.email, decision === "REJECT" ? "Votre dossier de référencement ImmoPilot est à compléter" : "Votre référencement ImmoPilot est suspendu",
+    sendMailSafe_(c.email, decision === "REJECT" ? "Votre dossier de référencement DarPilot est à compléter" : "Votre référencement DarPilot est suspendu",
       "Bonjour,\n\n" + (decision === "REJECT" ? "Votre dossier ne peut pas être validé en l'état" : "Votre référencement est suspendu") + " pour le motif suivant :\n\n" + reason +
-      "\n\nCorrigez vos informations ou déposez les pièces demandées depuis votre espace (Mon référencement), puis renvoyez votre dossier : " + url + "\n\nImmoPilot", "provider-" + decision + ":" + c.artisanId + ":" + Date.now());
+      "\n\nCorrigez vos informations ou déposez les pièces demandées depuis votre espace (Mon référencement), puis renvoyez votre dossier : " + url + "\n\nDarPilot", "provider-" + decision + ":" + c.artisanId + ":" + Date.now());
   }
   audit_("PROVIDER_" + decision, "Artisan", c.artisanId, c.organizationId, {});
   return providerOut_(dbGet_("Artisans", c.artisanId), true);
@@ -411,12 +411,12 @@ function providerExpiryJob_() {
       const x = ins[k[0]]; if (!x || !x.validUntil) return;
       if (x.validUntil < today) {
         dbUpdate_("Artisans", c.artisanId, { status: "INACTIVE", rejectReason: "Attestation d'assurance " + k[1] + " expirée le " + x.validUntil + ".", updatedAt: nowIso_() });
-        sendMailSafe_(c.email, "Référencement ImmoPilot suspendu : assurance expirée", "Bonjour,\n\nVotre attestation d'assurance " + k[1] + " a expiré le " + x.validUntil +
-          ". Votre référencement est suspendu jusqu'au dépôt d'une attestation à jour dans votre espace (Mon référencement) : " + url + "\n\nImmoPilot", "provider-expired:" + c.artisanId + ":" + k[0] + ":" + x.validUntil);
+        sendMailSafe_(c.email, "Référencement DarPilot suspendu : assurance expirée", "Bonjour,\n\nVotre attestation d'assurance " + k[1] + " a expiré le " + x.validUntil +
+          ". Votre référencement est suspendu jusqu'au dépôt d'une attestation à jour dans votre espace (Mon référencement) : " + url + "\n\nDarPilot", "provider-expired:" + c.artisanId + ":" + k[0] + ":" + x.validUntil);
         suspended++;
       } else if (x.validUntil <= soon) {
         sendMailSafe_(c.email, "Votre assurance expire bientôt", "Bonjour,\n\nVotre attestation d'assurance " + k[1] + " expire le " + x.validUntil +
-          ". Déposez la nouvelle attestation dans votre espace (Mon référencement) pour rester référencé(e) : " + url + "\n\nImmoPilot", "provider-expiring:" + c.artisanId + ":" + k[0] + ":" + x.validUntil);
+          ". Déposez la nouvelle attestation dans votre espace (Mon référencement) pour rester référencé(e) : " + url + "\n\nDarPilot", "provider-expiring:" + c.artisanId + ":" + k[0] + ":" + x.validUntil);
         reminded++;
       }
     });

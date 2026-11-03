@@ -68,16 +68,16 @@ function sumupPayLink_(ref, localAmount, description) {
 function commissionSendArtisanLink_(f, reminder) {
   const art = dbGet_("Artisans", f.artisanId) || {}, inv = dbGet_("Invoices", f.invoiceId) || {};
   let link = null, err = "";
-  try { link = sumupPayLink_("COM-" + String(f.feeId).slice(-20) + "-" + ((Number(f.reminders) || 0) + 1), f.total, "Commission ImmoPilot - facture " + (inv.invoiceNumber || "")); }
+  try { link = sumupPayLink_("COM-" + String(f.feeId).slice(-20) + "-" + ((Number(f.reminders) || 0) + 1), f.total, "Commission DarPilot - facture " + (inv.invoiceNumber || "")); }
   catch (e) { err = e.message; }
   dbUpdate_("PlatformFees", f.feeId, link ? { status: "LINK_SENT", checkoutId: link.id, payUrl: link.url, linkSentAt: nowIso_(), reminders: reminder ? (Number(f.reminders) || 0) + 1 : Number(f.reminders) || 0, note: "", updatedAt: nowIso_() }
     : { note: err.slice(0, 300), updatedAt: nowIso_() });
   if (!art.email) return { ok: !!link };
   const body = "Bonjour,\n\n" + (reminder ? "Rappel : " : "") + "votre client a réglé la facture n° " + (inv.invoiceNumber || "") + " (" + round2_(num_(inv.amountTTC)) + " " + f.currency + " TTC) en dehors de la plateforme." +
-    "\n\nCommission ImmoPilot de mise en relation (" + f.rate + " % du HT de " + f.baseHT + " " + f.currency + ") : " + f.amount + " " + f.currency + " HT + TVA " + f.vatAmount + " = " + f.total + " " + f.currency + "." +
+    "\n\nCommission DarPilot de mise en relation (" + f.rate + " % du HT de " + f.baseHT + " " + f.currency + ") : " + f.amount + " " + f.currency + " HT + TVA " + f.vatAmount + " = " + f.total + " " + f.currency + "." +
     (link ? "\n\nRéglez-la en ligne, par carte (paiement sécurisé SumUp) :\n" + link.url : "\n\nLe lien de paiement vous sera envoyé très prochainement.") +
-    "\n\nMerci de la régler sous " + COMMISSION_REMINDER_DAYS_ + " jours. Au-delà de trois rappels sans règlement, votre référencement peut être suspendu (conditions de référencement).\n\nImmoPilot";
-  sendMailSafe_(art.email, (reminder ? "Rappel — " : "") + "Commission ImmoPilot à régler : " + f.total + " " + f.currency, body, "commission:" + f.feeId + ":" + ((Number(f.reminders) || 0) + (reminder ? 1 : 0)));
+    "\n\nMerci de la régler sous " + COMMISSION_REMINDER_DAYS_ + " jours. Au-delà de trois rappels sans règlement, votre référencement peut être suspendu (conditions de référencement).\n\nDarPilot";
+  sendMailSafe_(art.email, (reminder ? "Rappel — " : "") + "Commission DarPilot à régler : " + f.total + " " + f.currency, body, "commission:" + f.feeId + ":" + ((Number(f.reminders) || 0) + (reminder ? 1 : 0)));
   if (art.userId) notify_({ eventKey: "commission-due:" + f.feeId + ":" + (Number(f.reminders) || 0), userIds: [art.userId], type: "COMMISSION_DUE", organizationId: "", email: false,
     title: "Commission à régler : " + f.total + " " + f.currency, body: "Facture " + (inv.invoiceNumber || "") + (link ? " — lien de paiement envoyé par e-mail." : ""), link: "#referencing" });
   return { ok: !!link, error: err };
@@ -161,7 +161,7 @@ function commissionStatementHtml_(s) {
     "<h2>Missions de la période " + escapeHtml_(s.period) + "</h2>" + htmlTable_(["Réglée le", "Bien", "Mission", "Artisan", "Facture", "Base HT", "Taux", "Commission HT"], rows) +
     "<table style='width:45%;margin:12px 0 0 auto'><tr><th>Total HT</th><td class='right'>" + s.totalHT + " " + s.currency + "</td></tr><tr><th>TVA</th><td class='right'>" + s.vatAmount + " " + s.currency + "</td></tr>" +
     "<tr><th>Total TTC</th><td class='right'><b>" + s.total + " " + s.currency + "</b></td></tr></table>" +
-    "<div class='box'>Commission de mise en relation due par le commanditaire sur les missions réalisées par les artisans référencés sur ImmoPilot et réglées au cours de la période " +
+    "<div class='box'>Commission de mise en relation due par le commanditaire sur les missions réalisées par les artisans référencés sur DarPilot et réglées au cours de la période " +
     "(conditions générales, article « Mise en relation »). Règlement : prélèvement sur la carte enregistrée pour l'abonnement, ou lien de paiement en ligne.</div>";
   return pdfShell_("Récapitulatif mensuel des commissions", inner, { subtitle: org.name + " — " + s.period, ref: "COM-" + String(s.period).replace("-", "") + "-" + String(s.statementId).slice(-6).toUpperCase() });
 }
@@ -177,21 +177,21 @@ function commissionCollectStatement_(s, sendMail) {
   if (card) {
     try {
       const c = sumupConf_(), amt = sumupAmount_(s.total);
-      const co = sumupCall_("post", "/checkouts", { checkout_reference: ref, amount: amt.amount, currency: amt.currency, merchant_code: c.merchant, customer_id: card.customerId, description: ("ImmoPilot : commissions " + s.period).slice(0, 120) }).body;
+      const co = sumupCall_("post", "/checkouts", { checkout_reference: ref, amount: amt.amount, currency: amt.currency, merchant_code: c.merchant, customer_id: card.customerId, description: ("DarPilot : commissions " + s.period).slice(0, 120) }).body;
       const res = sumupCall_("put", "/checkouts/" + encodeURIComponent(co.id), { payment_type: "card", token: card.token, customer_id: card.customerId }).body;
       if (String(res.status) === "PAID") charged = true; else err = String(res.message || res.status || "refusé");
       if (charged) commissionStatementPaid_(s, "SumUp " + (((res.transactions || [])[0] || {}).transaction_code || co.id));
     } catch (e) { err = e.message; }
   }
   if (!charged) {
-    try { link = sumupPayLink_(ref + "L", s.total, "ImmoPilot : commissions " + s.period); } catch (e) { err = err || e.message; }
+    try { link = sumupPayLink_(ref + "L", s.total, "DarPilot : commissions " + s.period); } catch (e) { err = err || e.message; }
     dbUpdate_("CommissionStatements", s.statementId, { status: link ? "LINK_SENT" : "DUE", checkoutId: link ? link.id : "", payUrl: link ? link.url : "", attempts: (Number(s.attempts) || 0) + 1, lastError: String(err || "").slice(0, 300), updatedAt: nowIso_() });
   }
   if (sendMail && org.billingEmail) {
-    const body = "Bonjour,\n\nVeuillez trouver ci-joint votre récapitulatif des commissions de mise en relation ImmoPilot pour " + s.period + " : " + s.count + " mission(s), " + s.total + " " + s.currency + " TTC." +
-      (charged ? "\n\nLe montant a été prélevé sur votre carte " + card.label + "." : link ? "\n\nRéglez-le en ligne (paiement sécurisé SumUp) :\n" + link.url : "\n\nLes modalités de règlement vous seront communiquées.") + "\n\nImmoPilot";
+    const body = "Bonjour,\n\nVeuillez trouver ci-joint votre récapitulatif des commissions de mise en relation DarPilot pour " + s.period + " : " + s.count + " mission(s), " + s.total + " " + s.currency + " TTC." +
+      (charged ? "\n\nLe montant a été prélevé sur votre carte " + card.label + "." : link ? "\n\nRéglez-le en ligne (paiement sécurisé SumUp) :\n" + link.url : "\n\nLes modalités de règlement vous seront communiquées.") + "\n\nDarPilot";
     let blob = null; try { blob = commissionStatementBlob_(dbGet_("CommissionStatements", s.statementId)); } catch (e) { console.error(e.message); }
-    sendMailSafe_(org.billingEmail, "Récapitulatif des commissions ImmoPilot — " + s.period, body, "statement:" + s.statementId + ":" + (Number(s.attempts) || 0), s.organizationId, blob ? { attachments: [blob] } : {});
+    sendMailSafe_(org.billingEmail, "Récapitulatif des commissions DarPilot — " + s.period, body, "statement:" + s.statementId + ":" + (Number(s.attempts) || 0), s.organizationId, blob ? { attachments: [blob] } : {});
   }
   return { ok: charged || !!link, charged: charged, link: link ? link.url : "", error: err };
 }

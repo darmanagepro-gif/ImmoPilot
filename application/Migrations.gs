@@ -151,7 +151,7 @@ function migSeed_() {
     r.plans++;
   });
   if (!dbAll_("Organizations").some(function (o) { return o.type === "PLATFORM"; })) {
-    dbInsert_("Organizations", { name: "ImmoPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: "migration" });
+    dbInsert_("Organizations", { name: "DarPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: "migration" });
     r.platformOrg = true;
   }
   return r;

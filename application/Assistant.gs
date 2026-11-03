@@ -1,5 +1,5 @@
 /**
- * RUBBAN (رُبّان, « le pilote ») — assistant d'aide intégré à ImmoPilot, disponible 24 h/24, 7 j/7.
+ * RUBBAN (رُبّان, « le pilote ») — assistant d'aide intégré à DarPilot, disponible 24 h/24, 7 j/7.
  *
  * Deux modes :
  *  - GUIDE (toujours disponible, gratuit) : recherche dans la base de connaissances ASSISTANT_KB_ ci-dessous,
@@ -21,20 +21,20 @@ var AI_LIMITS_ = { perUserHour: 30, platformDay: 1500, maxQuestion: 600, maxHist
  */
 var ASSISTANT_KB_ = [
   // ---------- Compte et connexion ----------
-  { id: "login", t: "Se connecter à ImmoPilot", r: ["*"], go: "", k: "connexion login connecter identifiant se connecter sign in دخول",
-    s: ["Ouvrez l'adresse d'ImmoPilot (site ou application).", "Saisissez votre e-mail et votre mot de passe, puis « Se connecter ».", "Après 5 essais erronés, le compte est bloqué 15 minutes : attendez puis réessayez, ou utilisez « Mot de passe oublié »."] },
+  { id: "login", t: "Se connecter à DarPilot", r: ["*"], go: "", k: "connexion login connecter identifiant se connecter sign in دخول",
+    s: ["Ouvrez l'adresse d'DarPilot (site ou application).", "Saisissez votre e-mail et votre mot de passe, puis « Se connecter ».", "Après 5 essais erronés, le compte est bloqué 15 minutes : attendez puis réessayez, ou utilisez « Mot de passe oublié »."] },
   { id: "theme", t: "Passer en mode sombre ou clair (jour / nuit)", r: ["*"], go: "", k: "thème theme sombre clair nuit jour dark light mode nocturne couleur écran الوضع الليلي داكن فاتح",
-    s: ["Cliquez sur le bouton 🌙 en haut de l'écran (à gauche du choix de langue), ou sur l'écran de connexion.", "L'application passe en mode sombre ; le bouton devient ☀️ pour revenir en mode clair.", "Votre choix est mémorisé sur cet appareil. Sans choix, ImmoPilot suit le réglage clair/sombre de votre appareil."] },
+    s: ["Cliquez sur le bouton 🌙 en haut de l'écran (à gauche du choix de langue), ou sur l'écran de connexion.", "L'application passe en mode sombre ; le bouton devient ☀️ pour revenir en mode clair.", "Votre choix est mémorisé sur cet appareil. Sans choix, DarPilot suit le réglage clair/sombre de votre appareil."] },
   { id: "activate", t: "Activer mon compte (lien reçu par e-mail)", r: ["*"], go: "", k: "activation activer invitation lien email premier mot de passe accepter invitation تفعيل",
-    s: ["Ouvrez l'e-mail « Invitation à rejoindre ImmoPilot » ou « Activez votre compte ImmoPilot ».", "Cliquez sur le bouton « Ouvrir ImmoPilot » (lien personnel, à usage unique).", "Choisissez votre mot de passe (10 caractères minimum, avec lettres et chiffres) puis validez.", "Le lien d'invitation est valable 7 jours, le lien d'activation 72 h. Expiré ? Demandez à votre administrateur de le renvoyer."] },
+    s: ["Ouvrez l'e-mail « Invitation à rejoindre DarPilot » ou « Activez votre compte DarPilot ».", "Cliquez sur le bouton « Ouvrir DarPilot » (lien personnel, à usage unique).", "Choisissez votre mot de passe (10 caractères minimum, avec lettres et chiffres) puis validez.", "Le lien d'invitation est valable 7 jours, le lien d'activation 72 h. Expiré ? Demandez à votre administrateur de le renvoyer."] },
   { id: "forgot", t: "Mot de passe oublié", r: ["*"], go: "", k: "oublié oublie reset réinitialiser mot de passe mdp password forgot نسيت كلمة السر",
     s: ["Sur l'écran de connexion, cliquez sur « Mot de passe oublié ».", "Saisissez votre e-mail : vous recevez un lien valable 1 heure.", "Ouvrez le lien et choisissez un nouveau mot de passe. Vos autres sessions sont déconnectées."] },
   { id: "password", t: "Changer mon mot de passe ou ma langue", r: ["*"], go: "settings", k: "changer mot de passe profil langue nom téléphone préférences notifications email arabe anglais espagnol italien néerlandais hollandais español italiano nederlands",
     s: ["Ouvrez « Paramètres » › « Mon profil ».", "Modifiez votre nom, téléphone, langue (FR, EN, ع) ou vos préférences de notifications.", "« Changer le mot de passe » demande l'ancien mot de passe. « Déconnecter mes autres appareils » ferme les sessions ouvertes ailleurs."] },
   { id: "delete-account", t: "Supprimer mon compte", r: ["*"], go: "settings", k: "supprimer compte suppression rgpd données personnelles delete account حذف الحساب",
-    s: ["Ouvrez « Paramètres » › « Mon profil » › « Supprimer mon compte ».", "Indiquez le motif : la demande est transmise à l'administrateur ImmoPilot.", "Votre identité est effacée ; les données comptables obligatoires sont conservées sans votre nom."] },
-  { id: "install-phone", t: "Installer ImmoPilot sur mon téléphone", r: ["*"], go: "", k: "téléphone mobile android iphone application installer écran d'accueil app store play store",
-    s: ["Android : ouvrez le site ImmoPilot dans Chrome, menu ⋮ › « Installer l'application » (ou installez-la depuis Google Play quand elle y est publiée).", "iPhone : ouvrez le site dans Safari, bouton Partager › « Sur l'écran d'accueil ».", "Les données sont les mêmes sur le web, Android et iPhone, en temps réel."] },
+    s: ["Ouvrez « Paramètres » › « Mon profil » › « Supprimer mon compte ».", "Indiquez le motif : la demande est transmise à l'administrateur DarPilot.", "Votre identité est effacée ; les données comptables obligatoires sont conservées sans votre nom."] },
+  { id: "install-phone", t: "Installer DarPilot sur mon téléphone", r: ["*"], go: "", k: "téléphone mobile android iphone application installer écran d'accueil app store play store",
+    s: ["Android : ouvrez le site DarPilot dans Chrome, menu ⋮ › « Installer l'application » (ou installez-la depuis Google Play quand elle y est publiée).", "iPhone : ouvrez le site dans Safari, bouton Partager › « Sur l'écran d'accueil ».", "Les données sont les mêmes sur le web, Android et iPhone, en temps réel."] },
   { id: "notifications", t: "Notifications et e-mails", r: ["*"], go: "notifications", k: "notification cloche alerte email rappel message whatsapp",
     s: ["La cloche en haut à droite affiche les notifications non lues ; « Notifications » les liste toutes.", "Réglez les e-mails dans « Paramètres » › « Mon profil » › « Modifier mes préférences ».", "Les boutons WhatsApp ouvrent une conversation pré-remplie : l'envoi reste manuel."] },
   // ---------- Biens ----------
@@ -53,7 +53,7 @@ var ASSISTANT_KB_ = [
     s: ["Ouvrez le bien › onglet « Agences et équipes ».", "« Inviter une personne » : e-mail, rôle (gardien, ménage, artisan, locataire) ; l'invitation est liée au bien.", "Si la personne a déjà un compte avec ce rôle : « Affecter une personne ». Un gardien peut aussi être limité à une seule réservation."] },
   // ---------- Réservations ----------
   { id: "resv-create", t: "Créer une réservation", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reservations", k: "réservation resa booking créer nouvelle séjour voyageur airbnb booking.com dates حجز",
-    s: ["Ouvrez « Réservations » › « + Nouvelle réservation » (ou cliquez sur une date du « Calendrier »).", "Choisissez le bien, les dates d'arrivée et de départ, le voyageur et le nombre de personnes.", "Prix : laissez vide pour nuits × prix du bien, ou saisissez votre prix (tarif libre pour l'agence).", "ImmoPilot refuse automatiquement les chevauchements, y compris entre agences, en respectant le temps de ménage entre deux séjours."] },
+    s: ["Ouvrez « Réservations » › « + Nouvelle réservation » (ou cliquez sur une date du « Calendrier »).", "Choisissez le bien, les dates d'arrivée et de départ, le voyageur et le nombre de personnes.", "Prix : laissez vide pour nuits × prix du bien, ou saisissez votre prix (tarif libre pour l'agence).", "DarPilot refuse automatiquement les chevauchements, y compris entre agences, en respectant le temps de ménage entre deux séjours."] },
   { id: "resv-pay", t: "Enregistrer un paiement ou un acompte de réservation", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reservations", k: "paiement acompte solde caution encaisser payé impayé règlement virement espèces",
     s: ["Ouvrez la réservation › « Enregistrer un paiement » : montant, date, mode (virement, espèces, carte, plateforme…) et référence.", "Le statut passe à « Partiel » ou « Payé » automatiquement.", "Aucun paiement en ligne n'est effectué par l'application : enregistrez les règlements réellement reçus."] },
   { id: "resv-cancel", t: "Annuler une réservation ou déclarer un no-show", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reservations", k: "annuler annulation no-show absent pas venu jamais arrivé client venu remboursement pénalité motif",
@@ -67,7 +67,7 @@ var ASSISTANT_KB_ = [
     s: ["Ouvrez « Arrivées et départs » : les arrivées et départs du jour.", "« Effectuer le check-in » : cochez la liste, relevez les compteurs, ajoutez photos et signature, signalez une anomalie si besoin.", "« Effectuer le check-out » au départ : la mission de ménage est créée automatiquement.", "Les retards sont enregistrés et alimentent l'analyse « Retards et non-conformités »."] },
   // ---------- Ménage ----------
   { id: "cleaning-create", t: "Créer et attribuer une mission de ménage", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "cleaning", k: "ménage menage nettoyage mission créer attribuer entreprise de ménage femme de ménage cleaning تنظيف",
-    s: ["Après chaque check-out, une mission est créée automatiquement ; vous pouvez aussi la créer dans « Ménage » › « Mission ».", "« Attribuer » : choisissez d'abord le type de prestation « Ménage », puis l'entreprise dans la liste de l'annuaire ImmoPilot.", "Indiquez le tarif convenu : il deviendra une dépense du propriétaire à la validation.", "L'entreprise a 2 heures pour accepter ; sinon vous êtes alerté et pouvez réattribuer."] },
+    s: ["Après chaque check-out, une mission est créée automatiquement ; vous pouvez aussi la créer dans « Ménage » › « Mission ».", "« Attribuer » : choisissez d'abord le type de prestation « Ménage », puis l'entreprise dans la liste de l'annuaire DarPilot.", "Indiquez le tarif convenu : il deviendra une dépense du propriétaire à la validation.", "L'entreprise a 2 heures pour accepter ; sinon vous êtes alerté et pouvez réattribuer."] },
   { id: "cleaning-do", t: "Réaliser une mission de ménage (entreprise de ménage)", r: ["CLEANER"], go: "cleaning", k: "accepter mission démarrer terminer photos avant après pièce checklist anomalie",
     s: ["Ouvrez « Ménage » : « Accepter » ou « Refuser » la mission dans le délai affiché.", "Sur place : « Démarrer », puis pour chaque pièce cochez les tâches et ajoutez les photos AVANT et APRÈS.", "« Signaler » une anomalie (objet manquant, casse, saleté) ; « Terminer la mission » à la fin."] },
   { id: "cleaning-validate", t: "Valider un ménage, rapport et ordre de mission PDF", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "CLEANER", "SUPER"], go: "cleaning", k: "valider ménage payer paie coût tarif prix facture ménage qui paie note qualité rapport de ménage pdf ordre de mission photos avant après reprendre",
@@ -82,7 +82,7 @@ var ASSISTANT_KB_ = [
   { id: "invoice", t: "Transmettre, approuver et payer une facture d'artisan", r: ["OWNER", "AGENCY_ADMIN", "ARTISAN", "SUPER"], go: "invoices", k: "facture transmettre approuver payer commission net prestataire facture pdf فاتورة",
     s: ["L'artisan : intervention terminée › « Transmettre la facture » (numéro, montants, justificatif PDF).", "Le gestionnaire : « Factures » › la facture › « Approuver » : la commission est calculée une seule fois et figée.", "« Enregistrer un paiement » pour le versement au prestataire. « Facture PDF » produit la facture au nom du prestataire."] },
   { id: "providers", t: "Choisir un prestataire (ménage, plombier, électricien…)", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "contractors", k: "prestataire artisan plombier électricien climatisation peintre serrurier jardinier piscine annuaire liste",
-    s: ["Les prestataires sont intégrés par l'équipe ImmoPilot dans un annuaire vérifié.", "Lors d'une attribution, choisissez d'abord le type de prestation, puis le prestataire dans la liste.", "« Prestataires » affiche leurs fiches et leurs statistiques, calculées uniquement sur vos biens."] },
+    s: ["Les prestataires sont intégrés par l'équipe DarPilot dans un annuaire vérifié.", "Lors d'une attribution, choisissez d'abord le type de prestation, puis le prestataire dans la liste.", "« Prestataires » affiche leurs fiches et leurs statistiques, calculées uniquement sur vos biens."] },
   { id: "providers-admin", t: "Ajouter un prestataire à l'annuaire (super administrateur)", r: ["SUPER"], go: "contractors", k: "ajouter prestataire annuaire intégrer artisan entreprise ménage super admin",
     s: ["Ouvrez « Prestataires » › « + Prestataire » : nom, e-mail, téléphone, types de prestation, zones, mentions légales et coordonnées de paiement.", "Le compte du prestataire est invité automatiquement (rôle ménage et/ou artisan).", "Les propriétaires et agences le choisissent ensuite dans la liste selon le type de prestation."] },
   // ---------- Location longue durée ----------
@@ -129,8 +129,8 @@ var ASSISTANT_KB_ = [
     s: ["Ouvrez « Abonnements » : forfait, statut, échéance, utilisation et historique des règlements.", "« Contrat et historique (PDF) » télécharge votre contrat.", "Les agences que vous avez créées apparaissent en « Option agences » (prix par agence) : elles n'ont pas d'abonnement séparé.", "« Demander un changement de forfait » ou « Résilier en fin de période » ; vos données restent conservées."] },
   { id: "settings-org", t: "Paramètres de l'organisation (horaires, annulation, commission…)", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "settings", k: "paramètres horaires arrivée départ battement ménage politique d'annulation commission tva modèles",
     s: ["Ouvrez « Paramètres » › « Paramètres de l'organisation ».", "Réglez : heures d'arrivée/départ, temps de ménage entre séjours, politique d'annulation, commission, TVA, délais d'alerte, modèles de documents."] },
-  { id: "support-access", t: "Accès d'assistance pour l'équipe ImmoPilot", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "settings", k: "assistance support aide équipe immopilot accès autoriser",
-    s: ["L'équipe ImmoPilot n'accède jamais à vos données sans votre accord.", "Une demande d'accès apparaît dans « Paramètres » › « Accès d'assistance » : « Accorder » (1 à 24 h, lecture seule, journalisé) ou refuser."] },
+  { id: "support-access", t: "Accès d'assistance pour l'équipe DarPilot", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "settings", k: "assistance support aide équipe immopilot accès autoriser",
+    s: ["L'équipe DarPilot n'accède jamais à vos données sans votre accord.", "Une demande d'accès apparaît dans « Paramètres » › « Accès d'assistance » : « Accorder » (1 à 24 h, lecture seule, journalisé) ou refuser."] },
   { id: "audit", t: "Journal d'audit (qui a fait quoi)", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "audit", k: "journal audit historique traçabilité qui a modifié sécurité",
     s: ["« Journal d'audit » liste les actions sensibles : connexions, paiements, annulations, droits, documents…"] },
   // ---------- Super administrateur ----------
@@ -147,7 +147,7 @@ var ASSISTANT_KB_ = [
   { id: "admin-diag", t: "Diagnostic, erreurs, sauvegardes (super administrateur)", r: ["SUPER"], go: "admin", k: "diagnostic erreur technique err- sauvegarde restauration tâches planifiées santé",
     s: ["« Administration globale » : onglets « Diagnostic », « Erreurs techniques » (références ERR-…), « Tâches planifiées » et « Sauvegardes ».", "« Créer une sauvegarde maintenant » copie la base dans le dossier privé « Sauvegardes »."] },
   { id: "error", t: "J'ai un message d'erreur", r: ["*"], go: "", k: "erreur bug ne marche pas bloqué page blanche err- problème accès refusé",
-    s: ["Notez la référence affichée (ERR-…) et l'heure.", "« Accès refusé » : votre rôle ou les droits accordés sur ce bien ne permettent pas l'action ; demandez au propriétaire ou à votre administrateur.", "« Abonnement suspendu » : le compte est en lecture seule jusqu'au règlement.", "Sinon, transmettez la référence à votre administrateur ImmoPilot."] }
+    s: ["Notez la référence affichée (ERR-…) et l'heure.", "« Accès refusé » : votre rôle ou les droits accordés sur ce bien ne permettent pas l'action ; demandez au propriétaire ou à votre administrateur.", "« Abonnement suspendu » : le compte est en lecture seule jusqu'au règlement.", "Sinon, transmettez la référence à votre administrateur DarPilot."] }
 ];
 
 /** Rôles de l'utilisateur sous forme de libellés (pour filtrer les articles). */
@@ -171,14 +171,14 @@ function assistantKb_(p) { return { name: ASSISTANT_NAME_, articles: ASSISTANT_K
 function assistantSystemPrompt_(p, lang, page) {
   const kb = ASSISTANT_KB_.map(function (a) { return "## " + a.t + " [page: " + (a.go || "connexion") + " ; rôles: " + a.r.join(",") + "]\n" + a.s.map(function (x, i) { return (i + 1) + ". " + x; }).join("\n"); }).join("\n\n");
   const L = { fr: "français", en: "English", ar: "العربية", es: "español", it: "italiano", nl: "Nederlands" }[lang] || "français";
-  return "Tu es " + ASSISTANT_NAME_ + " (رُبّان, « le pilote »), l'assistant d'aide intégré au logiciel de gestion immobilière ImmoPilot (" + edition_().countryName + ", devise " + cur_() + " : propriétaires, agences, gardiens, ménage, artisans, locataires).\n" +
+  return "Tu es " + ASSISTANT_NAME_ + " (رُبّان, « le pilote »), l'assistant d'aide intégré au logiciel de gestion immobilière DarPilot (" + edition_().countryName + ", devise " + cur_() + " : propriétaires, agences, gardiens, ménage, artisans, locataires).\n" +
     "Règles :\n- Réponds en " + L + ", de façon courte et concrète : étapes numérotées avec les noms exacts des menus et boutons.\n" +
-    "- Appuie-toi UNIQUEMENT sur la documentation ci-dessous. Si une fonction n'y figure pas, dis franchement qu'ImmoPilot ne la propose pas ou que tu n'es pas sûr, et propose de contacter l'administrateur ImmoPilot.\n" +
+    "- Appuie-toi UNIQUEMENT sur la documentation ci-dessous. Si une fonction n'y figure pas, dis franchement qu'DarPilot ne la propose pas ou que tu n'es pas sûr, et propose de contacter l'administrateur DarPilot.\n" +
     "- Tu n'as accès à aucune donnée du compte (biens, réservations, montants) : n'invente jamais de chiffres ni de noms.\n" +
     "- Ne demande jamais de mot de passe, numéro de pièce d'identité ou coordonnées bancaires.\n" +
     "- Pour les questions juridiques, fiscales ou comptables, donne des repères généraux et recommande un professionnel.\n" +
-    "- Hors sujet (sans lien avec ImmoPilot ou la gestion locative) : réponds poliment que tu es dédié à ImmoPilot.\n" +
-    "Contexte : rôles de l'utilisateur = " + assistantRoles_(p).join(", ") + " ; page affichée = " + (page || "inconnue") + ".\n\n# Documentation ImmoPilot\n" + kb;
+    "- Hors sujet (sans lien avec DarPilot ou la gestion locative) : réponds poliment que tu es dédié à DarPilot.\n" +
+    "Contexte : rôles de l'utilisateur = " + assistantRoles_(p).join(", ") + " ; page affichée = " + (page || "inconnue") + ".\n\n# Documentation DarPilot\n" + kb;
 }
 
 /** Appel du service d'IA (serveur uniquement). Retourne le texte de la réponse ou lève une erreur. */
@@ -234,6 +234,6 @@ function testerAssistantIA() {
   assertEditor_();
   const cfg = aiConfig_();
   if (!cfg) return { ok: false, mode: "guide", message: "Mode IA non configuré : renseignez IMMO_AI_PROVIDER (anthropic ou gemini) et IMMO_AI_API_KEY dans les propriétés du script. Le mode Guide fonctionne sans configuration." };
-  try { const t = aiCall_(cfg, "Réponds en une phrase.", [{ role: "user", content: "Dis bonjour aux utilisateurs d'ImmoPilot." }]); return { ok: true, provider: cfg.provider, model: cfg.model, sample: t.slice(0, 200) }; }
+  try { const t = aiCall_(cfg, "Réponds en une phrase.", [{ role: "user", content: "Dis bonjour aux utilisateurs d'DarPilot." }]); return { ok: true, provider: cfg.provider, model: cfg.model, sample: t.slice(0, 200) }; }
   catch (e) { return { ok: false, provider: cfg.provider, model: cfg.model, error: e.message }; }
 }

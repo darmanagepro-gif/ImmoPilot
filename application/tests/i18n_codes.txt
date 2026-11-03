@@ -415,7 +415,7 @@ OTHER_PROOF|Autre justificatif|Other document|وثيقة أخرى|Otro justifica
 LINK_SENT|Lien de paiement envoyé|Payment link sent|تم إرسال رابط الدفع|Enlace de pago enviado|Link di pagamento inviato|Betaallink verzonden
 DEDUCTED|Retenue en ligne|Deducted online|مقتطعة عبر الإنترنت|Retenida en línea|Trattenuta online|Online ingehouden
 BILLED|Dans le récapitulatif|On the statement|مدرجة في الكشف|En el resumen|Nel riepilogo|Op het overzicht
-STRIPE|Paiement en ligne ImmoPilot|ImmoPilot online payment|الدفع عبر الإنترنت ImmoPilot|Pago en línea ImmoPilot|Pagamento online ImmoPilot|Online betaling ImmoPilot
+STRIPE|Paiement en ligne DarPilot|DarPilot online payment|الدفع عبر الإنترنت DarPilot|Pago en línea DarPilot|Pagamento online DarPilot|Online betaling DarPilot
 PAYMODE_DIRECT|Paiement direct|Direct payment|دفع مباشر|Pago directo|Pagamento diretto|Rechtstreekse betaling
 PAYMODE_CASH|Espèces|Cash|نقدًا|Efectivo|Contanti|Contant
 PAYMODE_PLATFORM|En ligne (plateforme)|Online (platform)|عبر الإنترنت (المنصة)|En línea (plataforma)|Online (piattaforma)|Online (platform)

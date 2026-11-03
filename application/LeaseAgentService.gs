@@ -11,7 +11,7 @@
  * Règles :
  *  - Rien n'est envoyé au locataire sans action explicite du bailleur (« Valider », puis « Envoyer au locataire »).
  *  - Les avertissements juridiques calculés par le serveur (révision du loyer, dépôt de garantie, durée) s'ajoutent à ceux de l'IA.
- *  - Les documents sont des modèles : ils doivent être relus par un professionnel ; ImmoPilot ne garantit pas leur conformité.
+ *  - Les documents sont des modèles : ils doivent être relus par un professionnel ; DarPilot ne garantit pas leur conformité.
  */
 var LA_CONDITIONS_ = ["NEW", "GOOD", "WORN", "BAD", "NA"];
 var LA_CONDITION_LABELS_ = { NEW: "Neuf", GOOD: "Bon état", WORN: "État d'usage", BAD: "Mauvais état", NA: "Sans objet" };
@@ -84,10 +84,10 @@ function laContractInputs_(a) {
 }
 /** Avertissements juridiques calculés (indépendants de l'IA). */
 function laContractWarnings_(c, inp) {
-  const w = ["Modèle généré automatiquement : faites-le relire par un professionnel (avocat, notaire ou adoul selon le cas) avant signature. ImmoPilot ne garantit pas sa conformité juridique."];
+  const w = ["Modèle généré automatiquement : faites-le relire par un professionnel (avocat, notaire ou adoul selon le cas) avant signature. DarPilot ne garantit pas sa conformité juridique."];
   const l = c.l, rent = num_(l.monthlyRent), dep = num_(l.deposit), months = l.endDate ? diffDays_(l.startDate, addDaysStr_(l.endDate, 1)) / 30.44 : null;
   if (IMMO_EDITION_ === "MA") {
-    if (num_(l.indexationRate) > 0) w.push("Le bail prévoit une indexation annuelle de " + num_(l.indexationRate) + " % : au Maroc, la loi n° 67-12 (articles 31 à 38) ne permet de réviser le loyer qu'au plus tôt tous les trois ans, dans la limite de " + (inp.usage === "MIXED" ? "8 % (habitation) et 10 % (autres locaux)" : "8 % pour l'habitation") + ". Le contrat reprend la règle légale ; ajustez l'indexation du bail dans ImmoPilot.");
+    if (num_(l.indexationRate) > 0) w.push("Le bail prévoit une indexation annuelle de " + num_(l.indexationRate) + " % : au Maroc, la loi n° 67-12 (articles 31 à 38) ne permet de réviser le loyer qu'au plus tôt tous les trois ans, dans la limite de " + (inp.usage === "MIXED" ? "8 % (habitation) et 10 % (autres locaux)" : "8 % pour l'habitation") + ". Le contrat reprend la règle légale ; ajustez l'indexation du bail dans DarPilot.");
     w.push("Faites signer le contrat en deux exemplaires et légaliser les signatures pour lui donner date certaine.");
   } else {
     const maxDep = inp.furnished ? 2 : 1;
@@ -186,7 +186,7 @@ function st_label_(code) { return ({ APARTMENT: "appartement", VILLA: "villa", R
 
 function laContractAi_(c, inp, base) {
   const ma = IMMO_EDITION_ === "MA";
-  const system = "Tu es l'agent de rédaction juridique d'ImmoPilot, logiciel de gestion locative (" + edition_().countryName + "). Tu rédiges en français un contrat de location " +
+  const system = "Tu es l'agent de rédaction juridique d'DarPilot, logiciel de gestion locative (" + edition_().countryName + "). Tu rédiges en français un contrat de location " +
     (inp.furnished ? "meublée" : "vide") + " conforme au " + edition_().leaseLaw + ".\nRègles impératives :\n" +
     "- Pars de la TRAME fournie (déjà conforme) et améliore-la : clarté, articles complets, consignes de l'utilisateur intégrées. Garde tous les articles utiles de la trame.\n" +
     "- Utilise UNIQUEMENT les faits fournis. N'invente aucun montant, aucune date, aucun nom, aucune adresse.\n" +
@@ -248,7 +248,7 @@ function laLetterTemplate_(c, inp) {
   return { title: { RENEWAL: "Proposition de renouvellement du bail", RENT_REVISION: "Notification de révision du loyer", DEPOSIT_RETURN: "Restitution du dépôt de garantie", FREE: inp.subject || "Courrier au locataire" }[inp.subtype], sections: S };
 }
 function laLetterAi_(c, inp, base) {
-  const system = "Tu es l'agent de rédaction d'ImmoPilot (" + edition_().countryName + ", " + edition_().leaseLaw + "). Rédige en français un courrier du bailleur au locataire, courtois, précis et bref.\n" +
+  const system = "Tu es l'agent de rédaction d'DarPilot (" + edition_().countryName + ", " + edition_().leaseLaw + "). Rédige en français un courrier du bailleur au locataire, courtois, précis et bref.\n" +
     "- Utilise uniquement les faits fournis ; n'invente aucun montant, date ni nom ; marqueurs [BAILLEUR], [LOCATAIRE], [ADRESSE_DU_BIEN], [VILLE] pour les identités et l'adresse.\n" +
     "- Si la demande est contraire à la loi, n'applique pas la partie concernée et explique-le dans « warnings ».\n" +
     "- Pas de Markdown. Réponds UNIQUEMENT en JSON : {\"title\": string, \"sections\": [{\"title\": string, \"body\": string}], \"warnings\": [string]} (1 à 3 sections, la première commence par « Objet : »).";
@@ -320,7 +320,7 @@ function leaseDocHtml_(c, d) {
     "<table class='sign'><tr><td><b>Le bailleur</b><br><span class='muted'>« Lu et approuvé », signature</span></td><td><b>Le locataire</b><br><span class='muted'>« Lu et approuvé », signature</span></td></tr></table>";
   else inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + pdfDate_(todayStr_()) + ".</p>";
   return pdfShell_(d.title || "Document", inner, { subtitle: (prop.name || "") + (d.docType === "LETTER" ? " · à l'attention de " + (t.fullName || "") : ""), issuer: rentIssuer_(org), ref: (d.docType === "LEASE_CONTRACT" ? "BAIL-" : "COUR-") + String(d.leaseDocId || d.leaseId || "").slice(-8).toUpperCase(),
-    footer: draft ? "PROJET — document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; ImmoPilot ne garantit pas sa conformité juridique."
+    footer: draft ? "PROJET — document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; DarPilot ne garantit pas sa conformité juridique."
       : d.docType === "LEASE_CONTRACT" ? "Paraphe du bailleur : __________          Paraphe du locataire : __________" : " " });
 }
 function leaseDocFileName_(d) { return (d.docType === "LEASE_CONTRACT" ? "Bail_" : "Courrier_") + String(d.leaseId).slice(-6) + "_" + todayStr_(); }
@@ -510,7 +510,7 @@ function laInspectionTemplate_(r) {
 }
 function laInspectionAi_(c, r) {
   const exit = r.type === "EXIT", rooms = parseJson_(r.roomsJson, []);
-  const system = "Tu es l'agent de rédaction d'ImmoPilot (" + edition_().countryName + "). Rédige en français le compte rendu d'un état des lieux " + (exit ? "de SORTIE" : "d'ENTRÉE") + " d'un logement loué, à partir des relevés fournis.\n" +
+  const system = "Tu es l'agent de rédaction d'DarPilot (" + edition_().countryName + "). Rédige en français le compte rendu d'un état des lieux " + (exit ? "de SORTIE" : "d'ENTRÉE") + " d'un logement loué, à partir des relevés fournis.\n" +
     "- Décris UNIQUEMENT ce qui est relevé (états et observations). N'invente aucun défaut, aucun équipement, aucun nom.\n" +
     "- Style factuel et précis, phrases courtes, vocabulaire d'état des lieux. Une description par pièce (2 à 5 phrases).\n" +
     (exit ? "- Compare avec l'état à l'entrée (champ « entree ») ; liste dans « differences » les éléments plus dégradés à la sortie, en distinguant l'usure normale des dégradations. Ne chiffre aucune retenue.\n" : "- Les éléments sans état sont « non renseignés » : signale-les sans les décrire.\n") +

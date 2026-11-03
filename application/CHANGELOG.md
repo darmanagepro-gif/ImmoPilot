@@ -1,5 +1,12 @@
 # Journal des modifications
 
+## 2.7.0 — ImmoPilot devient DarPilot
+
+- Nouveau nom commercial DarPilot, slogan « Votre bien en pilote automatique. » : interface (6 langues), e-mails, PDF, documents juridiques, assistant, page d'accueil, manifeste de l'application.
+- Logos France et Maroc et vidéos d'ouverture refaits avec le nom DarPilot (mêmes visuels).
+- Nouveau domaine darpilot.fr (accueil, fr., ma., demo-fr., demo-ma.) ; immopilotapp.fr redirige vers darpilot.fr.
+- Inchangé volontairement (aucune perte de données) : noms internes des fichiers, dossiers, services et réglages (immopilot, ImmoPilot_DB…).
+
 ## 2.6.0 — Inscription en ligne et référencement des artisans (France et Maroc)
 
 - Écran de connexion : boutons « S'inscrire : propriétaire ou agence » et « Espace artisans » (aussi accessibles par `?action=signup` et `?action=artisans`, et depuis la page d'accueil).

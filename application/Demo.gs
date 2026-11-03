@@ -28,7 +28,7 @@ var DEMO_SPEC_ = {
   provider: { email: "speedfibre69@gmail.com", name: "Mohamed Zetounie",
     notes: "" }, // texte calculé par demoProviderNotes_() (devise de l'édition)
   pricingNote: "Prix demandé par le propriétaire à l'agence : {EUR} € la nuit, soit {MAD} MAD (prix fixe, 1 € ≈ " + DEMO_EUR_MAD_ + " MAD).\nPrix de vente au voyageur : libre, fixé par l'agence Moad Zaira.\n" +
-    "Ménage : organisé par l'agence (prestataire choisi dans la liste ImmoPilot), facturé au propriétaire qui le règle directement.",
+    "Ménage : organisé par l'agence (prestataire choisi dans la liste DarPilot), facturé au propriétaire qui le règle directement.",
   properties: [
     { key: "duplex", name: "DÉMO – Duplex 3 suites", rentalMode: "SHORT_TERM", propertyType: "APARTMENT", bedrooms: 3, bathrooms: 3, capacity: 6, eur: 120,
       rooms: ["Séjour", "Cuisine", "Suite 1", "Suite 2", "Suite 3", "Terrasse"], agency: true,
@@ -214,7 +214,7 @@ function demoAccount_(email, name, role, orgId, report) {
 }
 
 function demoSummaryText_(r) {
-  const L = ["=== Environnement de démonstration ImmoPilot ==="];
+  const L = ["=== Environnement de démonstration DarPilot ==="];
   r.organizations.forEach(function (o) { L.push("Organisation " + (o.created ? "créée" : "existante") + " : " + o.name + " (" + o.type + ")"); });
   r.accounts.filter(function (a) { return a.role !== "ARTISAN"; }).forEach(function (a) { L.push("Compte " + a.name + " <" + a.email + "> — " + a.role + (a.role === "CLEANER" ? " + ARTISAN" : "") + " — " + (a.activation || "")); });
   r.properties.forEach(function (p) { L.push("Bien " + (p.created ? "créé" : "existant") + " : " + p.name + " — " + p.rentalMode + (p.nightlyPrice ? " — " + p.nightlyPrice + " " + p.currency + "/nuit" : "")); });

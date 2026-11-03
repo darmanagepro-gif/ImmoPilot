@@ -66,7 +66,7 @@ function ensureDatabase_(props, rootFolder) {
   const first = ss.getSheets()[0];
   if (first && ss.getSheets().length === 1 && first.getLastRow() === 0) {
     first.setName("Accueil");
-    first.getRange(1, 1, 3, 1).setValues([["'Base de données ImmoPilot " + IMMO_CONFIG.VERSION], ["'Ne modifiez, ne triez et ne supprimez aucun onglet à la main : passez par l'application."], ["'Créée le " + nowIso_()]]);
+    first.getRange(1, 1, 3, 1).setValues([["'Base de données DarPilot " + IMMO_CONFIG.VERSION], ["'Ne modifiez, ne triez et ne supprimez aucun onglet à la main : passez par l'application."], ["'Créée le " + nowIso_()]]);
   }
   props.setProperty(IMMO_CONFIG.DATABASE_PROPERTY, ss.getId());
   dbSetSpreadsheet_(ss);
@@ -84,7 +84,7 @@ function createFirstSuperAdminInternal_(owner, props) {
   const emails = raw.split(",").map(normalizeEmail_).filter(Boolean);
   assert_(emails.length, "Renseignez IMMO_ADMIN_EMAILS (propriétés du script) avec au moins une adresse.", "CONFIG");
   let platform = dbAll_("Organizations").find(function (o) { return o.type === "PLATFORM"; });
-  if (!platform) platform = dbInsert_("Organizations", { name: "ImmoPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: owner });
+  if (!platform) platform = dbInsert_("Organizations", { name: "DarPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: owner });
   return emails.map(function (email) {
     validateEmail_(email);
     let user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });

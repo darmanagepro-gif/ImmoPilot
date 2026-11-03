@@ -61,7 +61,7 @@ function frameGuardOk() {
 const App = window.App = {
   start: function () {
     setLang(lstore("ip_lang") || "fr");
-    if (!frameGuardOk()) { clear($("app")).appendChild(h("div", { class: "alert bad", style: { margin: "40px auto", maxWidth: "560px" } }, t("Affichage refusé : ce site n'est pas autorisé à intégrer ImmoPilot. Ouvrez l'application depuis son adresse officielle."))); return; }
+    if (!frameGuardOk()) { clear($("app")).appendChild(h("div", { class: "alert bad", style: { margin: "40px auto", maxWidth: "560px" } }, t("Affichage refusé : ce site n'est pas autorisé à intégrer DarPilot. Ouvrez l'application depuis son adresse officielle."))); return; }
     const b = S.boot || {};
     if (b.mode === "accept" && b.token) return Public.invite(b.token);
     if (b.mode === "reset" && b.token) return Public.reset(b.token);
@@ -96,7 +96,7 @@ const App = window.App = {
       });
     });
     const roleTxt = S.me.isSuper ? t("Super administrateur") : (S.me.roles[0] ? roleLabel(S.me.roles[0].role) + " · " + S.me.roles[0].organizationName : "");
-    const sidebar = h("aside", { class: "sidebar" }, h("div", { class: "brand" }, brandMark(), h("div", null, h("b", null, "ImmoPilot"), h("small", null, t("Gestion immobilière")))), nav,
+    const sidebar = h("aside", { class: "sidebar" }, h("div", { class: "brand" }, brandMark(), h("div", null, h("b", null, "DarPilot"), h("small", null, t("Gestion immobilière")))), nav,
       h("div", { class: "sidebar-foot" }, "v" + S.me.version + " · " + S.me.timezone));
     const langSel = h("select", { class: "lang", "aria-label": t("Langue"), onchange: function (e) { setLang(e.target.value); if (!S.me.impersonator) api("me.updateProfile", { locale: S.lang }).catch(function () {}); App.shell(); App.go(S.route || "dashboard"); } },
       LANGS.map(function (l) { return h("option", { value: l[0], title: l[2] }, l[1]); }));
@@ -104,7 +104,7 @@ const App = window.App = {
     const bell = h("button", { class: "bell", type: "button", "aria-label": t("Notifications"), onclick: function () { NAV_HASH.v = "notifications"; } }, "🔔", S.me.unreadNotifications ? h("span", { class: "dot" }, String(S.me.unreadNotifications)) : null);
     const top = h("header", { class: "topbar" }, h("button", { class: "menu-btn", type: "button", "aria-label": t("Menu"), onclick: function () {
       sidebar.classList.add("open"); document.body.appendChild(h("div", { class: "scrim", onclick: function (e) { sidebar.classList.remove("open"); e.target.remove(); } }));
-    } }, "☰"), h("a", { class: "top-logo", href: "#dashboard", "aria-label": "ImmoPilot" }, brandMark()), h("h1", { id: "page-title" }, ""), h("div", { class: "spacer" }), Tour.button(), themeButton(), langSel, bell,
+    } }, "☰"), h("a", { class: "top-logo", href: "#dashboard", "aria-label": "DarPilot" }, brandMark()), h("h1", { id: "page-title" }, ""), h("div", { class: "spacer" }), Tour.button(), themeButton(), langSel, bell,
       h("button", { class: "user-chip", type: "button", onclick: function () { NAV_HASH.v = "settings"; } }, h("div", { class: "avatar" }, (S.me.displayName || "?").slice(0, 1).toUpperCase()), h("div", null, h("span", { class: "uname" }, S.me.displayName), h("small", null, roleTxt))));
     const imp = S.me.impersonator ? h("div", { class: "imp-banner", role: "status" },
       h("span", null, "👁 ", t("Vous êtes dans l'espace de"), " ", h("b", null, S.me.displayName), " (", S.me.email, ") — ", t("chaque action est enregistrée à votre nom") + " (" + S.me.impersonator.email + ")."),
@@ -125,7 +125,7 @@ const App = window.App = {
     const el = clear($("content"));
     document.querySelectorAll(".nav a").forEach(function (a) { a.classList.toggle("active", a.dataset.r === route || (route.indexOf(a.dataset.r.replace(/s$/, "")) === 0 && a.dataset.r !== "dashboard")); });
     const fn = PAGES[route];
-    $("page-title").textContent = t(TITLES[route] || TITLES[route + "s"] || "ImmoPilot");
+    $("page-title").textContent = t(TITLES[route] || TITLES[route + "s"] || "DarPilot");
     if (!fn) { el.appendChild(h("div", { class: "alert warn" }, t("Page introuvable."))); return; }
     try { const r = fn(el, param); if (r && r.catch) r.catch(function (e) { el.appendChild(h("div", { class: "alert bad" }, errMsg(e))); }); }
     catch (e) { el.appendChild(h("div", { class: "alert bad" }, errMsg(e))); console.error(e); }
@@ -313,11 +313,11 @@ function mySubscriptions(el) {
     }).catch(function () { /* facultatif */ });
     list.forEach(function (o) {
       const s = o.subscription, pl = o.plan;
-      if (o.includedIn) { el.appendChild(panel(o.organizationName, h("div", null, o.readOnly ? h("div", { class: "alert bad" }, t("Abonnement suspendu ou expiré : votre compte est en lecture seule. Contactez l'administrateur ImmoPilot.")) : null,
+      if (o.includedIn) { el.appendChild(panel(o.organizationName, h("div", null, o.readOnly ? h("div", { class: "alert bad" }, t("Abonnement suspendu ou expiré : votre compte est en lecture seule. Contactez l'administrateur DarPilot.")) : null,
         h("div", { class: "alert info" }, t("Agence incluse dans l'abonnement de") + " « " + o.includedIn + " » (" + t("option agences") + "). " + t("Aucun abonnement séparé à régler.")),
         o.plan ? h("p", { class: "small muted" }, t("Forfait") + " : " + o.plan.name + " · " + t("Fonctionnalités") + " : " + o.plan.features.map(function (f) { return st("feat." + f); }).join(", ")) : null))); return; }
       el.appendChild(panel(o.organizationName, h("div", null,
-        o.readOnly ? h("div", { class: "alert bad" }, t("Abonnement suspendu ou expiré : votre compte est en lecture seule. Contactez l'administrateur ImmoPilot.")) : null,
+        o.readOnly ? h("div", { class: "alert bad" }, t("Abonnement suspendu ou expiré : votre compte est en lecture seule. Contactez l'administrateur DarPilot.")) : null,
         !s ? h("div", { class: "alert info" }, t("Aucun abonnement enregistré pour cette organisation.")) :
           kv([["Forfait", pl ? pl.name : s.planCode], ["Statut", stTag(s.status)], ["Fin de période", fmtDate(s.periodEnd)], ["Prochaine échéance", fmtDate(s.nextDueDate)], ["Tarif", fmtMoney(s.price) + " / " + st(s.periodicity)], s.agencyOption && s.agencyOption.count ? ["Option agences", s.agencyOption.count + " × " + fmtMoney(s.agencyOption.unitPrice) + " (" + s.agencyOption.agencies.join(", ") + ")"] : null,
             ["Total par période", h("b", null, fmtMoney(s.agencyOption ? s.agencyOption.totalPrice : s.price))], ["Paiement", o.paymentProvider]]),
@@ -330,7 +330,7 @@ function mySubscriptions(el) {
         h("h3", null, t("Historique de facturation")), table([{ l: "Date", date: true, k: "paidAt" }, { l: "Montant", money: true, k: "amount" }, { l: "Mode", f: function (x) { return st(x.method); } }, { l: "Référence", k: "reference" }], o.billing),
         h("div", { class: "actions", style: { marginTop: "12px" } }, s ? btn(t("Contrat et historique (PDF)"), function () { api("sub.contractPdf", { organizationId: o.organizationId }).then(download).catch(showErr); }) : null, btn(t("Demander un changement de forfait"), function () {
           api("plan.list").then(function (pls) { formModal(t("Changer de forfait"), [{ k: "planCode", l: "Forfait souhaité", t: "select", req: true, opts: pls.map(function (x) { return [x.planCode, x.name + " — " + fmtMoney(x.price)]; }) }, { k: "message", l: "Message", t: "textarea" }], {},
-            function (v) { v.organizationId = o.organizationId; return api("sub.requestChange", v); }, { success: "Demande transmise à l'équipe ImmoPilot." }); });
+            function (v) { v.organizationId = o.organizationId; return api("sub.requestChange", v); }, { success: "Demande transmise à l'équipe DarPilot." }); });
         }), s && ["ACTIVE", "TRIAL"].indexOf(s.status) >= 0 ? btn(s.cancelAtPeriodEnd ? t("Annuler la résiliation") : t("Résilier en fin de période"), function () {
           confirmBox(s.cancelAtPeriodEnd ? t("Maintenir l'abonnement ?") : t("Résilier à la fin de la période en cours ? Vos données restent conservées."), { danger: !s.cancelAtPeriodEnd }).then(function (ok) { if (ok) api("sub.setStatus", { subscriptionId: s.subscriptionId, action: s.cancelAtPeriodEnd ? "UNDO_CANCEL" : "CANCEL_AT_END" }).then(function () { App.go("subscriptions"); }).catch(showErr); });
         }, "danger") : null))));
@@ -357,9 +357,9 @@ PAGES.onboarding = function (el) {
         stepBox(2, signed, "Signer le contrat d'abonnement", signed ? t("Signé le") + " " + fmtDate(o.sign.signedAt) + "." : t("Lisez votre contrat, puis signez-le avec le code reçu par e-mail ou par SMS."),
           btn("✍ " + t("Signer mon contrat"), function () { signContractDialog(o).then(function (ok) { if (ok) { App.refreshMe().then(function () { App.shell(); App.go("onboarding"); }); } }); }, "primary")),
         card.enabled ? stepBox(3, card.active, "Enregistrer ma carte bancaire", card.active ? t("Carte enregistrée") + " : " + card.label + "." :
-          (s.trialEnd ? t("Aucun débit avant la fin de l'essai gratuit") + " (" + fmtDate(s.trialEnd) + "). " : "") + t("Formulaire sécurisé SumUp (3D Secure) : ImmoPilot ne voit jamais votre numéro de carte."),
+          (s.trialEnd ? t("Aucun débit avant la fin de l'essai gratuit") + " (" + fmtDate(s.trialEnd) + "). " : "") + t("Formulaire sécurisé SumUp (3D Secure) : DarPilot ne voit jamais votre numéro de carte."),
           signed ? btn("💳 " + t("Enregistrer ma carte"), function () { cardSetupDialog(o); }, "primary") : h("span", { class: "small muted" }, t("Disponible après la signature du contrat.")))
-          : stepBox(3, false, "Paiement", t("Le paiement par carte n'est pas encore ouvert : après la signature, l'équipe ImmoPilot vous transmet les coordonnées de virement."), null)),
+          : stepBox(3, false, "Paiement", t("Le paiement par carte n'est pas encore ouvert : après la signature, l'équipe DarPilot vous transmet les coordonnées de virement."), null)),
       signed && paid ? h("div", { class: "alert good" }, "✓ " + t("Inscription terminée. Bienvenue !")) : null,
       h("div", { class: "actions", style: { marginTop: "12px" } }, btn(t("Lire mon contrat (PDF)"), function () { api("sub.contractPdf", { organizationId: o.organizationId }).then(download).catch(showErr); }),
         btn(signed && paid ? t("Accéder à mon espace") + " →" : t("Plus tard"), function () { NAV_HASH.v = "dashboard"; }, signed && paid ? "primary" : "")))));
@@ -370,7 +370,7 @@ PAGES.onboarding = function (el) {
 /* ======================= Espace artisan : mon référencement ======================= */
 const PROVIDER_STATUS_TXT = {
   PENDING: ["info", "Votre dossier n'est pas encore validé. Déposez toutes les pièces demandées, puis envoyez votre dossier pour contrôle."],
-  SUBMITTED: ["info", "Dossier envoyé : il est en cours de contrôle par l'équipe ImmoPilot (en général sous 2 jours ouvrés). Vous serez prévenu(e) par e-mail."],
+  SUBMITTED: ["info", "Dossier envoyé : il est en cours de contrôle par l'équipe DarPilot (en général sous 2 jours ouvrés). Vous serez prévenu(e) par e-mail."],
   REJECTED: ["bad", "Votre dossier est à compléter"],
   ACTIVE: ["good", "Vous êtes référencé(e) : les propriétaires et agences peuvent vous envoyer des demandes de devis et d'intervention."],
   INACTIVE: ["bad", "Votre référencement est suspendu"]
@@ -441,10 +441,10 @@ PAGES.referencing = function (el) {
       el.appendChild(providerSummary(c));
       if (c.status === "ACTIVE") {
         const pay = h("div", null, h("div", { class: "loading" }, t("Chargement…")));
-        el.appendChild(panel("Mes commissions ImmoPilot", pay));
+        el.appendChild(panel("Mes commissions DarPilot", pay));
         Promise.all([api("commission.mine", {}, { fresh: true }), api("provider.payoutInfo", {}, { fresh: true }).catch(function () { return { enabled: false }; })]).then(function (r) {
           const m = r[0], po = r[1]; clear(pay);
-          pay.appendChild(h("p", { class: "small muted" }, t("Commission de mise en relation") + " : " + m.rates.artisan + " % " + t("du montant HT de chaque facture réglée d'une mission obtenue par ImmoPilot (TVA en sus). Retenue automatiquement si le client paie en ligne ; sinon, un lien de paiement vous est envoyé une fois la facture réglée.")));
+          pay.appendChild(h("p", { class: "small muted" }, t("Commission de mise en relation") + " : " + m.rates.artisan + " % " + t("du montant HT de chaque facture réglée d'une mission obtenue par DarPilot (TVA en sus). Retenue automatiquement si le client paie en ligne ; sinon, un lien de paiement vous est envoyé une fois la facture réglée.")));
           if (po.enabled) pay.appendChild(h("div", { class: "alert " + (po.ready ? "good" : "info") }, po.ready ? "✓ " + t("Paiement en ligne activé : vos clients peuvent vous payer par la plateforme, Stripe vous verse le montant commission déduite.")
             : h("span", null, t("Activez le paiement en ligne : vos clients vous paient par carte via la plateforme et Stripe (établissement de paiement agréé) vous verse le montant, commission déduite. Plus de lien de commission à régler."), " ",
               btn(po.connected ? t("Terminer l'activation chez Stripe") : t("Activer le paiement en ligne"), function (ev) { const b = ev.currentTarget; b.disabled = true; api("provider.payoutSetup").then(function (x) { location.href = x.url; }).catch(function (e) { b.disabled = false; showErr(e); }); }, "sm primary"))));
@@ -455,7 +455,7 @@ PAGES.referencing = function (el) {
       el.appendChild(h("div", { class: "actions" }, btn(t("Modifier mes informations"), function () {
         const ff = providerInfoFields(c);
         formModal(t("Mes informations"), ff.fields, ff.values, function (v) { if (typeof v.zones !== "string") v.zones = ""; return api("provider.save", v).then(reload); },
-          { intro: c.status === "ACTIVE" ? t("Vous êtes référencé(e) : seuls le téléphone, les zones et les assurances sont modifiables. Pour changer d'entreprise, contactez l'équipe ImmoPilot.") : "" });
+          { intro: c.status === "ACTIVE" ? t("Vous êtes référencé(e) : seuls le téléphone, les zones et les assurances sont modifiables. Pour changer d'entreprise, contactez l'équipe DarPilot.") : "" });
       })));
       el.appendChild(Public.statusBox({ status: { providerPoints: c.status_ } }, true));
     });
@@ -514,7 +514,7 @@ function providerReviewPanel(el, c) {
   el.appendChild(panel("Dossier de référencement", box));
 }
 
-/* Prélèvement automatique par carte (SumUp) : le formulaire de carte est celui de SumUp (aucune donnée de carte chez ImmoPilot). */
+/* Prélèvement automatique par carte (SumUp) : le formulaire de carte est celui de SumUp (aucune donnée de carte chez DarPilot). */
 function cardPaymentBox(o, s) {
   const c = o.card, box = h("div", { class: "panel", style: { marginTop: "14px", padding: "12px" } });
   const amount = c.amount != null ? c.amount.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + (c.currency === "EUR" ? "€" : c.currency) : "";
@@ -553,7 +553,7 @@ function signContractDialog(o) {
       h("div", { class: "actions", style: { margin: "0 0 10px" } }, btn("📄 " + t("Lire le contrat (PDF)"), function () { api("sub.contractPdf", { organizationId: o.organizationId }).then(download).catch(showErr); }),
         h("a", { class: "btn", href: location.origin + location.pathname + "?action=legal&doc=cgv", target: "_blank", rel: "noopener" }, t("Conditions générales"))),
       h("label", { for: "sign-accept", style: { display: "flex", gap: "8px", alignItems: "flex-start", cursor: "pointer" } }, accept,
-        h("span", null, t("J'ai lu et j'accepte le contrat d'abonnement et les conditions générales d'ImmoPilot. Je signe électroniquement ce contrat."))),
+        h("span", null, t("J'ai lu et j'accepte le contrat d'abonnement et les conditions générales d'DarPilot. Je signe électroniquement ce contrat."))),
       h("div", { class: "field", style: { marginTop: "10px" } }, h("label", null, t("Recevoir le code de signature")), chan),
       sg.smsAvailable ? null : h("p", { class: "small muted" }, t("Pour recevoir le code par SMS, ajoutez votre numéro de téléphone dans votre profil (Paramètres).")),
       step2, err);
@@ -622,11 +622,11 @@ PAGES.settings = function (el) {
           btn(t("Se déconnecter"), function () { api("me.logout").catch(function () {}).then(function () { localLogout(); }); }, "danger"))),
         h("p", { class: "small muted", style: { marginTop: "18px" } }, t("Vous pouvez demander la suppression de votre compte et de vos données personnelles à tout moment."), " ",
           h("a", { href: "#settings", onclick: function (e) { e.preventDefault(); formModal(t("Supprimer mon compte"), [{ k: "reason", l: "Motif (facultatif)", t: "textarea" }], {}, function (v) {
-            return api("me.requestDeletion", v).then(function (r) { toast(r.message, "good"); }); }, { intro: t("Votre demande est transmise à l'administrateur ImmoPilot. Le compte et les données personnelles associées sont supprimés sous 30 jours ; certaines données comptables peuvent être conservées pour des obligations légales."), submitLabel: t("Demander la suppression") }); } }, t("Supprimer mon compte")))));
+            return api("me.requestDeletion", v).then(function (r) { toast(r.message, "good"); }); }, { intro: t("Votre demande est transmise à l'administrateur DarPilot. Le compte et les données personnelles associées sont supprimés sous 30 jours ; certaines données comptables peuvent être conservées pour des obligations légales."), submitLabel: t("Demander la suppression") }); } }, t("Supprimer mon compte")))));
     } },
     orgAdmin.length || S.me.isSuper ? { id: "org", label: S.me.isSuper ? "Paramètres de la plateforme" : "Paramètres de l'organisation", render: function (b) { settingsEditor(b, S.me.isSuper && !orgAdmin.length ? "" : (orgAdmin[0] || [""])[0], orgAdmin); } } : null,
     orgAdmin.length ? { id: "support", label: "Accès d'assistance", render: function (b) {
-      b.appendChild(h("p", { class: "muted" }, t("L'équipe ImmoPilot ne peut consulter vos données qu'avec votre accord explicite, en lecture seule, pour une durée limitée. Chaque accès est journalisé.")));
+      b.appendChild(h("p", { class: "muted" }, t("L'équipe DarPilot ne peut consulter vos données qu'avec votre accord explicite, en lecture seule, pour une durée limitée. Chaque accès est journalisé.")));
       const lv = listView(b, { route: "support.list", search: false, columns: [{ l: "Demandée le", dt: true, k: "requestedAt" }, { l: "Organisation", k: "organizationName" }, { l: "Justification", k: "justification" }, { l: "Statut", status: true, k: "status" }, { l: "Expire le", dt: true, k: "expiresAt" },
         { l: "", f: function (g) { return h("span", { class: "actions" }, g.status === "REQUESTED" ? [btn(t("Accorder"), function () { api("support.decide", { grantId: g.grantId, decision: "APPROVE" }).then(lv.reload).catch(showErr); }, "sm primary"), btn(t("Refuser"), function () { api("support.decide", { grantId: g.grantId, decision: "DENY" }).then(lv.reload).catch(showErr); }, "sm")] : null,
           ["REQUESTED", "ACTIVE"].indexOf(g.status) >= 0 ? btn(t("Révoquer"), function () { api("support.revoke", { grantId: g.grantId }).then(lv.reload).catch(showErr); }, "sm danger") : null); } }] });
@@ -667,7 +667,7 @@ function templateEditor(org, key) {
         return h("button", { type: "button", class: "btn sm", title: t(x.label), onclick: function () { insert(x.tag); } }, x.tag);
       }));
       const body = h("div", null,
-        h("p", { class: "small muted", style: { marginTop: 0 } }, info.current ? t("Votre modèle personnalisé est utilisé pour ce document.") : t("Aucun modèle personnalisé : le document standard d'ImmoPilot est utilisé. Le texte ci-dessous est un point de départ à adapter.")),
+        h("p", { class: "small muted", style: { marginTop: 0 } }, info.current ? t("Votre modèle personnalisé est utilisé pour ce document.") : t("Aucun modèle personnalisé : le document standard d'DarPilot est utilisé. Le texte ci-dessous est un point de départ à adapter.")),
         h("p", { class: "small", style: { margin: "0 0 6px" } }, t("Balises (cliquez pour insérer à l'endroit du curseur) :")), tags,
         (info.blocks || []).length ? h("div", { class: "small", style: { display: "flex", flexWrap: "wrap", gap: "6px", margin: "0 0 8px" } }, h("span", { class: "muted" }, t("Blocs de mise en page") + " :"),
           info.blocks.map(function (bk) { return h("button", { type: "button", class: "btn sm", onclick: function () { insert("\n" + bk + "\n"); } }, bk); })) : null,
@@ -677,7 +677,7 @@ function templateEditor(org, key) {
       const showErr = function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); };
       const m = modal({ title: t(info.title) + " — " + t("modèle"), size: "lg", body: body, onClose: function () { resolve(false); }, buttons: [
         { label: t("Aperçu PDF"), onClick: function (b) { b.disabled = true; api("template.preview", { organizationId: org, kind: kind, text: ta.value, furnished: !!(fur && fur.checked) }).then(download).catch(showErr).then(function () { b.disabled = false; }); } },
-        info.current ? { label: t("Revenir au document standard"), onClick: function (b) { confirmBox(t("Supprimer votre modèle et revenir au document standard d'ImmoPilot ?"), { danger: true }).then(function (ok) {
+        info.current ? { label: t("Revenir au document standard"), onClick: function (b) { confirmBox(t("Supprimer votre modèle et revenir au document standard d'DarPilot ?"), { danger: true }).then(function (ok) {
           if (!ok) return; b.disabled = true; api("settings.set", { organizationId: org, key: key, value: "" }).then(function () { toast(t("Paramètre enregistré."), "good"); resolve(true); m.close(); }).catch(function (e) { b.disabled = false; showErr(e); }); }); } } : null,
         { label: t("Enregistrer"), primary: true, onClick: function (b) { b.disabled = true; api("settings.set", { organizationId: org, key: key, value: ta.value }).then(function () { toast(t("Paramètre enregistré."), "good"); resolve(true); m.close(); }).catch(function (e) { b.disabled = false; showErr(e); }); } }
       ].filter(Boolean) });
@@ -777,7 +777,7 @@ const TOUR_TEXT = {
   checkin: { M: "Arrivées et départs du jour : check-in et check-out avec photos et signature.", G: "Votre poste : les arrivées et départs du jour. Faites le check-in et le check-out avec la liste, les photos et la signature du voyageur." },
   cleaning: { M: "Ménage : une mission est créée après chaque départ ; le prestataire a 2 heures pour accepter. Rapport avec photos avant / après.", C: "Vos missions de ménage : acceptez-les dans le délai, puis pièce par pièce cochez les tâches et ajoutez les photos avant / après. Signalez toute anomalie." },
   incidents: { M: "Signalez une panne, demandez un devis à un artisan vérifié et suivez l'intervention jusqu'à la facture.", X: "Signalez ici une panne ou un problème, avec des photos : le gestionnaire est prévenu aussitôt." },
-  contractors: { M: "L'annuaire des prestataires vérifiés par ImmoPilot : ménage, plomberie, électricité, climatisation…" },
+  contractors: { M: "L'annuaire des prestataires vérifiés par DarPilot : ménage, plomberie, électricité, climatisation…" },
   quotes: { M: "Les devis demandés aux artisans : acceptez ou refusez en un clic.", A: "Les demandes de devis : saisissez vos lignes, la TVA et le délai ; le client accepte en ligne." },
   workorders: { M: "Les interventions en cours : planification, compte rendu, contrôle.", A: "Vos interventions : acceptez, planifiez, démarrez puis terminez avec compte rendu et photos." },
   invoices: { M: "Les factures des artisans : approuvez-les puis enregistrez le paiement.", A: "Transmettez vos factures après chaque intervention et suivez leur paiement." },
@@ -805,7 +805,7 @@ const Tour = window.Tour = {
     if (roles.indexOf("GUARD") >= 0) return "G"; if (roles.indexOf("CLEANER") >= 0) return "C"; if (roles.indexOf("ARTISAN") >= 0) return "A"; if (roles.indexOf("TENANT") >= 0) return "T"; return "M";
   },
   steps: function () {
-    const g = Tour.group(), out = [{ title: t("Bienvenue sur ImmoPilot") + (S.me.displayName ? ", " + S.me.displayName : "") + " !", text: t("Quelques petites fenêtres pour découvrir l'essentiel de votre espace. Vous pouvez passer à tout moment et revoir ce tutoriel avec le bouton 🎓 en haut à droite.") }];
+    const g = Tour.group(), out = [{ title: t("Bienvenue sur DarPilot") + (S.me.displayName ? ", " + S.me.displayName : "") + " !", text: t("Quelques petites fenêtres pour découvrir l'essentiel de votre espace. Vous pouvez passer à tout moment et revoir ce tutoriel avec le bouton 🎓 en haut à droite.") }];
     TOUR_ORDER.forEach(function (r) {
       const el = document.querySelector('.nav a[data-r="' + r + '"]'), tx = TOUR_TEXT[r]; if (!el || !tx) return;
       const text = tx[g] || (g === "M" ? tx.M : tx.X) || (g !== "M" ? null : tx.M); if (!text) return;

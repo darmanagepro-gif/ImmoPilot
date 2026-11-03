@@ -186,13 +186,13 @@ const Rubban = (function () {
     const auth = !!(S.me && S.token);
     if (R.kb && R.kbAuth === auth) return Promise.resolve();
     return (auth ? api("assistant.kb") : apiP("assistant.kb")).then(function (kb) { prepare(kb); R.kbAuth = auth; R.legal.textContent = R.aiEnabled && auth
-      ? t("Réponses générées par une IA à partir de l'aide ImmoPilot : vérifiez les points importants. N'indiquez aucune donnée personnelle.")
-      : t("Mode guide : réponses issues de l'aide officielle d'ImmoPilot."); });
+      ? t("Réponses générées par une IA à partir de l'aide DarPilot : vérifiez les points importants. N'indiquez aucune donnée personnelle.")
+      : t("Mode guide : réponses issues de l'aide officielle d'DarPilot."); });
   }
   function welcome() {
     clear(R.body);
     const name = S.me && S.me.displayName ? " " + String(S.me.displayName).split(" ")[0] : "";
-    bubble("rb-bot", [el("div", null, t("Salam") + name + " ! " + t("Je suis Rubban (رُبّان, « le pilote »), votre copilote ImmoPilot. Posez-moi votre question : je vous guide pas à pas.")),
+    bubble("rb-bot", [el("div", null, t("Salam") + name + " ! " + t("Je suis Rubban (رُبّان, « le pilote »), votre copilote DarPilot. Posez-moi votre question : je vous guide pas à pas.")),
       chipsFor(suggestions(), t("Questions fréquentes"))]);
   }
   function toggle(open) {
@@ -215,7 +215,7 @@ const Rubban = (function () {
     R.legal = el("div", { class: "rb-legal" }, "");
     const av = el("div", { class: "rb-av" }, [robot(30)]);
     R.panel = el("section", { id: "rb-panel", role: "dialog", "aria-label": "Rubban", "aria-modal": "false" }, [
-      el("header", { class: "rb-head" }, [av, el("div", null, [el("b", null, ["Rubban", el("span", null, "رُبّان")]), el("small", null, t("Votre copilote ImmoPilot · 24 h/24, 7 j/7"))]),
+      el("header", { class: "rb-head" }, [av, el("div", null, [el("b", null, ["Rubban", el("span", null, "رُبّان")]), el("small", null, t("Votre copilote DarPilot · 24 h/24, 7 j/7"))]),
         el("button", { type: "button", class: "rb-x", "aria-label": t("Fermer"), onclick: function () { toggle(false); } }, "×")]),
       R.body, el("div", { class: "rb-foot" }, [el("div", { class: "rb-form" }, [R.input, R.send]), R.legal])]);
     document.body.appendChild(R.panel); document.body.appendChild(R.fab);

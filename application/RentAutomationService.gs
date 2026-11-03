@@ -72,7 +72,7 @@ function rentParties_(c) {
 }
 /**
  * Lien de paiement par carte du bailleur : celui de SON compte (SumUp, Stripe, PayPal…), les fonds lui sont versés
- * directement, sans transiter par ImmoPilot. Balises facultatives dans le lien : {montant} et {reference}.
+ * directement, sans transiter par DarPilot. Balises facultatives dans le lien : {montant} et {reference}.
  */
 function validatePayUrl_(v) {
   const s = safeText_(v, 500);

@@ -223,7 +223,7 @@ function billingEnforced_() { return getSetting_("billing.enforce") !== false; }
 function assertOrgWritable_(orgId) {
   if (!billingEnforced_()) return;
   const e = entitlement_(orgId);
-  if (e.readOnly) throw new AppError("SUBSCRIPTION", "Abonnement suspendu ou expiré : le compte est en lecture seule. Contactez l'administrateur ImmoPilot.");
+  if (e.readOnly) throw new AppError("SUBSCRIPTION", "Abonnement suspendu ou expiré : le compte est en lecture seule. Contactez l'administrateur DarPilot.");
 }
 /** Une organisation sans abonnement (installation historique) conserve l'accès complet ; à régulariser par le super administrateur. */
 function assertFeature_(orgId, feature) {

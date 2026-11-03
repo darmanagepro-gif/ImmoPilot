@@ -71,7 +71,7 @@ function providerPayoutSetup_(p) {
     const L = parseJson_(c.legalJson, {}) || {};
     const a = stripeCall_("post", "/accounts", { country: "FR", email: c.email,
       controller: { stripe_dashboard: { type: "full" }, fees: { payer: "account" }, losses: { payments: "stripe" }, requirement_collection: "stripe" },
-      business_profile: { name: L.legalName || c.name, product_description: "Travaux et services aux propriétaires (ImmoPilot)" }, metadata: { artisanId: c.artisanId } }, "acct-" + c.artisanId);
+      business_profile: { name: L.legalName || c.name, product_description: "Travaux et services aux propriétaires (DarPilot)" }, metadata: { artisanId: c.artisanId } }, "acct-" + c.artisanId);
     acct = a.id;
     dbUpdate_("Artisans", c.artisanId, { stripeAccountId: acct, stripeReady: false, updatedAt: nowIso_() });
     audit_("STRIPE_ACCOUNT_CREATED", "Artisan", c.artisanId, c.organizationId, {});
@@ -100,7 +100,7 @@ function invPayOnline_(p, a) {
   // Paiement direct sur le compte de l'artisan : il encaisse, la plateforme ne perçoit que sa commission.
   const s = stripeCall_("post", "/checkout/sessions", { mode: "payment", customer_email: p.email,
     line_items: [{ quantity: 1, price_data: { currency: "eur", unit_amount: cents_(due), product_data: { name: "Facture " + (v.invoiceNumber || "") + " — " + (art.name || "artisan") } } }],
-    payment_intent_data: { application_fee_amount: cents_(fee), description: "Facture " + (v.invoiceNumber || v.invoiceId) + " (via ImmoPilot)", metadata: { invoiceId: v.invoiceId } },
+    payment_intent_data: { application_fee_amount: cents_(fee), description: "Facture " + (v.invoiceNumber || v.invoiceId) + " (via DarPilot)", metadata: { invoiceId: v.invoiceId } },
     metadata: { invoiceId: v.invoiceId, kind: "INVOICE" }, success_url: base + "#invoice/" + v.invoiceId, cancel_url: base + "#invoice/" + v.invoiceId }, "inv-" + v.invoiceId + "-" + cents_(due) + "-" + todayStr_(), art.stripeAccountId);
   audit_("INVOICE_ONLINE_PAYMENT_STARTED", "Invoice", v.invoiceId, v.organizationId, { amount: due, fee: fee });
   return { url: s.url };
@@ -131,7 +131,7 @@ function stripeWebhookApply_(ev) {
     auditAs_("stripe", "", "INVOICE_PAID_ONLINE", "Invoice", v.invoiceId, v.organizationId, { amount: amount, session: o.id });
     const art = dbGet_("Artisans", v.artisanId);
     if (art && art.userId) notify_({ eventKey: "invoice-paid-online:" + v.invoiceId, userIds: [art.userId], type: "INVOICE_PAID", organizationId: v.organizationId, title: "Facture payée en ligne : " + v.invoiceNumber,
-      body: amount + " " + (v.currency || cur_()) + " réglés par le client ; Stripe vous verse le montant, commission ImmoPilot déduite.", link: "#invoices" });
+      body: amount + " " + (v.currency || cur_()) + " réglés par le client ; Stripe vous verse le montant, commission DarPilot déduite.", link: "#invoices" });
     return { ok: true, paymentId: pay.paymentId };
   });
 }

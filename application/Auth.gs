@@ -3,7 +3,7 @@
  *
  * Pourquoi pas l'identité Google seule ? Avec un déploiement « Exécuter en tant que : moi » et « Accès : tout le monde »,
  * Session.getActiveUser() est VIDE pour les comptes extérieurs au domaine du propriétaire du script. Elle ne peut donc
- * pas servir d'identité pour un SaaS ouvert. ImmoPilot utilise des comptes applicatifs :
+ * pas servir d'identité pour un SaaS ouvert. DarPilot utilise des comptes applicatifs :
  *  - mot de passe haché PBKDF2-HMAC-SHA256 avec sel aléatoire (jamais stocké en clair) ;
  *  - jeton de session aléatoire de 256 bits, seul son SHA-256 est stocké (feuille Sessions), expiration configurable ;
  *  - l'identité provient UNIQUEMENT du jeton vérifié côté serveur, jamais d'un e-mail transmis par le navigateur ;
@@ -191,9 +191,9 @@ function sendPasswordLink_(user, purpose) {
   const hours = purpose === "ACTIVATION" ? 72 : 1;
   dbInsert_("PasswordResets", { userId: user.userId, tokenHash: sha256Hex_(token), createdAt: nowIso_(), expiresAt: new Date(Date.now() + hours * 3600000).toISOString(), usedAt: "", purpose: purpose });
   const url = appUrl_() + "?action=reset&token=" + token;
-  const subject = purpose === "ACTIVATION" ? "Activez votre compte ImmoPilot" : "Réinitialisation de votre mot de passe ImmoPilot";
+  const subject = purpose === "ACTIVATION" ? "Activez votre compte DarPilot" : "Réinitialisation de votre mot de passe DarPilot";
   const body = "Bonjour " + (user.displayName || "") + ",\n\n" + (purpose === "ACTIVATION" ? "Définissez votre mot de passe pour activer votre compte" : "Une réinitialisation de mot de passe a été demandée") +
-    " (lien valable " + hours + " h, utilisable une seule fois) :\n" + url + "\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\nImmoPilot";
+    " (lien valable " + hours + " h, utilisable une seule fois) :\n" + url + "\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\nDarPilot";
   sendMailSafe_(user.email, subject, body, "auth:" + purpose + ":" + user.userId + ":" + Date.now());
   auditAs_("", user.userId, "PASSWORD_LINK_" + purpose, "User", user.userId, "", {});
   return url;

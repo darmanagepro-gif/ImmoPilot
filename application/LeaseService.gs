@@ -314,7 +314,7 @@ function leaseDocument_(p, a) {
   const map = { bailleur: org.name, locataire: t.fullName, locataire_email: t.email, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), surface: x.prop.surfaceM2, debut: x.l.startDate,
     fin: x.l.endDate || "indéterminée", loyer: x.l.monthlyRent, charges: x.l.charges, caution: x.l.deposit, jour_echeance: x.l.dueDay, indexation: x.l.indexationRate, conditions: x.l.terms, date: todayStr_() };
   const tpl = getSetting_("template.leaseDocId", x.l.organizationId), text = docTemplateOf_("lease", x.l.organizationId), cur = cur_();
-  // Contrat complet et conforme (meublé ou vide selon le logement), sans marque ImmoPilot : en-tête au nom du bailleur.
+  // Contrat complet et conforme (meublé ou vide selon le logement), sans marque DarPilot : en-tête au nom du bailleur.
   const c = rentCtx_(x.l), furnished = leaseFurnished_(x.l, x.prop);
   const base = laContractTemplate_(c, { furnished: furnished, usage: "HABITATION", clauses: ["INSURANCE_REQUIRED", "SUBLET_FORBIDDEN"], instructions: "" });
   const sections = base.sections.map(function (sc) { return { title: laFill_(sc.title, c), body: laFill_(sc.body, c) }; });

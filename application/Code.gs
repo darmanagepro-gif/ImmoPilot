@@ -111,7 +111,7 @@ function installErrorPage_(r) {
   const list = function (items, ext) { return "<ul>" + items.map(function (n) { return "<li><code>" + esc(n) + ext + "</code></li>"; }).join("") + "</ul>"; };
   let html = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;color:#1d2b3a;line-height:1.5}" +
     "h1{font-size:20px;color:#1b3554}code{background:#eef2f7;padding:1px 5px;border-radius:4px}.box{border:1px solid #e3b341;background:#fff8e6;padding:12px 16px;border-radius:8px}</style></head><body>" +
-    "<h1>ImmoPilot : installation incomplète</h1><div class='box'>L'application ne peut pas démarrer car des fichiers sont absents ou mal nommés dans le projet Apps Script. Aucune donnée n'est en cause.</div>";
+    "<h1>DarPilot : installation incomplète</h1><div class='box'>L'application ne peut pas démarrer car des fichiers sont absents ou mal nommés dans le projet Apps Script. Aucune donnée n'est en cause.</div>";
   if (r.indexOutdated) html += "<h2>Le fichier Index.html n'est pas la version complète</h2><p>Il contient l'ancienne version courte, qui appelle 7 autres fichiers. Dans l'éditeur, ouvrez <code>Index.html</code>, faites Ctrl+A puis Supprimer, et collez <b>tout</b> le contenu du fichier <code>2_Index_html_A_COLLER.txt</code> (environ 2 066 lignes). Ne recréez pas les autres fichiers HTML.</p>";
   else if (r.missingHtml.length) html += "<h2>Fichiers HTML introuvables</h2>" + list(r.missingHtml, ".html") +
     "<p>Dans l'éditeur : <b>＋ › HTML</b> (et non « Script »), tapez le nom exact <b>sans</b> « .html », en respectant les majuscules, effacez le contenu proposé et collez celui du fichier du ZIP. Si un fichier du même nom existe en <code>.gs</code>, supprimez-le.</p>";
@@ -119,7 +119,7 @@ function installErrorPage_(r) {
     "<p>Dans l'éditeur : <b>＋ › Script</b>, nom exact sans « .gs », collez le contenu complet du fichier du ZIP.</p>";
   html += "<h2>Ensuite</h2><ol><li>Enregistrez (Ctrl+S).</li><li>Déployer › Gérer les déploiements › ✏️ › Version : <b>Nouvelle version</b> › Déployer.</li><li>Rechargez cette page.</li></ol>" +
     "<p>Astuce : dans l'éditeur, la fonction <code>verifierInstallation</code> affiche la même liste dans le journal d'exécution.</p></body></html>";
-  return HtmlService.createHtmlOutput(html).setTitle("ImmoPilot — installation incomplète");
+  return HtmlService.createHtmlOutput(html).setTitle("DarPilot — installation incomplète");
 }
 
 /**

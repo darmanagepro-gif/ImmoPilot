@@ -127,7 +127,7 @@ function ctrCreate_(p, a) {
     orgId = platformOrgId_();
     assert_(orgId, "Organisation plateforme absente : exécutez setupProject().", "CONFIG");
   } else {
-    if (getSetting_("contractors.platformOnly") !== false) forbid_("Les prestataires (ménage, artisans…) sont intégrés par l'administrateur ImmoPilot. Choisissez-les dans la liste, par type de prestation.");
+    if (getSetting_("contractors.platformOnly") !== false) forbid_("Les prestataires (ménage, artisans…) sont intégrés par l'administrateur DarPilot. Choisissez-les dans la liste, par type de prestation.");
     orgId = safeText_(a.organizationId || (p.roles.find(function (r) { return r.caps.indexOf("contractor.manage") >= 0; }) || {}).organizationId, 120);
     assertOrgCap_(p, orgId, "contractor.manage");
     assertFeature_(orgId, "contractors");

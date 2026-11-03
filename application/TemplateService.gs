@@ -1,7 +1,7 @@
 /**
  * Modèles de documents intégrés : quittance, bail, fiche de réservation.
  * Ils remplacent les modèles Google Docs (indisponibles sur le serveur dédié). Chaque organisation peut écrire son
- * propre texte avec des balises {{cle}} ; laissé vide, le gabarit intégré d'ImmoPilot est utilisé.
+ * propre texte avec des balises {{cle}} ; laissé vide, le gabarit intégré d'DarPilot est utilisé.
  *
  * Mise en forme simple (le texte est toujours échappé, aucun HTML n'est accepté) :
  *   # Titre de section      → intertitre

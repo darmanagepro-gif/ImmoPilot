@@ -85,7 +85,7 @@ function supportRequest_(p, a) {
   audit_("SUPPORT_ACCESS_REQUESTED", "SupportGrant", g.grantId, orgId, { hours: hours, justification: g.justification });
   const approvers = dbAll_("UserRoles").filter(function (r) { return r.status === "ACTIVE" && String(r.organizationId) === orgId && (r.role === "OWNER" || r.role === "AGENCY_ADMIN"); }).map(function (r) { return r.userId; });
   notify_({ eventKey: "support:" + g.grantId, userIds: approvers, type: "SUPPORT_REQUEST", organizationId: orgId,
-    title: "Demande d'accès d'assistance", body: "L'équipe ImmoPilot demande un accès en lecture seule de " + hours + " h : " + g.justification, link: "#settings" });
+    title: "Demande d'accès d'assistance", body: "L'équipe DarPilot demande un accès en lecture seule de " + hours + " h : " + g.justification, link: "#settings" });
   return { ok: true, grantId: g.grantId };
 }
 function supportDecide_(p, a) {
@@ -140,7 +140,7 @@ function ownerAgencyCreate_(p, a) {
   const adminEmail = validateEmail_(a.adminEmail);
   rateLimit_("agency-create:" + p.userId, 10, 3600);
   assert_(dbAll_("Organizations").filter(function (o) { return o.type === "AGENCY" && normalizeEmail_(o.createdBy) === p.email && o.status !== "INACTIVE"; }).length < OWNER_AGENCY_LIMIT_,
-    "Nombre maximal d'agences créées atteint (" + OWNER_AGENCY_LIMIT_ + "). Contactez l'administrateur ImmoPilot.");
+    "Nombre maximal d'agences créées atteint (" + OWNER_AGENCY_LIMIT_ + "). Contactez l'administrateur DarPilot.");
   const agency = withLock_(function () {
     const same = dbAll_("Organizations").find(function (o) { return String(o.name).toLowerCase() === name.toLowerCase() && o.status !== "INACTIVE"; });
     if (same) throw new AppError("VALIDATION", "Une organisation porte déjà ce nom. S'il s'agit de la même agence, utilisez « Attribuer une agence » ; sinon, choisissez un autre nom.");

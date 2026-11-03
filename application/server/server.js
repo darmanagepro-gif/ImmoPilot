@@ -18,7 +18,7 @@ let nodemailer = null;
 try { nodemailer = require("nodemailer"); } catch (e) { nodemailer = null; }
 
 const rt = createRuntime({ dataKey: loadDataKey(C.dataKeyFile), dataDir: C.dataDir, bundleDir: C.bundleDir, publicUrl: C.publicUrl, adminEmail: C.adminEmail, chromium: C.chromium, mailDailyQuota: C.mailDailyQuota,
-  appName: "ImmoPilot", timezone: "UTC", onMail: function () { setTimeout(mailTick, 200); } });
+  appName: "DarPilot", timezone: "UTC", onMail: function () { setTimeout(mailTick, 200); } });
 const TZ = rt.ctx.IMMO_CONFIG.TIMEZONE, EDITION = rt.ctx.IMMO_EDITION_;
 
 // Réglages initiaux (une seule fois) : adresse publique et premier super administrateur.
@@ -85,7 +85,7 @@ function renderPage(query) {
 /* ----------------------------- Fichiers publics ----------------------------- */
 const ICON_DIR = path.join(C.editionsDir, String(EDITION).toLowerCase(), "icons");
 function manifest() {
-  return JSON.stringify({ name: "ImmoPilot", short_name: "ImmoPilot", description: "Gestion locative : réservations, ménage, maintenance, baux et finances.", lang: "fr", start_url: "/", scope: "/",
+  return JSON.stringify({ name: "DarPilot", short_name: "DarPilot", description: "Gestion locative : réservations, ménage, maintenance, baux et finances.", lang: "fr", start_url: "/", scope: "/",
     display: "standalone", background_color: "#13233d", theme_color: "#13233d",
     icons: [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }, { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
       { src: "/icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" }] });
@@ -205,7 +205,7 @@ let transport = null, mailBusy = false, mailWarned = false;
 if (!C.brevoApiKey && nodemailer && C.smtpHost) transport = nodemailer.createTransport({ host: C.smtpHost, port: C.smtpPort, secure: C.smtpSecure, auth: C.smtpUser ? { user: C.smtpUser, pass: C.smtpPass } : undefined });
 function permanentError(msg) { const e = new Error(msg); e.permanent = true; return e; }
 async function brevoSend(m, attachments) {
-  const payload = { sender: { name: m.sender || "ImmoPilot", email: C.mailFrom }, to: [{ email: m.recipient }], subject: m.subject, textContent: m.body || " ",
+  const payload = { sender: { name: m.sender || "DarPilot", email: C.mailFrom }, to: [{ email: m.recipient }], subject: m.subject, textContent: m.body || " ",
     tags: ["immopilot"], headers: m.ref ? { "X-Mailin-custom": String(m.ref).slice(0, 250) } : undefined };
   if (m.html) payload.htmlContent = m.html;
   if (m.bcc) payload.bcc = [{ email: m.bcc }];
@@ -232,7 +232,7 @@ async function mailTick() {
         let providerId = "";
         if (C.brevoApiKey) providerId = await brevoSend(m, att);
         else {
-          const info = await transport.sendMail({ from: { name: m.sender || "ImmoPilot", address: C.mailFrom }, to: m.recipient, bcc: m.bcc || undefined, replyTo: m.replyto || undefined,
+          const info = await transport.sendMail({ from: { name: m.sender || "DarPilot", address: C.mailFrom }, to: m.recipient, bcc: m.bcc || undefined, replyTo: m.replyto || undefined,
             subject: m.subject, text: m.body, html: m.html || undefined, headers: m.ref ? { "X-Mailin-custom": String(m.ref).slice(0, 250) } : undefined,
             attachments: att.map(function (a) { return { filename: a.name, contentType: a.type, content: Buffer.from(a.base64, "base64") }; }) });
           providerId = (info && info.messageId) || "";

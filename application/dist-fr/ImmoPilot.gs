@@ -1,5 +1,5 @@
 /**
- * ImmoPilot 2.6.0 (édition FR) — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
+ * ImmoPilot 2.7.0 (édition FR) — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
  * Contient les 42 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, CommissionService.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SignatureService.gs, SignupService.gs, StripeService.gs, SubscriptionService.gs, SumUpService.gs, TemplateService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
  * À coller seul dans le projet Apps Script (aucun autre fichier .gs ne doit rester dans le projet).
  */
@@ -75,7 +75,7 @@ function ensureDatabase_(props, rootFolder) {
   const first = ss.getSheets()[0];
   if (first && ss.getSheets().length === 1 && first.getLastRow() === 0) {
     first.setName("Accueil");
-    first.getRange(1, 1, 3, 1).setValues([["'Base de données ImmoPilot " + IMMO_CONFIG.VERSION], ["'Ne modifiez, ne triez et ne supprimez aucun onglet à la main : passez par l'application."], ["'Créée le " + nowIso_()]]);
+    first.getRange(1, 1, 3, 1).setValues([["'Base de données DarPilot " + IMMO_CONFIG.VERSION], ["'Ne modifiez, ne triez et ne supprimez aucun onglet à la main : passez par l'application."], ["'Créée le " + nowIso_()]]);
   }
   props.setProperty(IMMO_CONFIG.DATABASE_PROPERTY, ss.getId());
   dbSetSpreadsheet_(ss);
@@ -93,7 +93,7 @@ function createFirstSuperAdminInternal_(owner, props) {
   const emails = raw.split(",").map(normalizeEmail_).filter(Boolean);
   assert_(emails.length, "Renseignez IMMO_ADMIN_EMAILS (propriétés du script) avec au moins une adresse.", "CONFIG");
   let platform = dbAll_("Organizations").find(function (o) { return o.type === "PLATFORM"; });
-  if (!platform) platform = dbInsert_("Organizations", { name: "ImmoPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: owner });
+  if (!platform) platform = dbInsert_("Organizations", { name: "DarPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: owner });
   return emails.map(function (email) {
     validateEmail_(email);
     let user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });
@@ -286,7 +286,7 @@ function auditList_(p, a) {
  * Assistant.gs
  * ====================================================================== */
 /**
- * RUBBAN (رُبّان, « le pilote ») — assistant d'aide intégré à ImmoPilot, disponible 24 h/24, 7 j/7.
+ * RUBBAN (رُبّان, « le pilote ») — assistant d'aide intégré à DarPilot, disponible 24 h/24, 7 j/7.
  *
  * Deux modes :
  *  - GUIDE (toujours disponible, gratuit) : recherche dans la base de connaissances ASSISTANT_KB_ ci-dessous,
@@ -308,20 +308,20 @@ var AI_LIMITS_ = { perUserHour: 30, platformDay: 1500, maxQuestion: 600, maxHist
  */
 var ASSISTANT_KB_ = [
   // ---------- Compte et connexion ----------
-  { id: "login", t: "Se connecter à ImmoPilot", r: ["*"], go: "", k: "connexion login connecter identifiant se connecter sign in دخول",
-    s: ["Ouvrez l'adresse d'ImmoPilot (site ou application).", "Saisissez votre e-mail et votre mot de passe, puis « Se connecter ».", "Après 5 essais erronés, le compte est bloqué 15 minutes : attendez puis réessayez, ou utilisez « Mot de passe oublié »."] },
+  { id: "login", t: "Se connecter à DarPilot", r: ["*"], go: "", k: "connexion login connecter identifiant se connecter sign in دخول",
+    s: ["Ouvrez l'adresse d'DarPilot (site ou application).", "Saisissez votre e-mail et votre mot de passe, puis « Se connecter ».", "Après 5 essais erronés, le compte est bloqué 15 minutes : attendez puis réessayez, ou utilisez « Mot de passe oublié »."] },
   { id: "theme", t: "Passer en mode sombre ou clair (jour / nuit)", r: ["*"], go: "", k: "thème theme sombre clair nuit jour dark light mode nocturne couleur écran الوضع الليلي داكن فاتح",
-    s: ["Cliquez sur le bouton 🌙 en haut de l'écran (à gauche du choix de langue), ou sur l'écran de connexion.", "L'application passe en mode sombre ; le bouton devient ☀️ pour revenir en mode clair.", "Votre choix est mémorisé sur cet appareil. Sans choix, ImmoPilot suit le réglage clair/sombre de votre appareil."] },
+    s: ["Cliquez sur le bouton 🌙 en haut de l'écran (à gauche du choix de langue), ou sur l'écran de connexion.", "L'application passe en mode sombre ; le bouton devient ☀️ pour revenir en mode clair.", "Votre choix est mémorisé sur cet appareil. Sans choix, DarPilot suit le réglage clair/sombre de votre appareil."] },
   { id: "activate", t: "Activer mon compte (lien reçu par e-mail)", r: ["*"], go: "", k: "activation activer invitation lien email premier mot de passe accepter invitation تفعيل",
-    s: ["Ouvrez l'e-mail « Invitation à rejoindre ImmoPilot » ou « Activez votre compte ImmoPilot ».", "Cliquez sur le bouton « Ouvrir ImmoPilot » (lien personnel, à usage unique).", "Choisissez votre mot de passe (10 caractères minimum, avec lettres et chiffres) puis validez.", "Le lien d'invitation est valable 7 jours, le lien d'activation 72 h. Expiré ? Demandez à votre administrateur de le renvoyer."] },
+    s: ["Ouvrez l'e-mail « Invitation à rejoindre DarPilot » ou « Activez votre compte DarPilot ».", "Cliquez sur le bouton « Ouvrir DarPilot » (lien personnel, à usage unique).", "Choisissez votre mot de passe (10 caractères minimum, avec lettres et chiffres) puis validez.", "Le lien d'invitation est valable 7 jours, le lien d'activation 72 h. Expiré ? Demandez à votre administrateur de le renvoyer."] },
   { id: "forgot", t: "Mot de passe oublié", r: ["*"], go: "", k: "oublié oublie reset réinitialiser mot de passe mdp password forgot نسيت كلمة السر",
     s: ["Sur l'écran de connexion, cliquez sur « Mot de passe oublié ».", "Saisissez votre e-mail : vous recevez un lien valable 1 heure.", "Ouvrez le lien et choisissez un nouveau mot de passe. Vos autres sessions sont déconnectées."] },
   { id: "password", t: "Changer mon mot de passe ou ma langue", r: ["*"], go: "settings", k: "changer mot de passe profil langue nom téléphone préférences notifications email arabe anglais espagnol italien néerlandais hollandais español italiano nederlands",
     s: ["Ouvrez « Paramètres » › « Mon profil ».", "Modifiez votre nom, téléphone, langue (FR, EN, ع) ou vos préférences de notifications.", "« Changer le mot de passe » demande l'ancien mot de passe. « Déconnecter mes autres appareils » ferme les sessions ouvertes ailleurs."] },
   { id: "delete-account", t: "Supprimer mon compte", r: ["*"], go: "settings", k: "supprimer compte suppression rgpd données personnelles delete account حذف الحساب",
-    s: ["Ouvrez « Paramètres » › « Mon profil » › « Supprimer mon compte ».", "Indiquez le motif : la demande est transmise à l'administrateur ImmoPilot.", "Votre identité est effacée ; les données comptables obligatoires sont conservées sans votre nom."] },
-  { id: "install-phone", t: "Installer ImmoPilot sur mon téléphone", r: ["*"], go: "", k: "téléphone mobile android iphone application installer écran d'accueil app store play store",
-    s: ["Android : ouvrez le site ImmoPilot dans Chrome, menu ⋮ › « Installer l'application » (ou installez-la depuis Google Play quand elle y est publiée).", "iPhone : ouvrez le site dans Safari, bouton Partager › « Sur l'écran d'accueil ».", "Les données sont les mêmes sur le web, Android et iPhone, en temps réel."] },
+    s: ["Ouvrez « Paramètres » › « Mon profil » › « Supprimer mon compte ».", "Indiquez le motif : la demande est transmise à l'administrateur DarPilot.", "Votre identité est effacée ; les données comptables obligatoires sont conservées sans votre nom."] },
+  { id: "install-phone", t: "Installer DarPilot sur mon téléphone", r: ["*"], go: "", k: "téléphone mobile android iphone application installer écran d'accueil app store play store",
+    s: ["Android : ouvrez le site DarPilot dans Chrome, menu ⋮ › « Installer l'application » (ou installez-la depuis Google Play quand elle y est publiée).", "iPhone : ouvrez le site dans Safari, bouton Partager › « Sur l'écran d'accueil ».", "Les données sont les mêmes sur le web, Android et iPhone, en temps réel."] },
   { id: "notifications", t: "Notifications et e-mails", r: ["*"], go: "notifications", k: "notification cloche alerte email rappel message whatsapp",
     s: ["La cloche en haut à droite affiche les notifications non lues ; « Notifications » les liste toutes.", "Réglez les e-mails dans « Paramètres » › « Mon profil » › « Modifier mes préférences ».", "Les boutons WhatsApp ouvrent une conversation pré-remplie : l'envoi reste manuel."] },
   // ---------- Biens ----------
@@ -340,7 +340,7 @@ var ASSISTANT_KB_ = [
     s: ["Ouvrez le bien › onglet « Agences et équipes ».", "« Inviter une personne » : e-mail, rôle (gardien, ménage, artisan, locataire) ; l'invitation est liée au bien.", "Si la personne a déjà un compte avec ce rôle : « Affecter une personne ». Un gardien peut aussi être limité à une seule réservation."] },
   // ---------- Réservations ----------
   { id: "resv-create", t: "Créer une réservation", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reservations", k: "réservation resa booking créer nouvelle séjour voyageur airbnb booking.com dates حجز",
-    s: ["Ouvrez « Réservations » › « + Nouvelle réservation » (ou cliquez sur une date du « Calendrier »).", "Choisissez le bien, les dates d'arrivée et de départ, le voyageur et le nombre de personnes.", "Prix : laissez vide pour nuits × prix du bien, ou saisissez votre prix (tarif libre pour l'agence).", "ImmoPilot refuse automatiquement les chevauchements, y compris entre agences, en respectant le temps de ménage entre deux séjours."] },
+    s: ["Ouvrez « Réservations » › « + Nouvelle réservation » (ou cliquez sur une date du « Calendrier »).", "Choisissez le bien, les dates d'arrivée et de départ, le voyageur et le nombre de personnes.", "Prix : laissez vide pour nuits × prix du bien, ou saisissez votre prix (tarif libre pour l'agence).", "DarPilot refuse automatiquement les chevauchements, y compris entre agences, en respectant le temps de ménage entre deux séjours."] },
   { id: "resv-pay", t: "Enregistrer un paiement ou un acompte de réservation", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reservations", k: "paiement acompte solde caution encaisser payé impayé règlement virement espèces",
     s: ["Ouvrez la réservation › « Enregistrer un paiement » : montant, date, mode (virement, espèces, carte, plateforme…) et référence.", "Le statut passe à « Partiel » ou « Payé » automatiquement.", "Aucun paiement en ligne n'est effectué par l'application : enregistrez les règlements réellement reçus."] },
   { id: "resv-cancel", t: "Annuler une réservation ou déclarer un no-show", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reservations", k: "annuler annulation no-show absent pas venu jamais arrivé client venu remboursement pénalité motif",
@@ -354,7 +354,7 @@ var ASSISTANT_KB_ = [
     s: ["Ouvrez « Arrivées et départs » : les arrivées et départs du jour.", "« Effectuer le check-in » : cochez la liste, relevez les compteurs, ajoutez photos et signature, signalez une anomalie si besoin.", "« Effectuer le check-out » au départ : la mission de ménage est créée automatiquement.", "Les retards sont enregistrés et alimentent l'analyse « Retards et non-conformités »."] },
   // ---------- Ménage ----------
   { id: "cleaning-create", t: "Créer et attribuer une mission de ménage", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "cleaning", k: "ménage menage nettoyage mission créer attribuer entreprise de ménage femme de ménage cleaning تنظيف",
-    s: ["Après chaque check-out, une mission est créée automatiquement ; vous pouvez aussi la créer dans « Ménage » › « Mission ».", "« Attribuer » : choisissez d'abord le type de prestation « Ménage », puis l'entreprise dans la liste de l'annuaire ImmoPilot.", "Indiquez le tarif convenu : il deviendra une dépense du propriétaire à la validation.", "L'entreprise a 2 heures pour accepter ; sinon vous êtes alerté et pouvez réattribuer."] },
+    s: ["Après chaque check-out, une mission est créée automatiquement ; vous pouvez aussi la créer dans « Ménage » › « Mission ».", "« Attribuer » : choisissez d'abord le type de prestation « Ménage », puis l'entreprise dans la liste de l'annuaire DarPilot.", "Indiquez le tarif convenu : il deviendra une dépense du propriétaire à la validation.", "L'entreprise a 2 heures pour accepter ; sinon vous êtes alerté et pouvez réattribuer."] },
   { id: "cleaning-do", t: "Réaliser une mission de ménage (entreprise de ménage)", r: ["CLEANER"], go: "cleaning", k: "accepter mission démarrer terminer photos avant après pièce checklist anomalie",
     s: ["Ouvrez « Ménage » : « Accepter » ou « Refuser » la mission dans le délai affiché.", "Sur place : « Démarrer », puis pour chaque pièce cochez les tâches et ajoutez les photos AVANT et APRÈS.", "« Signaler » une anomalie (objet manquant, casse, saleté) ; « Terminer la mission » à la fin."] },
   { id: "cleaning-validate", t: "Valider un ménage, rapport et ordre de mission PDF", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "CLEANER", "SUPER"], go: "cleaning", k: "valider ménage payer paie coût tarif prix facture ménage qui paie note qualité rapport de ménage pdf ordre de mission photos avant après reprendre",
@@ -369,7 +369,7 @@ var ASSISTANT_KB_ = [
   { id: "invoice", t: "Transmettre, approuver et payer une facture d'artisan", r: ["OWNER", "AGENCY_ADMIN", "ARTISAN", "SUPER"], go: "invoices", k: "facture transmettre approuver payer commission net prestataire facture pdf فاتورة",
     s: ["L'artisan : intervention terminée › « Transmettre la facture » (numéro, montants, justificatif PDF).", "Le gestionnaire : « Factures » › la facture › « Approuver » : la commission est calculée une seule fois et figée.", "« Enregistrer un paiement » pour le versement au prestataire. « Facture PDF » produit la facture au nom du prestataire."] },
   { id: "providers", t: "Choisir un prestataire (ménage, plombier, électricien…)", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "contractors", k: "prestataire artisan plombier électricien climatisation peintre serrurier jardinier piscine annuaire liste",
-    s: ["Les prestataires sont intégrés par l'équipe ImmoPilot dans un annuaire vérifié.", "Lors d'une attribution, choisissez d'abord le type de prestation, puis le prestataire dans la liste.", "« Prestataires » affiche leurs fiches et leurs statistiques, calculées uniquement sur vos biens."] },
+    s: ["Les prestataires sont intégrés par l'équipe DarPilot dans un annuaire vérifié.", "Lors d'une attribution, choisissez d'abord le type de prestation, puis le prestataire dans la liste.", "« Prestataires » affiche leurs fiches et leurs statistiques, calculées uniquement sur vos biens."] },
   { id: "providers-admin", t: "Ajouter un prestataire à l'annuaire (super administrateur)", r: ["SUPER"], go: "contractors", k: "ajouter prestataire annuaire intégrer artisan entreprise ménage super admin",
     s: ["Ouvrez « Prestataires » › « + Prestataire » : nom, e-mail, téléphone, types de prestation, zones, mentions légales et coordonnées de paiement.", "Le compte du prestataire est invité automatiquement (rôle ménage et/ou artisan).", "Les propriétaires et agences le choisissent ensuite dans la liste selon le type de prestation."] },
   // ---------- Location longue durée ----------
@@ -416,8 +416,8 @@ var ASSISTANT_KB_ = [
     s: ["Ouvrez « Abonnements » : forfait, statut, échéance, utilisation et historique des règlements.", "« Contrat et historique (PDF) » télécharge votre contrat.", "Les agences que vous avez créées apparaissent en « Option agences » (prix par agence) : elles n'ont pas d'abonnement séparé.", "« Demander un changement de forfait » ou « Résilier en fin de période » ; vos données restent conservées."] },
   { id: "settings-org", t: "Paramètres de l'organisation (horaires, annulation, commission…)", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "settings", k: "paramètres horaires arrivée départ battement ménage politique d'annulation commission tva modèles",
     s: ["Ouvrez « Paramètres » › « Paramètres de l'organisation ».", "Réglez : heures d'arrivée/départ, temps de ménage entre séjours, politique d'annulation, commission, TVA, délais d'alerte, modèles de documents."] },
-  { id: "support-access", t: "Accès d'assistance pour l'équipe ImmoPilot", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "settings", k: "assistance support aide équipe immopilot accès autoriser",
-    s: ["L'équipe ImmoPilot n'accède jamais à vos données sans votre accord.", "Une demande d'accès apparaît dans « Paramètres » › « Accès d'assistance » : « Accorder » (1 à 24 h, lecture seule, journalisé) ou refuser."] },
+  { id: "support-access", t: "Accès d'assistance pour l'équipe DarPilot", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "settings", k: "assistance support aide équipe immopilot accès autoriser",
+    s: ["L'équipe DarPilot n'accède jamais à vos données sans votre accord.", "Une demande d'accès apparaît dans « Paramètres » › « Accès d'assistance » : « Accorder » (1 à 24 h, lecture seule, journalisé) ou refuser."] },
   { id: "audit", t: "Journal d'audit (qui a fait quoi)", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "audit", k: "journal audit historique traçabilité qui a modifié sécurité",
     s: ["« Journal d'audit » liste les actions sensibles : connexions, paiements, annulations, droits, documents…"] },
   // ---------- Super administrateur ----------
@@ -434,7 +434,7 @@ var ASSISTANT_KB_ = [
   { id: "admin-diag", t: "Diagnostic, erreurs, sauvegardes (super administrateur)", r: ["SUPER"], go: "admin", k: "diagnostic erreur technique err- sauvegarde restauration tâches planifiées santé",
     s: ["« Administration globale » : onglets « Diagnostic », « Erreurs techniques » (références ERR-…), « Tâches planifiées » et « Sauvegardes ».", "« Créer une sauvegarde maintenant » copie la base dans le dossier privé « Sauvegardes »."] },
   { id: "error", t: "J'ai un message d'erreur", r: ["*"], go: "", k: "erreur bug ne marche pas bloqué page blanche err- problème accès refusé",
-    s: ["Notez la référence affichée (ERR-…) et l'heure.", "« Accès refusé » : votre rôle ou les droits accordés sur ce bien ne permettent pas l'action ; demandez au propriétaire ou à votre administrateur.", "« Abonnement suspendu » : le compte est en lecture seule jusqu'au règlement.", "Sinon, transmettez la référence à votre administrateur ImmoPilot."] }
+    s: ["Notez la référence affichée (ERR-…) et l'heure.", "« Accès refusé » : votre rôle ou les droits accordés sur ce bien ne permettent pas l'action ; demandez au propriétaire ou à votre administrateur.", "« Abonnement suspendu » : le compte est en lecture seule jusqu'au règlement.", "Sinon, transmettez la référence à votre administrateur DarPilot."] }
 ];
 
 /** Rôles de l'utilisateur sous forme de libellés (pour filtrer les articles). */
@@ -458,14 +458,14 @@ function assistantKb_(p) { return { name: ASSISTANT_NAME_, articles: ASSISTANT_K
 function assistantSystemPrompt_(p, lang, page) {
   const kb = ASSISTANT_KB_.map(function (a) { return "## " + a.t + " [page: " + (a.go || "connexion") + " ; rôles: " + a.r.join(",") + "]\n" + a.s.map(function (x, i) { return (i + 1) + ". " + x; }).join("\n"); }).join("\n\n");
   const L = { fr: "français", en: "English", ar: "العربية", es: "español", it: "italiano", nl: "Nederlands" }[lang] || "français";
-  return "Tu es " + ASSISTANT_NAME_ + " (رُبّان, « le pilote »), l'assistant d'aide intégré au logiciel de gestion immobilière ImmoPilot (" + edition_().countryName + ", devise " + cur_() + " : propriétaires, agences, gardiens, ménage, artisans, locataires).\n" +
+  return "Tu es " + ASSISTANT_NAME_ + " (رُبّان, « le pilote »), l'assistant d'aide intégré au logiciel de gestion immobilière DarPilot (" + edition_().countryName + ", devise " + cur_() + " : propriétaires, agences, gardiens, ménage, artisans, locataires).\n" +
     "Règles :\n- Réponds en " + L + ", de façon courte et concrète : étapes numérotées avec les noms exacts des menus et boutons.\n" +
-    "- Appuie-toi UNIQUEMENT sur la documentation ci-dessous. Si une fonction n'y figure pas, dis franchement qu'ImmoPilot ne la propose pas ou que tu n'es pas sûr, et propose de contacter l'administrateur ImmoPilot.\n" +
+    "- Appuie-toi UNIQUEMENT sur la documentation ci-dessous. Si une fonction n'y figure pas, dis franchement qu'DarPilot ne la propose pas ou que tu n'es pas sûr, et propose de contacter l'administrateur DarPilot.\n" +
     "- Tu n'as accès à aucune donnée du compte (biens, réservations, montants) : n'invente jamais de chiffres ni de noms.\n" +
     "- Ne demande jamais de mot de passe, numéro de pièce d'identité ou coordonnées bancaires.\n" +
     "- Pour les questions juridiques, fiscales ou comptables, donne des repères généraux et recommande un professionnel.\n" +
-    "- Hors sujet (sans lien avec ImmoPilot ou la gestion locative) : réponds poliment que tu es dédié à ImmoPilot.\n" +
-    "Contexte : rôles de l'utilisateur = " + assistantRoles_(p).join(", ") + " ; page affichée = " + (page || "inconnue") + ".\n\n# Documentation ImmoPilot\n" + kb;
+    "- Hors sujet (sans lien avec DarPilot ou la gestion locative) : réponds poliment que tu es dédié à DarPilot.\n" +
+    "Contexte : rôles de l'utilisateur = " + assistantRoles_(p).join(", ") + " ; page affichée = " + (page || "inconnue") + ".\n\n# Documentation DarPilot\n" + kb;
 }
 
 /** Appel du service d'IA (serveur uniquement). Retourne le texte de la réponse ou lève une erreur. */
@@ -521,7 +521,7 @@ function testerAssistantIA() {
   assertEditor_();
   const cfg = aiConfig_();
   if (!cfg) return { ok: false, mode: "guide", message: "Mode IA non configuré : renseignez IMMO_AI_PROVIDER (anthropic ou gemini) et IMMO_AI_API_KEY dans les propriétés du script. Le mode Guide fonctionne sans configuration." };
-  try { const t = aiCall_(cfg, "Réponds en une phrase.", [{ role: "user", content: "Dis bonjour aux utilisateurs d'ImmoPilot." }]); return { ok: true, provider: cfg.provider, model: cfg.model, sample: t.slice(0, 200) }; }
+  try { const t = aiCall_(cfg, "Réponds en une phrase.", [{ role: "user", content: "Dis bonjour aux utilisateurs d'DarPilot." }]); return { ok: true, provider: cfg.provider, model: cfg.model, sample: t.slice(0, 200) }; }
   catch (e) { return { ok: false, provider: cfg.provider, model: cfg.model, error: e.message }; }
 }
 
@@ -576,7 +576,7 @@ function diff_(before, after, fields) {
  *
  * Pourquoi pas l'identité Google seule ? Avec un déploiement « Exécuter en tant que : moi » et « Accès : tout le monde »,
  * Session.getActiveUser() est VIDE pour les comptes extérieurs au domaine du propriétaire du script. Elle ne peut donc
- * pas servir d'identité pour un SaaS ouvert. ImmoPilot utilise des comptes applicatifs :
+ * pas servir d'identité pour un SaaS ouvert. DarPilot utilise des comptes applicatifs :
  *  - mot de passe haché PBKDF2-HMAC-SHA256 avec sel aléatoire (jamais stocké en clair) ;
  *  - jeton de session aléatoire de 256 bits, seul son SHA-256 est stocké (feuille Sessions), expiration configurable ;
  *  - l'identité provient UNIQUEMENT du jeton vérifié côté serveur, jamais d'un e-mail transmis par le navigateur ;
@@ -764,9 +764,9 @@ function sendPasswordLink_(user, purpose) {
   const hours = purpose === "ACTIVATION" ? 72 : 1;
   dbInsert_("PasswordResets", { userId: user.userId, tokenHash: sha256Hex_(token), createdAt: nowIso_(), expiresAt: new Date(Date.now() + hours * 3600000).toISOString(), usedAt: "", purpose: purpose });
   const url = appUrl_() + "?action=reset&token=" + token;
-  const subject = purpose === "ACTIVATION" ? "Activez votre compte ImmoPilot" : "Réinitialisation de votre mot de passe ImmoPilot";
+  const subject = purpose === "ACTIVATION" ? "Activez votre compte DarPilot" : "Réinitialisation de votre mot de passe DarPilot";
   const body = "Bonjour " + (user.displayName || "") + ",\n\n" + (purpose === "ACTIVATION" ? "Définissez votre mot de passe pour activer votre compte" : "Une réinitialisation de mot de passe a été demandée") +
-    " (lien valable " + hours + " h, utilisable une seule fois) :\n" + url + "\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\nImmoPilot";
+    " (lien valable " + hours + " h, utilisable une seule fois) :\n" + url + "\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\nDarPilot";
   sendMailSafe_(user.email, subject, body, "auth:" + purpose + ":" + user.userId + ":" + Date.now());
   auditAs_("", user.userId, "PASSWORD_LINK_" + purpose, "User", user.userId, "", {});
   return url;
@@ -1526,7 +1526,7 @@ function installErrorPage_(r) {
   const list = function (items, ext) { return "<ul>" + items.map(function (n) { return "<li><code>" + esc(n) + ext + "</code></li>"; }).join("") + "</ul>"; };
   let html = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;color:#1d2b3a;line-height:1.5}" +
     "h1{font-size:20px;color:#1b3554}code{background:#eef2f7;padding:1px 5px;border-radius:4px}.box{border:1px solid #e3b341;background:#fff8e6;padding:12px 16px;border-radius:8px}</style></head><body>" +
-    "<h1>ImmoPilot : installation incomplète</h1><div class='box'>L'application ne peut pas démarrer car des fichiers sont absents ou mal nommés dans le projet Apps Script. Aucune donnée n'est en cause.</div>";
+    "<h1>DarPilot : installation incomplète</h1><div class='box'>L'application ne peut pas démarrer car des fichiers sont absents ou mal nommés dans le projet Apps Script. Aucune donnée n'est en cause.</div>";
   if (r.indexOutdated) html += "<h2>Le fichier Index.html n'est pas la version complète</h2><p>Il contient l'ancienne version courte, qui appelle 7 autres fichiers. Dans l'éditeur, ouvrez <code>Index.html</code>, faites Ctrl+A puis Supprimer, et collez <b>tout</b> le contenu du fichier <code>2_Index_html_A_COLLER.txt</code> (environ 2 066 lignes). Ne recréez pas les autres fichiers HTML.</p>";
   else if (r.missingHtml.length) html += "<h2>Fichiers HTML introuvables</h2>" + list(r.missingHtml, ".html") +
     "<p>Dans l'éditeur : <b>＋ › HTML</b> (et non « Script »), tapez le nom exact <b>sans</b> « .html », en respectant les majuscules, effacez le contenu proposé et collez celui du fichier du ZIP. Si un fichier du même nom existe en <code>.gs</code>, supprimez-le.</p>";
@@ -1534,7 +1534,7 @@ function installErrorPage_(r) {
     "<p>Dans l'éditeur : <b>＋ › Script</b>, nom exact sans « .gs », collez le contenu complet du fichier du ZIP.</p>";
   html += "<h2>Ensuite</h2><ol><li>Enregistrez (Ctrl+S).</li><li>Déployer › Gérer les déploiements › ✏️ › Version : <b>Nouvelle version</b> › Déployer.</li><li>Rechargez cette page.</li></ol>" +
     "<p>Astuce : dans l'éditeur, la fonction <code>verifierInstallation</code> affiche la même liste dans le journal d'exécution.</p></body></html>";
-  return HtmlService.createHtmlOutput(html).setTitle("ImmoPilot — installation incomplète");
+  return HtmlService.createHtmlOutput(html).setTitle("DarPilot — installation incomplète");
 }
 
 /**
@@ -1722,16 +1722,16 @@ function sumupPayLink_(ref, localAmount, description) {
 function commissionSendArtisanLink_(f, reminder) {
   const art = dbGet_("Artisans", f.artisanId) || {}, inv = dbGet_("Invoices", f.invoiceId) || {};
   let link = null, err = "";
-  try { link = sumupPayLink_("COM-" + String(f.feeId).slice(-20) + "-" + ((Number(f.reminders) || 0) + 1), f.total, "Commission ImmoPilot - facture " + (inv.invoiceNumber || "")); }
+  try { link = sumupPayLink_("COM-" + String(f.feeId).slice(-20) + "-" + ((Number(f.reminders) || 0) + 1), f.total, "Commission DarPilot - facture " + (inv.invoiceNumber || "")); }
   catch (e) { err = e.message; }
   dbUpdate_("PlatformFees", f.feeId, link ? { status: "LINK_SENT", checkoutId: link.id, payUrl: link.url, linkSentAt: nowIso_(), reminders: reminder ? (Number(f.reminders) || 0) + 1 : Number(f.reminders) || 0, note: "", updatedAt: nowIso_() }
     : { note: err.slice(0, 300), updatedAt: nowIso_() });
   if (!art.email) return { ok: !!link };
   const body = "Bonjour,\n\n" + (reminder ? "Rappel : " : "") + "votre client a réglé la facture n° " + (inv.invoiceNumber || "") + " (" + round2_(num_(inv.amountTTC)) + " " + f.currency + " TTC) en dehors de la plateforme." +
-    "\n\nCommission ImmoPilot de mise en relation (" + f.rate + " % du HT de " + f.baseHT + " " + f.currency + ") : " + f.amount + " " + f.currency + " HT + TVA " + f.vatAmount + " = " + f.total + " " + f.currency + "." +
+    "\n\nCommission DarPilot de mise en relation (" + f.rate + " % du HT de " + f.baseHT + " " + f.currency + ") : " + f.amount + " " + f.currency + " HT + TVA " + f.vatAmount + " = " + f.total + " " + f.currency + "." +
     (link ? "\n\nRéglez-la en ligne, par carte (paiement sécurisé SumUp) :\n" + link.url : "\n\nLe lien de paiement vous sera envoyé très prochainement.") +
-    "\n\nMerci de la régler sous " + COMMISSION_REMINDER_DAYS_ + " jours. Au-delà de trois rappels sans règlement, votre référencement peut être suspendu (conditions de référencement).\n\nImmoPilot";
-  sendMailSafe_(art.email, (reminder ? "Rappel — " : "") + "Commission ImmoPilot à régler : " + f.total + " " + f.currency, body, "commission:" + f.feeId + ":" + ((Number(f.reminders) || 0) + (reminder ? 1 : 0)));
+    "\n\nMerci de la régler sous " + COMMISSION_REMINDER_DAYS_ + " jours. Au-delà de trois rappels sans règlement, votre référencement peut être suspendu (conditions de référencement).\n\nDarPilot";
+  sendMailSafe_(art.email, (reminder ? "Rappel — " : "") + "Commission DarPilot à régler : " + f.total + " " + f.currency, body, "commission:" + f.feeId + ":" + ((Number(f.reminders) || 0) + (reminder ? 1 : 0)));
   if (art.userId) notify_({ eventKey: "commission-due:" + f.feeId + ":" + (Number(f.reminders) || 0), userIds: [art.userId], type: "COMMISSION_DUE", organizationId: "", email: false,
     title: "Commission à régler : " + f.total + " " + f.currency, body: "Facture " + (inv.invoiceNumber || "") + (link ? " — lien de paiement envoyé par e-mail." : ""), link: "#referencing" });
   return { ok: !!link, error: err };
@@ -1815,7 +1815,7 @@ function commissionStatementHtml_(s) {
     "<h2>Missions de la période " + escapeHtml_(s.period) + "</h2>" + htmlTable_(["Réglée le", "Bien", "Mission", "Artisan", "Facture", "Base HT", "Taux", "Commission HT"], rows) +
     "<table style='width:45%;margin:12px 0 0 auto'><tr><th>Total HT</th><td class='right'>" + s.totalHT + " " + s.currency + "</td></tr><tr><th>TVA</th><td class='right'>" + s.vatAmount + " " + s.currency + "</td></tr>" +
     "<tr><th>Total TTC</th><td class='right'><b>" + s.total + " " + s.currency + "</b></td></tr></table>" +
-    "<div class='box'>Commission de mise en relation due par le commanditaire sur les missions réalisées par les artisans référencés sur ImmoPilot et réglées au cours de la période " +
+    "<div class='box'>Commission de mise en relation due par le commanditaire sur les missions réalisées par les artisans référencés sur DarPilot et réglées au cours de la période " +
     "(conditions générales, article « Mise en relation »). Règlement : prélèvement sur la carte enregistrée pour l'abonnement, ou lien de paiement en ligne.</div>";
   return pdfShell_("Récapitulatif mensuel des commissions", inner, { subtitle: org.name + " — " + s.period, ref: "COM-" + String(s.period).replace("-", "") + "-" + String(s.statementId).slice(-6).toUpperCase() });
 }
@@ -1831,21 +1831,21 @@ function commissionCollectStatement_(s, sendMail) {
   if (card) {
     try {
       const c = sumupConf_(), amt = sumupAmount_(s.total);
-      const co = sumupCall_("post", "/checkouts", { checkout_reference: ref, amount: amt.amount, currency: amt.currency, merchant_code: c.merchant, customer_id: card.customerId, description: ("ImmoPilot : commissions " + s.period).slice(0, 120) }).body;
+      const co = sumupCall_("post", "/checkouts", { checkout_reference: ref, amount: amt.amount, currency: amt.currency, merchant_code: c.merchant, customer_id: card.customerId, description: ("DarPilot : commissions " + s.period).slice(0, 120) }).body;
       const res = sumupCall_("put", "/checkouts/" + encodeURIComponent(co.id), { payment_type: "card", token: card.token, customer_id: card.customerId }).body;
       if (String(res.status) === "PAID") charged = true; else err = String(res.message || res.status || "refusé");
       if (charged) commissionStatementPaid_(s, "SumUp " + (((res.transactions || [])[0] || {}).transaction_code || co.id));
     } catch (e) { err = e.message; }
   }
   if (!charged) {
-    try { link = sumupPayLink_(ref + "L", s.total, "ImmoPilot : commissions " + s.period); } catch (e) { err = err || e.message; }
+    try { link = sumupPayLink_(ref + "L", s.total, "DarPilot : commissions " + s.period); } catch (e) { err = err || e.message; }
     dbUpdate_("CommissionStatements", s.statementId, { status: link ? "LINK_SENT" : "DUE", checkoutId: link ? link.id : "", payUrl: link ? link.url : "", attempts: (Number(s.attempts) || 0) + 1, lastError: String(err || "").slice(0, 300), updatedAt: nowIso_() });
   }
   if (sendMail && org.billingEmail) {
-    const body = "Bonjour,\n\nVeuillez trouver ci-joint votre récapitulatif des commissions de mise en relation ImmoPilot pour " + s.period + " : " + s.count + " mission(s), " + s.total + " " + s.currency + " TTC." +
-      (charged ? "\n\nLe montant a été prélevé sur votre carte " + card.label + "." : link ? "\n\nRéglez-le en ligne (paiement sécurisé SumUp) :\n" + link.url : "\n\nLes modalités de règlement vous seront communiquées.") + "\n\nImmoPilot";
+    const body = "Bonjour,\n\nVeuillez trouver ci-joint votre récapitulatif des commissions de mise en relation DarPilot pour " + s.period + " : " + s.count + " mission(s), " + s.total + " " + s.currency + " TTC." +
+      (charged ? "\n\nLe montant a été prélevé sur votre carte " + card.label + "." : link ? "\n\nRéglez-le en ligne (paiement sécurisé SumUp) :\n" + link.url : "\n\nLes modalités de règlement vous seront communiquées.") + "\n\nDarPilot";
     let blob = null; try { blob = commissionStatementBlob_(dbGet_("CommissionStatements", s.statementId)); } catch (e) { console.error(e.message); }
-    sendMailSafe_(org.billingEmail, "Récapitulatif des commissions ImmoPilot — " + s.period, body, "statement:" + s.statementId + ":" + (Number(s.attempts) || 0), s.organizationId, blob ? { attachments: [blob] } : {});
+    sendMailSafe_(org.billingEmail, "Récapitulatif des commissions DarPilot — " + s.period, body, "statement:" + s.statementId + ":" + (Number(s.attempts) || 0), s.organizationId, blob ? { attachments: [blob] } : {});
   }
   return { ok: charged || !!link, charged: charged, link: link ? link.url : "", error: err };
 }
@@ -1929,14 +1929,14 @@ function installPhase4Triggers() { return installTriggers(); }
  * Config.gs
  * ====================================================================== */
 /**
- * ImmoPilot — configuration centrale et schéma des données.
+ * DarPilot — configuration centrale et schéma des données.
  * Les colonnes situées AVANT le séparateur "|" sont les colonnes historiques (phases 2 à 4) :
  * elles ne doivent jamais être renommées ni réordonnées. Les colonnes après "|" sont ajoutées
  * en fin de feuille par la migration (non destructif).
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "0f09c2df4fdf";
+var IMMO_BUILD_ = "a0358b26487a";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -1973,8 +1973,8 @@ function cur_() { return edition_().currency; }
 /** Langues de l'interface : français, anglais, arabe, espagnol, italien, néerlandais. */
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
-  APP_NAME: "ImmoPilot",
-  VERSION: "2.6.0",
+  APP_NAME: "DarPilot",
+  VERSION: "2.7.0",
   SCHEMA_VERSION: 16,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
@@ -2358,7 +2358,7 @@ function ctrCreate_(p, a) {
     orgId = platformOrgId_();
     assert_(orgId, "Organisation plateforme absente : exécutez setupProject().", "CONFIG");
   } else {
-    if (getSetting_("contractors.platformOnly") !== false) forbid_("Les prestataires (ménage, artisans…) sont intégrés par l'administrateur ImmoPilot. Choisissez-les dans la liste, par type de prestation.");
+    if (getSetting_("contractors.platformOnly") !== false) forbid_("Les prestataires (ménage, artisans…) sont intégrés par l'administrateur DarPilot. Choisissez-les dans la liste, par type de prestation.");
     orgId = safeText_(a.organizationId || (p.roles.find(function (r) { return r.caps.indexOf("contractor.manage") >= 0; }) || {}).organizationId, 120);
     assertOrgCap_(p, orgId, "contractor.manage");
     assertFeature_(orgId, "contractors");
@@ -3013,7 +3013,7 @@ var DEMO_SPEC_ = {
   provider: { email: "speedfibre69@gmail.com", name: "Mohamed Zetounie",
     notes: "" }, // texte calculé par demoProviderNotes_() (devise de l'édition)
   pricingNote: "Prix demandé par le propriétaire à l'agence : {EUR} € la nuit, soit {MAD} MAD (prix fixe, 1 € ≈ " + DEMO_EUR_MAD_ + " MAD).\nPrix de vente au voyageur : libre, fixé par l'agence Moad Zaira.\n" +
-    "Ménage : organisé par l'agence (prestataire choisi dans la liste ImmoPilot), facturé au propriétaire qui le règle directement.",
+    "Ménage : organisé par l'agence (prestataire choisi dans la liste DarPilot), facturé au propriétaire qui le règle directement.",
   properties: [
     { key: "duplex", name: "DÉMO – Duplex 3 suites", rentalMode: "SHORT_TERM", propertyType: "APARTMENT", bedrooms: 3, bathrooms: 3, capacity: 6, eur: 120,
       rooms: ["Séjour", "Cuisine", "Suite 1", "Suite 2", "Suite 3", "Terrasse"], agency: true,
@@ -3199,7 +3199,7 @@ function demoAccount_(email, name, role, orgId, report) {
 }
 
 function demoSummaryText_(r) {
-  const L = ["=== Environnement de démonstration ImmoPilot ==="];
+  const L = ["=== Environnement de démonstration DarPilot ==="];
   r.organizations.forEach(function (o) { L.push("Organisation " + (o.created ? "créée" : "existante") + " : " + o.name + " (" + o.type + ")"); });
   r.accounts.filter(function (a) { return a.role !== "ARTISAN"; }).forEach(function (a) { L.push("Compte " + a.name + " <" + a.email + "> — " + a.role + (a.role === "CLEANER" ? " + ARTISAN" : "") + " — " + (a.activation || "")); });
   r.properties.forEach(function (p) { L.push("Bien " + (p.created ? "créé" : "existant") + " : " + p.name + " — " + p.rentalMode + (p.nightlyPrice ? " — " + p.nightlyPrice + " " + p.currency + "/nuit" : "")); });
@@ -3974,7 +3974,7 @@ function assertTemplateAllowed_(templateId) {
   const parents = file.getParents();
   let inModeles = false;
   while (parents.hasNext()) { if (parents.next().getId() === modeles) { inModeles = true; break; } }
-  assert_(inModeles, "Le modèle doit être placé dans le dossier « Modeles » du Drive privé d'ImmoPilot.");
+  assert_(inModeles, "Le modèle doit être placé dans le dossier « Modeles » du Drive privé d'DarPilot.");
   return file;
 }
 function docFromTemplate_(templateId, map, folder, name) {
@@ -3992,11 +3992,11 @@ function storeGeneratedPdf_(p, pdfBlob, ctx, ownerType, ownerId, category) {
   const d = storeFile_(ctx, ownerType, ownerId, category, { mimeType: "application/pdf", fileName: pdfBlob.getName(), base64: Utilities.base64Encode(bytes) }, p.email);
   return { documentId: d.documentId, fileName: d.fileName, mimeType: "application/pdf", base64: Utilities.base64Encode(bytes) };
 }
-/** Logo ImmoPilot (PNG 96 × 96) intégré aux documents PDF. */
-var PDF_LOGO_PNG_B64_ = "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAABGUElEQVR42o29d4AV5fU/fJ4yM7fX7btso/feQUFFUOy9JzaMvUS/xhiNMTHFbmJvCWqiYkHFjiIgHaR32GVZtre7t987M89z3j/m3rt3keT3wop768yc55zznPI5nyGICP/ljxBgSkQERCQAhBBCgAAQAgAABEjemwkAWi+h9RJmHwAAAAJaD5AAIGLmBZSoqmzN2l3X3PGavWzYx89cjIA+r0NVlO7e5KAqnxCSZL+HZP6D3HcCAUDrPDDzSu4M8t6R97HjXrI+QeC//6EnfFY3MZaUibQ0TbSkQymhFChBQgAIEIIEMsKyfgCAEMSc4PpOlEBOTgiWdHJnSwgxDDF92siH7zlXhhpue/QLxtSSQlddY6QrlD5+8Y67EEtgBCHvWvu/7+dXfoKXEPF/aMnxApISYklMpFAiUAKUAiWEUkIsoRAgBChBSoAQzFw7Ilh/gZCfr3OfePo/kdUpiSQa1y+68NSLTx/93Y7oordaDtd3HG3t/WpNA2TOHI/7HnKCr87XZ/zfR7ek8rMnTiwmkv+sITCeRABgDCghlKAlIAJo6SEhlhQs88mYSkZZc08T/NlVZI6BmDkxzEgVAMA0JWG0sbHjxt8tOdAqhN198pDAM/83t7LMYyIhedd+QlPIvPjzg1qH+R/mg5hdTMyKAhCQEpr/oT4NMkyIJiQAMAoUICcdmlUcQjJuKHfUvrMn2QsgJ1LgjGllhII5fwQgJdrtvLu799xrnpSSvv3Y2Y9dWLFj575LH1qx/2iUEiLxxCqQOZE853bCN/1P6RAAkl0oAlkzkLKfJmUEJCREk5IQwmjOsoACyZoVIYDEOg/sf5qQJ7MT6M7PNZpg9qGUyDltaek889I/pdXAcw9f2N3V4y8vefrXp7Ydqfvwyx2MEZkngNyXEGI9yLjB/JU5oTD+l+yyHhQz9kAQUci+j3Drf7GkBERGCSXAKFAKhBBKMh6e9PvGE+r5z5/PWB8iZrU3p1CZ65OIlJKDde1VleW33nhWMOAKR5KmiF158ckvqMqYUTVCILW+GhHznExWUkgswwZy4jNDyDOi/7VVobUVZU4ZAFEIYIxkfFDawFhSKoxYomGW3+nbm/6nPfdTmrzzQMxJBwDyBNT3OyCkDRmKJBOJJALRNPWjZZso5zdePiOaML0uzaZSAgQIZv89/hQIEAQk5ITSwf7rdkIZoSV9CQQRAPtFJYwTSggHgLSBnALNSMdSnP7SyZNT/wU57iSyy5knHeyzS2tDIIRYkQMAIKWEM6qqmpSywO/qCYXDCelza4YhubVKlpcjJ9riATKyy1gh6beQ+bp1ArXquxbZt3tg1hkRICgkUAbcNBElMEYY+Zl0/osxwfERYp4iEcx5GcwcLLcyfbZASWZ9OSNet83lkGlDhrpCX6+po4GqxqbustKAKbDfPtC3MH1BFcGMDmXdXy7qIj8LEn/uIrKqLXMOOt97EokgKVBTZs2KQkY6cNyW9P/H/WXfjZY958sl30liTh0pIKWEUaJySgnRVL6vrrX5SEO8q239rnbOCCD2nY8VK5P/ElNZMsr5JSQnXsr8QCP7SFqCQIJ5eiURJYJEFBKplMAosEw0iJkVI//vjSDjbfN3l+yOkycd68CZLKUv7EZARCklorTs1JSwZ//RqrKCAWWe/XXtVkgipZQoESTJSOd4ZcZcsJ4fIZMTBYqYv2dhJvrIRYeIiCARZMZFEmtTExI4IUgJIRRozt77JSuYrx2WBVkHo5RKKayAO+t2citEcp4nF1VmYg6UlBJF6RfBqxw6e40hA8sb2kKiKbzovFGEgF1j+QpgCgmIVhBHiOWCyXFXf9xCWhs2o5SS41Y44wQkkmysS/r2R5JbdCIROM36nbyYoJ8b/NlmjoiEEIjGTbeTUwAANM2sFPoFWSSTmwJKiZQSNSuX3nDy0LHe/Q3h+qZwY2tvd8Q4erThhoVDhg2tAc3TGzfOuWtZQUFg0ADvkEr3iCp3bZnTZtOyKbREtJYT81Ytz6IQhERTosqpwikA6IapcJb135buEJn1BhJJ7mty0sasHnBr/enPLRvJCX0QIkiUQtIPP9u0dG3vrdfPmz1CcWgEANM6EpLZerPBLhFSKgpTOABAXWPPt+uO/LDp6I59rS3tPbFoGIwUSB3AgGRMLKgBqTOZ7umJrvxueTRlB4dbcweChcUDK/1TRxTMGRuYOsRXEHQBgEREmfFKOV1HQClBIqoK4wCRmPHF2qMff7Hlb78+rbaqQFrvR4KIEhGRSMwGaJjvLPppIqd5zthKtY7P/Y7fLAkgRqKpmurCDY+8vnxV4/Q5Ey+eV3Hu7OIyv7Vc1l4OKJEyoqnMNM3PVh5+67NdqzYe6mlrBTMBXHKGDEEggjBBN8BMgRSmAEV1EErdihHt7lZBwQTp6OBtB30bNpe/VVozuLbk1NHecyb7Jg4rAMYlIiLSrEdEBM4pAOyr71ny7YEPvt65Z+22k+ZPKCr0m6akNLeBEESQABJzSp+JXfM1yRIVB0BLLJnkBuG/hBx9IpZAKGBxcfDCs6e9/OzbP8Tbftg07qWRgYUnV91wWkF1icMUiIiaygDlf5btfuat9Vt+2g+pXqpKrlCTUNDB1AFs3OtSgj67z8EL/U7N7jCJgwldmsbQmsKe7mQqLsAQwA3Q0jTZ1t25J9RQsXPfsI83V588rPPymYGZ40qBUlNISjKW/8PGI69+tOeLVXuiHd0gI4pX+eXFswhIKZkVGFm+2fI+GXeJfdaanwATggDA87atvCgDj6seEMgL/AigojDOYPas8W//57Nk5CdSUL6rrTi58titpwcJBQpEYXTtloYH/7F61aodoHeqDm7YuUyaUpDSYs+IgUUjhgyorCj0eFyazYaElBUHOlrb4tFIia8kmcJ/PX/P9t1Hu7p7d+09umHb4W17j6V7E2AnIOsTvfWHWga0Nk1YfahqwajwdacWD6sNAoCum5yzXfta3nt3FXhdqlsxe3HYmOEThxcZAlWFYCZ8zW5VuTrNieKGbGUQOSGZ6K5fxEyyMs3mzPllCgBgjKmM1taUTZt90oqv19Kjy4IVhc7gsO939P6i1CWEcf+TK558c5WMNGsuJa269FjK5eOzpg+ZPnFoeXkx1zRTkrRuJk0RjxmJlK4oSjyhG0aSUNBRaelOtEVRdQZmnVx8xvzpyXhsy9YDH3+1Ze/eZlAVIE2hHU3J1qFL4idvPiYum9D9ywXVmk0FgO6YdATcOmGYDkvVe/rsUUGPRgjpqyIgSMyZJB4XzJFccEkybon/10Qul0NkvwazqSYCoZTYbIrLocw/dfL3y7ea0c6eVa+kkr+4MzRhc93+vetW/vDlJuYnituejpp2N1xwwdRTTh4fKAgkdaGndc6oS2Wq4lAURikJR1MVJb7V9XV2lTtsvLO9M+ixF/gckWiysSWUSBmqqoydNO7UU6bs2X34tXeW79hxFNyudMeB5lWNYvzpr8oxm4/su35u4bOL1y35dAdxcdSjEE76a6rmTBjAOOWU5lVaSK7Ah8eZFfYzJitA4f2CQjxxSpz73myERQghmsptKh85tHzqlJqZUxb8/bVP4xvfck81XoqNkZsOaYU0neYiLa66cOL/3Xp2WXlRPJGOxdPRhKlwpnBquTxElBIZpQ6bEooaTHE47WoyEVEVWlMeSOtGKm3Gk3ookmxsCe2t0yvLSp57/NaN63c89cqXHR0x5mFNGz4xIu3mhFPeu/2T+LEWFnDKZMznto0eUcCcgRG1AUYZZUTmwrTMNm9VQvv2LSC5KmAmsgNCCEGev/UDIf23d+xX5crmENbLjDGXQwv4HHfccnHFgFIC8PQz78Z/ep8PS+CAUem9q8ZOHPDioxeNHl6zaVf7toOHXS5HZYlj/LDiSNxIpU1rhSSiYcp4ylA5jcRNl9cn0ewISykg4LUbhiql1E1RFHRVFHt7womm9tCqltCQoUP/8+rw51/57JMvtlKfu33/plg4mjRVFvQREJg2b/jljFNmDA+HworCFYUBEszvFKCVT+RlASRXW+pXJiJWNp+fcPZzzllXn1FLzBitldxRSjRNLQm6GWNuh+YrqSSai0DK2PM5ajV3377guoumvfVp/bm/3taVdICnQFG6WOee6dX0s7fvVRTNMCQiCCkJEM4o57SrKwQyFfSV7KvvSKVShUXBdNqghEhEtxC6Swt47UVBV1coXtfY2UTo3XddNmFs7SNPLQXNlYh0g62AgDTDsbGjiq+/aOrRjtiQweUKZ5yznHQyhTrrlxP6ZyuVIGiV3nMCOmE91wqlMmUKiVY8QNCKIQEJIapKvR57dYV38cdbH37sPaYS01SZ0J/43ZzC0sFzr/6kq9cBBQHO46JtlxHabfT0ls84jytMGsgZtUJiSpFRIoXZFUo7NM45jUZTPb2xyspiYQorrkFkdk1xOaTboXqcWsBrb26PrN16ZOykMa88Efj1I0sigjMRk4ZZOW1ORNF+3NZ+1VnDusNpu10BIFL2Veky5Tc8gc+lJOOlrezCKrfQE7qfjHRkRkZWxGnluDk9IoQQBL9HXb+14Vf3v8VIRFDutGlLlzzaFHJeffOnXUkNtAi0rDP3f8lD2x2UjJ486O0XbrZp3OPiLicj1jkBMEYNw+zuCREkmk2lqtLWHVcYEEIYpZxRhTNN5Q6b4nbZgj57SdA9pKpg7NCy/XXtijv4xt9vKtDSoredpLuSzVvtBWW/XdK5bX9XWZEjk/Ra6U72KnJ7s+V+LVlQIIRYvyMl2QZXruQK/fwOyX5Xbl/MiTyTiBEgiFLTaFtH5OLbFhupTtWmuCj/8M37vlvb9PRTG6GyoNirFHiDg2oGzZtaGe7q/XFz46Hm6MLbVpSXOyfVKBedNthf4O0Jm4SAovBobziWktVuL6FMSGhs6uIs6x2yDUsghFLCGVEYVRXGOVU523+kQzhtz/7hwlvvey2Sxs79myV1ssGnX/30vjVPuvx+RyqFQCGvnGp5WWvrtyo8hBIgFLIC6ktO87saCH1ZP0qJQoJAsH6ReT+50oZVvV70u4+ajxwu8KgOzt9+4a6WXvbE62unTfROLBRCVQuqBw2uLV/yed2f3g193VBzzH/a8mPOd1a13fP2kXk3fVh3qMnlYChRVZVQb4xzBiLZHeos8qstnTEhAfpXgAgAY0ThTNMUl1MLeB0lhe7RQ0oT8ZRBXY///mqWjjJF6977g2jbXa8Hbn1+r8YyBcNccCgh64EACGQ6FIQgI8By9XiaOzLS/KoyApFIpLR+UEoQEoRVkskew3q7kGjT2OvvbVr2xfqyQoUhfeTeK2qHD1770Tdv8W+eqnv2jXUPPX/gJdm468kXvl+9oS2t+m1u8IdXX1C+6y/nKdeNS+7YtOn+x5ZoCkEAu01p6whJPZVM6VFD8wWL6ptCpomU0LyQt29/4YyqCnPaFb/bVuh3jhlaGosnfEWld958jghFGKM92z9zcX3pNvzn5w0BN9VNyLuEvt5Lpg8K0FeMt7rHgLmONO2LBq2vkBlfIxAsAUnM/JsthqGUaNdoW3vkd8984XQk9aS47PyZV1w9r33Dpvkr/z5r0fljln877PsvLp1ddG/jUip6NR+VLVsHJFYt/s2Ud5+/vqwk4HPQsQPdK9fvikRTdpvCKDS3xSjXHHabWyWg64m47AolGKfZ4KtfN40Q4JQoCrPbFK/LVuh3jhlS2t4VOXnOtNlzRolIkqa6Enu+pS7Pb9862twa0zQiMiCDTOZOCSGEZPrpFBglVlWe9NW/Mn6WZiuBlsqgRBQSTEt9smLqv4wEATgjf3tlRXtDvY3i4JrSe2+/IJEy+atPjLn1hiPn/nrhgwffc880//TkOUpootadPrBl2qDY8rcWzT9t3F0PvrVk6drLL5rzwpOLBg3wcEWhFLwupam1y+Hx19ZWXDp/mM1h74qlYuGQ20mExFxElzmTbIWaUsI5s9sUj8tWFHCNqC1s64n/6vrzXR4bSobNm1jP4faQ4/G393rtRMq8eIdYe5ZlU4Qz4DRXJiR58TEBQAoIEiwjIhmbEiBlVjSyX0cUECRKp40dPtL55ofrHS5ppOXdN51ZWuIzDx4Su3cGLrrilnu+WP1Vzx8eW0kLi01hhOsOzLtyylevL6qqLFn83oqm5vYPFt83fGjFtElDLjhrTjgcc9rY3v2NDQ1dQbfa29P1/cYjcdMM+JQPvvgpEUsqnGZMm+SSQeyrRTDCObVriseplRd5SgIOVyB4yYUny3CcgW7WraQqfePLlv2Hup0OhoikzxmjZVOcAqPHYRowk4QSBCBUImY9DoqsTWVsTUKuJZLTcJTAGbzy7oZIRysIc+KYgecsnJYwpfrFR70dHbFQ7IoLhg4dgY/eOga2bkkfqv/Vnee9fnq5r7t95bqdN93xwq03nm2a4qfth7/9bovTxrZsPagq5NmXPt2wYW8iGduxr+3Db3aFu0Lhjs5n3/y+qbVXUamUfTlB3oaSiXspJZxTm03xuG0DBwRBijMXzPKX+YQBJHyA9h6MR9jrS/d5bIAAjBBGCKPEsinL6fys+UvyK/4Uszu66PNBGd2RYLVE+n3IbmPdocR7n28mPK2n4coLZ2k2VR6o4598hLUDV9x2y23zvDu+v/gqtg8vvvz3Ecfew20GU94/FJm/4P5T5ow+ZfbIY83dkZixbOWhH7fUdXSG0gImTBrr8BeAIWrK/EMq/H4V9TRMGz+stLQwkZD5+B3OsokSIIAk1mbKiMKpXVN8bntJwFlYXHjWgukYT1Fiyo6tRMV/f324tSPutLOs4iBnwFhOOti/BZgfRCKVmX0dcmV9ay/H45rhBAghUqJdhW9W7WuqbyJoFhX6zjxtgo4Ie3bZd+2s8vtt3W1LBg/7rnbwzumzP6sYWfCPl275851/3dJz2RV/1pyOW64/CwBsNvXr5dsP1zWfNme8pikaA42aHrtWW13a3dV6aH+9TZOV5UU9kWRLW4/NRrPRCtg0qnDqsOV+mN3GVJ7BEzBGNZUXF7htqjJ/3jTutgtJMdFMjbb2hq4vf9jr0gAAOQWFEU6tpvYJcDDHdf24RJRIhETDlEBo//dnI7Rs18XKiZd+txtkWur6uFGVpeWF3QLo7l1+hqU+zzOF0w+kD95z1Yzyy8/2lg307D5y671vrF+5fdzM0UEnTp0wGBH9XseFZ08aebjsjFPHvrr4u2RS/3H9ngOdeuBYM+dKWXVZR28klkpvO3Bs05Z9IwYXpVIoEdx2duDAsRfeWF1TVVJWFhxcW+j12EoKHF6vnfNcS4upKkukjaFDakeOHrxr60Gu6Zg4ItH58Te7rrtkMiXIGbIMviVX3cB8PIEQMtPYtOJSIcEUEoAEPDyaBN3IlJMySBcAq2gtJWoqCbj5gSOhH7ccoQpiEqdNGoYIqbgoP7x39yXXXthQZCbCd//h7p1dqTWfNtcd2rBh4y4mYoNHlBm6uPy6cwoLfUIIm02dMmnwlEmDAWDh6RMX/3vVvsZwsNDtcfA/3n9p1cDKF9/4YtnXP5UVBb5ZU3/t5SdTQlSFKgz+8NQnnJK6I8k1G7anBUXJXQ6luMhfW1k4oMw3sKawsNBdVOCuKPIiZecsmL5jzX5doaDFiMLWbNzX2R0tKnBLKSUio3B8q9pqQhPCFZ6fcnGFU6cNUjq+/uH2M04aEvA5EEBISKclpQQApUROSdDL4gnj+Xf3P/efjT29IabZDGaMGjoACJTqoS/N4DUH/Hqka8bU2sefXPLAXRd5Au7dK5ePrXFs39c7uLrg5kUXzp01KpU2FUZlFoGDCNVVRT9uOOQPFvfGWgNux5CBhW4XKSn0eByq3emuq2trbu0NFngZwd/88b1N2+sevOeS6gpvNJZWOE0k0l09scbGjn2H6n/arodjKa5oXpcW9NoHDyorLSm76e6rw2lj2aqDyWgkmjLOv/uT39w0d+GMCs6yLbM8iJEUknFGCPzxiQ+nTh7icTudDnXUsAre0NybNswff9x263VPn/6L86ORZHHA/fLfLne77Mm0IAABDyMAH39/5M+v/vjTT/vB7GYMRZR5B1TOmDyIgHz63zsf2F5hcvAHtW++O/Dtx/eOHFo+ZsZt3fV1199+2YtP3e5128vLfMmkTimTiBQJJVSi5Jx9sHTtu5+sJna/RmRRgdfhsEnEQTXlElGliZ5E8rPlu266alZrV/qnvR0jB5W+8s+v7Q530KcVBV2BgKO8rHDEyIEuB3c4NMPQe8Px1vbeUHd4264jsXiKch7wuQeXebfvTzKHbd3KLedsPXr6yWPuumrS/CnFnDNEkFJSAlIiV1gsnnrgj+8ebWjZe6Bpyac7H3/0otHDB7D9LYH7Hnh75766Sy6dM2xweUND0/L3Vm9p7L104ViHjbsddP2uzl89tvKxf3zVeuQgZSkUBE129vwxS1+9ob1XXfTEwRc+75YOF8RiyXD0ub9efMW5k8668q/7dx21lRZu2XyIQjoWjxcGfX6/CxGoZbEEAUg0ltz804Ejjd2GtAV9tjlTqqdMGkIp8Xhcq9bscjrdms0W7e0578xJpoktx7o+/Garz+9XVVtTS099Q+fuPUfXbq5ft7Vpzbq9G7c1NLd0h2PocmhlFaXjRleOGlk1qLawwGf/dkNDb5wQrlCbBijq6js/3NCxszHltfOaYo0pXAgJhDS1dN/7uze7epMbtjebQEcPLwbE004ezf0edVCN5/vP/lhZ7n/v0y0H9h4647JZX20MdUVMm1158Nkf3/5sq+htp3ZCPEEiRXWp/cy5w8eOqr37+WOf7RDAHOAMqkQ7a5r3kZsnjB5atOjXb6xefYgEg34vU7z2l/717VOP3VJc5KeUUgqGYRJCLEl1dUV27mvy+TzJHlOayTU7G+ofX8ZUngqH06AwIaTUG1qST770zTWXzFq2cme4O73otycNHVjUG0n09CZ7QrG2zkgoYoR7ertCyf31PcmdR5OJpGr3atz0e20FRcWlRc7i4qJj3d3IARmjNpfiDig253f75ba21rlbEtfOLZwx0iuE+PNTH/bGjXWb6oJFgYajraLI6/F4XnjtKxKsveaJP1597RWnfbDspytvfuadF25vaOwYOHJk/cG6B59eZYQ6mEchjAtJAUChRrHfmTBId2sKnMW0bJCMJW6+bNwj1w51u5WPv937mz8taaqvP2nuhDWrds05eTAH2dwe2r36ad2QW7cdmjiuVlGVbAdZMMb+8uxn67a3NDS1ESMaGD4unCSeAjVytJNycCXakWpJoZUFlH89f+t9f1325pvff7J4Ud3hVkaUggKXw879fvtHn2+J68CpGDqw7HBdC3DVkLSrsycWS7R1JvRkIuasbYlRSPeCmQSpE8rsdtVhtys2jdocLrdrZJH2xF0zaisDZZN+3br7SKjjraVfbrvuikdue+jGfzx6Oe+uby4pCr7wxle33fD86//5zSXnTr3spmcLysuHVXvnDkmsXHNYb0wSj48yKhF0yo/1EOAqdzgphvQO+uZfzrr67GF3v9X20gf7xeH1555cec+iuW9+sFnG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";
+/** Logo DarPilot (PNG 96 × 96) intégré aux documents PDF. */
+var PDF_LOGO_PNG_B64_ = "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";
 /**
  * Gabarit commun des PDF : en-tête avec logo et nom de l'application, titre, sous-titre facultatif (organisation),
- * date de génération et pied de page. opts : { subtitle, footer, issuer: { name, lines[] }, noHead } — issuer remplace la marque ImmoPilot ;
+ * date de génération et pied de page. opts : { subtitle, footer, issuer: { name, lines[] }, noHead } — issuer remplace la marque DarPilot ;
  * noHead : aucun en-tête de marque (le modèle affiche lui-même les parties avec le bloc [entete]) ; ref : référence unique du document.
  */
 function pdfShell_(title, inner, opts) {
@@ -4010,17 +4010,17 @@ function pdfShell_(title, inner, opts) {
     ".photos td{border:0;padding:3px;width:50%}.photos img{width:100%;border:1px solid #c9d3df}.sign td{height:70px;width:50%}.box{border:1px solid #c9d3df;padding:8px;margin:8px 0;background:#f8fafc}" +
     ".foot{margin-top:24px;border-top:1px solid #c9d3df;padding-top:6px;color:#64748b;font-size:9px}</style></head><body>" +
     (opts.noHead ? "<table class='head'><tr><td></td>" : opts.issuer
-      // Document émis par un tiers (devis, facture d'un prestataire) : son identité en en-tête, sans la marque ImmoPilot.
+      // Document émis par un tiers (devis, facture d'un prestataire) : son identité en en-tête, sans la marque DarPilot.
       ? "<table class='head'><tr><td><div class='brand'>" + escapeHtml_(opts.issuer.name) + "</div><div class='muted'>" + (opts.issuer.lines || []).filter(String).map(escapeHtml_).join("<br>") + "</div></td>"
       : "<table class='head'><tr><td style='width:62px'><img src='data:image/png;base64," + PDF_LOGO_PNG_B64_ + "' width='54' height='54'></td>" +
-        "<td><div class='brand'>Immo<span class='gold'>Pilot</span></div><div class='muted'>Gestion immobilière</div></td>") +
+        "<td><div class='brand'>Dar<span class='gold'>Pilot</span></div><div class='muted'>Gestion immobilière</div></td>") +
     "<td class='right muted'>Généré le " + escapeHtml_(when) + "<br>Réf. " + escapeHtml_(ref) + "</td></tr></table><hr style='border:0;border-top:3px solid #13233d;margin:8px 0 12px'>" +
     "<h1>" + escapeHtml_(title) + "</h1>" + (opts.subtitle ? "<p class='muted' style='margin:0 0 10px'>" + escapeHtml_(opts.subtitle) + "</p>" : "") + inner +
     "<div class='foot'>" + escapeHtml_(opts.footer || (IMMO_CONFIG.APP_NAME + " — document généré automatiquement à partir des données enregistrées dans l'application.")) + " — Réf. " + escapeHtml_(ref) + "</div></body></html>";
 }
 /** Date AAAA-MM-JJ (ou horodatage) au format JJ/MM/AAAA. */
 function pdfDate_(s) { const v = String(s || "").slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v.slice(8, 10) + "/" + v.slice(5, 7) + "/" + v.slice(0, 4) : (v || "—"); }
-var PDF_PAY_METHODS_ = { TRANSFER: "Virement", CASH: "Espèces", CARD: "Carte", CHEQUE: "Chèque", PLATFORM: "Plateforme de réservation", STRIPE: "Paiement en ligne ImmoPilot", OTHER: "Autre" };
+var PDF_PAY_METHODS_ = { TRANSFER: "Virement", CASH: "Espèces", CARD: "Carte", CHEQUE: "Chèque", PLATFORM: "Plateforme de réservation", STRIPE: "Paiement en ligne DarPilot", OTHER: "Autre" };
 /** Image d'un document (photo) au format data: pour un PDF. Les fichiers de plus de 1,5 Mo ne sont pas intégrés (le PDF resterait trop lourd). */
 function pdfImageData_(documentId) {
   const d = dbGet_("Documents", documentId);
@@ -4588,7 +4588,7 @@ function guestPoliceForms_(p, a) {
       "<table class='sign' style='margin-top:10px'><tr><td>Signature du voyageur</td><td>Date</td></tr></table>";
   });
   html += "<p class='muted' style='margin-top:12px'>Fiche à faire signer par chaque voyageur étranger à son arrivée, à conserver 6 mois et à remettre aux services de police ou de gendarmerie sur leur demande. " +
-    "Les enfants de moins de 15 ans peuvent figurer sur la fiche d'un adulte qui les accompagne. ImmoPilot ne garantit pas la conformité juridique : vérifiez les obligations applicables à votre activité.</p>";
+    "Les enfants de moins de 15 ans peuvent figurer sur la fiche d'un adulte qui les accompagne. DarPilot ne garantit pas la conformité juridique : vérifiez les obligations applicables à votre activité.</p>";
   audit_("POLICE_FORMS_PDF", "Reservation", r.reservationId, r.organizationId, { guests: foreign.length });
   return storeGeneratedPdf_(p, htmlToPdf_(pdfShell_("Fiches individuelles de police", html, { subtitle: "Réservation " + String(r.reservationId).slice(-8).toUpperCase() }), "Fiches_police_" + String(r.reservationId).slice(-8)),
     { propertyId: r.propertyId, organizationId: r.organizationId }, "RESERVATION", r.reservationId, "POLICE_FORM");
@@ -4868,7 +4868,7 @@ function invApprove_(p, a) {
     audit_("INVOICE_APPROVED", "Invoice", v.invoiceId, v.organizationId, { amountTTC: v.amountTTC, commissionRate: rate, commissionAmount: split.commissionAmount, beneficiary: beneficiary });
     const art = dbGet_("Artisans", v.artisanId);
     if (art && art.userId) notify_({ eventKey: "invoice-approved:" + v.invoiceId, userIds: [art.userId], type: "INVOICE_APPROVED", organizationId: v.organizationId, title: "Facture approuvée : " + v.invoiceNumber,
-      body: pf ? "Montant à recevoir du client : " + split.amountTTC + " " + cur_() + ". Commission ImmoPilot (" + rate + " %) : " + round2_(split.commissionAmount + split.commissionVatAmount) + " " + cur_() + " TTC, prélevée si le client paie par la plateforme, sinon réclamée par lien de paiement une fois la facture réglée."
+      body: pf ? "Montant à recevoir du client : " + split.amountTTC + " " + cur_() + ". Commission DarPilot (" + rate + " %) : " + round2_(split.commissionAmount + split.commissionVatAmount) + " " + cur_() + " TTC, prélevée si le client paie par la plateforme, sinon réclamée par lien de paiement une fois la facture réglée."
         : "Net à percevoir : " + split.netToContractor + " " + cur_() + " (commission " + rate + " % : " + split.commissionAmount + " " + cur_() + " HT).", link: "#invoices" });
     return Object.assign({ ok: true, status: "APPROVED", commissionRate: rate, beneficiaryOrgId: beneficiary }, split);
   });
@@ -4943,7 +4943,7 @@ function invRefreshPaid_(invoiceId) {
  * Règles :
  *  - Rien n'est envoyé au locataire sans action explicite du bailleur (« Valider », puis « Envoyer au locataire »).
  *  - Les avertissements juridiques calculés par le serveur (révision du loyer, dépôt de garantie, durée) s'ajoutent à ceux de l'IA.
- *  - Les documents sont des modèles : ils doivent être relus par un professionnel ; ImmoPilot ne garantit pas leur conformité.
+ *  - Les documents sont des modèles : ils doivent être relus par un professionnel ; DarPilot ne garantit pas leur conformité.
  */
 var LA_CONDITIONS_ = ["NEW", "GOOD", "WORN", "BAD", "NA"];
 var LA_CONDITION_LABELS_ = { NEW: "Neuf", GOOD: "Bon état", WORN: "État d'usage", BAD: "Mauvais état", NA: "Sans objet" };
@@ -5016,10 +5016,10 @@ function laContractInputs_(a) {
 }
 /** Avertissements juridiques calculés (indépendants de l'IA). */
 function laContractWarnings_(c, inp) {
-  const w = ["Modèle généré automatiquement : faites-le relire par un professionnel (avocat, notaire ou adoul selon le cas) avant signature. ImmoPilot ne garantit pas sa conformité juridique."];
+  const w = ["Modèle généré automatiquement : faites-le relire par un professionnel (avocat, notaire ou adoul selon le cas) avant signature. DarPilot ne garantit pas sa conformité juridique."];
   const l = c.l, rent = num_(l.monthlyRent), dep = num_(l.deposit), months = l.endDate ? diffDays_(l.startDate, addDaysStr_(l.endDate, 1)) / 30.44 : null;
   if (IMMO_EDITION_ === "MA") {
-    if (num_(l.indexationRate) > 0) w.push("Le bail prévoit une indexation annuelle de " + num_(l.indexationRate) + " % : au Maroc, la loi n° 67-12 (articles 31 à 38) ne permet de réviser le loyer qu'au plus tôt tous les trois ans, dans la limite de " + (inp.usage === "MIXED" ? "8 % (habitation) et 10 % (autres locaux)" : "8 % pour l'habitation") + ". Le contrat reprend la règle légale ; ajustez l'indexation du bail dans ImmoPilot.");
+    if (num_(l.indexationRate) > 0) w.push("Le bail prévoit une indexation annuelle de " + num_(l.indexationRate) + " % : au Maroc, la loi n° 67-12 (articles 31 à 38) ne permet de réviser le loyer qu'au plus tôt tous les trois ans, dans la limite de " + (inp.usage === "MIXED" ? "8 % (habitation) et 10 % (autres locaux)" : "8 % pour l'habitation") + ". Le contrat reprend la règle légale ; ajustez l'indexation du bail dans DarPilot.");
     w.push("Faites signer le contrat en deux exemplaires et légaliser les signatures pour lui donner date certaine.");
   } else {
     const maxDep = inp.furnished ? 2 : 1;
@@ -5118,7 +5118,7 @@ function st_label_(code) { return ({ APARTMENT: "appartement", VILLA: "villa", R
 
 function laContractAi_(c, inp, base) {
   const ma = IMMO_EDITION_ === "MA";
-  const system = "Tu es l'agent de rédaction juridique d'ImmoPilot, logiciel de gestion locative (" + edition_().countryName + "). Tu rédiges en français un contrat de location " +
+  const system = "Tu es l'agent de rédaction juridique d'DarPilot, logiciel de gestion locative (" + edition_().countryName + "). Tu rédiges en français un contrat de location " +
     (inp.furnished ? "meublée" : "vide") + " conforme au " + edition_().leaseLaw + ".\nRègles impératives :\n" +
     "- Pars de la TRAME fournie (déjà conforme) et améliore-la : clarté, articles complets, consignes de l'utilisateur intégrées. Garde tous les articles utiles de la trame.\n" +
     "- Utilise UNIQUEMENT les faits fournis. N'invente aucun montant, aucune date, aucun nom, aucune adresse.\n" +
@@ -5180,7 +5180,7 @@ function laLetterTemplate_(c, inp) {
   return { title: { RENEWAL: "Proposition de renouvellement du bail", RENT_REVISION: "Notification de révision du loyer", DEPOSIT_RETURN: "Restitution du dépôt de garantie", FREE: inp.subject || "Courrier au locataire" }[inp.subtype], sections: S };
 }
 function laLetterAi_(c, inp, base) {
-  const system = "Tu es l'agent de rédaction d'ImmoPilot (" + edition_().countryName + ", " + edition_().leaseLaw + "). Rédige en français un courrier du bailleur au locataire, courtois, précis et bref.\n" +
+  const system = "Tu es l'agent de rédaction d'DarPilot (" + edition_().countryName + ", " + edition_().leaseLaw + "). Rédige en français un courrier du bailleur au locataire, courtois, précis et bref.\n" +
     "- Utilise uniquement les faits fournis ; n'invente aucun montant, date ni nom ; marqueurs [BAILLEUR], [LOCATAIRE], [ADRESSE_DU_BIEN], [VILLE] pour les identités et l'adresse.\n" +
     "- Si la demande est contraire à la loi, n'applique pas la partie concernée et explique-le dans « warnings ».\n" +
     "- Pas de Markdown. Réponds UNIQUEMENT en JSON : {\"title\": string, \"sections\": [{\"title\": string, \"body\": string}], \"warnings\": [string]} (1 à 3 sections, la première commence par « Objet : »).";
@@ -5252,7 +5252,7 @@ function leaseDocHtml_(c, d) {
     "<table class='sign'><tr><td><b>Le bailleur</b><br><span class='muted'>« Lu et approuvé », signature</span></td><td><b>Le locataire</b><br><span class='muted'>« Lu et approuvé », signature</span></td></tr></table>";
   else inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + pdfDate_(todayStr_()) + ".</p>";
   return pdfShell_(d.title || "Document", inner, { subtitle: (prop.name || "") + (d.docType === "LETTER" ? " · à l'attention de " + (t.fullName || "") : ""), issuer: rentIssuer_(org), ref: (d.docType === "LEASE_CONTRACT" ? "BAIL-" : "COUR-") + String(d.leaseDocId || d.leaseId || "").slice(-8).toUpperCase(),
-    footer: draft ? "PROJET — document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; ImmoPilot ne garantit pas sa conformité juridique."
+    footer: draft ? "PROJET — document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; DarPilot ne garantit pas sa conformité juridique."
       : d.docType === "LEASE_CONTRACT" ? "Paraphe du bailleur : __________          Paraphe du locataire : __________" : " " });
 }
 function leaseDocFileName_(d) { return (d.docType === "LEASE_CONTRACT" ? "Bail_" : "Courrier_") + String(d.leaseId).slice(-6) + "_" + todayStr_(); }
@@ -5442,7 +5442,7 @@ function laInspectionTemplate_(r) {
 }
 function laInspectionAi_(c, r) {
   const exit = r.type === "EXIT", rooms = parseJson_(r.roomsJson, []);
-  const system = "Tu es l'agent de rédaction d'ImmoPilot (" + edition_().countryName + "). Rédige en français le compte rendu d'un état des lieux " + (exit ? "de SORTIE" : "d'ENTRÉE") + " d'un logement loué, à partir des relevés fournis.\n" +
+  const system = "Tu es l'agent de rédaction d'DarPilot (" + edition_().countryName + "). Rédige en français le compte rendu d'un état des lieux " + (exit ? "de SORTIE" : "d'ENTRÉE") + " d'un logement loué, à partir des relevés fournis.\n" +
     "- Décris UNIQUEMENT ce qui est relevé (états et observations). N'invente aucun défaut, aucun équipement, aucun nom.\n" +
     "- Style factuel et précis, phrases courtes, vocabulaire d'état des lieux. Une description par pièce (2 à 5 phrases).\n" +
     (exit ? "- Compare avec l'état à l'entrée (champ « entree ») ; liste dans « differences » les éléments plus dégradés à la sortie, en distinguant l'usure normale des dégradations. Ne chiffre aucune retenue.\n" : "- Les éléments sans état sont « non renseignés » : signale-les sans les décrire.\n") +
@@ -5918,7 +5918,7 @@ function leaseDocument_(p, a) {
   const map = { bailleur: org.name, locataire: t.fullName, locataire_email: t.email, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), surface: x.prop.surfaceM2, debut: x.l.startDate,
     fin: x.l.endDate || "indéterminée", loyer: x.l.monthlyRent, charges: x.l.charges, caution: x.l.deposit, jour_echeance: x.l.dueDay, indexation: x.l.indexationRate, conditions: x.l.terms, date: todayStr_() };
   const tpl = getSetting_("template.leaseDocId", x.l.organizationId), text = docTemplateOf_("lease", x.l.organizationId), cur = cur_();
-  // Contrat complet et conforme (meublé ou vide selon le logement), sans marque ImmoPilot : en-tête au nom du bailleur.
+  // Contrat complet et conforme (meublé ou vide selon le logement), sans marque DarPilot : en-tête au nom du bailleur.
   const c = rentCtx_(x.l), furnished = leaseFurnished_(x.l, x.prop);
   const base = laContractTemplate_(c, { furnished: furnished, usage: "HABITATION", clauses: ["INSURANCE_REQUIRED", "SUBLET_FORBIDDEN"], instructions: "" });
   const sections = base.sections.map(function (sc) { return { title: laFill_(sc.title, c), body: laFill_(sc.body, c) }; });
@@ -5977,7 +5977,7 @@ function leaseJob_() {
  * mentions légales, conditions générales, confidentialité, cookies et, pour la France, accord de sous-traitance (art. 28 RGPD).
  * Les informations propres à l'éditeur (raison sociale, SIRET, hébergeur…) se règlent dans Paramètres › Plateforme (clés legal.*) :
  * tant qu'une valeur manque, elle apparaît surlignée « À compléter ».
- * Ces textes sont des modèles : ils doivent être relus par un professionnel du droit avant la mise en service. ImmoPilot ne garantit pas leur conformité.
+ * Ces textes sont des modèles : ils doivent être relus par un professionnel du droit avant la mise en service. DarPilot ne garantit pas leur conformité.
  */
 /** Date de la version en vigueur des documents juridiques (conservée comme preuve à chaque acceptation ou signature). */
 var LEGAL_VERSION_ = "2026-11-02";
@@ -6007,7 +6007,7 @@ function legalFill_(text, v) {
 /* Rôle de l'éditeur : commun aux deux éditions. L'éditeur fournit un LOGICIEL ; il n'exerce aucune activité immobilière. */
 function legalRoleSection_() {
   return { h: "Rôle de l'éditeur : un logiciel de gestion, pas un gestionnaire", ul: [
-    "ImmoPilot est un logiciel en ligne (SaaS) mis à disposition du client pour l'aider à organiser lui-même la gestion de ses biens. L'éditeur fournit uniquement l'outil.",
+    "DarPilot est un logiciel en ligne (SaaS) mis à disposition du client pour l'aider à organiser lui-même la gestion de ses biens. L'éditeur fournit uniquement l'outil.",
     "L'éditeur n'est ni agent immobilier, ni administrateur de biens, ni syndic, ni conciergerie, ni mandataire du client. Il n'effectue aucune transaction, ne loue aucun bien, ne détient aucune carte professionnelle immobilière et n'intervient dans aucune négociation.",
     "L'éditeur n'est pas partie aux contrats conclus par le client avec des tiers (baux, réservations, contrats de ménage ou de travaux, contrats avec des agences ou des artisans). Il ne garantit ni leur exécution, ni la solvabilité des locataires ou voyageurs, ni la qualité des prestations des tiers.",
     "L'éditeur ne détient pas et ne gère pas les fonds du client ni ceux de ses locataires ou voyageurs : loyers, cautions et paiements des séjours sont encaissés directement par le client, en dehors de l'application. L'éditeur perçoit uniquement le prix de l'abonnement et, lorsque le client fait appel à un prestataire référencé, la commission de mise en relation prévue à l'article « Mise en relation ».",
@@ -6027,7 +6027,7 @@ function legalClientDutiesSection_(law) {
 function legalMarketplaceSection_(v) {
   const R = commissionRates_(), fr = edition_().code === "FR";
   return { h: "Mise en relation avec des prestataires référencés", ul: [
-    "En plus du logiciel, ImmoPilot propose un annuaire d'artisans et de prestataires (ménage, plomberie, électricité, climatisation…) référencés par l'éditeur. Le client y choisit librement un prestataire par métier et par zone ; l'éditeur ne choisit pas à sa place.",
+    "En plus du logiciel, DarPilot propose un annuaire d'artisans et de prestataires (ménage, plomberie, électricité, climatisation…) référencés par l'éditeur. Le client y choisit librement un prestataire par métier et par zone ; l'éditeur ne choisit pas à sa place.",
     "Les devis, interventions et factures sont établis par le prestataire, en son nom, et conclus directement entre le client et le prestataire. L'éditeur n'est pas partie à ces contrats et ne garantit ni leur exécution, ni leur qualité, ni leurs délais.",
     "Commission de mise en relation : pour chaque mission réalisée par un prestataire référencé et réglée, le client (commanditaire) doit à l'éditeur une commission de " + R.client + " % du montant hors taxes de la facture du prestataire (TVA en sus au taux de " + R.vat + " %). Elle rémunère le service de mise en relation (sélection et contrôle des prestataires, outils de demande de devis, de suivi et de facturation). Les commissions d'un mois sont réunies dans un récapitulatif envoyé au début du mois suivant et prélevées sur la carte enregistrée pour l'abonnement, ou réglées par lien de paiement.",
     "Règlement du prestataire : le client règle la facture du prestataire soit directement (virement, chèque, espèces), soit en ligne par la plateforme" + (fr ? " : dans ce cas le client paie directement le prestataire sur le compte de paiement de celui-ci, ouvert auprès de Stripe Payments Europe (établissement de paiement agréé) ; le prestataire est le vendeur, apparaît sur le reçu et gère remboursements et litiges ; seule la commission due par le prestataire est versée à l'éditeur, qui ne détient jamais le prix de la prestation." : " lorsque ce mode est proposé.") + " Le client indique dans l'application que la facture est réglée dès qu'il l'a payée directement.",
@@ -6038,7 +6038,7 @@ function legalMarketplaceSection_(v) {
 /* Conditions de référencement des prestataires (artisans inscrits en ligne). */
 function legalProviderDoc_(fr) {
   return { id: "referencement", title: "Conditions de référencement des prestataires", sections: [
-    { h: "1. Objet", p: ["Les présentes conditions s'appliquent aux artisans et prestataires (« le prestataire ») qui demandent leur référencement dans l'annuaire ImmoPilot édité par {{publisherName}} (« l'éditeur »). Elles sont acceptées en ligne lors de l'inscription. Le référencement est gratuit."] },
+    { h: "1. Objet", p: ["Les présentes conditions s'appliquent aux artisans et prestataires (« le prestataire ») qui demandent leur référencement dans l'annuaire DarPilot édité par {{publisherName}} (« l'éditeur »). Elles sont acceptées en ligne lors de l'inscription. Le référencement est gratuit."] },
     { h: "2. Rôle de l'éditeur", p: ["L'éditeur met à disposition un logiciel et un annuaire permettant aux propriétaires et agences abonnés de trouver un prestataire et de lui adresser des demandes de devis et d'intervention. L'éditeur n'est ni employeur, ni donneur d'ordre, ni mandataire du prestataire ou du client ; il n'est pas partie aux contrats de prestation, ne fixe pas les prix et n'encaisse pas les paiements."] },
     { h: "3. Conditions et pièces exigées", ul: fr ? [
       "Être immatriculé : SIRET actif (auto-entrepreneur) ou société immatriculée au RCS.",
@@ -6065,14 +6065,14 @@ function legalDocsFR_(v) {
     : "un serveur dédié situé en France (Paris), loué auprès de {{hostName}} ({{hostAddress}}). Les données sensibles (base de données, pièces d'identité, documents) y sont chiffrées au repos (AES-256).";
   return [
     { id: "mentions", title: "Mentions légales", sections: [
-      { h: "Éditeur", p: ["Le logiciel ImmoPilot et le présent site sont édités par {{publisherName}}, {{legalForm}}, dont le siège est situé {{address}}, {{registration}}, n° de TVA intracommunautaire {{vatNumber}}.",
+      { h: "Éditeur", p: ["Le logiciel DarPilot et le présent site sont édités par {{publisherName}}, {{legalForm}}, dont le siège est situé {{address}}, {{registration}}, n° de TVA intracommunautaire {{vatNumber}}.",
         "Contact : {{contactEmail}} — {{phone}}.", "Directeur ou directrice de la publication : {{director}}."] },
       { h: "Hébergeur", p: ["{{hostName}}, {{hostAddress}}" + (google ? "." : " — serveur situé en France (Paris).")] },
-      { h: "Propriété intellectuelle", p: ["Le logiciel, la marque ImmoPilot, son logo et ses contenus sont protégés. Toute reproduction ou réutilisation non autorisée est interdite. Les données saisies par les clients restent leur propriété."] },
+      { h: "Propriété intellectuelle", p: ["Le logiciel, la marque DarPilot, son logo et ses contenus sont protégés. Toute reproduction ou réutilisation non autorisée est interdite. Les données saisies par les clients restent leur propriété."] },
       { h: "Signalement", p: ["Pour signaler un contenu illicite ou exercer vos droits, écrivez à {{contactEmail}}."] }
     ] },
     { id: "cgv", title: "Conditions générales d'abonnement et d'utilisation", sections: [
-      { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement au logiciel en ligne ImmoPilot (gestion de locations courte et longue durée : biens, réservations, voyageurs, ménage, maintenance, baux, finances) fourni par {{publisherName}} (« l'éditeur ») à ses clients (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne lors de la création du compte ou de la souscription ; la version en vigueur reste consultable à tout moment dans l'application."] },
+      { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement au logiciel en ligne DarPilot (gestion de locations courte et longue durée : biens, réservations, voyageurs, ménage, maintenance, baux, finances) fourni par {{publisherName}} (« l'éditeur ») à ses clients (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne lors de la création du compte ou de la souscription ; la version en vigueur reste consultable à tout moment dans l'application."] },
       legalRoleSection_(),
       legalMarketplaceSection_(v),
       { h: "3. Comptes et accès", p: ["L'accès se fait par des comptes personnels protégés par mot de passe. Toute utilisation anormale doit être signalée sans délai à l'éditeur."] },
@@ -6125,15 +6125,15 @@ function legalDocsFR_(v) {
         "La suppression de votre compte peut être demandée depuis Paramètres › Mon profil. Vous pouvez introduire une réclamation auprès de la CNIL (www.cnil.fr)."] }
     ] },
     { id: "cookies", title: "Cookies et stockage local", sections: [
-      { h: "Ce que nous utilisons", p: ["ImmoPilot n'utilise ni cookie publicitaire ni outil de mesure d'audience. Le navigateur conserve seulement des éléments strictement nécessaires au fonctionnement : le jeton de session (pendant la visite), la langue et le thème clair/sombre choisis. Le formulaire de paiement SumUp peut déposer ses propres traceurs techniques, nécessaires à la sécurité du paiement.",
+      { h: "Ce que nous utilisons", p: ["DarPilot n'utilise ni cookie publicitaire ni outil de mesure d'audience. Le navigateur conserve seulement des éléments strictement nécessaires au fonctionnement : le jeton de session (pendant la visite), la langue et le thème clair/sombre choisis. Le formulaire de paiement SumUp peut déposer ses propres traceurs techniques, nécessaires à la sécurité du paiement.",
         "Ces éléments sont exemptés de consentement (article 82 de la loi Informatique et Libertés et lignes directrices de la CNIL). Vous pouvez les effacer depuis les réglages de votre navigateur ; vous serez alors déconnecté."] }
     ] },
     { id: "dpa", title: "Accord de sous-traitance (article 28 du RGPD)", sections: [
-      { h: "Parties et objet", p: ["Le client (responsable de traitement) confie à {{publisherName}} (sous-traitant) le traitement des données personnelles qu'il enregistre dans ImmoPilot, pour la seule fourniture du service et pendant la durée de l'abonnement."] },
+      { h: "Parties et objet", p: ["Le client (responsable de traitement) confie à {{publisherName}} (sous-traitant) le traitement des données personnelles qu'il enregistre dans DarPilot, pour la seule fourniture du service et pendant la durée de l'abonnement."] },
       { h: "Données et personnes concernées", p: ["Voyageurs, locataires, propriétaires, collaborateurs et prestataires du client : identité, coordonnées, données de séjour ou de location, pièces d'identité, données de naissance et domicile des voyageurs étrangers, paiements, photos et documents."] },
       { h: "Engagements du sous-traitant", ul: [
         "Ne traiter les données que sur instruction documentée du client (le paramétrage et l'utilisation du service valent instructions).",
-        "Garantir la confidentialité des personnes autorisées à y accéder ; l'équipe ImmoPilot n'accède aux données du client qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
+        "Garantir la confidentialité des personnes autorisées à y accéder ; l'équipe DarPilot n'accède aux données du client qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
         "Mettre en œuvre les mesures de sécurité décrites dans la politique de confidentialité.",
         "Aider le client à répondre aux demandes d'exercice des droits et à réaliser ses analyses d'impact le cas échéant.",
         "Notifier au client toute violation de données dans les meilleurs délais et au plus tard 48 heures après en avoir eu connaissance.",
@@ -6150,13 +6150,13 @@ function legalDocsMA_(v) {
   const hosting = google ? "Google (Google Apps Script, Google Sheets, Google Drive)" : "un serveur dédié situé en France (Paris), loué auprès de {{hostName}} ({{hostAddress}}), avec chiffrement au repos (AES-256) des données sensibles";
   return [
     { id: "mentions", title: "Mentions légales", sections: [
-      { h: "Éditeur", p: ["La plateforme ImmoPilot est éditée par {{publisherName}}, {{legalForm}}, société de droit français dont le siège est situé {{address}}, {{registration}}, n° de TVA intracommunautaire {{vatNumber}}.",
+      { h: "Éditeur", p: ["La plateforme DarPilot est éditée par {{publisherName}}, {{legalForm}}, société de droit français dont le siège est situé {{address}}, {{registration}}, n° de TVA intracommunautaire {{vatNumber}}.",
         "Contact : {{contactEmail}} — {{phone}}.", "Directeur ou directrice de la publication : {{director}}."] },
       { h: "Hébergeur", p: ["{{hostName}}, {{hostAddress}}" + (google ? "." : " — serveur situé en France (Paris).")] },
-      { h: "Propriété intellectuelle", p: ["Le logiciel, la marque ImmoPilot, son logo et ses contenus sont protégés. Toute reproduction non autorisée est interdite. Les données saisies par les clients restent leur propriété."] }
+      { h: "Propriété intellectuelle", p: ["Le logiciel, la marque DarPilot, son logo et ses contenus sont protégés. Toute reproduction non autorisée est interdite. Les données saisies par les clients restent leur propriété."] }
     ] },
     { id: "cgv", title: "Conditions générales d'abonnement et d'utilisation", sections: [
-      { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement à la plateforme en ligne ImmoPilot (gestion de locations courte et longue durée) fournie par {{publisherName}} (« l'éditeur ») à ses clients au Maroc (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne, par un clic de confirmation, lors de la création du compte ou de la souscription ; cette acceptation électronique a la même valeur qu'une signature (loi n° 53-05 relative à l'échange électronique de données juridiques). La version en vigueur reste consultable à tout moment dans l'application."] },
+      { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement à la plateforme en ligne DarPilot (gestion de locations courte et longue durée) fournie par {{publisherName}} (« l'éditeur ») à ses clients au Maroc (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne, par un clic de confirmation, lors de la création du compte ou de la souscription ; cette acceptation électronique a la même valeur qu'une signature (loi n° 53-05 relative à l'échange électronique de données juridiques). La version en vigueur reste consultable à tout moment dans l'application."] },
       legalRoleSection_(),
       legalMarketplaceSection_(v),
       { h: "3. Forfaits et prix", p: ["Le service est fourni selon le forfait choisi (fonctionnalités, nombre de biens, d'utilisateurs et stockage indiqués dans l'application). Les prix sont indiqués en dirhams marocains (MAD), toutes taxes comprises lorsque le client est un consommateur. Une période d'essai gratuite peut être proposée ; aucun prélèvement n'a lieu avant sa fin.",
@@ -6209,7 +6209,7 @@ function legalGet_(a) {
   });
   const missing = Object.keys(LEGAL_FIELDS_).filter(function (k) { return !v[k] && ["vatNumber", "phone", "hostPhone", "dpoEmail", "dataAuthorityRef", "mediator", "platformInsurance"].indexOf(k) < 0; });
   return { edition: edition_().code, updatedAt: LEGAL_VERSION_, docs: a && a.id ? docs.filter(function (d) { return d.id === a.id; }) : docs, missing: missing.map(function (k) { return LEGAL_FIELDS_[k]; }),
-    notice: "Modèles à faire relire par un professionnel du droit avant mise en service. ImmoPilot ne garantit pas leur conformité." };
+    notice: "Modèles à faire relire par un professionnel du droit avant mise en service. DarPilot ne garantit pas leur conformité." };
 }
 
 /* ======================================================================
@@ -6368,7 +6368,7 @@ function migSeed_() {
     r.plans++;
   });
   if (!dbAll_("Organizations").some(function (o) { return o.type === "PLATFORM"; })) {
-    dbInsert_("Organizations", { name: "ImmoPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: "migration" });
+    dbInsert_("Organizations", { name: "DarPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: "migration" });
     r.platformOrg = true;
   }
   return r;
@@ -6475,11 +6475,11 @@ function listBackups_() {
 /**
  * Notifications centralisées : in-app (feuille Notifications), e-mail (MailApp/Gmail), liens WhatsApp wa.me.
  * Anti-doublon : chaque envoi porte une clé d'événement ; NotificationLogs garde (eventKey, canal, destinataire).
- * WhatsApp : ImmoPilot génère un lien qui OUVRE une conversation pré-remplie. Aucun message n'est envoyé automatiquement.
+ * WhatsApp : DarPilot génère un lien qui OUVRE une conversation pré-remplie. Aucun message n'est envoyé automatiquement.
  */
 /**
  * opts (facultatif) : { attachments: [Blob] (PDF joints), bcc: "copie@…", replyTo: "…", senderName: "…", footer: [coordonnées de l'expéditeur],
- * plain: true (pas de bouton « Ouvrir ImmoPilot » pour les liens : e-mails adressés à un locataire sans compte) }.
+ * plain: true (pas de bouton « Ouvrir DarPilot » pour les liens : e-mails adressés à un locataire sans compte) }.
  * Tous les e-mails passent par le gabarit commun (mailLayout_) ; ref = clé d'événement, renvoyée par Brevo pour le suivi de livraison.
  */
 function sendMailSafe_(to, subject, body, eventKey, orgId, opts) {
@@ -6514,7 +6514,7 @@ function mailHtml_(text, opts) {
   const inner = parts.map(function (part, i) {
     if (i % 2 === 0) return escapeHtml_(part).replace(/\n/g, "<br>");
     const url = escapeHtml_(part);
-    return "<br><a href=\"" + url + "\" style=\"display:inline-block;background:#2f4fd8;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold\">Ouvrir ImmoPilot</a>" +
+    return "<br><a href=\"" + url + "\" style=\"display:inline-block;background:#2f4fd8;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold\">Ouvrir DarPilot</a>" +
       "<br><span style=\"font-size:12px;color:#64748b\">Si le bouton ne fonctionne pas, copiez ce lien en entier dans la barre d'adresse de votre navigateur :<br><a href=\"" + url + "\" style=\"color:#2f4fd8;word-break:break-all\">" + url + "</a></span><br>";
   }).join("");
   return mailLayout_(inner, opts);
@@ -6529,12 +6529,12 @@ function mailHtmlPlain_(text, opts) {
   }).join(""), opts);
 }
 
-/** Adresse publique du logo de l'édition (servi par le serveur ImmoPilot). */
+/** Adresse publique du logo de l'édition (servi par le serveur DarPilot). */
 function mailLogoUrl_() {
   try { const m = /^(https:\/\/[^\/?#]+)/.exec(appUrl_()); return m ? m[1] + "/icons/icon-192.png" : ""; } catch (e) { return ""; }
 }
 /**
- * Gabarit commun de tous les e-mails ImmoPilot : en-tête avec logo, contenu, pied de page de l'expéditeur.
+ * Gabarit commun de tous les e-mails DarPilot : en-tête avec logo, contenu, pied de page de l'expéditeur.
  * Tableaux et styles en ligne (compatibles Gmail, Outlook, Apple Mail), largeur fluide jusqu'à 600 px (téléphone).
  * opts : { senderName, footer: [lignes de coordonnées de l'expéditeur] }
  */
@@ -6546,13 +6546,13 @@ function mailLayout_(innerHtml, opts) {
     "<body style=\"margin:0;padding:0;background:#eef2f7\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#eef2f7\"><tr><td align=\"center\" style=\"padding:20px 10px\">" +
     "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #dbe3ee\">" +
     "<tr><td style=\"background:#13233d;padding:16px 22px\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\"><tr>" +
-      (logo ? "<td style=\"padding-right:12px\"><img src=\"" + escapeHtml_(logo) + "\" width=\"44\" height=\"44\" alt=\"ImmoPilot\" style=\"display:block;border-radius:9px;background:#ffffff\"></td>" : "") +
-      "<td style=\"font-family:Arial,Helvetica,sans-serif;color:#ffffff\"><div style=\"font-size:19px;font-weight:bold\">Immo<span style=\"color:#e9b341\">Pilot</span></div>" +
+      (logo ? "<td style=\"padding-right:12px\"><img src=\"" + escapeHtml_(logo) + "\" width=\"44\" height=\"44\" alt=\"DarPilot\" style=\"display:block;border-radius:9px;background:#ffffff\"></td>" : "") +
+      "<td style=\"font-family:Arial,Helvetica,sans-serif;color:#ffffff\"><div style=\"font-size:19px;font-weight:bold\">Dar<span style=\"color:#e9b341\">Pilot</span></div>" +
       (from ? "<div style=\"font-size:12px;color:#c7d2e3\">pour le compte de " + escapeHtml_(from) + "</div>" : "<div style=\"font-size:12px;color:#c7d2e3\">Gestion immobilière</div>") + "</td></tr></table></td></tr>" +
     "<tr><td style=\"padding:24px 22px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1d2b3a\">" + innerHtml + "</td></tr>" +
     (foot ? "<tr><td style=\"padding:14px 22px;background:#f6f8fb;border-top:1px solid #e3e9f1;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#475569\"><b>" + escapeHtml_(from || IMMO_CONFIG.APP_NAME) + "</b><br>" + foot + "</td></tr>" : "") +
-    "<tr><td style=\"padding:12px 22px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.5;color:#94a3b8;text-align:center\">Message envoyé via ImmoPilot, logiciel de gestion immobilière édité par ECO SYNERGY. " +
-      "Les pièces jointes éventuelles sont également disponibles dans votre espace ImmoPilot.</td></tr>" +
+    "<tr><td style=\"padding:12px 22px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.5;color:#94a3b8;text-align:center\">Message envoyé via DarPilot, logiciel de gestion immobilière édité par ECO SYNERGY. " +
+      "Les pièces jointes éventuelles sont également disponibles dans votre espace DarPilot.</td></tr>" +
     "</table></td></tr></table></body></html>";
 }
 
@@ -6617,7 +6617,7 @@ function notify_(opts) {
       sent++;
     }
     if (opts.email !== false && orgEmail && prefs.email !== false) {
-      sendMailSafe_(u.email, "[ImmoPilot] " + opts.title, (opts.body || "") + "\n\nOuvrir ImmoPilot : " + safeAppUrl_() + (opts.link || ""), opts.eventKey, opts.organizationId);
+      sendMailSafe_(u.email, "[DarPilot] " + opts.title, (opts.body || "") + "\n\nOuvrir DarPilot : " + safeAppUrl_() + (opts.link || ""), opts.eventKey, opts.organizationId);
     }
   });
   return { sent: sent };
@@ -6668,7 +6668,7 @@ function notifWhatsApp_(p, a) {
 function notifSendEmail_(p, a) {
   const prop = assertPropAny_(p, a.propertyId, ["reservation.edit", "cleaning.manage", "incident.manage", "lease.manage"]);
   rateLimit_("mail:" + p.userId, 30, 3600);
-  const r = sendMailSafe_(a.to, "[ImmoPilot] " + reqText_(a.subject, "Objet", 2, 150), reqText_(a.body, "Message", 2, 5000), "manual:" + newId_("m"), prop.organizationId);
+  const r = sendMailSafe_(a.to, "[DarPilot] " + reqText_(a.subject, "Objet", 2, 150), reqText_(a.body, "Message", 2, 5000), "manual:" + newId_("m"), prop.organizationId);
   audit_("EMAIL_SENT", "Notification", prop.propertyId, prop.organizationId, { ok: r.ok });
   if (!r.ok) throw new AppError("EMAIL", "Envoi impossible : " + r.error);
   return { ok: true };
@@ -6764,7 +6764,7 @@ function supportRequest_(p, a) {
   audit_("SUPPORT_ACCESS_REQUESTED", "SupportGrant", g.grantId, orgId, { hours: hours, justification: g.justification });
   const approvers = dbAll_("UserRoles").filter(function (r) { return r.status === "ACTIVE" && String(r.organizationId) === orgId && (r.role === "OWNER" || r.role === "AGENCY_ADMIN"); }).map(function (r) { return r.userId; });
   notify_({ eventKey: "support:" + g.grantId, userIds: approvers, type: "SUPPORT_REQUEST", organizationId: orgId,
-    title: "Demande d'accès d'assistance", body: "L'équipe ImmoPilot demande un accès en lecture seule de " + hours + " h : " + g.justification, link: "#settings" });
+    title: "Demande d'accès d'assistance", body: "L'équipe DarPilot demande un accès en lecture seule de " + hours + " h : " + g.justification, link: "#settings" });
   return { ok: true, grantId: g.grantId };
 }
 function supportDecide_(p, a) {
@@ -6819,7 +6819,7 @@ function ownerAgencyCreate_(p, a) {
   const adminEmail = validateEmail_(a.adminEmail);
   rateLimit_("agency-create:" + p.userId, 10, 3600);
   assert_(dbAll_("Organizations").filter(function (o) { return o.type === "AGENCY" && normalizeEmail_(o.createdBy) === p.email && o.status !== "INACTIVE"; }).length < OWNER_AGENCY_LIMIT_,
-    "Nombre maximal d'agences créées atteint (" + OWNER_AGENCY_LIMIT_ + "). Contactez l'administrateur ImmoPilot.");
+    "Nombre maximal d'agences créées atteint (" + OWNER_AGENCY_LIMIT_ + "). Contactez l'administrateur DarPilot.");
   const agency = withLock_(function () {
     const same = dbAll_("Organizations").find(function (o) { return String(o.name).toLowerCase() === name.toLowerCase() && o.status !== "INACTIVE"; });
     if (same) throw new AppError("VALIDATION", "Une organisation porte déjà ce nom. S'il s'agit de la même agence, utilisez « Attribuer une agence » ; sinon, choisissez un autre nom.");
@@ -7384,7 +7384,7 @@ function billingEnforced_() { return getSetting_("billing.enforce") !== false; }
 function assertOrgWritable_(orgId) {
   if (!billingEnforced_()) return;
   const e = entitlement_(orgId);
-  if (e.readOnly) throw new AppError("SUBSCRIPTION", "Abonnement suspendu ou expiré : le compte est en lecture seule. Contactez l'administrateur ImmoPilot.");
+  if (e.readOnly) throw new AppError("SUBSCRIPTION", "Abonnement suspendu ou expiré : le compte est en lecture seule. Contactez l'administrateur DarPilot.");
 }
 /** Une organisation sans abonnement (installation historique) conserve l'accès complet ; à régulariser par le super administrateur. */
 function assertFeature_(orgId, feature) {
@@ -7757,7 +7757,7 @@ function rentParties_(c) {
 }
 /**
  * Lien de paiement par carte du bailleur : celui de SON compte (SumUp, Stripe, PayPal…), les fonds lui sont versés
- * directement, sans transiter par ImmoPilot. Balises facultatives dans le lien : {montant} et {reference}.
+ * directement, sans transiter par DarPilot. Balises facultatives dans le lien : {montant} et {reference}.
  */
 function validatePayUrl_(v) {
   const s = safeText_(v, 500);
@@ -8648,11 +8648,11 @@ function requestMeta_() {
 
 /* ------------------------------- SMS (Brevo) ------------------------------- */
 function smsConf_() {
-  if (TEST_HOOKS_.smsSink) return { key: "test", sender: "ImmoPilot" };
+  if (TEST_HOOKS_.smsSink) return { key: "test", sender: "DarPilot" };
   const g = typeof globalThis !== "undefined" ? globalThis : this, env = g.IMMO_SECRETS_ || {};
   const P = PropertiesService.getScriptProperties(), key = String(env.brevoApiKey || P.getProperty("BREVO_API_KEY") || "").trim();
   if (!key) return null;
-  const sender = String(P.getProperty("SMS_SENDER") || "ImmoPilot").replace(/[^A-Za-z0-9]/g, "").slice(0, 11) || "ImmoPilot";
+  const sender = String(P.getProperty("SMS_SENDER") || "DarPilot").replace(/[^A-Za-z0-9]/g, "").slice(0, 11) || "DarPilot";
   return { key: key, sender: sender };
 }
 /** Numéro au format international sans « + » (ex. 33612345678), ou "" si inutilisable. */
@@ -8720,10 +8720,10 @@ function subSignStart_(p, a) {
     currency: s.currency || cur_(), contractHash: subContractHash_(d), legalVersion: d.legalVersion, signerUserId: p.userId, signerEmail: p.email, signerName: safeText_(u.displayName || p.email, 120),
     channel: channel, destination: masked, otpHash: "", otpExpires: new Date(Date.now() + SIGN_OTP_MINUTES_ * 60000).toISOString(), otpAttempts: 0, status: "PENDING", createdAt: nowIso_() });
   dbUpdate_("ContractSignatures", row.signatureId, { otpHash: sha256Hex_(row.signatureId + ":" + digits) });
-  const text = "ImmoPilot : votre code de signature du contrat d'abonnement est " + digits + ". Il expire dans " + SIGN_OTP_MINUTES_ + " minutes. Ne le communiquez à personne.";
+  const text = "DarPilot : votre code de signature du contrat d'abonnement est " + digits + ". Il expire dans " + SIGN_OTP_MINUTES_ + " minutes. Ne le communiquez à personne.";
   if (channel === "SMS") smsSend_(dest, text);
   else {
-    const r = sendMailSafe_(dest, "Code de signature de votre contrat ImmoPilot : " + digits, "Bonjour,\n\n" + text + "\n\nContrat : abonnement " + d.cur.planCode + " pour " + d.org.name +
+    const r = sendMailSafe_(dest, "Code de signature de votre contrat DarPilot : " + digits, "Bonjour,\n\n" + text + "\n\nContrat : abonnement " + d.cur.planCode + " pour " + d.org.name +
       ".\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.", "sign-otp:" + row.signatureId, orgId, { plain: true });
     if (!r.ok) throw new AppError("MAIL", "L'e-mail contenant le code n'a pas pu être envoyé. Réessayez dans un instant.");
   }
@@ -8754,8 +8754,8 @@ function subSignConfirm_(p, a) {
       { mimeType: "application/pdf", fileName: blob.getName(), base64: Utilities.base64Encode(blob.getBytes()) }, p.email);
     dbUpdate_("ContractSignatures", id, { documentId: doc.documentId });
     audit_("CONTRACT_SIGNED", "Subscription", s.subscriptionId, orgId, { signatureId: id, channel: row.channel, hash: row.contractHash });
-    sendMailSafe_(p.email, "Votre contrat d'abonnement ImmoPilot signé", "Bonjour,\n\nVotre contrat d'abonnement ImmoPilot (" + d.org.name + ", forfait " + s.planCode + ") a été signé électroniquement le " +
-      Utilities.formatDate(new Date(), tz_(), "dd/MM/yyyy à HH:mm") + ".\nVous le trouverez en pièce jointe ; il reste disponible dans ImmoPilot, menu Abonnement.\n\nMerci de votre confiance.", "sign-done:" + id, orgId,
+    sendMailSafe_(p.email, "Votre contrat d'abonnement DarPilot signé", "Bonjour,\n\nVotre contrat d'abonnement DarPilot (" + d.org.name + ", forfait " + s.planCode + ") a été signé électroniquement le " +
+      Utilities.formatDate(new Date(), tz_(), "dd/MM/yyyy à HH:mm") + ".\nVous le trouverez en pièce jointe ; il reste disponible dans DarPilot, menu Abonnement.\n\nMerci de votre confiance.", "sign-done:" + id, orgId,
       { attachments: [blob], plain: true });
     return { ok: true, signedAt: sig.signedAt, documentId: doc.documentId };
   });
@@ -8831,10 +8831,10 @@ var PROVIDER_DOC_CODES_ = ["ID_DOCUMENT", "SIRENE", "KBIS", "URSSAF", "DECENNALE
 function platformStatusText_() {
   const v = legalValues_();
   return {
-    title: "Ce qu'est ImmoPilot",
+    title: "Ce qu'est DarPilot",
     points: [
-      "ImmoPilot est un logiciel en ligne (SaaS) édité par " + (v.publisherName || "ECO SYNERGY") + " et mis à disposition par abonnement : vous l'utilisez pour gérer vous-même vos biens, vos locations, vos équipes et vos documents.",
-      "ImmoPilot est aussi une plateforme de mise en relation avec des artisans et prestataires référencés (ménage, plomberie, électricité…). Les prestations sont commandées, réalisées et facturées directement entre vous et le prestataire.",
+      "DarPilot est un logiciel en ligne (SaaS) édité par " + (v.publisherName || "ECO SYNERGY") + " et mis à disposition par abonnement : vous l'utilisez pour gérer vous-même vos biens, vos locations, vos équipes et vos documents.",
+      "DarPilot est aussi une plateforme de mise en relation avec des artisans et prestataires référencés (ménage, plomberie, électricité…). Les prestations sont commandées, réalisées et facturées directement entre vous et le prestataire.",
       "L'éditeur n'est ni agent immobilier, ni administrateur de biens, ni conciergerie, ni partie à vos contrats (baux, réservations, travaux). Il ne détient pas vos fonds : loyers et paiements des séjours vous sont versés directement.",
       "Vous payez à l'éditeur l'abonnement (sans engagement : résiliation à tout moment, effective à la fin de la période payée) et, si vous faites appel à un artisan référencé, une commission de mise en relation de " + commissionRates_().client + " % HT du montant de sa facture, réunie dans un récapitulatif mensuel."
     ],
@@ -8958,9 +8958,9 @@ function signupStart_(a) {
 }
 function signupCode_() { return (parseInt(randomToken_().slice(0, 12), 16) % 1000000 + 1000000).toString().slice(1); }
 function signupSendCode_(email, code, kind, requestId) {
-  const body = "Bonjour,\n\nVoici votre code de confirmation pour " + (kind === "PROVIDER" ? "votre référencement artisan" : "la création de votre compte") + " ImmoPilot :\n\n" + code +
-    "\n\nIl est valable " + SIGNUP_CODE_MINUTES_ + " minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : aucun compte ne sera créé.\n\nImmoPilot";
-  sendMailSafe_(email, "Votre code de confirmation ImmoPilot : " + code, body, "signup:" + requestId + ":" + Date.now());
+  const body = "Bonjour,\n\nVoici votre code de confirmation pour " + (kind === "PROVIDER" ? "votre référencement artisan" : "la création de votre compte") + " DarPilot :\n\n" + code +
+    "\n\nIl est valable " + SIGNUP_CODE_MINUTES_ + " minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : aucun compte ne sera créé.\n\nDarPilot";
+  sendMailSafe_(email, "Votre code de confirmation DarPilot : " + code, body, "signup:" + requestId + ":" + Date.now());
 }
 function signupLoad_(requestId) {
   const r = dbGet_("SignupRequests", safeText_(requestId, 120));
@@ -9166,14 +9166,14 @@ function providerDecide_(p, a) {
     assert_(st.allApproved, "Validez d'abord chaque pièce exigée.");
     assert_(!st.expired.length, "Assurance expirée : le prestataire doit la mettre à jour.");
     dbUpdate_("Artisans", c.artisanId, { status: "ACTIVE", verifiedAt: nowIso_(), verifiedBy: p.email, rejectReason: "", updatedAt: nowIso_() });
-    sendMailSafe_(c.email, "Votre référencement ImmoPilot est validé", "Bonjour,\n\nBonne nouvelle : votre dossier est validé. Vous êtes désormais référencé(e) dans l'annuaire ImmoPilot pour : " +
-      parseJson_(c.categoriesJson, []).join(", ") + ".\n\nLes propriétaires et agences peuvent vous envoyer des demandes de devis et d'intervention. Connectez-vous : " + url + "\n\nPensez à mettre à jour vos attestations avant leur expiration.\n\nImmoPilot", "provider-approved:" + c.artisanId + ":" + Date.now());
+    sendMailSafe_(c.email, "Votre référencement DarPilot est validé", "Bonjour,\n\nBonne nouvelle : votre dossier est validé. Vous êtes désormais référencé(e) dans l'annuaire DarPilot pour : " +
+      parseJson_(c.categoriesJson, []).join(", ") + ".\n\nLes propriétaires et agences peuvent vous envoyer des demandes de devis et d'intervention. Connectez-vous : " + url + "\n\nPensez à mettre à jour vos attestations avant leur expiration.\n\nDarPilot", "provider-approved:" + c.artisanId + ":" + Date.now());
   } else {
     const reason = reqText_(a.reason, "Motif", 3, 500);
     dbUpdate_("Artisans", c.artisanId, { status: decision === "REJECT" ? "REJECTED" : "INACTIVE", rejectReason: reason, updatedAt: nowIso_() });
-    sendMailSafe_(c.email, decision === "REJECT" ? "Votre dossier de référencement ImmoPilot est à compléter" : "Votre référencement ImmoPilot est suspendu",
+    sendMailSafe_(c.email, decision === "REJECT" ? "Votre dossier de référencement DarPilot est à compléter" : "Votre référencement DarPilot est suspendu",
       "Bonjour,\n\n" + (decision === "REJECT" ? "Votre dossier ne peut pas être validé en l'état" : "Votre référencement est suspendu") + " pour le motif suivant :\n\n" + reason +
-      "\n\nCorrigez vos informations ou déposez les pièces demandées depuis votre espace (Mon référencement), puis renvoyez votre dossier : " + url + "\n\nImmoPilot", "provider-" + decision + ":" + c.artisanId + ":" + Date.now());
+      "\n\nCorrigez vos informations ou déposez les pièces demandées depuis votre espace (Mon référencement), puis renvoyez votre dossier : " + url + "\n\nDarPilot", "provider-" + decision + ":" + c.artisanId + ":" + Date.now());
   }
   audit_("PROVIDER_" + decision, "Artisan", c.artisanId, c.organizationId, {});
   return providerOut_(dbGet_("Artisans", c.artisanId), true);
@@ -9189,12 +9189,12 @@ function providerExpiryJob_() {
       const x = ins[k[0]]; if (!x || !x.validUntil) return;
       if (x.validUntil < today) {
         dbUpdate_("Artisans", c.artisanId, { status: "INACTIVE", rejectReason: "Attestation d'assurance " + k[1] + " expirée le " + x.validUntil + ".", updatedAt: nowIso_() });
-        sendMailSafe_(c.email, "Référencement ImmoPilot suspendu : assurance expirée", "Bonjour,\n\nVotre attestation d'assurance " + k[1] + " a expiré le " + x.validUntil +
-          ". Votre référencement est suspendu jusqu'au dépôt d'une attestation à jour dans votre espace (Mon référencement) : " + url + "\n\nImmoPilot", "provider-expired:" + c.artisanId + ":" + k[0] + ":" + x.validUntil);
+        sendMailSafe_(c.email, "Référencement DarPilot suspendu : assurance expirée", "Bonjour,\n\nVotre attestation d'assurance " + k[1] + " a expiré le " + x.validUntil +
+          ". Votre référencement est suspendu jusqu'au dépôt d'une attestation à jour dans votre espace (Mon référencement) : " + url + "\n\nDarPilot", "provider-expired:" + c.artisanId + ":" + k[0] + ":" + x.validUntil);
         suspended++;
       } else if (x.validUntil <= soon) {
         sendMailSafe_(c.email, "Votre assurance expire bientôt", "Bonjour,\n\nVotre attestation d'assurance " + k[1] + " expire le " + x.validUntil +
-          ". Déposez la nouvelle attestation dans votre espace (Mon référencement) pour rester référencé(e) : " + url + "\n\nImmoPilot", "provider-expiring:" + c.artisanId + ":" + k[0] + ":" + x.validUntil);
+          ". Déposez la nouvelle attestation dans votre espace (Mon référencement) pour rester référencé(e) : " + url + "\n\nDarPilot", "provider-expiring:" + c.artisanId + ":" + k[0] + ":" + x.validUntil);
         reminded++;
       }
     });
@@ -9278,7 +9278,7 @@ function providerPayoutSetup_(p) {
     const L = parseJson_(c.legalJson, {}) || {};
     const a = stripeCall_("post", "/accounts", { country: "FR", email: c.email,
       controller: { stripe_dashboard: { type: "full" }, fees: { payer: "account" }, losses: { payments: "stripe" }, requirement_collection: "stripe" },
-      business_profile: { name: L.legalName || c.name, product_description: "Travaux et services aux propriétaires (ImmoPilot)" }, metadata: { artisanId: c.artisanId } }, "acct-" + c.artisanId);
+      business_profile: { name: L.legalName || c.name, product_description: "Travaux et services aux propriétaires (DarPilot)" }, metadata: { artisanId: c.artisanId } }, "acct-" + c.artisanId);
     acct = a.id;
     dbUpdate_("Artisans", c.artisanId, { stripeAccountId: acct, stripeReady: false, updatedAt: nowIso_() });
     audit_("STRIPE_ACCOUNT_CREATED", "Artisan", c.artisanId, c.organizationId, {});
@@ -9307,7 +9307,7 @@ function invPayOnline_(p, a) {
   // Paiement direct sur le compte de l'artisan : il encaisse, la plateforme ne perçoit que sa commission.
   const s = stripeCall_("post", "/checkout/sessions", { mode: "payment", customer_email: p.email,
     line_items: [{ quantity: 1, price_data: { currency: "eur", unit_amount: cents_(due), product_data: { name: "Facture " + (v.invoiceNumber || "") + " — " + (art.name || "artisan") } } }],
-    payment_intent_data: { application_fee_amount: cents_(fee), description: "Facture " + (v.invoiceNumber || v.invoiceId) + " (via ImmoPilot)", metadata: { invoiceId: v.invoiceId } },
+    payment_intent_data: { application_fee_amount: cents_(fee), description: "Facture " + (v.invoiceNumber || v.invoiceId) + " (via DarPilot)", metadata: { invoiceId: v.invoiceId } },
     metadata: { invoiceId: v.invoiceId, kind: "INVOICE" }, success_url: base + "#invoice/" + v.invoiceId, cancel_url: base + "#invoice/" + v.invoiceId }, "inv-" + v.invoiceId + "-" + cents_(due) + "-" + todayStr_(), art.stripeAccountId);
   audit_("INVOICE_ONLINE_PAYMENT_STARTED", "Invoice", v.invoiceId, v.organizationId, { amount: due, fee: fee });
   return { url: s.url };
@@ -9338,7 +9338,7 @@ function stripeWebhookApply_(ev) {
     auditAs_("stripe", "", "INVOICE_PAID_ONLINE", "Invoice", v.invoiceId, v.organizationId, { amount: amount, session: o.id });
     const art = dbGet_("Artisans", v.artisanId);
     if (art && art.userId) notify_({ eventKey: "invoice-paid-online:" + v.invoiceId, userIds: [art.userId], type: "INVOICE_PAID", organizationId: v.organizationId, title: "Facture payée en ligne : " + v.invoiceNumber,
-      body: amount + " " + (v.currency || cur_()) + " réglés par le client ; Stripe vous verse le montant, commission ImmoPilot déduite.", link: "#invoices" });
+      body: amount + " " + (v.currency || cur_()) + " réglés par le client ; Stripe vous verse le montant, commission DarPilot déduite.", link: "#invoices" });
     return { ok: true, paymentId: pay.paymentId };
   });
 }
@@ -9560,20 +9560,20 @@ function subContractData_(orgId) {
     ["Limites", (plan.maxProperties || "—") + " biens, " + (plan.maxUsers || "—") + " utilisateurs, " + (plan.storageMb || "—") + " Mo de stockage"],
     ["Fonctionnalités", feats.map(function (f) { return FEAT[f] || f; }).join(", ") || "—"]]);
   html += "<h2>Conditions principales</h2><div class='box'><ol style='margin:0;padding-left:16px'>" + [
-    "L'abonnement donne accès à l'application ImmoPilot pour l'organisation cliente, dans les limites du forfait.",
-    (sumupCardOf_(orgId) && sumupEnabled_() ? "Le tarif est payable d'avance pour chaque " + per + " par prélèvement automatique sur la carte enregistrée par le client auprès de SumUp (aucune donnée de carte n'est conservée par ImmoPilot) ; le client peut retirer sa carte à tout moment, le règlement se fait alors par virement." : "Le tarif est payable d'avance pour chaque " + per + ", par virement, espèces ou chèque ; aucun paiement en ligne n'est effectué par l'application."),
+    "L'abonnement donne accès à l'application DarPilot pour l'organisation cliente, dans les limites du forfait.",
+    (sumupCardOf_(orgId) && sumupEnabled_() ? "Le tarif est payable d'avance pour chaque " + per + " par prélèvement automatique sur la carte enregistrée par le client auprès de SumUp (aucune donnée de carte n'est conservée par DarPilot) ; le client peut retirer sa carte à tout moment, le règlement se fait alors par virement." : "Le tarif est payable d'avance pour chaque " + per + ", par virement, espèces ou chèque ; aucun paiement en ligne n'est effectué par l'application."),
     sumupEnabled_() && sumupConf_().currency !== cur_() ? "Les prix sont exprimés en " + cur_() + ". Le prélèvement par carte est effectué en " + sumupConf_().currency + (sumupConf_().rateMode === "AUTO" ? " au cours de change du jour du prélèvement (source publique de cours de change, mise à jour quotidienne) : le montant débité peut donc varier légèrement d'une période à l'autre ; le cours appliqué figure dans l'historique des règlements." : " au taux de conversion fixe de " + sumupConf_().rate + " " + sumupConf_().currency + " pour 1 " + cur_() + ", modifiable avec un préavis de 30 jours.") + " D'éventuels frais de change ou bancaires facturés par la banque du client restent à sa charge." : "",
     "En cas d'échéance non réglée, un délai de grâce de " + SUB_GRACE_DAYS_ + " jours s'applique ; au-delà, le compte passe en lecture seule jusqu'au règlement.",
-    "Les agences créées par le client dans ImmoPilot n'ont pas d'abonnement propre : elles sont facturées en option sur cet abonnement, au prix par agence indiqué ci-dessus, et suivent son statut.",
+    "Les agences créées par le client dans DarPilot n'ont pas d'abonnement propre : elles sont facturées en option sur cet abonnement, au prix par agence indiqué ci-dessus, et suivent son statut.",
     "La résiliation peut être demandée à tout moment ; elle prend effet à la fin de la période payée. Les données restent conservées et exportables.",
-    "Chaque organisation n'accède qu'à ses propres données ; l'équipe ImmoPilot n'y accède qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
+    "Chaque organisation n'accède qu'à ses propres données ; l'équipe DarPilot n'y accède qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
     "Le client reste responsable des données qu'il saisit (voyageurs, locataires) et de ses obligations déclaratives, notamment au titre de la réglementation sur les données personnelles (" + edition_().dataLaw + ")."
   ].filter(Boolean).map(function (x) { return "<li>" + escapeHtml_(x) + "</li>"; }).join("") + "</ol></div>";
   html += "<h2>Historique des abonnements</h2>" + htmlTable_(["Référence", "Forfait", "Statut", "Début", "Payé jusqu'au", "Tarif"], subs.map(function (s) { return [s.subscriptionId, s.planCode, ST[s.status] || s.status, pdfDate_(s.startDate), pdfDate_(s.paidThrough), fmt(s.price)]; }));
   html += "<h2>Historique des règlements</h2>" + (pays.length ? htmlTable_(["Date", "Montant", "Mode", "Référence", "Détail"], pays.map(function (x) { return [pdfDate_(x.paidAt), fmt(x.amount), PDF_PAY_METHODS_[x.method] || x.method || "", x.reference || "", x.note || ""]; })) +
     "<p class='right'><b>Total réglé : " + escapeHtml_(fmt(sumBy_(pays, function (x) { return x.amount; }))) + "</b></p>" : "<p class='muted'>Aucun règlement enregistré.</p>");
   const lg = legalGet_({ id: "cgv" });
-  html += "<h2>Documents contractuels</h2><p>Le présent contrat est complété par les conditions générales d'abonnement et d'utilisation, la politique de confidentialité et l'accord de traitement des données d'ImmoPilot" +
+  html += "<h2>Documents contractuels</h2><p>Le présent contrat est complété par les conditions générales d'abonnement et d'utilisation, la politique de confidentialité et l'accord de traitement des données d'DarPilot" +
     " (version du " + escapeHtml_(pdfDate_(lg.updatedAt)) + "), consultables à tout moment depuis l'application (lien « Conditions générales ») ; le client déclare en avoir pris connaissance et les accepter.</p>";
   return { org: org, cur: cur, platform: platform, html: html, legalVersion: lg.updatedAt,
     signBox: "<h2>Signatures</h2><table class='sign'><tr><td>Pour " + escapeHtml_(platform.name) + "</td><td>Pour " + escapeHtml_(org.name) + "</td></tr></table>",
@@ -9615,7 +9615,7 @@ function subscriptionJob_() {
  * Prélèvement automatique des abonnements par carte, via SumUp (paiements récurrents avec authentification forte).
  *
  * Parcours : le super administrateur attribue un forfait (sub.assign) → le propriétaire enregistre sa carte UNE fois dans le
- * formulaire sécurisé SumUp (widget, 3D Secure ; aucune donnée de carte ne passe par ImmoPilot) → à chaque échéance (fin d'essai,
+ * formulaire sécurisé SumUp (widget, 3D Secure ; aucune donnée de carte ne passe par DarPilot) → à chaque échéance (fin d'essai,
  * fin de période, ou tout de suite si un règlement est attendu) le serveur débite la carte enregistrée et prolonge l'abonnement
  * (subApplyPayment_). Échec : nouvel essai chaque jour (SUMUP_MAX_ATTEMPTS_ au plus par échéance), notifications, puis la règle
  * habituelle (lecture seule après le délai de grâce) s'applique.
@@ -9714,7 +9714,7 @@ function sumupPayerSub_(p, orgId) {
   assert_(org && org.type !== "PLATFORM", "Organisation introuvable.");
   if (agencyBillingParent_(org)) throw new AppError("VALIDATION", "Cette agence est incluse dans l'abonnement de son propriétaire : c'est lui qui enregistre la carte.");
   const e = entitlement_(orgId), s = e.subscription;
-  assert_(s && ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0, "Aucun abonnement en cours : l'administrateur ImmoPilot doit d'abord attribuer un forfait.");
+  assert_(s && ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0, "Aucun abonnement en cours : l'administrateur DarPilot doit d'abord attribuer un forfait.");
   return s;
 }
 
@@ -9738,7 +9738,7 @@ function subCardSetup_(p, a) {
   const c = sumupConf_(), org = dbGet_("Organizations", orgId), customerId = sumupCustomerId_(orgId);
   sumupCall_("post", "/customers", { customer_id: customerId, personal_details: { email: safeText_(p.email, 200), first_name: safeText_(org.name, 100) } }, [409]);
   const co = sumupCall_("post", "/checkouts", { checkout_reference: "CARD-" + orgId.slice(-20) + "-" + Date.now(), amount: SUMUP_SETUP_AMOUNT_, currency: c.currency, merchant_code: c.merchant,
-    description: "ImmoPilot : enregistrement de la carte (montant remboursé)", customer_id: customerId, purpose: "SETUP_RECURRING_PAYMENT" }).body;
+    description: "DarPilot : enregistrement de la carte (montant remboursé)", customer_id: customerId, purpose: "SETUP_RECURRING_PAYMENT" }).body;
   assert_(co && co.id, "SumUp n'a pas créé le paiement de vérification.");
   dbInsert_("BillingCards", { organizationId: orgId, status: "PENDING", customerId: customerId, token: "", label: "", setupCheckoutId: co.id, createdAt: nowIso_(), createdBy: p.email });
   audit_("CARD_SETUP_STARTED", "Organization", orgId, orgId, {});
@@ -9829,7 +9829,7 @@ function sumupChargeSub_(s, actor) {
   try {
     const plan = dbGet_("SubscriptionPlans", s.planCode) || {};
     const co = sumupCall_("post", "/checkouts", { checkout_reference: ref, amount: amt.amount, currency: amt.currency, merchant_code: c.merchant, customer_id: card.customerId,
-      description: ("ImmoPilot : abonnement " + (plan.name || s.planCode)).slice(0, 120) }).body;
+      description: ("DarPilot : abonnement " + (plan.name || s.planCode)).slice(0, 120) }).body;
     res = sumupCall_("put", "/checkouts/" + encodeURIComponent(co.id), { payment_type: "card", token: card.token, customer_id: card.customerId }).body;
   } catch (e) { res = { status: "FAILED", message: e.message }; }
   if (String(res.status) === "PAID") return sumupRecordPaid_(s, card, res, total, amt, actor);
@@ -9900,7 +9900,7 @@ function testerSumUp() {
 /**
  * Modèles de documents intégrés : quittance, bail, fiche de réservation.
  * Ils remplacent les modèles Google Docs (indisponibles sur le serveur dédié). Chaque organisation peut écrire son
- * propre texte avec des balises {{cle}} ; laissé vide, le gabarit intégré d'ImmoPilot est utilisé.
+ * propre texte avec des balises {{cle}} ; laissé vide, le gabarit intégré d'DarPilot est utilisé.
  *
  * Mise en forme simple (le texte est toujours échappé, aucun HTML n'est accepté) :
  *   # Titre de section      → intertitre
@@ -10076,7 +10076,7 @@ function templatePreview_(p, a) {
  * Tests.gs
  * ====================================================================== */
 /**
- * Suite de tests automatisés ImmoPilot.
+ * Suite de tests automatisés DarPilot.
  *
  * Exécution dans Google Apps Script : lancer runAllTests() depuis l'éditeur (propriétaire du script).
  *  - Crée un classeur et un dossier Drive TEMPORAIRES (« ImmoPilot_TEST_… »), n'utilise JAMAIS la base de production,
@@ -10721,13 +10721,13 @@ function TEST_GROUPS_() {
         T.ok(report.indexOf("Rapport de ménage") > 0 && (report.match(/data:image\/jpeg;base64,/g) || []).length === 4 && report.indexOf("AVANT") > 0, "rapport avec 4 photos avant / après");
         T.ok(text(T.call(provTok, "clean.orderPdf", { missionId: withPhotos })).indexOf("Ordre de mission de ménage") > 0, "ordre de mission pour le prestataire");
         T.fails(fx.tok.ownerB, "clean.reportPdf", { missionId: withPhotos }, "FORBIDDEN");
-        // Devis et facture au nom du prestataire (sans la marque ImmoPilot), devis en attente et intervention planifiée
+        // Devis et facture au nom du prestataire (sans la marque DarPilot), devis en attente et intervention planifiée
         T.eq([h.counts.extras.pendingQuote, h.counts.extras.scheduledWorkOrder], [1, 1], "devis en attente et intervention planifiée");
         const art = dbAll_("Artisans").find(function (c) { return c.email === S.provider.email; });
         const q = dbAll_("Quotes").find(function (x) { return x.status === "APPROVED" && String(x.artisanId) === String(art.artisanId); });
         T.ok(parseJson_(q.linesJson, []).length >= 2, "devis type sur plusieurs lignes");
         const qpdf = text(T.call(ownerTok, "quote.pdf", { quoteId: q.quoteId }));
-        T.ok(qpdf.indexOf("Devis n° DEV-") > 0 && qpdf.indexOf("Multiservices") > 0 && qpdf.indexOf("Bon pour accord") > 0 && qpdf.indexOf(PDF_LOGO_PNG_B64_.slice(0, 40)) < 0 && qpdf.indexOf("Immo<span") < 0, "devis sans logo ImmoPilot");
+        T.ok(qpdf.indexOf("Devis n° DEV-") > 0 && qpdf.indexOf("Multiservices") > 0 && qpdf.indexOf("Bon pour accord") > 0 && qpdf.indexOf(PDF_LOGO_PNG_B64_.slice(0, 40)) < 0 && qpdf.indexOf("Immo<span") < 0, "devis sans logo DarPilot");
         T.ok(text(T.call(provTok, "quote.pdf", { quoteId: q.quoteId })).indexOf("Devis") > 0, "le prestataire télécharge son devis");
         T.fails(fx.tok.ownerB, "quote.pdf", { quoteId: q.quoteId }, "FORBIDDEN");
         const pending = dbAll_("Quotes").find(function (x) { return x.status === "PENDING" && String(x.artisanId) === String(art.artisanId); });
@@ -11708,7 +11708,7 @@ function TEST_GROUPS_() {
           T.call(fx.tok.ownerA, "pay.record", { refType: "INVOICE", refId: v1.invoiceId, kind: "INVOICE", amount: 600, method: "TRANSFER", reference: "VIR-1" });
           const fa = dbAll_("PlatformFees").find(function (f) { return f.invoiceId === v1.invoiceId && f.kind === "ARTISAN"; });
           T.eq(fa.status, "LINK_SENT", "lien de paiement envoyé"); T.ok(/pay\.sumup\.test/.test(fa.payUrl), "lien SumUp hébergé");
-          T.ok(/Commission ImmoPilot à régler/.test(T.lastMailTo(art.email).subject) && T.lastMailTo(art.email).body.indexOf(fa.payUrl) >= 0, "e-mail avec le lien");
+          T.ok(/Commission DarPilot à régler/.test(T.lastMailTo(art.email).subject) && T.lastMailTo(art.email).body.indexOf(fa.payUrl) >= 0, "e-mail avec le lien");
           sim.checkouts[fa.checkoutId].status = "PAID";
           commissionCheckPayments_();
           T.eq(dbGet_("PlatformFees", fa.feeId).status, "PAID", "paiement détecté");
@@ -12057,10 +12057,10 @@ function invitationInsertAndSend_(p, a, org) {
 }
 function sendInvitationEmail_(inv, token, org, p) {
   const url = appUrl_() + "?action=accept&token=" + token;
-  const body = "Bonjour " + inv.displayName + ",\n\n" + p.displayName + " vous invite à rejoindre ImmoPilot.\n\nOrganisation : " + org.name + "\nRôle : " + inv.role +
+  const body = "Bonjour " + inv.displayName + ",\n\n" + p.displayName + " vous invite à rejoindre DarPilot.\n\nOrganisation : " + org.name + "\nRôle : " + inv.role +
     "\n\nAcceptez l'invitation avec ce lien personnel, à usage unique, valable " + inviteDays_() + " jours :\n" + url +
-    "\n\nSi vous n'attendiez pas cette invitation, ignorez ce message.\n\nImmoPilot";
-  const r = sendMailSafe_(inv.email, "Invitation à rejoindre ImmoPilot — " + org.name, body, "invite:" + inv.invitationId + ":" + inv.tokenHash.slice(0, 8));
+    "\n\nSi vous n'attendiez pas cette invitation, ignorez ce message.\n\nDarPilot";
+  const r = sendMailSafe_(inv.email, "Invitation à rejoindre DarPilot — " + org.name, body, "invite:" + inv.invitationId + ":" + inv.tokenHash.slice(0, 8));
   if (!r.ok) dbUpdate_("Invitations", inv.invitationId, { status: "EMAIL_FAILED" });
   return r;
 }
@@ -12729,7 +12729,7 @@ function docTotalsHtml_(ht, vatRate, vat, ttc, cur, extra) {
   return "<table style='width:45%;margin:8px 0 0 auto'>" + rows.map(function (r) { return "<tr><td>" + (r[0].charAt(0) === "<" ? r[0] : escapeHtml_(r[0])) + "</td><td class='right'>" + (r[1].charAt(0) === "<" ? r[1] : escapeHtml_(r[1])) + "</td></tr>"; }).join("") + "</table>";
 }
 
-/** Devis du prestataire (sans la marque ImmoPilot). */
+/** Devis du prestataire (sans la marque DarPilot). */
 function quotePdf_(p, a) {
   const x = quoteLoad_(p, a.quoteId), q = x.q, prop = x.prop, art = dbGet_("Artisans", q.artisanId) || {};
   assert_(["PENDING", "APPROVED", "REJECTED", "EXPIRED"].indexOf(q.status) >= 0, "Le devis n'a pas encore été établi par le prestataire.");
@@ -12752,7 +12752,7 @@ function quotePdf_(p, a) {
     { propertyId: prop.propertyId, organizationId: prop.organizationId }, "QUOTE", q.quoteId, "QUOTE");
 }
 
-/** Facture du prestataire au propriétaire du bien (sans la marque ImmoPilot ; la commission interne n'y figure pas). */
+/** Facture du prestataire au propriétaire du bien (sans la marque DarPilot ; la commission interne n'y figure pas). */
 function invoicePdf_(p, a) {
   const x = invLoad_(p, a.invoiceId), v = x.v, prop = x.prop, art = dbGet_("Artisans", v.artisanId) || {}, cur = v.currency || cur_();
   const owner = dbGet_("Organizations", prop.organizationId) || {}, w = v.workOrderId ? dbGet_("WorkOrders", v.workOrderId) : null, q = w && w.quoteId ? dbGet_("Quotes", w.quoteId) : null;

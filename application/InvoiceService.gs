@@ -99,7 +99,7 @@ function invApprove_(p, a) {
     audit_("INVOICE_APPROVED", "Invoice", v.invoiceId, v.organizationId, { amountTTC: v.amountTTC, commissionRate: rate, commissionAmount: split.commissionAmount, beneficiary: beneficiary });
     const art = dbGet_("Artisans", v.artisanId);
     if (art && art.userId) notify_({ eventKey: "invoice-approved:" + v.invoiceId, userIds: [art.userId], type: "INVOICE_APPROVED", organizationId: v.organizationId, title: "Facture approuvée : " + v.invoiceNumber,
-      body: pf ? "Montant à recevoir du client : " + split.amountTTC + " " + cur_() + ". Commission ImmoPilot (" + rate + " %) : " + round2_(split.commissionAmount + split.commissionVatAmount) + " " + cur_() + " TTC, prélevée si le client paie par la plateforme, sinon réclamée par lien de paiement une fois la facture réglée."
+      body: pf ? "Montant à recevoir du client : " + split.amountTTC + " " + cur_() + ". Commission DarPilot (" + rate + " %) : " + round2_(split.commissionAmount + split.commissionVatAmount) + " " + cur_() + " TTC, prélevée si le client paie par la plateforme, sinon réclamée par lien de paiement une fois la facture réglée."
         : "Net à percevoir : " + split.netToContractor + " " + cur_() + " (commission " + rate + " % : " + split.commissionAmount + " " + cur_() + " HT).", link: "#invoices" });
     return Object.assign({ ok: true, status: "APPROVED", commissionRate: rate, beneficiaryOrgId: beneficiary }, split);
   });

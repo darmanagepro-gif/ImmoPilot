@@ -620,7 +620,7 @@ function providerPicker(getPropertyId, o) {
   if (!o.fixedType) fields.push({ k: "serviceType", l: "Type de prestation", t: "select", req: true, def: o.defaultType, opts: function () { return listOpts("specialties").filter(function (x) { return x[0] !== "CLEANING" || o.allowCleaning; }); }, onchange: function (v, inputs) { load(inputs); } });
   let started = false;
   // Premier chargement de la liste dès que le formulaire est construit (puis à chaque changement de bien ou de type).
-  fields.push({ k: key, l: o.label || "Prestataire", t: "select", req: !!o.required, opts: [], help: t("Liste tenue par l'administrateur ImmoPilot, filtrée par type de prestation."),
+  fields.push({ k: key, l: o.label || "Prestataire", t: "select", req: !!o.required, opts: [], help: t("Liste tenue par l'administrateur DarPilot, filtrée par type de prestation."),
     onchange: function (v, inputs) { if (!started) { started = true; load(inputs); } } });
   return { fields: fields, load: load };
 }
@@ -642,7 +642,7 @@ function contractorFields(isCreate) {
 }
 PAGES.contractors = function (el, id) {
   if (id) return contractorDetail(el, id);
-  el.appendChild(pageHead(t("Prestataires"), S.me.isSuper ? t("Annuaire de la plateforme : entreprises de ménage et artisans, avec leurs types de prestation. Les propriétaires et agences les choisissent dans cette liste.") : t("Annuaire des prestataires intégrés par l'administrateur ImmoPilot. Pour demander un devis, créer une intervention ou attribuer un ménage, choisissez le type de prestation puis le prestataire."), [S.me.isSuper ? btn("+ " + t("Prestataire"), function () {
+  el.appendChild(pageHead(t("Prestataires"), S.me.isSuper ? t("Annuaire de la plateforme : entreprises de ménage et artisans, avec leurs types de prestation. Les propriétaires et agences les choisissent dans cette liste.") : t("Annuaire des prestataires intégrés par l'administrateur DarPilot. Pour demander un devis, créer une intervention ou attribuer un ménage, choisissez le type de prestation puis le prestataire."), [S.me.isSuper ? btn("+ " + t("Prestataire"), function () {
     formModal(t("Nouveau prestataire"), contractorFields(true), {}, function (v) { if (typeof v.zones === "string") v.zones = v.zones.split(","); return api("ctr.create", v).then(function (r) { const inv = (r.invitations || []).filter(function (x) { return x.invitationId; });
       toast(inv.length ? t("Prestataire ajouté. Invitation envoyée :") + " " + inv.map(function (x) { return roleLabel(x.role); }).join(", ") : t("Prestataire ajouté."), "good");
       if (r.note) toast(r.note); NAV_HASH.v = "contractors/" + r.artisanId; }); });
@@ -655,7 +655,7 @@ PAGES.contractors = function (el, id) {
 function contractorDetail(el, id) {
   return api("ctr.get", { artisanId: id }).then(function (c) {
     $("page-title").textContent = c.name;
-    el.appendChild(pageHead(c.name, (c.specialties || []).map(st).join(", "), [stTag(c.status), c.platform && !c.canEdit ? tag(t("Annuaire ImmoPilot"), "info") : null, (c.canEdit || can("workorder.operate")) ? btn(t("Modifier"), function () { formModal(t("Modifier"), contractorFields(false), Object.assign({}, c, { zones: (c.zones || []).join(", ") }), function (v) { v.artisanId = id; if (typeof v.zones === "string") v.zones = v.zones.split(","); return api("ctr.update", v).then(function () { App.go("contractors/" + id); }); }); }) : null,
+    el.appendChild(pageHead(c.name, (c.specialties || []).map(st).join(", "), [stTag(c.status), c.platform && !c.canEdit ? tag(t("Annuaire DarPilot"), "info") : null, (c.canEdit || can("workorder.operate")) ? btn(t("Modifier"), function () { formModal(t("Modifier"), contractorFields(false), Object.assign({}, c, { zones: (c.zones || []).join(", ") }), function (v) { v.artisanId = id; if (typeof v.zones === "string") v.zones = v.zones.split(","); return api("ctr.update", v).then(function () { App.go("contractors/" + id); }); }); }) : null,
       c.phone ? h("a", { class: "btn", href: "https://wa.me/" + waNumber(c.phone), target: "_blank", rel: "noopener" }, "WhatsApp") : null]));
     if (c.verification) providerReviewPanel(el, c);
     el.appendChild(kpis([{ l: "Interventions", v: fmtNum(c.stats.interventions, 0) }, { l: "Contrôlées", v: fmtNum(c.stats.verified, 0), tone: "good" }, { l: "Taux de résolution", v: fmtPct(c.stats.resolutionRate) }, { l: "Délai moyen", v: c.stats.avgDelayDays === null ? "—" : fmtNum(c.stats.avgDelayDays, 1) + " j" },
@@ -737,7 +737,7 @@ PAGES.invoice = function (el, id) {
     el.appendChild(pageHead(t("Facture") + " " + v.invoiceNumber, v.artisanName, A));
     if (v.notes && v.notes.indexOf("[") === 0) el.appendChild(h("div", { class: "alert warn" }, v.notes));
     el.appendChild(h("div", { class: "grid c2" }, panel("Montants", kv([["Montant HT", fmtMoney(v.amountHT)], ["TVA", fmtMoney(v.vatAmount) + " (" + fmtNum(v.vatRate) + " %)"], ["Montant TTC (coût propriétaire)", h("b", null, fmtMoney(v.amountTTC))], ["Date", fmtDate(v.issueDate)], ["Échéance", fmtDate(v.dueDate)]])),
-      v.platformArtisan ? panel("Commissions ImmoPilot", h("div", null, v.commissionLocked ? kv([["Payé à l'artisan", h("b", null, fmtMoney(v.amountTTC))], ["Déjà réglé", fmtMoney(v.paidAmount)], ["Reste à régler", fmtMoney(v.balance)],
+      v.platformArtisan ? panel("Commissions DarPilot", h("div", null, v.commissionLocked ? kv([["Payé à l'artisan", h("b", null, fmtMoney(v.amountTTC))], ["Déjà réglé", fmtMoney(v.paidAmount)], ["Reste à régler", fmtMoney(v.balance)],
           ["Commission artisan", fmtNum(v.commissionRate) + " % · " + fmtMoney(v.commissionAmount + v.commissionVatAmount) + " " + t("TTC")], ["Votre commission", fmtNum(v.clientCommission.rate) + " % · " + fmtMoney(v.clientCommission.amount) + " " + t("HT, récapitulatif mensuel")]]) : h("p", { class: "muted" }, t("Calculées à l'approbation de la facture.")),
           h("p", { class: "small muted" }, t("Payée en ligne par la plateforme : Stripe verse l'artisan et retient sa commission. Payée directement ou en espèces : marquez-la réglée ; l'artisan reçoit alors un lien pour régler sa commission.")),
           v.platformPay && !v.platformPay.available && v.canManage ? h("p", { class: "small muted" }, "ⓘ " + t(v.platformPay.reason)) : null,
@@ -989,7 +989,7 @@ const LA_COND = [["", "—"], ["NEW", "Neuf"], ["GOOD", "Bon état"], ["WORN", "
 function laCondLabel(c) { const x = LA_COND.find(function (o) { return o[0] === c; }); return x && c ? t(x[1]) : "—"; }
 function laEngineTag(engine) { return engine && engine !== "MODELE" ? tag("✦ " + t("Rédigé par l'IA"), "info") : tag(t("Modèle intégré"), ""); }
 function laAgentIntro(ai) {
-  return ai ? t("L'agent IA rédige un premier jet que vous relisez et modifiez. Aucune donnée d'identité (nom, e-mail, téléphone, adresse, pièce d'identité) n'est transmise au service d'IA : elles sont ajoutées par ImmoPilot ensuite. Vos consignes et conditions particulières sont transmises telles quelles : n'y mettez pas de données personnelles.")
+  return ai ? t("L'agent IA rédige un premier jet que vous relisez et modifiez. Aucune donnée d'identité (nom, e-mail, téléphone, adresse, pièce d'identité) n'est transmise au service d'IA : elles sont ajoutées par DarPilot ensuite. Vos consignes et conditions particulières sont transmises telles quelles : n'y mettez pas de données personnelles.")
     : t("L'IA n'est pas configurée : l'agent utilise les modèles intégrés, déjà adaptés à votre pays. Le document reste entièrement modifiable avant validation.");
 }
 function leaseDocsTable(l, go) {

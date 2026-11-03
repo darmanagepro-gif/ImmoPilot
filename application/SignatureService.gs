@@ -19,11 +19,11 @@ function requestMeta_() {
 
 /* ------------------------------- SMS (Brevo) ------------------------------- */
 function smsConf_() {
-  if (TEST_HOOKS_.smsSink) return { key: "test", sender: "ImmoPilot" };
+  if (TEST_HOOKS_.smsSink) return { key: "test", sender: "DarPilot" };
   const g = typeof globalThis !== "undefined" ? globalThis : this, env = g.IMMO_SECRETS_ || {};
   const P = PropertiesService.getScriptProperties(), key = String(env.brevoApiKey || P.getProperty("BREVO_API_KEY") || "").trim();
   if (!key) return null;
-  const sender = String(P.getProperty("SMS_SENDER") || "ImmoPilot").replace(/[^A-Za-z0-9]/g, "").slice(0, 11) || "ImmoPilot";
+  const sender = String(P.getProperty("SMS_SENDER") || "DarPilot").replace(/[^A-Za-z0-9]/g, "").slice(0, 11) || "DarPilot";
   return { key: key, sender: sender };
 }
 /** Numéro au format international sans « + » (ex. 33612345678), ou "" si inutilisable. */
@@ -91,10 +91,10 @@ function subSignStart_(p, a) {
     currency: s.currency || cur_(), contractHash: subContractHash_(d), legalVersion: d.legalVersion, signerUserId: p.userId, signerEmail: p.email, signerName: safeText_(u.displayName || p.email, 120),
     channel: channel, destination: masked, otpHash: "", otpExpires: new Date(Date.now() + SIGN_OTP_MINUTES_ * 60000).toISOString(), otpAttempts: 0, status: "PENDING", createdAt: nowIso_() });
   dbUpdate_("ContractSignatures", row.signatureId, { otpHash: sha256Hex_(row.signatureId + ":" + digits) });
-  const text = "ImmoPilot : votre code de signature du contrat d'abonnement est " + digits + ". Il expire dans " + SIGN_OTP_MINUTES_ + " minutes. Ne le communiquez à personne.";
+  const text = "DarPilot : votre code de signature du contrat d'abonnement est " + digits + ". Il expire dans " + SIGN_OTP_MINUTES_ + " minutes. Ne le communiquez à personne.";
   if (channel === "SMS") smsSend_(dest, text);
   else {
-    const r = sendMailSafe_(dest, "Code de signature de votre contrat ImmoPilot : " + digits, "Bonjour,\n\n" + text + "\n\nContrat : abonnement " + d.cur.planCode + " pour " + d.org.name +
+    const r = sendMailSafe_(dest, "Code de signature de votre contrat DarPilot : " + digits, "Bonjour,\n\n" + text + "\n\nContrat : abonnement " + d.cur.planCode + " pour " + d.org.name +
       ".\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.", "sign-otp:" + row.signatureId, orgId, { plain: true });
     if (!r.ok) throw new AppError("MAIL", "L'e-mail contenant le code n'a pas pu être envoyé. Réessayez dans un instant.");
   }
@@ -125,8 +125,8 @@ function subSignConfirm_(p, a) {
       { mimeType: "application/pdf", fileName: blob.getName(), base64: Utilities.base64Encode(blob.getBytes()) }, p.email);
     dbUpdate_("ContractSignatures", id, { documentId: doc.documentId });
     audit_("CONTRACT_SIGNED", "Subscription", s.subscriptionId, orgId, { signatureId: id, channel: row.channel, hash: row.contractHash });
-    sendMailSafe_(p.email, "Votre contrat d'abonnement ImmoPilot signé", "Bonjour,\n\nVotre contrat d'abonnement ImmoPilot (" + d.org.name + ", forfait " + s.planCode + ") a été signé électroniquement le " +
-      Utilities.formatDate(new Date(), tz_(), "dd/MM/yyyy à HH:mm") + ".\nVous le trouverez en pièce jointe ; il reste disponible dans ImmoPilot, menu Abonnement.\n\nMerci de votre confiance.", "sign-done:" + id, orgId,
+    sendMailSafe_(p.email, "Votre contrat d'abonnement DarPilot signé", "Bonjour,\n\nVotre contrat d'abonnement DarPilot (" + d.org.name + ", forfait " + s.planCode + ") a été signé électroniquement le " +
+      Utilities.formatDate(new Date(), tz_(), "dd/MM/yyyy à HH:mm") + ".\nVous le trouverez en pièce jointe ; il reste disponible dans DarPilot, menu Abonnement.\n\nMerci de votre confiance.", "sign-done:" + id, orgId,
       { attachments: [blob], plain: true });
     return { ok: true, signedAt: sig.signedAt, documentId: doc.documentId };
   });

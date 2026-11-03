@@ -1,5 +1,5 @@
 /**
- * ImmoPilot 2.6.0 — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
+ * ImmoPilot 2.7.0 — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
  * Contient les 42 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, CommissionService.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SignatureService.gs, SignupService.gs, StripeService.gs, SubscriptionService.gs, SumUpService.gs, TemplateService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
  * À coller seul dans le projet Apps Script (aucun autre fichier .gs ne doit rester dans le projet).
  */
@@ -75,7 +75,7 @@ function ensureDatabase_(props, rootFolder) {
   const first = ss.getSheets()[0];
   if (first && ss.getSheets().length === 1 && first.getLastRow() === 0) {
     first.setName("Accueil");
-    first.getRange(1, 1, 3, 1).setValues([["'Base de données ImmoPilot " + IMMO_CONFIG.VERSION], ["'Ne modifiez, ne triez et ne supprimez aucun onglet à la main : passez par l'application."], ["'Créée le " + nowIso_()]]);
+    first.getRange(1, 1, 3, 1).setValues([["'Base de données DarPilot " + IMMO_CONFIG.VERSION], ["'Ne modifiez, ne triez et ne supprimez aucun onglet à la main : passez par l'application."], ["'Créée le " + nowIso_()]]);
   }
   props.setProperty(IMMO_CONFIG.DATABASE_PROPERTY, ss.getId());
   dbSetSpreadsheet_(ss);
@@ -93,7 +93,7 @@ function createFirstSuperAdminInternal_(owner, props) {
   const emails = raw.split(",").map(normalizeEmail_).filter(Boolean);
   assert_(emails.length, "Renseignez IMMO_ADMIN_EMAILS (propriétés du script) avec au moins une adresse.", "CONFIG");
   let platform = dbAll_("Organizations").find(function (o) { return o.type === "PLATFORM"; });
-  if (!platform) platform = dbInsert_("Organizations", { name: "ImmoPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: owner });
+  if (!platform) platform = dbInsert_("Organizations", { name: "DarPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: owner });
   return emails.map(function (email) {
     validateEmail_(email);
     let user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });
@@ -286,7 +286,7 @@ function auditList_(p, a) {
  * Assistant.gs
  * ====================================================================== */
 /**
- * RUBBAN (رُبّان, « le pilote ») — assistant d'aide intégré à ImmoPilot, disponible 24 h/24, 7 j/7.
+ * RUBBAN (رُبّان, « le pilote ») — assistant d'aide intégré à DarPilot, disponible 24 h/24, 7 j/7.
  *
  * Deux modes :
  *  - GUIDE (toujours disponible, gratuit) : recherche dans la base de connaissances ASSISTANT_KB_ ci-dessous,
@@ -308,20 +308,20 @@ var AI_LIMITS_ = { perUserHour: 30, platformDay: 1500, maxQuestion: 600, maxHist
  */
 var ASSISTANT_KB_ = [
   // ---------- Compte et connexion ----------
-  { id: "login", t: "Se connecter à ImmoPilot", r: ["*"], go: "", k: "connexion login connecter identifiant se connecter sign in دخول",
-    s: ["Ouvrez l'adresse d'ImmoPilot (site ou application).", "Saisissez votre e-mail et votre mot de passe, puis « Se connecter ».", "Après 5 essais erronés, le compte est bloqué 15 minutes : attendez puis réessayez, ou utilisez « Mot de passe oublié »."] },
+  { id: "login", t: "Se connecter à DarPilot", r: ["*"], go: "", k: "connexion login connecter identifiant se connecter sign in دخول",
+    s: ["Ouvrez l'adresse d'DarPilot (site ou application).", "Saisissez votre e-mail et votre mot de passe, puis « Se connecter ».", "Après 5 essais erronés, le compte est bloqué 15 minutes : attendez puis réessayez, ou utilisez « Mot de passe oublié »."] },
   { id: "theme", t: "Passer en mode sombre ou clair (jour / nuit)", r: ["*"], go: "", k: "thème theme sombre clair nuit jour dark light mode nocturne couleur écran الوضع الليلي داكن فاتح",
-    s: ["Cliquez sur le bouton 🌙 en haut de l'écran (à gauche du choix de langue), ou sur l'écran de connexion.", "L'application passe en mode sombre ; le bouton devient ☀️ pour revenir en mode clair.", "Votre choix est mémorisé sur cet appareil. Sans choix, ImmoPilot suit le réglage clair/sombre de votre appareil."] },
+    s: ["Cliquez sur le bouton 🌙 en haut de l'écran (à gauche du choix de langue), ou sur l'écran de connexion.", "L'application passe en mode sombre ; le bouton devient ☀️ pour revenir en mode clair.", "Votre choix est mémorisé sur cet appareil. Sans choix, DarPilot suit le réglage clair/sombre de votre appareil."] },
   { id: "activate", t: "Activer mon compte (lien reçu par e-mail)", r: ["*"], go: "", k: "activation activer invitation lien email premier mot de passe accepter invitation تفعيل",
-    s: ["Ouvrez l'e-mail « Invitation à rejoindre ImmoPilot » ou « Activez votre compte ImmoPilot ».", "Cliquez sur le bouton « Ouvrir ImmoPilot » (lien personnel, à usage unique).", "Choisissez votre mot de passe (10 caractères minimum, avec lettres et chiffres) puis validez.", "Le lien d'invitation est valable 7 jours, le lien d'activation 72 h. Expiré ? Demandez à votre administrateur de le renvoyer."] },
+    s: ["Ouvrez l'e-mail « Invitation à rejoindre DarPilot » ou « Activez votre compte DarPilot ».", "Cliquez sur le bouton « Ouvrir DarPilot » (lien personnel, à usage unique).", "Choisissez votre mot de passe (10 caractères minimum, avec lettres et chiffres) puis validez.", "Le lien d'invitation est valable 7 jours, le lien d'activation 72 h. Expiré ? Demandez à votre administrateur de le renvoyer."] },
   { id: "forgot", t: "Mot de passe oublié", r: ["*"], go: "", k: "oublié oublie reset réinitialiser mot de passe mdp password forgot نسيت كلمة السر",
     s: ["Sur l'écran de connexion, cliquez sur « Mot de passe oublié ».", "Saisissez votre e-mail : vous recevez un lien valable 1 heure.", "Ouvrez le lien et choisissez un nouveau mot de passe. Vos autres sessions sont déconnectées."] },
   { id: "password", t: "Changer mon mot de passe ou ma langue", r: ["*"], go: "settings", k: "changer mot de passe profil langue nom téléphone préférences notifications email arabe anglais espagnol italien néerlandais hollandais español italiano nederlands",
     s: ["Ouvrez « Paramètres » › « Mon profil ».", "Modifiez votre nom, téléphone, langue (FR, EN, ع) ou vos préférences de notifications.", "« Changer le mot de passe » demande l'ancien mot de passe. « Déconnecter mes autres appareils » ferme les sessions ouvertes ailleurs."] },
   { id: "delete-account", t: "Supprimer mon compte", r: ["*"], go: "settings", k: "supprimer compte suppression rgpd données personnelles delete account حذف الحساب",
-    s: ["Ouvrez « Paramètres » › « Mon profil » › « Supprimer mon compte ».", "Indiquez le motif : la demande est transmise à l'administrateur ImmoPilot.", "Votre identité est effacée ; les données comptables obligatoires sont conservées sans votre nom."] },
-  { id: "install-phone", t: "Installer ImmoPilot sur mon téléphone", r: ["*"], go: "", k: "téléphone mobile android iphone application installer écran d'accueil app store play store",
-    s: ["Android : ouvrez le site ImmoPilot dans Chrome, menu ⋮ › « Installer l'application » (ou installez-la depuis Google Play quand elle y est publiée).", "iPhone : ouvrez le site dans Safari, bouton Partager › « Sur l'écran d'accueil ».", "Les données sont les mêmes sur le web, Android et iPhone, en temps réel."] },
+    s: ["Ouvrez « Paramètres » › « Mon profil » › « Supprimer mon compte ».", "Indiquez le motif : la demande est transmise à l'administrateur DarPilot.", "Votre identité est effacée ; les données comptables obligatoires sont conservées sans votre nom."] },
+  { id: "install-phone", t: "Installer DarPilot sur mon téléphone", r: ["*"], go: "", k: "téléphone mobile android iphone application installer écran d'accueil app store play store",
+    s: ["Android : ouvrez le site DarPilot dans Chrome, menu ⋮ › « Installer l'application » (ou installez-la depuis Google Play quand elle y est publiée).", "iPhone : ouvrez le site dans Safari, bouton Partager › « Sur l'écran d'accueil ».", "Les données sont les mêmes sur le web, Android et iPhone, en temps réel."] },
   { id: "notifications", t: "Notifications et e-mails", r: ["*"], go: "notifications", k: "notification cloche alerte email rappel message whatsapp",
     s: ["La cloche en haut à droite affiche les notifications non lues ; « Notifications » les liste toutes.", "Réglez les e-mails dans « Paramètres » › « Mon profil » › « Modifier mes préférences ».", "Les boutons WhatsApp ouvrent une conversation pré-remplie : l'envoi reste manuel."] },
   // ---------- Biens ----------
@@ -340,7 +340,7 @@ var ASSISTANT_KB_ = [
     s: ["Ouvrez le bien › onglet « Agences et équipes ».", "« Inviter une personne » : e-mail, rôle (gardien, ménage, artisan, locataire) ; l'invitation est liée au bien.", "Si la personne a déjà un compte avec ce rôle : « Affecter une personne ». Un gardien peut aussi être limité à une seule réservation."] },
   // ---------- Réservations ----------
   { id: "resv-create", t: "Créer une réservation", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reservations", k: "réservation resa booking créer nouvelle séjour voyageur airbnb booking.com dates حجز",
-    s: ["Ouvrez « Réservations » › « + Nouvelle réservation » (ou cliquez sur une date du « Calendrier »).", "Choisissez le bien, les dates d'arrivée et de départ, le voyageur et le nombre de personnes.", "Prix : laissez vide pour nuits × prix du bien, ou saisissez votre prix (tarif libre pour l'agence).", "ImmoPilot refuse automatiquement les chevauchements, y compris entre agences, en respectant le temps de ménage entre deux séjours."] },
+    s: ["Ouvrez « Réservations » › « + Nouvelle réservation » (ou cliquez sur une date du « Calendrier »).", "Choisissez le bien, les dates d'arrivée et de départ, le voyageur et le nombre de personnes.", "Prix : laissez vide pour nuits × prix du bien, ou saisissez votre prix (tarif libre pour l'agence).", "DarPilot refuse automatiquement les chevauchements, y compris entre agences, en respectant le temps de ménage entre deux séjours."] },
   { id: "resv-pay", t: "Enregistrer un paiement ou un acompte de réservation", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reservations", k: "paiement acompte solde caution encaisser payé impayé règlement virement espèces",
     s: ["Ouvrez la réservation › « Enregistrer un paiement » : montant, date, mode (virement, espèces, carte, plateforme…) et référence.", "Le statut passe à « Partiel » ou « Payé » automatiquement.", "Aucun paiement en ligne n'est effectué par l'application : enregistrez les règlements réellement reçus."] },
   { id: "resv-cancel", t: "Annuler une réservation ou déclarer un no-show", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "reservations", k: "annuler annulation no-show absent pas venu jamais arrivé client venu remboursement pénalité motif",
@@ -354,7 +354,7 @@ var ASSISTANT_KB_ = [
     s: ["Ouvrez « Arrivées et départs » : les arrivées et départs du jour.", "« Effectuer le check-in » : cochez la liste, relevez les compteurs, ajoutez photos et signature, signalez une anomalie si besoin.", "« Effectuer le check-out » au départ : la mission de ménage est créée automatiquement.", "Les retards sont enregistrés et alimentent l'analyse « Retards et non-conformités »."] },
   // ---------- Ménage ----------
   { id: "cleaning-create", t: "Créer et attribuer une mission de ménage", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "cleaning", k: "ménage menage nettoyage mission créer attribuer entreprise de ménage femme de ménage cleaning تنظيف",
-    s: ["Après chaque check-out, une mission est créée automatiquement ; vous pouvez aussi la créer dans « Ménage » › « Mission ».", "« Attribuer » : choisissez d'abord le type de prestation « Ménage », puis l'entreprise dans la liste de l'annuaire ImmoPilot.", "Indiquez le tarif convenu : il deviendra une dépense du propriétaire à la validation.", "L'entreprise a 2 heures pour accepter ; sinon vous êtes alerté et pouvez réattribuer."] },
+    s: ["Après chaque check-out, une mission est créée automatiquement ; vous pouvez aussi la créer dans « Ménage » › « Mission ».", "« Attribuer » : choisissez d'abord le type de prestation « Ménage », puis l'entreprise dans la liste de l'annuaire DarPilot.", "Indiquez le tarif convenu : il deviendra une dépense du propriétaire à la validation.", "L'entreprise a 2 heures pour accepter ; sinon vous êtes alerté et pouvez réattribuer."] },
   { id: "cleaning-do", t: "Réaliser une mission de ménage (entreprise de ménage)", r: ["CLEANER"], go: "cleaning", k: "accepter mission démarrer terminer photos avant après pièce checklist anomalie",
     s: ["Ouvrez « Ménage » : « Accepter » ou « Refuser » la mission dans le délai affiché.", "Sur place : « Démarrer », puis pour chaque pièce cochez les tâches et ajoutez les photos AVANT et APRÈS.", "« Signaler » une anomalie (objet manquant, casse, saleté) ; « Terminer la mission » à la fin."] },
   { id: "cleaning-validate", t: "Valider un ménage, rapport et ordre de mission PDF", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "CLEANER", "SUPER"], go: "cleaning", k: "valider ménage payer paie coût tarif prix facture ménage qui paie note qualité rapport de ménage pdf ordre de mission photos avant après reprendre",
@@ -369,7 +369,7 @@ var ASSISTANT_KB_ = [
   { id: "invoice", t: "Transmettre, approuver et payer une facture d'artisan", r: ["OWNER", "AGENCY_ADMIN", "ARTISAN", "SUPER"], go: "invoices", k: "facture transmettre approuver payer commission net prestataire facture pdf فاتورة",
     s: ["L'artisan : intervention terminée › « Transmettre la facture » (numéro, montants, justificatif PDF).", "Le gestionnaire : « Factures » › la facture › « Approuver » : la commission est calculée une seule fois et figée.", "« Enregistrer un paiement » pour le versement au prestataire. « Facture PDF » produit la facture au nom du prestataire."] },
   { id: "providers", t: "Choisir un prestataire (ménage, plombier, électricien…)", r: ["OWNER", "AGENCY_ADMIN", "AGENCY_USER", "SUPER"], go: "contractors", k: "prestataire artisan plombier électricien climatisation peintre serrurier jardinier piscine annuaire liste",
-    s: ["Les prestataires sont intégrés par l'équipe ImmoPilot dans un annuaire vérifié.", "Lors d'une attribution, choisissez d'abord le type de prestation, puis le prestataire dans la liste.", "« Prestataires » affiche leurs fiches et leurs statistiques, calculées uniquement sur vos biens."] },
+    s: ["Les prestataires sont intégrés par l'équipe DarPilot dans un annuaire vérifié.", "Lors d'une attribution, choisissez d'abord le type de prestation, puis le prestataire dans la liste.", "« Prestataires » affiche leurs fiches et leurs statistiques, calculées uniquement sur vos biens."] },
   { id: "providers-admin", t: "Ajouter un prestataire à l'annuaire (super administrateur)", r: ["SUPER"], go: "contractors", k: "ajouter prestataire annuaire intégrer artisan entreprise ménage super admin",
     s: ["Ouvrez « Prestataires » › « + Prestataire » : nom, e-mail, téléphone, types de prestation, zones, mentions légales et coordonnées de paiement.", "Le compte du prestataire est invité automatiquement (rôle ménage et/ou artisan).", "Les propriétaires et agences le choisissent ensuite dans la liste selon le type de prestation."] },
   // ---------- Location longue durée ----------
@@ -416,8 +416,8 @@ var ASSISTANT_KB_ = [
     s: ["Ouvrez « Abonnements » : forfait, statut, échéance, utilisation et historique des règlements.", "« Contrat et historique (PDF) » télécharge votre contrat.", "Les agences que vous avez créées apparaissent en « Option agences » (prix par agence) : elles n'ont pas d'abonnement séparé.", "« Demander un changement de forfait » ou « Résilier en fin de période » ; vos données restent conservées."] },
   { id: "settings-org", t: "Paramètres de l'organisation (horaires, annulation, commission…)", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "settings", k: "paramètres horaires arrivée départ battement ménage politique d'annulation commission tva modèles",
     s: ["Ouvrez « Paramètres » › « Paramètres de l'organisation ».", "Réglez : heures d'arrivée/départ, temps de ménage entre séjours, politique d'annulation, commission, TVA, délais d'alerte, modèles de documents."] },
-  { id: "support-access", t: "Accès d'assistance pour l'équipe ImmoPilot", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "settings", k: "assistance support aide équipe immopilot accès autoriser",
-    s: ["L'équipe ImmoPilot n'accède jamais à vos données sans votre accord.", "Une demande d'accès apparaît dans « Paramètres » › « Accès d'assistance » : « Accorder » (1 à 24 h, lecture seule, journalisé) ou refuser."] },
+  { id: "support-access", t: "Accès d'assistance pour l'équipe DarPilot", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "settings", k: "assistance support aide équipe immopilot accès autoriser",
+    s: ["L'équipe DarPilot n'accède jamais à vos données sans votre accord.", "Une demande d'accès apparaît dans « Paramètres » › « Accès d'assistance » : « Accorder » (1 à 24 h, lecture seule, journalisé) ou refuser."] },
   { id: "audit", t: "Journal d'audit (qui a fait quoi)", r: ["OWNER", "AGENCY_ADMIN", "SUPER"], go: "audit", k: "journal audit historique traçabilité qui a modifié sécurité",
     s: ["« Journal d'audit » liste les actions sensibles : connexions, paiements, annulations, droits, documents…"] },
   // ---------- Super administrateur ----------
@@ -434,7 +434,7 @@ var ASSISTANT_KB_ = [
   { id: "admin-diag", t: "Diagnostic, erreurs, sauvegardes (super administrateur)", r: ["SUPER"], go: "admin", k: "diagnostic erreur technique err- sauvegarde restauration tâches planifiées santé",
     s: ["« Administration globale » : onglets « Diagnostic », « Erreurs techniques » (références ERR-…), « Tâches planifiées » et « Sauvegardes ».", "« Créer une sauvegarde maintenant » copie la base dans le dossier privé « Sauvegardes »."] },
   { id: "error", t: "J'ai un message d'erreur", r: ["*"], go: "", k: "erreur bug ne marche pas bloqué page blanche err- problème accès refusé",
-    s: ["Notez la référence affichée (ERR-…) et l'heure.", "« Accès refusé » : votre rôle ou les droits accordés sur ce bien ne permettent pas l'action ; demandez au propriétaire ou à votre administrateur.", "« Abonnement suspendu » : le compte est en lecture seule jusqu'au règlement.", "Sinon, transmettez la référence à votre administrateur ImmoPilot."] }
+    s: ["Notez la référence affichée (ERR-…) et l'heure.", "« Accès refusé » : votre rôle ou les droits accordés sur ce bien ne permettent pas l'action ; demandez au propriétaire ou à votre administrateur.", "« Abonnement suspendu » : le compte est en lecture seule jusqu'au règlement.", "Sinon, transmettez la référence à votre administrateur DarPilot."] }
 ];
 
 /** Rôles de l'utilisateur sous forme de libellés (pour filtrer les articles). */
@@ -458,14 +458,14 @@ function assistantKb_(p) { return { name: ASSISTANT_NAME_, articles: ASSISTANT_K
 function assistantSystemPrompt_(p, lang, page) {
   const kb = ASSISTANT_KB_.map(function (a) { return "## " + a.t + " [page: " + (a.go || "connexion") + " ; rôles: " + a.r.join(",") + "]\n" + a.s.map(function (x, i) { return (i + 1) + ". " + x; }).join("\n"); }).join("\n\n");
   const L = { fr: "français", en: "English", ar: "العربية", es: "español", it: "italiano", nl: "Nederlands" }[lang] || "français";
-  return "Tu es " + ASSISTANT_NAME_ + " (رُبّان, « le pilote »), l'assistant d'aide intégré au logiciel de gestion immobilière ImmoPilot (" + edition_().countryName + ", devise " + cur_() + " : propriétaires, agences, gardiens, ménage, artisans, locataires).\n" +
+  return "Tu es " + ASSISTANT_NAME_ + " (رُبّان, « le pilote »), l'assistant d'aide intégré au logiciel de gestion immobilière DarPilot (" + edition_().countryName + ", devise " + cur_() + " : propriétaires, agences, gardiens, ménage, artisans, locataires).\n" +
     "Règles :\n- Réponds en " + L + ", de façon courte et concrète : étapes numérotées avec les noms exacts des menus et boutons.\n" +
-    "- Appuie-toi UNIQUEMENT sur la documentation ci-dessous. Si une fonction n'y figure pas, dis franchement qu'ImmoPilot ne la propose pas ou que tu n'es pas sûr, et propose de contacter l'administrateur ImmoPilot.\n" +
+    "- Appuie-toi UNIQUEMENT sur la documentation ci-dessous. Si une fonction n'y figure pas, dis franchement qu'DarPilot ne la propose pas ou que tu n'es pas sûr, et propose de contacter l'administrateur DarPilot.\n" +
     "- Tu n'as accès à aucune donnée du compte (biens, réservations, montants) : n'invente jamais de chiffres ni de noms.\n" +
     "- Ne demande jamais de mot de passe, numéro de pièce d'identité ou coordonnées bancaires.\n" +
     "- Pour les questions juridiques, fiscales ou comptables, donne des repères généraux et recommande un professionnel.\n" +
-    "- Hors sujet (sans lien avec ImmoPilot ou la gestion locative) : réponds poliment que tu es dédié à ImmoPilot.\n" +
-    "Contexte : rôles de l'utilisateur = " + assistantRoles_(p).join(", ") + " ; page affichée = " + (page || "inconnue") + ".\n\n# Documentation ImmoPilot\n" + kb;
+    "- Hors sujet (sans lien avec DarPilot ou la gestion locative) : réponds poliment que tu es dédié à DarPilot.\n" +
+    "Contexte : rôles de l'utilisateur = " + assistantRoles_(p).join(", ") + " ; page affichée = " + (page || "inconnue") + ".\n\n# Documentation DarPilot\n" + kb;
 }
 
 /** Appel du service d'IA (serveur uniquement). Retourne le texte de la réponse ou lève une erreur. */
@@ -521,7 +521,7 @@ function testerAssistantIA() {
   assertEditor_();
   const cfg = aiConfig_();
   if (!cfg) return { ok: false, mode: "guide", message: "Mode IA non configuré : renseignez IMMO_AI_PROVIDER (anthropic ou gemini) et IMMO_AI_API_KEY dans les propriétés du script. Le mode Guide fonctionne sans configuration." };
-  try { const t = aiCall_(cfg, "Réponds en une phrase.", [{ role: "user", content: "Dis bonjour aux utilisateurs d'ImmoPilot." }]); return { ok: true, provider: cfg.provider, model: cfg.model, sample: t.slice(0, 200) }; }
+  try { const t = aiCall_(cfg, "Réponds en une phrase.", [{ role: "user", content: "Dis bonjour aux utilisateurs d'DarPilot." }]); return { ok: true, provider: cfg.provider, model: cfg.model, sample: t.slice(0, 200) }; }
   catch (e) { return { ok: false, provider: cfg.provider, model: cfg.model, error: e.message }; }
 }
 
@@ -576,7 +576,7 @@ function diff_(before, after, fields) {
  *
  * Pourquoi pas l'identité Google seule ? Avec un déploiement « Exécuter en tant que : moi » et « Accès : tout le monde »,
  * Session.getActiveUser() est VIDE pour les comptes extérieurs au domaine du propriétaire du script. Elle ne peut donc
- * pas servir d'identité pour un SaaS ouvert. ImmoPilot utilise des comptes applicatifs :
+ * pas servir d'identité pour un SaaS ouvert. DarPilot utilise des comptes applicatifs :
  *  - mot de passe haché PBKDF2-HMAC-SHA256 avec sel aléatoire (jamais stocké en clair) ;
  *  - jeton de session aléatoire de 256 bits, seul son SHA-256 est stocké (feuille Sessions), expiration configurable ;
  *  - l'identité provient UNIQUEMENT du jeton vérifié côté serveur, jamais d'un e-mail transmis par le navigateur ;
@@ -764,9 +764,9 @@ function sendPasswordLink_(user, purpose) {
   const hours = purpose === "ACTIVATION" ? 72 : 1;
   dbInsert_("PasswordResets", { userId: user.userId, tokenHash: sha256Hex_(token), createdAt: nowIso_(), expiresAt: new Date(Date.now() + hours * 3600000).toISOString(), usedAt: "", purpose: purpose });
   const url = appUrl_() + "?action=reset&token=" + token;
-  const subject = purpose === "ACTIVATION" ? "Activez votre compte ImmoPilot" : "Réinitialisation de votre mot de passe ImmoPilot";
+  const subject = purpose === "ACTIVATION" ? "Activez votre compte DarPilot" : "Réinitialisation de votre mot de passe DarPilot";
   const body = "Bonjour " + (user.displayName || "") + ",\n\n" + (purpose === "ACTIVATION" ? "Définissez votre mot de passe pour activer votre compte" : "Une réinitialisation de mot de passe a été demandée") +
-    " (lien valable " + hours + " h, utilisable une seule fois) :\n" + url + "\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\nImmoPilot";
+    " (lien valable " + hours + " h, utilisable une seule fois) :\n" + url + "\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\nDarPilot";
   sendMailSafe_(user.email, subject, body, "auth:" + purpose + ":" + user.userId + ":" + Date.now());
   auditAs_("", user.userId, "PASSWORD_LINK_" + purpose, "User", user.userId, "", {});
   return url;
@@ -1526,7 +1526,7 @@ function installErrorPage_(r) {
   const list = function (items, ext) { return "<ul>" + items.map(function (n) { return "<li><code>" + esc(n) + ext + "</code></li>"; }).join("") + "</ul>"; };
   let html = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;color:#1d2b3a;line-height:1.5}" +
     "h1{font-size:20px;color:#1b3554}code{background:#eef2f7;padding:1px 5px;border-radius:4px}.box{border:1px solid #e3b341;background:#fff8e6;padding:12px 16px;border-radius:8px}</style></head><body>" +
-    "<h1>ImmoPilot : installation incomplète</h1><div class='box'>L'application ne peut pas démarrer car des fichiers sont absents ou mal nommés dans le projet Apps Script. Aucune donnée n'est en cause.</div>";
+    "<h1>DarPilot : installation incomplète</h1><div class='box'>L'application ne peut pas démarrer car des fichiers sont absents ou mal nommés dans le projet Apps Script. Aucune donnée n'est en cause.</div>";
   if (r.indexOutdated) html += "<h2>Le fichier Index.html n'est pas la version complète</h2><p>Il contient l'ancienne version courte, qui appelle 7 autres fichiers. Dans l'éditeur, ouvrez <code>Index.html</code>, faites Ctrl+A puis Supprimer, et collez <b>tout</b> le contenu du fichier <code>2_Index_html_A_COLLER.txt</code> (environ 2 066 lignes). Ne recréez pas les autres fichiers HTML.</p>";
   else if (r.missingHtml.length) html += "<h2>Fichiers HTML introuvables</h2>" + list(r.missingHtml, ".html") +
     "<p>Dans l'éditeur : <b>＋ › HTML</b> (et non « Script »), tapez le nom exact <b>sans</b> « .html », en respectant les majuscules, effacez le contenu proposé et collez celui du fichier du ZIP. Si un fichier du même nom existe en <code>.gs</code>, supprimez-le.</p>";
@@ -1534,7 +1534,7 @@ function installErrorPage_(r) {
     "<p>Dans l'éditeur : <b>＋ › Script</b>, nom exact sans « .gs », collez le contenu complet du fichier du ZIP.</p>";
   html += "<h2>Ensuite</h2><ol><li>Enregistrez (Ctrl+S).</li><li>Déployer › Gérer les déploiements › ✏️ › Version : <b>Nouvelle version</b> › Déployer.</li><li>Rechargez cette page.</li></ol>" +
     "<p>Astuce : dans l'éditeur, la fonction <code>verifierInstallation</code> affiche la même liste dans le journal d'exécution.</p></body></html>";
-  return HtmlService.createHtmlOutput(html).setTitle("ImmoPilot — installation incomplète");
+  return HtmlService.createHtmlOutput(html).setTitle("DarPilot — installation incomplète");
 }
 
 /**
@@ -1722,16 +1722,16 @@ function sumupPayLink_(ref, localAmount, description) {
 function commissionSendArtisanLink_(f, reminder) {
   const art = dbGet_("Artisans", f.artisanId) || {}, inv = dbGet_("Invoices", f.invoiceId) || {};
   let link = null, err = "";
-  try { link = sumupPayLink_("COM-" + String(f.feeId).slice(-20) + "-" + ((Number(f.reminders) || 0) + 1), f.total, "Commission ImmoPilot - facture " + (inv.invoiceNumber || "")); }
+  try { link = sumupPayLink_("COM-" + String(f.feeId).slice(-20) + "-" + ((Number(f.reminders) || 0) + 1), f.total, "Commission DarPilot - facture " + (inv.invoiceNumber || "")); }
   catch (e) { err = e.message; }
   dbUpdate_("PlatformFees", f.feeId, link ? { status: "LINK_SENT", checkoutId: link.id, payUrl: link.url, linkSentAt: nowIso_(), reminders: reminder ? (Number(f.reminders) || 0) + 1 : Number(f.reminders) || 0, note: "", updatedAt: nowIso_() }
     : { note: err.slice(0, 300), updatedAt: nowIso_() });
   if (!art.email) return { ok: !!link };
   const body = "Bonjour,\n\n" + (reminder ? "Rappel : " : "") + "votre client a réglé la facture n° " + (inv.invoiceNumber || "") + " (" + round2_(num_(inv.amountTTC)) + " " + f.currency + " TTC) en dehors de la plateforme." +
-    "\n\nCommission ImmoPilot de mise en relation (" + f.rate + " % du HT de " + f.baseHT + " " + f.currency + ") : " + f.amount + " " + f.currency + " HT + TVA " + f.vatAmount + " = " + f.total + " " + f.currency + "." +
+    "\n\nCommission DarPilot de mise en relation (" + f.rate + " % du HT de " + f.baseHT + " " + f.currency + ") : " + f.amount + " " + f.currency + " HT + TVA " + f.vatAmount + " = " + f.total + " " + f.currency + "." +
     (link ? "\n\nRéglez-la en ligne, par carte (paiement sécurisé SumUp) :\n" + link.url : "\n\nLe lien de paiement vous sera envoyé très prochainement.") +
-    "\n\nMerci de la régler sous " + COMMISSION_REMINDER_DAYS_ + " jours. Au-delà de trois rappels sans règlement, votre référencement peut être suspendu (conditions de référencement).\n\nImmoPilot";
-  sendMailSafe_(art.email, (reminder ? "Rappel — " : "") + "Commission ImmoPilot à régler : " + f.total + " " + f.currency, body, "commission:" + f.feeId + ":" + ((Number(f.reminders) || 0) + (reminder ? 1 : 0)));
+    "\n\nMerci de la régler sous " + COMMISSION_REMINDER_DAYS_ + " jours. Au-delà de trois rappels sans règlement, votre référencement peut être suspendu (conditions de référencement).\n\nDarPilot";
+  sendMailSafe_(art.email, (reminder ? "Rappel — " : "") + "Commission DarPilot à régler : " + f.total + " " + f.currency, body, "commission:" + f.feeId + ":" + ((Number(f.reminders) || 0) + (reminder ? 1 : 0)));
   if (art.userId) notify_({ eventKey: "commission-due:" + f.feeId + ":" + (Number(f.reminders) || 0), userIds: [art.userId], type: "COMMISSION_DUE", organizationId: "", email: false,
     title: "Commission à régler : " + f.total + " " + f.currency, body: "Facture " + (inv.invoiceNumber || "") + (link ? " — lien de paiement envoyé par e-mail." : ""), link: "#referencing" });
   return { ok: !!link, error: err };
@@ -1815,7 +1815,7 @@ function commissionStatementHtml_(s) {
     "<h2>Missions de la période " + escapeHtml_(s.period) + "</h2>" + htmlTable_(["Réglée le", "Bien", "Mission", "Artisan", "Facture", "Base HT", "Taux", "Commission HT"], rows) +
     "<table style='width:45%;margin:12px 0 0 auto'><tr><th>Total HT</th><td class='right'>" + s.totalHT + " " + s.currency + "</td></tr><tr><th>TVA</th><td class='right'>" + s.vatAmount + " " + s.currency + "</td></tr>" +
     "<tr><th>Total TTC</th><td class='right'><b>" + s.total + " " + s.currency + "</b></td></tr></table>" +
-    "<div class='box'>Commission de mise en relation due par le commanditaire sur les missions réalisées par les artisans référencés sur ImmoPilot et réglées au cours de la période " +
+    "<div class='box'>Commission de mise en relation due par le commanditaire sur les missions réalisées par les artisans référencés sur DarPilot et réglées au cours de la période " +
     "(conditions générales, article « Mise en relation »). Règlement : prélèvement sur la carte enregistrée pour l'abonnement, ou lien de paiement en ligne.</div>";
   return pdfShell_("Récapitulatif mensuel des commissions", inner, { subtitle: org.name + " — " + s.period, ref: "COM-" + String(s.period).replace("-", "") + "-" + String(s.statementId).slice(-6).toUpperCase() });
 }
@@ -1831,21 +1831,21 @@ function commissionCollectStatement_(s, sendMail) {
   if (card) {
     try {
       const c = sumupConf_(), amt = sumupAmount_(s.total);
-      const co = sumupCall_("post", "/checkouts", { checkout_reference: ref, amount: amt.amount, currency: amt.currency, merchant_code: c.merchant, customer_id: card.customerId, description: ("ImmoPilot : commissions " + s.period).slice(0, 120) }).body;
+      const co = sumupCall_("post", "/checkouts", { checkout_reference: ref, amount: amt.amount, currency: amt.currency, merchant_code: c.merchant, customer_id: card.customerId, description: ("DarPilot : commissions " + s.period).slice(0, 120) }).body;
       const res = sumupCall_("put", "/checkouts/" + encodeURIComponent(co.id), { payment_type: "card", token: card.token, customer_id: card.customerId }).body;
       if (String(res.status) === "PAID") charged = true; else err = String(res.message || res.status || "refusé");
       if (charged) commissionStatementPaid_(s, "SumUp " + (((res.transactions || [])[0] || {}).transaction_code || co.id));
     } catch (e) { err = e.message; }
   }
   if (!charged) {
-    try { link = sumupPayLink_(ref + "L", s.total, "ImmoPilot : commissions " + s.period); } catch (e) { err = err || e.message; }
+    try { link = sumupPayLink_(ref + "L", s.total, "DarPilot : commissions " + s.period); } catch (e) { err = err || e.message; }
     dbUpdate_("CommissionStatements", s.statementId, { status: link ? "LINK_SENT" : "DUE", checkoutId: link ? link.id : "", payUrl: link ? link.url : "", attempts: (Number(s.attempts) || 0) + 1, lastError: String(err || "").slice(0, 300), updatedAt: nowIso_() });
   }
   if (sendMail && org.billingEmail) {
-    const body = "Bonjour,\n\nVeuillez trouver ci-joint votre récapitulatif des commissions de mise en relation ImmoPilot pour " + s.period + " : " + s.count + " mission(s), " + s.total + " " + s.currency + " TTC." +
-      (charged ? "\n\nLe montant a été prélevé sur votre carte " + card.label + "." : link ? "\n\nRéglez-le en ligne (paiement sécurisé SumUp) :\n" + link.url : "\n\nLes modalités de règlement vous seront communiquées.") + "\n\nImmoPilot";
+    const body = "Bonjour,\n\nVeuillez trouver ci-joint votre récapitulatif des commissions de mise en relation DarPilot pour " + s.period + " : " + s.count + " mission(s), " + s.total + " " + s.currency + " TTC." +
+      (charged ? "\n\nLe montant a été prélevé sur votre carte " + card.label + "." : link ? "\n\nRéglez-le en ligne (paiement sécurisé SumUp) :\n" + link.url : "\n\nLes modalités de règlement vous seront communiquées.") + "\n\nDarPilot";
     let blob = null; try { blob = commissionStatementBlob_(dbGet_("CommissionStatements", s.statementId)); } catch (e) { console.error(e.message); }
-    sendMailSafe_(org.billingEmail, "Récapitulatif des commissions ImmoPilot — " + s.period, body, "statement:" + s.statementId + ":" + (Number(s.attempts) || 0), s.organizationId, blob ? { attachments: [blob] } : {});
+    sendMailSafe_(org.billingEmail, "Récapitulatif des commissions DarPilot — " + s.period, body, "statement:" + s.statementId + ":" + (Number(s.attempts) || 0), s.organizationId, blob ? { attachments: [blob] } : {});
   }
   return { ok: charged || !!link, charged: charged, link: link ? link.url : "", error: err };
 }
@@ -1929,14 +1929,14 @@ function installPhase4Triggers() { return installTriggers(); }
  * Config.gs
  * ====================================================================== */
 /**
- * ImmoPilot — configuration centrale et schéma des données.
+ * DarPilot — configuration centrale et schéma des données.
  * Les colonnes situées AVANT le séparateur "|" sont les colonnes historiques (phases 2 à 4) :
  * elles ne doivent jamais être renommées ni réordonnées. Les colonnes après "|" sont ajoutées
  * en fin de feuille par la migration (non destructif).
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "011164e9dce2";
+var IMMO_BUILD_ = "553b7a5f80a3";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -1973,8 +1973,8 @@ function cur_() { return edition_().currency; }
 /** Langues de l'interface : français, anglais, arabe, espagnol, italien, néerlandais. */
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
-  APP_NAME: "ImmoPilot",
-  VERSION: "2.6.0",
+  APP_NAME: "DarPilot",
+  VERSION: "2.7.0",
   SCHEMA_VERSION: 16,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
@@ -2358,7 +2358,7 @@ function ctrCreate_(p, a) {
     orgId = platformOrgId_();
     assert_(orgId, "Organisation plateforme absente : exécutez setupProject().", "CONFIG");
   } else {
-    if (getSetting_("contractors.platformOnly") !== false) forbid_("Les prestataires (ménage, artisans…) sont intégrés par l'administrateur ImmoPilot. Choisissez-les dans la liste, par type de prestation.");
+    if (getSetting_("contractors.platformOnly") !== false) forbid_("Les prestataires (ménage, artisans…) sont intégrés par l'administrateur DarPilot. Choisissez-les dans la liste, par type de prestation.");
     orgId = safeText_(a.organizationId || (p.roles.find(function (r) { return r.caps.indexOf("contractor.manage") >= 0; }) || {}).organizationId, 120);
     assertOrgCap_(p, orgId, "contractor.manage");
     assertFeature_(orgId, "contractors");
@@ -3013,7 +3013,7 @@ var DEMO_SPEC_ = {
   provider: { email: "speedfibre69@gmail.com", name: "Mohamed Zetounie",
     notes: "" }, // texte calculé par demoProviderNotes_() (devise de l'édition)
   pricingNote: "Prix demandé par le propriétaire à l'agence : {EUR} € la nuit, soit {MAD} MAD (prix fixe, 1 € ≈ " + DEMO_EUR_MAD_ + " MAD).\nPrix de vente au voyageur : libre, fixé par l'agence Moad Zaira.\n" +
-    "Ménage : organisé par l'agence (prestataire choisi dans la liste ImmoPilot), facturé au propriétaire qui le règle directement.",
+    "Ménage : organisé par l'agence (prestataire choisi dans la liste DarPilot), facturé au propriétaire qui le règle directement.",
   properties: [
     { key: "duplex", name: "DÉMO – Duplex 3 suites", rentalMode: "SHORT_TERM", propertyType: "APARTMENT", bedrooms: 3, bathrooms: 3, capacity: 6, eur: 120,
       rooms: ["Séjour", "Cuisine", "Suite 1", "Suite 2", "Suite 3", "Terrasse"], agency: true,
@@ -3199,7 +3199,7 @@ function demoAccount_(email, name, role, orgId, report) {
 }
 
 function demoSummaryText_(r) {
-  const L = ["=== Environnement de démonstration ImmoPilot ==="];
+  const L = ["=== Environnement de démonstration DarPilot ==="];
   r.organizations.forEach(function (o) { L.push("Organisation " + (o.created ? "créée" : "existante") + " : " + o.name + " (" + o.type + ")"); });
   r.accounts.filter(function (a) { return a.role !== "ARTISAN"; }).forEach(function (a) { L.push("Compte " + a.name + " <" + a.email + "> — " + a.role + (a.role === "CLEANER" ? " + ARTISAN" : "") + " — " + (a.activation || "")); });
   r.properties.forEach(function (p) { L.push("Bien " + (p.created ? "créé" : "existant") + " : " + p.name + " — " + p.rentalMode + (p.nightlyPrice ? " — " + p.nightlyPrice + " " + p.currency + "/nuit" : "")); });
@@ -3974,7 +3974,7 @@ function assertTemplateAllowed_(templateId) {
   const parents = file.getParents();
   let inModeles = false;
   while (parents.hasNext()) { if (parents.next().getId() === modeles) { inModeles = true; break; } }
-  assert_(inModeles, "Le modèle doit être placé dans le dossier « Modeles » du Drive privé d'ImmoPilot.");
+  assert_(inModeles, "Le modèle doit être placé dans le dossier « Modeles » du Drive privé d'DarPilot.");
   return file;
 }
 function docFromTemplate_(templateId, map, folder, name) {
@@ -3992,11 +3992,11 @@ function storeGeneratedPdf_(p, pdfBlob, ctx, ownerType, ownerId, category) {
   const d = storeFile_(ctx, ownerType, ownerId, category, { mimeType: "application/pdf", fileName: pdfBlob.getName(), base64: Utilities.base64Encode(bytes) }, p.email);
   return { documentId: d.documentId, fileName: d.fileName, mimeType: "application/pdf", base64: Utilities.base64Encode(bytes) };
 }
-/** Logo ImmoPilot (PNG 96 × 96) intégré aux documents PDF. */
+/** Logo DarPilot (PNG 96 × 96) intégré aux documents PDF. */
 var PDF_LOGO_PNG_B64_ = "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";
 /**
  * Gabarit commun des PDF : en-tête avec logo et nom de l'application, titre, sous-titre facultatif (organisation),
- * date de génération et pied de page. opts : { subtitle, footer, issuer: { name, lines[] }, noHead } — issuer remplace la marque ImmoPilot ;
+ * date de génération et pied de page. opts : { subtitle, footer, issuer: { name, lines[] }, noHead } — issuer remplace la marque DarPilot ;
  * noHead : aucun en-tête de marque (le modèle affiche lui-même les parties avec le bloc [entete]) ; ref : référence unique du document.
  */
 function pdfShell_(title, inner, opts) {
@@ -4010,17 +4010,17 @@ function pdfShell_(title, inner, opts) {
     ".photos td{border:0;padding:3px;width:50%}.photos img{width:100%;border:1px solid #c9d3df}.sign td{height:70px;width:50%}.box{border:1px solid #c9d3df;padding:8px;margin:8px 0;background:#f8fafc}" +
     ".foot{margin-top:24px;border-top:1px solid #c9d3df;padding-top:6px;color:#64748b;font-size:9px}</style></head><body>" +
     (opts.noHead ? "<table class='head'><tr><td></td>" : opts.issuer
-      // Document émis par un tiers (devis, facture d'un prestataire) : son identité en en-tête, sans la marque ImmoPilot.
+      // Document émis par un tiers (devis, facture d'un prestataire) : son identité en en-tête, sans la marque DarPilot.
       ? "<table class='head'><tr><td><div class='brand'>" + escapeHtml_(opts.issuer.name) + "</div><div class='muted'>" + (opts.issuer.lines || []).filter(String).map(escapeHtml_).join("<br>") + "</div></td>"
       : "<table class='head'><tr><td style='width:62px'><img src='data:image/png;base64," + PDF_LOGO_PNG_B64_ + "' width='54' height='54'></td>" +
-        "<td><div class='brand'>Immo<span class='gold'>Pilot</span></div><div class='muted'>Gestion immobilière</div></td>") +
+        "<td><div class='brand'>Dar<span class='gold'>Pilot</span></div><div class='muted'>Gestion immobilière</div></td>") +
     "<td class='right muted'>Généré le " + escapeHtml_(when) + "<br>Réf. " + escapeHtml_(ref) + "</td></tr></table><hr style='border:0;border-top:3px solid #13233d;margin:8px 0 12px'>" +
     "<h1>" + escapeHtml_(title) + "</h1>" + (opts.subtitle ? "<p class='muted' style='margin:0 0 10px'>" + escapeHtml_(opts.subtitle) + "</p>" : "") + inner +
     "<div class='foot'>" + escapeHtml_(opts.footer || (IMMO_CONFIG.APP_NAME + " — document généré automatiquement à partir des données enregistrées dans l'application.")) + " — Réf. " + escapeHtml_(ref) + "</div></body></html>";
 }
 /** Date AAAA-MM-JJ (ou horodatage) au format JJ/MM/AAAA. */
 function pdfDate_(s) { const v = String(s || "").slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v.slice(8, 10) + "/" + v.slice(5, 7) + "/" + v.slice(0, 4) : (v || "—"); }
-var PDF_PAY_METHODS_ = { TRANSFER: "Virement", CASH: "Espèces", CARD: "Carte", CHEQUE: "Chèque", PLATFORM: "Plateforme de réservation", STRIPE: "Paiement en ligne ImmoPilot", OTHER: "Autre" };
+var PDF_PAY_METHODS_ = { TRANSFER: "Virement", CASH: "Espèces", CARD: "Carte", CHEQUE: "Chèque", PLATFORM: "Plateforme de réservation", STRIPE: "Paiement en ligne DarPilot", OTHER: "Autre" };
 /** Image d'un document (photo) au format data: pour un PDF. Les fichiers de plus de 1,5 Mo ne sont pas intégrés (le PDF resterait trop lourd). */
 function pdfImageData_(documentId) {
   const d = dbGet_("Documents", documentId);
@@ -4588,7 +4588,7 @@ function guestPoliceForms_(p, a) {
       "<table class='sign' style='margin-top:10px'><tr><td>Signature du voyageur</td><td>Date</td></tr></table>";
   });
   html += "<p class='muted' style='margin-top:12px'>Fiche à faire signer par chaque voyageur étranger à son arrivée, à conserver 6 mois et à remettre aux services de police ou de gendarmerie sur leur demande. " +
-    "Les enfants de moins de 15 ans peuvent figurer sur la fiche d'un adulte qui les accompagne. ImmoPilot ne garantit pas la conformité juridique : vérifiez les obligations applicables à votre activité.</p>";
+    "Les enfants de moins de 15 ans peuvent figurer sur la fiche d'un adulte qui les accompagne. DarPilot ne garantit pas la conformité juridique : vérifiez les obligations applicables à votre activité.</p>";
   audit_("POLICE_FORMS_PDF", "Reservation", r.reservationId, r.organizationId, { guests: foreign.length });
   return storeGeneratedPdf_(p, htmlToPdf_(pdfShell_("Fiches individuelles de police", html, { subtitle: "Réservation " + String(r.reservationId).slice(-8).toUpperCase() }), "Fiches_police_" + String(r.reservationId).slice(-8)),
     { propertyId: r.propertyId, organizationId: r.organizationId }, "RESERVATION", r.reservationId, "POLICE_FORM");
@@ -4868,7 +4868,7 @@ function invApprove_(p, a) {
     audit_("INVOICE_APPROVED", "Invoice", v.invoiceId, v.organizationId, { amountTTC: v.amountTTC, commissionRate: rate, commissionAmount: split.commissionAmount, beneficiary: beneficiary });
     const art = dbGet_("Artisans", v.artisanId);
     if (art && art.userId) notify_({ eventKey: "invoice-approved:" + v.invoiceId, userIds: [art.userId], type: "INVOICE_APPROVED", organizationId: v.organizationId, title: "Facture approuvée : " + v.invoiceNumber,
-      body: pf ? "Montant à recevoir du client : " + split.amountTTC + " " + cur_() + ". Commission ImmoPilot (" + rate + " %) : " + round2_(split.commissionAmount + split.commissionVatAmount) + " " + cur_() + " TTC, prélevée si le client paie par la plateforme, sinon réclamée par lien de paiement une fois la facture réglée."
+      body: pf ? "Montant à recevoir du client : " + split.amountTTC + " " + cur_() + ". Commission DarPilot (" + rate + " %) : " + round2_(split.commissionAmount + split.commissionVatAmount) + " " + cur_() + " TTC, prélevée si le client paie par la plateforme, sinon réclamée par lien de paiement une fois la facture réglée."
         : "Net à percevoir : " + split.netToContractor + " " + cur_() + " (commission " + rate + " % : " + split.commissionAmount + " " + cur_() + " HT).", link: "#invoices" });
     return Object.assign({ ok: true, status: "APPROVED", commissionRate: rate, beneficiaryOrgId: beneficiary }, split);
   });
@@ -4943,7 +4943,7 @@ function invRefreshPaid_(invoiceId) {
  * Règles :
  *  - Rien n'est envoyé au locataire sans action explicite du bailleur (« Valider », puis « Envoyer au locataire »).
  *  - Les avertissements juridiques calculés par le serveur (révision du loyer, dépôt de garantie, durée) s'ajoutent à ceux de l'IA.
- *  - Les documents sont des modèles : ils doivent être relus par un professionnel ; ImmoPilot ne garantit pas leur conformité.
+ *  - Les documents sont des modèles : ils doivent être relus par un professionnel ; DarPilot ne garantit pas leur conformité.
  */
 var LA_CONDITIONS_ = ["NEW", "GOOD", "WORN", "BAD", "NA"];
 var LA_CONDITION_LABELS_ = { NEW: "Neuf", GOOD: "Bon état", WORN: "État d'usage", BAD: "Mauvais état", NA: "Sans objet" };
@@ -5016,10 +5016,10 @@ function laContractInputs_(a) {
 }
 /** Avertissements juridiques calculés (indépendants de l'IA). */
 function laContractWarnings_(c, inp) {
-  const w = ["Modèle généré automatiquement : faites-le relire par un professionnel (avocat, notaire ou adoul selon le cas) avant signature. ImmoPilot ne garantit pas sa conformité juridique."];
+  const w = ["Modèle généré automatiquement : faites-le relire par un professionnel (avocat, notaire ou adoul selon le cas) avant signature. DarPilot ne garantit pas sa conformité juridique."];
   const l = c.l, rent = num_(l.monthlyRent), dep = num_(l.deposit), months = l.endDate ? diffDays_(l.startDate, addDaysStr_(l.endDate, 1)) / 30.44 : null;
   if (IMMO_EDITION_ === "MA") {
-    if (num_(l.indexationRate) > 0) w.push("Le bail prévoit une indexation annuelle de " + num_(l.indexationRate) + " % : au Maroc, la loi n° 67-12 (articles 31 à 38) ne permet de réviser le loyer qu'au plus tôt tous les trois ans, dans la limite de " + (inp.usage === "MIXED" ? "8 % (habitation) et 10 % (autres locaux)" : "8 % pour l'habitation") + ". Le contrat reprend la règle légale ; ajustez l'indexation du bail dans ImmoPilot.");
+    if (num_(l.indexationRate) > 0) w.push("Le bail prévoit une indexation annuelle de " + num_(l.indexationRate) + " % : au Maroc, la loi n° 67-12 (articles 31 à 38) ne permet de réviser le loyer qu'au plus tôt tous les trois ans, dans la limite de " + (inp.usage === "MIXED" ? "8 % (habitation) et 10 % (autres locaux)" : "8 % pour l'habitation") + ". Le contrat reprend la règle légale ; ajustez l'indexation du bail dans DarPilot.");
     w.push("Faites signer le contrat en deux exemplaires et légaliser les signatures pour lui donner date certaine.");
   } else {
     const maxDep = inp.furnished ? 2 : 1;
@@ -5118,7 +5118,7 @@ function st_label_(code) { return ({ APARTMENT: "appartement", VILLA: "villa", R
 
 function laContractAi_(c, inp, base) {
   const ma = IMMO_EDITION_ === "MA";
-  const system = "Tu es l'agent de rédaction juridique d'ImmoPilot, logiciel de gestion locative (" + edition_().countryName + "). Tu rédiges en français un contrat de location " +
+  const system = "Tu es l'agent de rédaction juridique d'DarPilot, logiciel de gestion locative (" + edition_().countryName + "). Tu rédiges en français un contrat de location " +
     (inp.furnished ? "meublée" : "vide") + " conforme au " + edition_().leaseLaw + ".\nRègles impératives :\n" +
     "- Pars de la TRAME fournie (déjà conforme) et améliore-la : clarté, articles complets, consignes de l'utilisateur intégrées. Garde tous les articles utiles de la trame.\n" +
     "- Utilise UNIQUEMENT les faits fournis. N'invente aucun montant, aucune date, aucun nom, aucune adresse.\n" +
@@ -5180,7 +5180,7 @@ function laLetterTemplate_(c, inp) {
   return { title: { RENEWAL: "Proposition de renouvellement du bail", RENT_REVISION: "Notification de révision du loyer", DEPOSIT_RETURN: "Restitution du dépôt de garantie", FREE: inp.subject || "Courrier au locataire" }[inp.subtype], sections: S };
 }
 function laLetterAi_(c, inp, base) {
-  const system = "Tu es l'agent de rédaction d'ImmoPilot (" + edition_().countryName + ", " + edition_().leaseLaw + "). Rédige en français un courrier du bailleur au locataire, courtois, précis et bref.\n" +
+  const system = "Tu es l'agent de rédaction d'DarPilot (" + edition_().countryName + ", " + edition_().leaseLaw + "). Rédige en français un courrier du bailleur au locataire, courtois, précis et bref.\n" +
     "- Utilise uniquement les faits fournis ; n'invente aucun montant, date ni nom ; marqueurs [BAILLEUR], [LOCATAIRE], [ADRESSE_DU_BIEN], [VILLE] pour les identités et l'adresse.\n" +
     "- Si la demande est contraire à la loi, n'applique pas la partie concernée et explique-le dans « warnings ».\n" +
     "- Pas de Markdown. Réponds UNIQUEMENT en JSON : {\"title\": string, \"sections\": [{\"title\": string, \"body\": string}], \"warnings\": [string]} (1 à 3 sections, la première commence par « Objet : »).";
@@ -5252,7 +5252,7 @@ function leaseDocHtml_(c, d) {
     "<table class='sign'><tr><td><b>Le bailleur</b><br><span class='muted'>« Lu et approuvé », signature</span></td><td><b>Le locataire</b><br><span class='muted'>« Lu et approuvé », signature</span></td></tr></table>";
   else inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + pdfDate_(todayStr_()) + ".</p>";
   return pdfShell_(d.title || "Document", inner, { subtitle: (prop.name || "") + (d.docType === "LETTER" ? " · à l'attention de " + (t.fullName || "") : ""), issuer: rentIssuer_(org), ref: (d.docType === "LEASE_CONTRACT" ? "BAIL-" : "COUR-") + String(d.leaseDocId || d.leaseId || "").slice(-8).toUpperCase(),
-    footer: draft ? "PROJET — document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; ImmoPilot ne garantit pas sa conformité juridique."
+    footer: draft ? "PROJET — document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; DarPilot ne garantit pas sa conformité juridique."
       : d.docType === "LEASE_CONTRACT" ? "Paraphe du bailleur : __________          Paraphe du locataire : __________" : " " });
 }
 function leaseDocFileName_(d) { return (d.docType === "LEASE_CONTRACT" ? "Bail_" : "Courrier_") + String(d.leaseId).slice(-6) + "_" + todayStr_(); }
@@ -5442,7 +5442,7 @@ function laInspectionTemplate_(r) {
 }
 function laInspectionAi_(c, r) {
   const exit = r.type === "EXIT", rooms = parseJson_(r.roomsJson, []);
-  const system = "Tu es l'agent de rédaction d'ImmoPilot (" + edition_().countryName + "). Rédige en français le compte rendu d'un état des lieux " + (exit ? "de SORTIE" : "d'ENTRÉE") + " d'un logement loué, à partir des relevés fournis.\n" +
+  const system = "Tu es l'agent de rédaction d'DarPilot (" + edition_().countryName + "). Rédige en français le compte rendu d'un état des lieux " + (exit ? "de SORTIE" : "d'ENTRÉE") + " d'un logement loué, à partir des relevés fournis.\n" +
     "- Décris UNIQUEMENT ce qui est relevé (états et observations). N'invente aucun défaut, aucun équipement, aucun nom.\n" +
     "- Style factuel et précis, phrases courtes, vocabulaire d'état des lieux. Une description par pièce (2 à 5 phrases).\n" +
     (exit ? "- Compare avec l'état à l'entrée (champ « entree ») ; liste dans « differences » les éléments plus dégradés à la sortie, en distinguant l'usure normale des dégradations. Ne chiffre aucune retenue.\n" : "- Les éléments sans état sont « non renseignés » : signale-les sans les décrire.\n") +
@@ -5918,7 +5918,7 @@ function leaseDocument_(p, a) {
   const map = { bailleur: org.name, locataire: t.fullName, locataire_email: t.email, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), surface: x.prop.surfaceM2, debut: x.l.startDate,
     fin: x.l.endDate || "indéterminée", loyer: x.l.monthlyRent, charges: x.l.charges, caution: x.l.deposit, jour_echeance: x.l.dueDay, indexation: x.l.indexationRate, conditions: x.l.terms, date: todayStr_() };
   const tpl = getSetting_("template.leaseDocId", x.l.organizationId), text = docTemplateOf_("lease", x.l.organizationId), cur = cur_();
-  // Contrat complet et conforme (meublé ou vide selon le logement), sans marque ImmoPilot : en-tête au nom du bailleur.
+  // Contrat complet et conforme (meublé ou vide selon le logement), sans marque DarPilot : en-tête au nom du bailleur.
   const c = rentCtx_(x.l), furnished = leaseFurnished_(x.l, x.prop);
   const base = laContractTemplate_(c, { furnished: furnished, usage: "HABITATION", clauses: ["INSURANCE_REQUIRED", "SUBLET_FORBIDDEN"], instructions: "" });
   const sections = base.sections.map(function (sc) { return { title: laFill_(sc.title, c), body: laFill_(sc.body, c) }; });
@@ -5977,7 +5977,7 @@ function leaseJob_() {
  * mentions légales, conditions générales, confidentialité, cookies et, pour la France, accord de sous-traitance (art. 28 RGPD).
  * Les informations propres à l'éditeur (raison sociale, SIRET, hébergeur…) se règlent dans Paramètres › Plateforme (clés legal.*) :
  * tant qu'une valeur manque, elle apparaît surlignée « À compléter ».
- * Ces textes sont des modèles : ils doivent être relus par un professionnel du droit avant la mise en service. ImmoPilot ne garantit pas leur conformité.
+ * Ces textes sont des modèles : ils doivent être relus par un professionnel du droit avant la mise en service. DarPilot ne garantit pas leur conformité.
  */
 /** Date de la version en vigueur des documents juridiques (conservée comme preuve à chaque acceptation ou signature). */
 var LEGAL_VERSION_ = "2026-11-02";
@@ -6007,7 +6007,7 @@ function legalFill_(text, v) {
 /* Rôle de l'éditeur : commun aux deux éditions. L'éditeur fournit un LOGICIEL ; il n'exerce aucune activité immobilière. */
 function legalRoleSection_() {
   return { h: "Rôle de l'éditeur : un logiciel de gestion, pas un gestionnaire", ul: [
-    "ImmoPilot est un logiciel en ligne (SaaS) mis à disposition du client pour l'aider à organiser lui-même la gestion de ses biens. L'éditeur fournit uniquement l'outil.",
+    "DarPilot est un logiciel en ligne (SaaS) mis à disposition du client pour l'aider à organiser lui-même la gestion de ses biens. L'éditeur fournit uniquement l'outil.",
     "L'éditeur n'est ni agent immobilier, ni administrateur de biens, ni syndic, ni conciergerie, ni mandataire du client. Il n'effectue aucune transaction, ne loue aucun bien, ne détient aucune carte professionnelle immobilière et n'intervient dans aucune négociation.",
     "L'éditeur n'est pas partie aux contrats conclus par le client avec des tiers (baux, réservations, contrats de ménage ou de travaux, contrats avec des agences ou des artisans). Il ne garantit ni leur exécution, ni la solvabilité des locataires ou voyageurs, ni la qualité des prestations des tiers.",
     "L'éditeur ne détient pas et ne gère pas les fonds du client ni ceux de ses locataires ou voyageurs : loyers, cautions et paiements des séjours sont encaissés directement par le client, en dehors de l'application. L'éditeur perçoit uniquement le prix de l'abonnement et, lorsque le client fait appel à un prestataire référencé, la commission de mise en relation prévue à l'article « Mise en relation ».",
@@ -6027,7 +6027,7 @@ function legalClientDutiesSection_(law) {
 function legalMarketplaceSection_(v) {
   const R = commissionRates_(), fr = edition_().code === "FR";
   return { h: "Mise en relation avec des prestataires référencés", ul: [
-    "En plus du logiciel, ImmoPilot propose un annuaire d'artisans et de prestataires (ménage, plomberie, électricité, climatisation…) référencés par l'éditeur. Le client y choisit librement un prestataire par métier et par zone ; l'éditeur ne choisit pas à sa place.",
+    "En plus du logiciel, DarPilot propose un annuaire d'artisans et de prestataires (ménage, plomberie, électricité, climatisation…) référencés par l'éditeur. Le client y choisit librement un prestataire par métier et par zone ; l'éditeur ne choisit pas à sa place.",
     "Les devis, interventions et factures sont établis par le prestataire, en son nom, et conclus directement entre le client et le prestataire. L'éditeur n'est pas partie à ces contrats et ne garantit ni leur exécution, ni leur qualité, ni leurs délais.",
     "Commission de mise en relation : pour chaque mission réalisée par un prestataire référencé et réglée, le client (commanditaire) doit à l'éditeur une commission de " + R.client + " % du montant hors taxes de la facture du prestataire (TVA en sus au taux de " + R.vat + " %). Elle rémunère le service de mise en relation (sélection et contrôle des prestataires, outils de demande de devis, de suivi et de facturation). Les commissions d'un mois sont réunies dans un récapitulatif envoyé au début du mois suivant et prélevées sur la carte enregistrée pour l'abonnement, ou réglées par lien de paiement.",
     "Règlement du prestataire : le client règle la facture du prestataire soit directement (virement, chèque, espèces), soit en ligne par la plateforme" + (fr ? " : dans ce cas le client paie directement le prestataire sur le compte de paiement de celui-ci, ouvert auprès de Stripe Payments Europe (établissement de paiement agréé) ; le prestataire est le vendeur, apparaît sur le reçu et gère remboursements et litiges ; seule la commission due par le prestataire est versée à l'éditeur, qui ne détient jamais le prix de la prestation." : " lorsque ce mode est proposé.") + " Le client indique dans l'application que la facture est réglée dès qu'il l'a payée directement.",
@@ -6038,7 +6038,7 @@ function legalMarketplaceSection_(v) {
 /* Conditions de référencement des prestataires (artisans inscrits en ligne). */
 function legalProviderDoc_(fr) {
   return { id: "referencement", title: "Conditions de référencement des prestataires", sections: [
-    { h: "1. Objet", p: ["Les présentes conditions s'appliquent aux artisans et prestataires (« le prestataire ») qui demandent leur référencement dans l'annuaire ImmoPilot édité par {{publisherName}} (« l'éditeur »). Elles sont acceptées en ligne lors de l'inscription. Le référencement est gratuit."] },
+    { h: "1. Objet", p: ["Les présentes conditions s'appliquent aux artisans et prestataires (« le prestataire ») qui demandent leur référencement dans l'annuaire DarPilot édité par {{publisherName}} (« l'éditeur »). Elles sont acceptées en ligne lors de l'inscription. Le référencement est gratuit."] },
     { h: "2. Rôle de l'éditeur", p: ["L'éditeur met à disposition un logiciel et un annuaire permettant aux propriétaires et agences abonnés de trouver un prestataire et de lui adresser des demandes de devis et d'intervention. L'éditeur n'est ni employeur, ni donneur d'ordre, ni mandataire du prestataire ou du client ; il n'est pas partie aux contrats de prestation, ne fixe pas les prix et n'encaisse pas les paiements."] },
     { h: "3. Conditions et pièces exigées", ul: fr ? [
       "Être immatriculé : SIRET actif (auto-entrepreneur) ou société immatriculée au RCS.",
@@ -6065,14 +6065,14 @@ function legalDocsFR_(v) {
     : "un serveur dédié situé en France (Paris), loué auprès de {{hostName}} ({{hostAddress}}). Les données sensibles (base de données, pièces d'identité, documents) y sont chiffrées au repos (AES-256).";
   return [
     { id: "mentions", title: "Mentions légales", sections: [
-      { h: "Éditeur", p: ["Le logiciel ImmoPilot et le présent site sont édités par {{publisherName}}, {{legalForm}}, dont le siège est situé {{address}}, {{registration}}, n° de TVA intracommunautaire {{vatNumber}}.",
+      { h: "Éditeur", p: ["Le logiciel DarPilot et le présent site sont édités par {{publisherName}}, {{legalForm}}, dont le siège est situé {{address}}, {{registration}}, n° de TVA intracommunautaire {{vatNumber}}.",
         "Contact : {{contactEmail}} — {{phone}}.", "Directeur ou directrice de la publication : {{director}}."] },
       { h: "Hébergeur", p: ["{{hostName}}, {{hostAddress}}" + (google ? "." : " — serveur situé en France (Paris).")] },
-      { h: "Propriété intellectuelle", p: ["Le logiciel, la marque ImmoPilot, son logo et ses contenus sont protégés. Toute reproduction ou réutilisation non autorisée est interdite. Les données saisies par les clients restent leur propriété."] },
+      { h: "Propriété intellectuelle", p: ["Le logiciel, la marque DarPilot, son logo et ses contenus sont protégés. Toute reproduction ou réutilisation non autorisée est interdite. Les données saisies par les clients restent leur propriété."] },
       { h: "Signalement", p: ["Pour signaler un contenu illicite ou exercer vos droits, écrivez à {{contactEmail}}."] }
     ] },
     { id: "cgv", title: "Conditions générales d'abonnement et d'utilisation", sections: [
-      { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement au logiciel en ligne ImmoPilot (gestion de locations courte et longue durée : biens, réservations, voyageurs, ménage, maintenance, baux, finances) fourni par {{publisherName}} (« l'éditeur ») à ses clients (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne lors de la création du compte ou de la souscription ; la version en vigueur reste consultable à tout moment dans l'application."] },
+      { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement au logiciel en ligne DarPilot (gestion de locations courte et longue durée : biens, réservations, voyageurs, ménage, maintenance, baux, finances) fourni par {{publisherName}} (« l'éditeur ») à ses clients (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne lors de la création du compte ou de la souscription ; la version en vigueur reste consultable à tout moment dans l'application."] },
       legalRoleSection_(),
       legalMarketplaceSection_(v),
       { h: "3. Comptes et accès", p: ["L'accès se fait par des comptes personnels protégés par mot de passe. Toute utilisation anormale doit être signalée sans délai à l'éditeur."] },
@@ -6125,15 +6125,15 @@ function legalDocsFR_(v) {
         "La suppression de votre compte peut être demandée depuis Paramètres › Mon profil. Vous pouvez introduire une réclamation auprès de la CNIL (www.cnil.fr)."] }
     ] },
     { id: "cookies", title: "Cookies et stockage local", sections: [
-      { h: "Ce que nous utilisons", p: ["ImmoPilot n'utilise ni cookie publicitaire ni outil de mesure d'audience. Le navigateur conserve seulement des éléments strictement nécessaires au fonctionnement : le jeton de session (pendant la visite), la langue et le thème clair/sombre choisis. Le formulaire de paiement SumUp peut déposer ses propres traceurs techniques, nécessaires à la sécurité du paiement.",
+      { h: "Ce que nous utilisons", p: ["DarPilot n'utilise ni cookie publicitaire ni outil de mesure d'audience. Le navigateur conserve seulement des éléments strictement nécessaires au fonctionnement : le jeton de session (pendant la visite), la langue et le thème clair/sombre choisis. Le formulaire de paiement SumUp peut déposer ses propres traceurs techniques, nécessaires à la sécurité du paiement.",
         "Ces éléments sont exemptés de consentement (article 82 de la loi Informatique et Libertés et lignes directrices de la CNIL). Vous pouvez les effacer depuis les réglages de votre navigateur ; vous serez alors déconnecté."] }
     ] },
     { id: "dpa", title: "Accord de sous-traitance (article 28 du RGPD)", sections: [
-      { h: "Parties et objet", p: ["Le client (responsable de traitement) confie à {{publisherName}} (sous-traitant) le traitement des données personnelles qu'il enregistre dans ImmoPilot, pour la seule fourniture du service et pendant la durée de l'abonnement."] },
+      { h: "Parties et objet", p: ["Le client (responsable de traitement) confie à {{publisherName}} (sous-traitant) le traitement des données personnelles qu'il enregistre dans DarPilot, pour la seule fourniture du service et pendant la durée de l'abonnement."] },
       { h: "Données et personnes concernées", p: ["Voyageurs, locataires, propriétaires, collaborateurs et prestataires du client : identité, coordonnées, données de séjour ou de location, pièces d'identité, données de naissance et domicile des voyageurs étrangers, paiements, photos et documents."] },
       { h: "Engagements du sous-traitant", ul: [
         "Ne traiter les données que sur instruction documentée du client (le paramétrage et l'utilisation du service valent instructions).",
-        "Garantir la confidentialité des personnes autorisées à y accéder ; l'équipe ImmoPilot n'accède aux données du client qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
+        "Garantir la confidentialité des personnes autorisées à y accéder ; l'équipe DarPilot n'accède aux données du client qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
         "Mettre en œuvre les mesures de sécurité décrites dans la politique de confidentialité.",
         "Aider le client à répondre aux demandes d'exercice des droits et à réaliser ses analyses d'impact le cas échéant.",
         "Notifier au client toute violation de données dans les meilleurs délais et au plus tard 48 heures après en avoir eu connaissance.",
@@ -6150,13 +6150,13 @@ function legalDocsMA_(v) {
   const hosting = google ? "Google (Google Apps Script, Google Sheets, Google Drive)" : "un serveur dédié situé en France (Paris), loué auprès de {{hostName}} ({{hostAddress}}), avec chiffrement au repos (AES-256) des données sensibles";
   return [
     { id: "mentions", title: "Mentions légales", sections: [
-      { h: "Éditeur", p: ["La plateforme ImmoPilot est éditée par {{publisherName}}, {{legalForm}}, société de droit français dont le siège est situé {{address}}, {{registration}}, n° de TVA intracommunautaire {{vatNumber}}.",
+      { h: "Éditeur", p: ["La plateforme DarPilot est éditée par {{publisherName}}, {{legalForm}}, société de droit français dont le siège est situé {{address}}, {{registration}}, n° de TVA intracommunautaire {{vatNumber}}.",
         "Contact : {{contactEmail}} — {{phone}}.", "Directeur ou directrice de la publication : {{director}}."] },
       { h: "Hébergeur", p: ["{{hostName}}, {{hostAddress}}" + (google ? "." : " — serveur situé en France (Paris).")] },
-      { h: "Propriété intellectuelle", p: ["Le logiciel, la marque ImmoPilot, son logo et ses contenus sont protégés. Toute reproduction non autorisée est interdite. Les données saisies par les clients restent leur propriété."] }
+      { h: "Propriété intellectuelle", p: ["Le logiciel, la marque DarPilot, son logo et ses contenus sont protégés. Toute reproduction non autorisée est interdite. Les données saisies par les clients restent leur propriété."] }
     ] },
     { id: "cgv", title: "Conditions générales d'abonnement et d'utilisation", sections: [
-      { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement à la plateforme en ligne ImmoPilot (gestion de locations courte et longue durée) fournie par {{publisherName}} (« l'éditeur ») à ses clients au Maroc (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne, par un clic de confirmation, lors de la création du compte ou de la souscription ; cette acceptation électronique a la même valeur qu'une signature (loi n° 53-05 relative à l'échange électronique de données juridiques). La version en vigueur reste consultable à tout moment dans l'application."] },
+      { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement à la plateforme en ligne DarPilot (gestion de locations courte et longue durée) fournie par {{publisherName}} (« l'éditeur ») à ses clients au Maroc (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne, par un clic de confirmation, lors de la création du compte ou de la souscription ; cette acceptation électronique a la même valeur qu'une signature (loi n° 53-05 relative à l'échange électronique de données juridiques). La version en vigueur reste consultable à tout moment dans l'application."] },
       legalRoleSection_(),
       legalMarketplaceSection_(v),
       { h: "3. Forfaits et prix", p: ["Le service est fourni selon le forfait choisi (fonctionnalités, nombre de biens, d'utilisateurs et stockage indiqués dans l'application). Les prix sont indiqués en dirhams marocains (MAD), toutes taxes comprises lorsque le client est un consommateur. Une période d'essai gratuite peut être proposée ; aucun prélèvement n'a lieu avant sa fin.",
@@ -6209,7 +6209,7 @@ function legalGet_(a) {
   });
   const missing = Object.keys(LEGAL_FIELDS_).filter(function (k) { return !v[k] && ["vatNumber", "phone", "hostPhone", "dpoEmail", "dataAuthorityRef", "mediator", "platformInsurance"].indexOf(k) < 0; });
   return { edition: edition_().code, updatedAt: LEGAL_VERSION_, docs: a && a.id ? docs.filter(function (d) { return d.id === a.id; }) : docs, missing: missing.map(function (k) { return LEGAL_FIELDS_[k]; }),
-    notice: "Modèles à faire relire par un professionnel du droit avant mise en service. ImmoPilot ne garantit pas leur conformité." };
+    notice: "Modèles à faire relire par un professionnel du droit avant mise en service. DarPilot ne garantit pas leur conformité." };
 }
 
 /* ======================================================================
@@ -6368,7 +6368,7 @@ function migSeed_() {
     r.plans++;
   });
   if (!dbAll_("Organizations").some(function (o) { return o.type === "PLATFORM"; })) {
-    dbInsert_("Organizations", { name: "ImmoPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: "migration" });
+    dbInsert_("Organizations", { name: "DarPilot Plateforme", status: "ACTIVE", type: "PLATFORM", country: edition_().country, city: edition_().city, timezone: tz_(), locale: "fr", createdAt: nowIso_(), createdBy: "migration" });
     r.platformOrg = true;
   }
   return r;
@@ -6475,11 +6475,11 @@ function listBackups_() {
 /**
  * Notifications centralisées : in-app (feuille Notifications), e-mail (MailApp/Gmail), liens WhatsApp wa.me.
  * Anti-doublon : chaque envoi porte une clé d'événement ; NotificationLogs garde (eventKey, canal, destinataire).
- * WhatsApp : ImmoPilot génère un lien qui OUVRE une conversation pré-remplie. Aucun message n'est envoyé automatiquement.
+ * WhatsApp : DarPilot génère un lien qui OUVRE une conversation pré-remplie. Aucun message n'est envoyé automatiquement.
  */
 /**
  * opts (facultatif) : { attachments: [Blob] (PDF joints), bcc: "copie@…", replyTo: "…", senderName: "…", footer: [coordonnées de l'expéditeur],
- * plain: true (pas de bouton « Ouvrir ImmoPilot » pour les liens : e-mails adressés à un locataire sans compte) }.
+ * plain: true (pas de bouton « Ouvrir DarPilot » pour les liens : e-mails adressés à un locataire sans compte) }.
  * Tous les e-mails passent par le gabarit commun (mailLayout_) ; ref = clé d'événement, renvoyée par Brevo pour le suivi de livraison.
  */
 function sendMailSafe_(to, subject, body, eventKey, orgId, opts) {
@@ -6514,7 +6514,7 @@ function mailHtml_(text, opts) {
   const inner = parts.map(function (part, i) {
     if (i % 2 === 0) return escapeHtml_(part).replace(/\n/g, "<br>");
     const url = escapeHtml_(part);
-    return "<br><a href=\"" + url + "\" style=\"display:inline-block;background:#2f4fd8;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold\">Ouvrir ImmoPilot</a>" +
+    return "<br><a href=\"" + url + "\" style=\"display:inline-block;background:#2f4fd8;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold\">Ouvrir DarPilot</a>" +
       "<br><span style=\"font-size:12px;color:#64748b\">Si le bouton ne fonctionne pas, copiez ce lien en entier dans la barre d'adresse de votre navigateur :<br><a href=\"" + url + "\" style=\"color:#2f4fd8;word-break:break-all\">" + url + "</a></span><br>";
   }).join("");
   return mailLayout_(inner, opts);
@@ -6529,12 +6529,12 @@ function mailHtmlPlain_(text, opts) {
   }).join(""), opts);
 }
 
-/** Adresse publique du logo de l'édition (servi par le serveur ImmoPilot). */
+/** Adresse publique du logo de l'édition (servi par le serveur DarPilot). */
 function mailLogoUrl_() {
   try { const m = /^(https:\/\/[^\/?#]+)/.exec(appUrl_()); return m ? m[1] + "/icons/icon-192.png" : ""; } catch (e) { return ""; }
 }
 /**
- * Gabarit commun de tous les e-mails ImmoPilot : en-tête avec logo, contenu, pied de page de l'expéditeur.
+ * Gabarit commun de tous les e-mails DarPilot : en-tête avec logo, contenu, pied de page de l'expéditeur.
  * Tableaux et styles en ligne (compatibles Gmail, Outlook, Apple Mail), largeur fluide jusqu'à 600 px (téléphone).
  * opts : { senderName, footer: [lignes de coordonnées de l'expéditeur] }
  */
@@ -6546,13 +6546,13 @@ function mailLayout_(innerHtml, opts) {
     "<body style=\"margin:0;padding:0;background:#eef2f7\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#eef2f7\"><tr><td align=\"center\" style=\"padding:20px 10px\">" +
     "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #dbe3ee\">" +
     "<tr><td style=\"background:#13233d;padding:16px 22px\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\"><tr>" +
-      (logo ? "<td style=\"padding-right:12px\"><img src=\"" + escapeHtml_(logo) + "\" width=\"44\" height=\"44\" alt=\"ImmoPilot\" style=\"display:block;border-radius:9px;background:#ffffff\"></td>" : "") +
-      "<td style=\"font-family:Arial,Helvetica,sans-serif;color:#ffffff\"><div style=\"font-size:19px;font-weight:bold\">Immo<span style=\"color:#e9b341\">Pilot</span></div>" +
+      (logo ? "<td style=\"padding-right:12px\"><img src=\"" + escapeHtml_(logo) + "\" width=\"44\" height=\"44\" alt=\"DarPilot\" style=\"display:block;border-radius:9px;background:#ffffff\"></td>" : "") +
+      "<td style=\"font-family:Arial,Helvetica,sans-serif;color:#ffffff\"><div style=\"font-size:19px;font-weight:bold\">Dar<span style=\"color:#e9b341\">Pilot</span></div>" +
       (from ? "<div style=\"font-size:12px;color:#c7d2e3\">pour le compte de " + escapeHtml_(from) + "</div>" : "<div style=\"font-size:12px;color:#c7d2e3\">Gestion immobilière</div>") + "</td></tr></table></td></tr>" +
     "<tr><td style=\"padding:24px 22px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1d2b3a\">" + innerHtml + "</td></tr>" +
     (foot ? "<tr><td style=\"padding:14px 22px;background:#f6f8fb;border-top:1px solid #e3e9f1;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#475569\"><b>" + escapeHtml_(from || IMMO_CONFIG.APP_NAME) + "</b><br>" + foot + "</td></tr>" : "") +
-    "<tr><td style=\"padding:12px 22px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.5;color:#94a3b8;text-align:center\">Message envoyé via ImmoPilot, logiciel de gestion immobilière édité par ECO SYNERGY. " +
-      "Les pièces jointes éventuelles sont également disponibles dans votre espace ImmoPilot.</td></tr>" +
+    "<tr><td style=\"padding:12px 22px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.5;color:#94a3b8;text-align:center\">Message envoyé via DarPilot, logiciel de gestion immobilière édité par ECO SYNERGY. " +
+      "Les pièces jointes éventuelles sont également disponibles dans votre espace DarPilot.</td></tr>" +
     "</table></td></tr></table></body></html>";
 }
 
@@ -6617,7 +6617,7 @@ function notify_(opts) {
       sent++;
     }
     if (opts.email !== false && orgEmail && prefs.email !== false) {
-      sendMailSafe_(u.email, "[ImmoPilot] " + opts.title, (opts.body || "") + "\n\nOuvrir ImmoPilot : " + safeAppUrl_() + (opts.link || ""), opts.eventKey, opts.organizationId);
+      sendMailSafe_(u.email, "[DarPilot] " + opts.title, (opts.body || "") + "\n\nOuvrir DarPilot : " + safeAppUrl_() + (opts.link || ""), opts.eventKey, opts.organizationId);
     }
   });
   return { sent: sent };
@@ -6668,7 +6668,7 @@ function notifWhatsApp_(p, a) {
 function notifSendEmail_(p, a) {
   const prop = assertPropAny_(p, a.propertyId, ["reservation.edit", "cleaning.manage", "incident.manage", "lease.manage"]);
   rateLimit_("mail:" + p.userId, 30, 3600);
-  const r = sendMailSafe_(a.to, "[ImmoPilot] " + reqText_(a.subject, "Objet", 2, 150), reqText_(a.body, "Message", 2, 5000), "manual:" + newId_("m"), prop.organizationId);
+  const r = sendMailSafe_(a.to, "[DarPilot] " + reqText_(a.subject, "Objet", 2, 150), reqText_(a.body, "Message", 2, 5000), "manual:" + newId_("m"), prop.organizationId);
   audit_("EMAIL_SENT", "Notification", prop.propertyId, prop.organizationId, { ok: r.ok });
   if (!r.ok) throw new AppError("EMAIL", "Envoi impossible : " + r.error);
   return { ok: true };
@@ -6764,7 +6764,7 @@ function supportRequest_(p, a) {
   audit_("SUPPORT_ACCESS_REQUESTED", "SupportGrant", g.grantId, orgId, { hours: hours, justification: g.justification });
   const approvers = dbAll_("UserRoles").filter(function (r) { return r.status === "ACTIVE" && String(r.organizationId) === orgId && (r.role === "OWNER" || r.role === "AGENCY_ADMIN"); }).map(function (r) { return r.userId; });
   notify_({ eventKey: "support:" + g.grantId, userIds: approvers, type: "SUPPORT_REQUEST", organizationId: orgId,
-    title: "Demande d'accès d'assistance", body: "L'équipe ImmoPilot demande un accès en lecture seule de " + hours + " h : " + g.justification, link: "#settings" });
+    title: "Demande d'accès d'assistance", body: "L'équipe DarPilot demande un accès en lecture seule de " + hours + " h : " + g.justification, link: "#settings" });
   return { ok: true, grantId: g.grantId };
 }
 function supportDecide_(p, a) {
@@ -6819,7 +6819,7 @@ function ownerAgencyCreate_(p, a) {
   const adminEmail = validateEmail_(a.adminEmail);
   rateLimit_("agency-create:" + p.userId, 10, 3600);
   assert_(dbAll_("Organizations").filter(function (o) { return o.type === "AGENCY" && normalizeEmail_(o.createdBy) === p.email && o.status !== "INACTIVE"; }).length < OWNER_AGENCY_LIMIT_,
-    "Nombre maximal d'agences créées atteint (" + OWNER_AGENCY_LIMIT_ + "). Contactez l'administrateur ImmoPilot.");
+    "Nombre maximal d'agences créées atteint (" + OWNER_AGENCY_LIMIT_ + "). Contactez l'administrateur DarPilot.");
   const agency = withLock_(function () {
     const same = dbAll_("Organizations").find(function (o) { return String(o.name).toLowerCase() === name.toLowerCase() && o.status !== "INACTIVE"; });
     if (same) throw new AppError("VALIDATION", "Une organisation porte déjà ce nom. S'il s'agit de la même agence, utilisez « Attribuer une agence » ; sinon, choisissez un autre nom.");
@@ -7384,7 +7384,7 @@ function billingEnforced_() { return getSetting_("billing.enforce") !== false; }
 function assertOrgWritable_(orgId) {
   if (!billingEnforced_()) return;
   const e = entitlement_(orgId);
-  if (e.readOnly) throw new AppError("SUBSCRIPTION", "Abonnement suspendu ou expiré : le compte est en lecture seule. Contactez l'administrateur ImmoPilot.");
+  if (e.readOnly) throw new AppError("SUBSCRIPTION", "Abonnement suspendu ou expiré : le compte est en lecture seule. Contactez l'administrateur DarPilot.");
 }
 /** Une organisation sans abonnement (installation historique) conserve l'accès complet ; à régulariser par le super administrateur. */
 function assertFeature_(orgId, feature) {
@@ -7757,7 +7757,7 @@ function rentParties_(c) {
 }
 /**
  * Lien de paiement par carte du bailleur : celui de SON compte (SumUp, Stripe, PayPal…), les fonds lui sont versés
- * directement, sans transiter par ImmoPilot. Balises facultatives dans le lien : {montant} et {reference}.
+ * directement, sans transiter par DarPilot. Balises facultatives dans le lien : {montant} et {reference}.
  */
 function validatePayUrl_(v) {
   const s = safeText_(v, 500);
@@ -8648,11 +8648,11 @@ function requestMeta_() {
 
 /* ------------------------------- SMS (Brevo) ------------------------------- */
 function smsConf_() {
-  if (TEST_HOOKS_.smsSink) return { key: "test", sender: "ImmoPilot" };
+  if (TEST_HOOKS_.smsSink) return { key: "test", sender: "DarPilot" };
   const g = typeof globalThis !== "undefined" ? globalThis : this, env = g.IMMO_SECRETS_ || {};
   const P = PropertiesService.getScriptProperties(), key = String(env.brevoApiKey || P.getProperty("BREVO_API_KEY") || "").trim();
   if (!key) return null;
-  const sender = String(P.getProperty("SMS_SENDER") || "ImmoPilot").replace(/[^A-Za-z0-9]/g, "").slice(0, 11) || "ImmoPilot";
+  const sender = String(P.getProperty("SMS_SENDER") || "DarPilot").replace(/[^A-Za-z0-9]/g, "").slice(0, 11) || "DarPilot";
   return { key: key, sender: sender };
 }
 /** Numéro au format international sans « + » (ex. 33612345678), ou "" si inutilisable. */
@@ -8720,10 +8720,10 @@ function subSignStart_(p, a) {
     currency: s.currency || cur_(), contractHash: subContractHash_(d), legalVersion: d.legalVersion, signerUserId: p.userId, signerEmail: p.email, signerName: safeText_(u.displayName || p.email, 120),
     channel: channel, destination: masked, otpHash: "", otpExpires: new Date(Date.now() + SIGN_OTP_MINUTES_ * 60000).toISOString(), otpAttempts: 0, status: "PENDING", createdAt: nowIso_() });
   dbUpdate_("ContractSignatures", row.signatureId, { otpHash: sha256Hex_(row.signatureId + ":" + digits) });
-  const text = "ImmoPilot : votre code de signature du contrat d'abonnement est " + digits + ". Il expire dans " + SIGN_OTP_MINUTES_ + " minutes. Ne le communiquez à personne.";
+  const text = "DarPilot : votre code de signature du contrat d'abonnement est " + digits + ". Il expire dans " + SIGN_OTP_MINUTES_ + " minutes. Ne le communiquez à personne.";
   if (channel === "SMS") smsSend_(dest, text);
   else {
-    const r = sendMailSafe_(dest, "Code de signature de votre contrat ImmoPilot : " + digits, "Bonjour,\n\n" + text + "\n\nContrat : abonnement " + d.cur.planCode + " pour " + d.org.name +
+    const r = sendMailSafe_(dest, "Code de signature de votre contrat DarPilot : " + digits, "Bonjour,\n\n" + text + "\n\nContrat : abonnement " + d.cur.planCode + " pour " + d.org.name +
       ".\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.", "sign-otp:" + row.signatureId, orgId, { plain: true });
     if (!r.ok) throw new AppError("MAIL", "L'e-mail contenant le code n'a pas pu être envoyé. Réessayez dans un instant.");
   }
@@ -8754,8 +8754,8 @@ function subSignConfirm_(p, a) {
       { mimeType: "application/pdf", fileName: blob.getName(), base64: Utilities.base64Encode(blob.getBytes()) }, p.email);
     dbUpdate_("ContractSignatures", id, { documentId: doc.documentId });
     audit_("CONTRACT_SIGNED", "Subscription", s.subscriptionId, orgId, { signatureId: id, channel: row.channel, hash: row.contractHash });
-    sendMailSafe_(p.email, "Votre contrat d'abonnement ImmoPilot signé", "Bonjour,\n\nVotre contrat d'abonnement ImmoPilot (" + d.org.name + ", forfait " + s.planCode + ") a été signé électroniquement le " +
-      Utilities.formatDate(new Date(), tz_(), "dd/MM/yyyy à HH:mm") + ".\nVous le trouverez en pièce jointe ; il reste disponible dans ImmoPilot, menu Abonnement.\n\nMerci de votre confiance.", "sign-done:" + id, orgId,
+    sendMailSafe_(p.email, "Votre contrat d'abonnement DarPilot signé", "Bonjour,\n\nVotre contrat d'abonnement DarPilot (" + d.org.name + ", forfait " + s.planCode + ") a été signé électroniquement le " +
+      Utilities.formatDate(new Date(), tz_(), "dd/MM/yyyy à HH:mm") + ".\nVous le trouverez en pièce jointe ; il reste disponible dans DarPilot, menu Abonnement.\n\nMerci de votre confiance.", "sign-done:" + id, orgId,
       { attachments: [blob], plain: true });
     return { ok: true, signedAt: sig.signedAt, documentId: doc.documentId };
   });
@@ -8831,10 +8831,10 @@ var PROVIDER_DOC_CODES_ = ["ID_DOCUMENT", "SIRENE", "KBIS", "URSSAF", "DECENNALE
 function platformStatusText_() {
   const v = legalValues_();
   return {
-    title: "Ce qu'est ImmoPilot",
+    title: "Ce qu'est DarPilot",
     points: [
-      "ImmoPilot est un logiciel en ligne (SaaS) édité par " + (v.publisherName || "ECO SYNERGY") + " et mis à disposition par abonnement : vous l'utilisez pour gérer vous-même vos biens, vos locations, vos équipes et vos documents.",
-      "ImmoPilot est aussi une plateforme de mise en relation avec des artisans et prestataires référencés (ménage, plomberie, électricité…). Les prestations sont commandées, réalisées et facturées directement entre vous et le prestataire.",
+      "DarPilot est un logiciel en ligne (SaaS) édité par " + (v.publisherName || "ECO SYNERGY") + " et mis à disposition par abonnement : vous l'utilisez pour gérer vous-même vos biens, vos locations, vos équipes et vos documents.",
+      "DarPilot est aussi une plateforme de mise en relation avec des artisans et prestataires référencés (ménage, plomberie, électricité…). Les prestations sont commandées, réalisées et facturées directement entre vous et le prestataire.",
       "L'éditeur n'est ni agent immobilier, ni administrateur de biens, ni conciergerie, ni partie à vos contrats (baux, réservations, travaux). Il ne détient pas vos fonds : loyers et paiements des séjours vous sont versés directement.",
       "Vous payez à l'éditeur l'abonnement (sans engagement : résiliation à tout moment, effective à la fin de la période payée) et, si vous faites appel à un artisan référencé, une commission de mise en relation de " + commissionRates_().client + " % HT du montant de sa facture, réunie dans un récapitulatif mensuel."
     ],
@@ -8958,9 +8958,9 @@ function signupStart_(a) {
 }
 function signupCode_() { return (parseInt(randomToken_().slice(0, 12), 16) % 1000000 + 1000000).toString().slice(1); }
 function signupSendCode_(email, code, kind, requestId) {
-  const body = "Bonjour,\n\nVoici votre code de confirmation pour " + (kind === "PROVIDER" ? "votre référencement artisan" : "la création de votre compte") + " ImmoPilot :\n\n" + code +
-    "\n\nIl est valable " + SIGNUP_CODE_MINUTES_ + " minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : aucun compte ne sera créé.\n\nImmoPilot";
-  sendMailSafe_(email, "Votre code de confirmation ImmoPilot : " + code, body, "signup:" + requestId + ":" + Date.now());
+  const body = "Bonjour,\n\nVoici votre code de confirmation pour " + (kind === "PROVIDER" ? "votre référencement artisan" : "la création de votre compte") + " DarPilot :\n\n" + code +
+    "\n\nIl est valable " + SIGNUP_CODE_MINUTES_ + " minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : aucun compte ne sera créé.\n\nDarPilot";
+  sendMailSafe_(email, "Votre code de confirmation DarPilot : " + code, body, "signup:" + requestId + ":" + Date.now());
 }
 function signupLoad_(requestId) {
   const r = dbGet_("SignupRequests", safeText_(requestId, 120));
@@ -9166,14 +9166,14 @@ function providerDecide_(p, a) {
     assert_(st.allApproved, "Validez d'abord chaque pièce exigée.");
     assert_(!st.expired.length, "Assurance expirée : le prestataire doit la mettre à jour.");
     dbUpdate_("Artisans", c.artisanId, { status: "ACTIVE", verifiedAt: nowIso_(), verifiedBy: p.email, rejectReason: "", updatedAt: nowIso_() });
-    sendMailSafe_(c.email, "Votre référencement ImmoPilot est validé", "Bonjour,\n\nBonne nouvelle : votre dossier est validé. Vous êtes désormais référencé(e) dans l'annuaire ImmoPilot pour : " +
-      parseJson_(c.categoriesJson, []).join(", ") + ".\n\nLes propriétaires et agences peuvent vous envoyer des demandes de devis et d'intervention. Connectez-vous : " + url + "\n\nPensez à mettre à jour vos attestations avant leur expiration.\n\nImmoPilot", "provider-approved:" + c.artisanId + ":" + Date.now());
+    sendMailSafe_(c.email, "Votre référencement DarPilot est validé", "Bonjour,\n\nBonne nouvelle : votre dossier est validé. Vous êtes désormais référencé(e) dans l'annuaire DarPilot pour : " +
+      parseJson_(c.categoriesJson, []).join(", ") + ".\n\nLes propriétaires et agences peuvent vous envoyer des demandes de devis et d'intervention. Connectez-vous : " + url + "\n\nPensez à mettre à jour vos attestations avant leur expiration.\n\nDarPilot", "provider-approved:" + c.artisanId + ":" + Date.now());
   } else {
     const reason = reqText_(a.reason, "Motif", 3, 500);
     dbUpdate_("Artisans", c.artisanId, { status: decision === "REJECT" ? "REJECTED" : "INACTIVE", rejectReason: reason, updatedAt: nowIso_() });
-    sendMailSafe_(c.email, decision === "REJECT" ? "Votre dossier de référencement ImmoPilot est à compléter" : "Votre référencement ImmoPilot est suspendu",
+    sendMailSafe_(c.email, decision === "REJECT" ? "Votre dossier de référencement DarPilot est à compléter" : "Votre référencement DarPilot est suspendu",
       "Bonjour,\n\n" + (decision === "REJECT" ? "Votre dossier ne peut pas être validé en l'état" : "Votre référencement est suspendu") + " pour le motif suivant :\n\n" + reason +
-      "\n\nCorrigez vos informations ou déposez les pièces demandées depuis votre espace (Mon référencement), puis renvoyez votre dossier : " + url + "\n\nImmoPilot", "provider-" + decision + ":" + c.artisanId + ":" + Date.now());
+      "\n\nCorrigez vos informations ou déposez les pièces demandées depuis votre espace (Mon référencement), puis renvoyez votre dossier : " + url + "\n\nDarPilot", "provider-" + decision + ":" + c.artisanId + ":" + Date.now());
   }
   audit_("PROVIDER_" + decision, "Artisan", c.artisanId, c.organizationId, {});
   return providerOut_(dbGet_("Artisans", c.artisanId), true);
@@ -9189,12 +9189,12 @@ function providerExpiryJob_() {
       const x = ins[k[0]]; if (!x || !x.validUntil) return;
       if (x.validUntil < today) {
         dbUpdate_("Artisans", c.artisanId, { status: "INACTIVE", rejectReason: "Attestation d'assurance " + k[1] + " expirée le " + x.validUntil + ".", updatedAt: nowIso_() });
-        sendMailSafe_(c.email, "Référencement ImmoPilot suspendu : assurance expirée", "Bonjour,\n\nVotre attestation d'assurance " + k[1] + " a expiré le " + x.validUntil +
-          ". Votre référencement est suspendu jusqu'au dépôt d'une attestation à jour dans votre espace (Mon référencement) : " + url + "\n\nImmoPilot", "provider-expired:" + c.artisanId + ":" + k[0] + ":" + x.validUntil);
+        sendMailSafe_(c.email, "Référencement DarPilot suspendu : assurance expirée", "Bonjour,\n\nVotre attestation d'assurance " + k[1] + " a expiré le " + x.validUntil +
+          ". Votre référencement est suspendu jusqu'au dépôt d'une attestation à jour dans votre espace (Mon référencement) : " + url + "\n\nDarPilot", "provider-expired:" + c.artisanId + ":" + k[0] + ":" + x.validUntil);
         suspended++;
       } else if (x.validUntil <= soon) {
         sendMailSafe_(c.email, "Votre assurance expire bientôt", "Bonjour,\n\nVotre attestation d'assurance " + k[1] + " expire le " + x.validUntil +
-          ". Déposez la nouvelle attestation dans votre espace (Mon référencement) pour rester référencé(e) : " + url + "\n\nImmoPilot", "provider-expiring:" + c.artisanId + ":" + k[0] + ":" + x.validUntil);
+          ". Déposez la nouvelle attestation dans votre espace (Mon référencement) pour rester référencé(e) : " + url + "\n\nDarPilot", "provider-expiring:" + c.artisanId + ":" + k[0] + ":" + x.validUntil);
         reminded++;
       }
     });
@@ -9278,7 +9278,7 @@ function providerPayoutSetup_(p) {
     const L = parseJson_(c.legalJson, {}) || {};
     const a = stripeCall_("post", "/accounts", { country: "FR", email: c.email,
       controller: { stripe_dashboard: { type: "full" }, fees: { payer: "account" }, losses: { payments: "stripe" }, requirement_collection: "stripe" },
-      business_profile: { name: L.legalName || c.name, product_description: "Travaux et services aux propriétaires (ImmoPilot)" }, metadata: { artisanId: c.artisanId } }, "acct-" + c.artisanId);
+      business_profile: { name: L.legalName || c.name, product_description: "Travaux et services aux propriétaires (DarPilot)" }, metadata: { artisanId: c.artisanId } }, "acct-" + c.artisanId);
     acct = a.id;
     dbUpdate_("Artisans", c.artisanId, { stripeAccountId: acct, stripeReady: false, updatedAt: nowIso_() });
     audit_("STRIPE_ACCOUNT_CREATED", "Artisan", c.artisanId, c.organizationId, {});
@@ -9307,7 +9307,7 @@ function invPayOnline_(p, a) {
   // Paiement direct sur le compte de l'artisan : il encaisse, la plateforme ne perçoit que sa commission.
   const s = stripeCall_("post", "/checkout/sessions", { mode: "payment", customer_email: p.email,
     line_items: [{ quantity: 1, price_data: { currency: "eur", unit_amount: cents_(due), product_data: { name: "Facture " + (v.invoiceNumber || "") + " — " + (art.name || "artisan") } } }],
-    payment_intent_data: { application_fee_amount: cents_(fee), description: "Facture " + (v.invoiceNumber || v.invoiceId) + " (via ImmoPilot)", metadata: { invoiceId: v.invoiceId } },
+    payment_intent_data: { application_fee_amount: cents_(fee), description: "Facture " + (v.invoiceNumber || v.invoiceId) + " (via DarPilot)", metadata: { invoiceId: v.invoiceId } },
     metadata: { invoiceId: v.invoiceId, kind: "INVOICE" }, success_url: base + "#invoice/" + v.invoiceId, cancel_url: base + "#invoice/" + v.invoiceId }, "inv-" + v.invoiceId + "-" + cents_(due) + "-" + todayStr_(), art.stripeAccountId);
   audit_("INVOICE_ONLINE_PAYMENT_STARTED", "Invoice", v.invoiceId, v.organizationId, { amount: due, fee: fee });
   return { url: s.url };
@@ -9338,7 +9338,7 @@ function stripeWebhookApply_(ev) {
     auditAs_("stripe", "", "INVOICE_PAID_ONLINE", "Invoice", v.invoiceId, v.organizationId, { amount: amount, session: o.id });
     const art = dbGet_("Artisans", v.artisanId);
     if (art && art.userId) notify_({ eventKey: "invoice-paid-online:" + v.invoiceId, userIds: [art.userId], type: "INVOICE_PAID", organizationId: v.organizationId, title: "Facture payée en ligne : " + v.invoiceNumber,
-      body: amount + " " + (v.currency || cur_()) + " réglés par le client ; Stripe vous verse le montant, commission ImmoPilot déduite.", link: "#invoices" });
+      body: amount + " " + (v.currency || cur_()) + " réglés par le client ; Stripe vous verse le montant, commission DarPilot déduite.", link: "#invoices" });
     return { ok: true, paymentId: pay.paymentId };
   });
 }
@@ -9560,20 +9560,20 @@ function subContractData_(orgId) {
     ["Limites", (plan.maxProperties || "—") + " biens, " + (plan.maxUsers || "—") + " utilisateurs, " + (plan.storageMb || "—") + " Mo de stockage"],
     ["Fonctionnalités", feats.map(function (f) { return FEAT[f] || f; }).join(", ") || "—"]]);
   html += "<h2>Conditions principales</h2><div class='box'><ol style='margin:0;padding-left:16px'>" + [
-    "L'abonnement donne accès à l'application ImmoPilot pour l'organisation cliente, dans les limites du forfait.",
-    (sumupCardOf_(orgId) && sumupEnabled_() ? "Le tarif est payable d'avance pour chaque " + per + " par prélèvement automatique sur la carte enregistrée par le client auprès de SumUp (aucune donnée de carte n'est conservée par ImmoPilot) ; le client peut retirer sa carte à tout moment, le règlement se fait alors par virement." : "Le tarif est payable d'avance pour chaque " + per + ", par virement, espèces ou chèque ; aucun paiement en ligne n'est effectué par l'application."),
+    "L'abonnement donne accès à l'application DarPilot pour l'organisation cliente, dans les limites du forfait.",
+    (sumupCardOf_(orgId) && sumupEnabled_() ? "Le tarif est payable d'avance pour chaque " + per + " par prélèvement automatique sur la carte enregistrée par le client auprès de SumUp (aucune donnée de carte n'est conservée par DarPilot) ; le client peut retirer sa carte à tout moment, le règlement se fait alors par virement." : "Le tarif est payable d'avance pour chaque " + per + ", par virement, espèces ou chèque ; aucun paiement en ligne n'est effectué par l'application."),
     sumupEnabled_() && sumupConf_().currency !== cur_() ? "Les prix sont exprimés en " + cur_() + ". Le prélèvement par carte est effectué en " + sumupConf_().currency + (sumupConf_().rateMode === "AUTO" ? " au cours de change du jour du prélèvement (source publique de cours de change, mise à jour quotidienne) : le montant débité peut donc varier légèrement d'une période à l'autre ; le cours appliqué figure dans l'historique des règlements." : " au taux de conversion fixe de " + sumupConf_().rate + " " + sumupConf_().currency + " pour 1 " + cur_() + ", modifiable avec un préavis de 30 jours.") + " D'éventuels frais de change ou bancaires facturés par la banque du client restent à sa charge." : "",
     "En cas d'échéance non réglée, un délai de grâce de " + SUB_GRACE_DAYS_ + " jours s'applique ; au-delà, le compte passe en lecture seule jusqu'au règlement.",
-    "Les agences créées par le client dans ImmoPilot n'ont pas d'abonnement propre : elles sont facturées en option sur cet abonnement, au prix par agence indiqué ci-dessus, et suivent son statut.",
+    "Les agences créées par le client dans DarPilot n'ont pas d'abonnement propre : elles sont facturées en option sur cet abonnement, au prix par agence indiqué ci-dessus, et suivent son statut.",
     "La résiliation peut être demandée à tout moment ; elle prend effet à la fin de la période payée. Les données restent conservées et exportables.",
-    "Chaque organisation n'accède qu'à ses propres données ; l'équipe ImmoPilot n'y accède qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
+    "Chaque organisation n'accède qu'à ses propres données ; l'équipe DarPilot n'y accède qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
     "Le client reste responsable des données qu'il saisit (voyageurs, locataires) et de ses obligations déclaratives, notamment au titre de la réglementation sur les données personnelles (" + edition_().dataLaw + ")."
   ].filter(Boolean).map(function (x) { return "<li>" + escapeHtml_(x) + "</li>"; }).join("") + "</ol></div>";
   html += "<h2>Historique des abonnements</h2>" + htmlTable_(["Référence", "Forfait", "Statut", "Début", "Payé jusqu'au", "Tarif"], subs.map(function (s) { return [s.subscriptionId, s.planCode, ST[s.status] || s.status, pdfDate_(s.startDate), pdfDate_(s.paidThrough), fmt(s.price)]; }));
   html += "<h2>Historique des règlements</h2>" + (pays.length ? htmlTable_(["Date", "Montant", "Mode", "Référence", "Détail"], pays.map(function (x) { return [pdfDate_(x.paidAt), fmt(x.amount), PDF_PAY_METHODS_[x.method] || x.method || "", x.reference || "", x.note || ""]; })) +
     "<p class='right'><b>Total réglé : " + escapeHtml_(fmt(sumBy_(pays, function (x) { return x.amount; }))) + "</b></p>" : "<p class='muted'>Aucun règlement enregistré.</p>");
   const lg = legalGet_({ id: "cgv" });
-  html += "<h2>Documents contractuels</h2><p>Le présent contrat est complété par les conditions générales d'abonnement et d'utilisation, la politique de confidentialité et l'accord de traitement des données d'ImmoPilot" +
+  html += "<h2>Documents contractuels</h2><p>Le présent contrat est complété par les conditions générales d'abonnement et d'utilisation, la politique de confidentialité et l'accord de traitement des données d'DarPilot" +
     " (version du " + escapeHtml_(pdfDate_(lg.updatedAt)) + "), consultables à tout moment depuis l'application (lien « Conditions générales ») ; le client déclare en avoir pris connaissance et les accepter.</p>";
   return { org: org, cur: cur, platform: platform, html: html, legalVersion: lg.updatedAt,
     signBox: "<h2>Signatures</h2><table class='sign'><tr><td>Pour " + escapeHtml_(platform.name) + "</td><td>Pour " + escapeHtml_(org.name) + "</td></tr></table>",
@@ -9615,7 +9615,7 @@ function subscriptionJob_() {
  * Prélèvement automatique des abonnements par carte, via SumUp (paiements récurrents avec authentification forte).
  *
  * Parcours : le super administrateur attribue un forfait (sub.assign) → le propriétaire enregistre sa carte UNE fois dans le
- * formulaire sécurisé SumUp (widget, 3D Secure ; aucune donnée de carte ne passe par ImmoPilot) → à chaque échéance (fin d'essai,
+ * formulaire sécurisé SumUp (widget, 3D Secure ; aucune donnée de carte ne passe par DarPilot) → à chaque échéance (fin d'essai,
  * fin de période, ou tout de suite si un règlement est attendu) le serveur débite la carte enregistrée et prolonge l'abonnement
  * (subApplyPayment_). Échec : nouvel essai chaque jour (SUMUP_MAX_ATTEMPTS_ au plus par échéance), notifications, puis la règle
  * habituelle (lecture seule après le délai de grâce) s'applique.
@@ -9714,7 +9714,7 @@ function sumupPayerSub_(p, orgId) {
   assert_(org && org.type !== "PLATFORM", "Organisation introuvable.");
   if (agencyBillingParent_(org)) throw new AppError("VALIDATION", "Cette agence est incluse dans l'abonnement de son propriétaire : c'est lui qui enregistre la carte.");
   const e = entitlement_(orgId), s = e.subscription;
-  assert_(s && ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0, "Aucun abonnement en cours : l'administrateur ImmoPilot doit d'abord attribuer un forfait.");
+  assert_(s && ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0, "Aucun abonnement en cours : l'administrateur DarPilot doit d'abord attribuer un forfait.");
   return s;
 }
 
@@ -9738,7 +9738,7 @@ function subCardSetup_(p, a) {
   const c = sumupConf_(), org = dbGet_("Organizations", orgId), customerId = sumupCustomerId_(orgId);
   sumupCall_("post", "/customers", { customer_id: customerId, personal_details: { email: safeText_(p.email, 200), first_name: safeText_(org.name, 100) } }, [409]);
   const co = sumupCall_("post", "/checkouts", { checkout_reference: "CARD-" + orgId.slice(-20) + "-" + Date.now(), amount: SUMUP_SETUP_AMOUNT_, currency: c.currency, merchant_code: c.merchant,
-    description: "ImmoPilot : enregistrement de la carte (montant remboursé)", customer_id: customerId, purpose: "SETUP_RECURRING_PAYMENT" }).body;
+    description: "DarPilot : enregistrement de la carte (montant remboursé)", customer_id: customerId, purpose: "SETUP_RECURRING_PAYMENT" }).body;
   assert_(co && co.id, "SumUp n'a pas créé le paiement de vérification.");
   dbInsert_("BillingCards", { organizationId: orgId, status: "PENDING", customerId: customerId, token: "", label: "", setupCheckoutId: co.id, createdAt: nowIso_(), createdBy: p.email });
   audit_("CARD_SETUP_STARTED", "Organization", orgId, orgId, {});
@@ -9829,7 +9829,7 @@ function sumupChargeSub_(s, actor) {
   try {
     const plan = dbGet_("SubscriptionPlans", s.planCode) || {};
     const co = sumupCall_("post", "/checkouts", { checkout_reference: ref, amount: amt.amount, currency: amt.currency, merchant_code: c.merchant, customer_id: card.customerId,
-      description: ("ImmoPilot : abonnement " + (plan.name || s.planCode)).slice(0, 120) }).body;
+      description: ("DarPilot : abonnement " + (plan.name || s.planCode)).slice(0, 120) }).body;
     res = sumupCall_("put", "/checkouts/" + encodeURIComponent(co.id), { payment_type: "card", token: card.token, customer_id: card.customerId }).body;
   } catch (e) { res = { status: "FAILED", message: e.message }; }
   if (String(res.status) === "PAID") return sumupRecordPaid_(s, card, res, total, amt, actor);
@@ -9900,7 +9900,7 @@ function testerSumUp() {
 /**
  * Modèles de documents intégrés : quittance, bail, fiche de réservation.
  * Ils remplacent les modèles Google Docs (indisponibles sur le serveur dédié). Chaque organisation peut écrire son
- * propre texte avec des balises {{cle}} ; laissé vide, le gabarit intégré d'ImmoPilot est utilisé.
+ * propre texte avec des balises {{cle}} ; laissé vide, le gabarit intégré d'DarPilot est utilisé.
  *
  * Mise en forme simple (le texte est toujours échappé, aucun HTML n'est accepté) :
  *   # Titre de section      → intertitre
@@ -10076,7 +10076,7 @@ function templatePreview_(p, a) {
  * Tests.gs
  * ====================================================================== */
 /**
- * Suite de tests automatisés ImmoPilot.
+ * Suite de tests automatisés DarPilot.
  *
  * Exécution dans Google Apps Script : lancer runAllTests() depuis l'éditeur (propriétaire du script).
  *  - Crée un classeur et un dossier Drive TEMPORAIRES (« ImmoPilot_TEST_… »), n'utilise JAMAIS la base de production,
@@ -10721,13 +10721,13 @@ function TEST_GROUPS_() {
         T.ok(report.indexOf("Rapport de ménage") > 0 && (report.match(/data:image\/jpeg;base64,/g) || []).length === 4 && report.indexOf("AVANT") > 0, "rapport avec 4 photos avant / après");
         T.ok(text(T.call(provTok, "clean.orderPdf", { missionId: withPhotos })).indexOf("Ordre de mission de ménage") > 0, "ordre de mission pour le prestataire");
         T.fails(fx.tok.ownerB, "clean.reportPdf", { missionId: withPhotos }, "FORBIDDEN");
-        // Devis et facture au nom du prestataire (sans la marque ImmoPilot), devis en attente et intervention planifiée
+        // Devis et facture au nom du prestataire (sans la marque DarPilot), devis en attente et intervention planifiée
         T.eq([h.counts.extras.pendingQuote, h.counts.extras.scheduledWorkOrder], [1, 1], "devis en attente et intervention planifiée");
         const art = dbAll_("Artisans").find(function (c) { return c.email === S.provider.email; });
         const q = dbAll_("Quotes").find(function (x) { return x.status === "APPROVED" && String(x.artisanId) === String(art.artisanId); });
         T.ok(parseJson_(q.linesJson, []).length >= 2, "devis type sur plusieurs lignes");
         const qpdf = text(T.call(ownerTok, "quote.pdf", { quoteId: q.quoteId }));
-        T.ok(qpdf.indexOf("Devis n° DEV-") > 0 && qpdf.indexOf("Multiservices") > 0 && qpdf.indexOf("Bon pour accord") > 0 && qpdf.indexOf(PDF_LOGO_PNG_B64_.slice(0, 40)) < 0 && qpdf.indexOf("Immo<span") < 0, "devis sans logo ImmoPilot");
+        T.ok(qpdf.indexOf("Devis n° DEV-") > 0 && qpdf.indexOf("Multiservices") > 0 && qpdf.indexOf("Bon pour accord") > 0 && qpdf.indexOf(PDF_LOGO_PNG_B64_.slice(0, 40)) < 0 && qpdf.indexOf("Immo<span") < 0, "devis sans logo DarPilot");
         T.ok(text(T.call(provTok, "quote.pdf", { quoteId: q.quoteId })).indexOf("Devis") > 0, "le prestataire télécharge son devis");
         T.fails(fx.tok.ownerB, "quote.pdf", { quoteId: q.quoteId }, "FORBIDDEN");
         const pending = dbAll_("Quotes").find(function (x) { return x.status === "PENDING" && String(x.artisanId) === String(art.artisanId); });
@@ -11708,7 +11708,7 @@ function TEST_GROUPS_() {
           T.call(fx.tok.ownerA, "pay.record", { refType: "INVOICE", refId: v1.invoiceId, kind: "INVOICE", amount: 600, method: "TRANSFER", reference: "VIR-1" });
           const fa = dbAll_("PlatformFees").find(function (f) { return f.invoiceId === v1.invoiceId && f.kind === "ARTISAN"; });
           T.eq(fa.status, "LINK_SENT", "lien de paiement envoyé"); T.ok(/pay\.sumup\.test/.test(fa.payUrl), "lien SumUp hébergé");
-          T.ok(/Commission ImmoPilot à régler/.test(T.lastMailTo(art.email).subject) && T.lastMailTo(art.email).body.indexOf(fa.payUrl) >= 0, "e-mail avec le lien");
+          T.ok(/Commission DarPilot à régler/.test(T.lastMailTo(art.email).subject) && T.lastMailTo(art.email).body.indexOf(fa.payUrl) >= 0, "e-mail avec le lien");
           sim.checkouts[fa.checkoutId].status = "PAID";
           commissionCheckPayments_();
           T.eq(dbGet_("PlatformFees", fa.feeId).status, "PAID", "paiement détecté");
@@ -12057,10 +12057,10 @@ function invitationInsertAndSend_(p, a, org) {
 }
 function sendInvitationEmail_(inv, token, org, p) {
   const url = appUrl_() + "?action=accept&token=" + token;
-  const body = "Bonjour " + inv.displayName + ",\n\n" + p.displayName + " vous invite à rejoindre ImmoPilot.\n\nOrganisation : " + org.name + "\nRôle : " + inv.role +
+  const body = "Bonjour " + inv.displayName + ",\n\n" + p.displayName + " vous invite à rejoindre DarPilot.\n\nOrganisation : " + org.name + "\nRôle : " + inv.role +
     "\n\nAcceptez l'invitation avec ce lien personnel, à usage unique, valable " + inviteDays_() + " jours :\n" + url +
-    "\n\nSi vous n'attendiez pas cette invitation, ignorez ce message.\n\nImmoPilot";
-  const r = sendMailSafe_(inv.email, "Invitation à rejoindre ImmoPilot — " + org.name, body, "invite:" + inv.invitationId + ":" + inv.tokenHash.slice(0, 8));
+    "\n\nSi vous n'attendiez pas cette invitation, ignorez ce message.\n\nDarPilot";
+  const r = sendMailSafe_(inv.email, "Invitation à rejoindre DarPilot — " + org.name, body, "invite:" + inv.invitationId + ":" + inv.tokenHash.slice(0, 8));
   if (!r.ok) dbUpdate_("Invitations", inv.invitationId, { status: "EMAIL_FAILED" });
   return r;
 }
@@ -12729,7 +12729,7 @@ function docTotalsHtml_(ht, vatRate, vat, ttc, cur, extra) {
   return "<table style='width:45%;margin:8px 0 0 auto'>" + rows.map(function (r) { return "<tr><td>" + (r[0].charAt(0) === "<" ? r[0] : escapeHtml_(r[0])) + "</td><td class='right'>" + (r[1].charAt(0) === "<" ? r[1] : escapeHtml_(r[1])) + "</td></tr>"; }).join("") + "</table>";
 }
 
-/** Devis du prestataire (sans la marque ImmoPilot). */
+/** Devis du prestataire (sans la marque DarPilot). */
 function quotePdf_(p, a) {
   const x = quoteLoad_(p, a.quoteId), q = x.q, prop = x.prop, art = dbGet_("Artisans", q.artisanId) || {};
   assert_(["PENDING", "APPROVED", "REJECTED", "EXPIRED"].indexOf(q.status) >= 0, "Le devis n'a pas encore été établi par le prestataire.");
@@ -12752,7 +12752,7 @@ function quotePdf_(p, a) {
     { propertyId: prop.propertyId, organizationId: prop.organizationId }, "QUOTE", q.quoteId, "QUOTE");
 }
 
-/** Facture du prestataire au propriétaire du bien (sans la marque ImmoPilot ; la commission interne n'y figure pas). */
+/** Facture du prestataire au propriétaire du bien (sans la marque DarPilot ; la commission interne n'y figure pas). */
 function invoicePdf_(p, a) {
   const x = invLoad_(p, a.invoiceId), v = x.v, prop = x.prop, art = dbGet_("Artisans", v.artisanId) || {}, cur = v.currency || cur_();
   const owner = dbGet_("Organizations", prop.organizationId) || {}, w = v.workOrderId ? dbGet_("WorkOrders", v.workOrderId) : null, q = w && w.quoteId ? dbGet_("Quotes", w.quoteId) : null;

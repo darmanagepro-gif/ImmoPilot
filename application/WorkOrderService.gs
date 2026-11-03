@@ -303,7 +303,7 @@ function docTotalsHtml_(ht, vatRate, vat, ttc, cur, extra) {
   return "<table style='width:45%;margin:8px 0 0 auto'>" + rows.map(function (r) { return "<tr><td>" + (r[0].charAt(0) === "<" ? r[0] : escapeHtml_(r[0])) + "</td><td class='right'>" + (r[1].charAt(0) === "<" ? r[1] : escapeHtml_(r[1])) + "</td></tr>"; }).join("") + "</table>";
 }
 
-/** Devis du prestataire (sans la marque ImmoPilot). */
+/** Devis du prestataire (sans la marque DarPilot). */
 function quotePdf_(p, a) {
   const x = quoteLoad_(p, a.quoteId), q = x.q, prop = x.prop, art = dbGet_("Artisans", q.artisanId) || {};
   assert_(["PENDING", "APPROVED", "REJECTED", "EXPIRED"].indexOf(q.status) >= 0, "Le devis n'a pas encore été établi par le prestataire.");
@@ -326,7 +326,7 @@ function quotePdf_(p, a) {
     { propertyId: prop.propertyId, organizationId: prop.organizationId }, "QUOTE", q.quoteId, "QUOTE");
 }
 
-/** Facture du prestataire au propriétaire du bien (sans la marque ImmoPilot ; la commission interne n'y figure pas). */
+/** Facture du prestataire au propriétaire du bien (sans la marque DarPilot ; la commission interne n'y figure pas). */
 function invoicePdf_(p, a) {
   const x = invLoad_(p, a.invoiceId), v = x.v, prop = x.prop, art = dbGet_("Artisans", v.artisanId) || {}, cur = v.currency || cur_();
   const owner = dbGet_("Organizations", prop.organizationId) || {}, w = v.workOrderId ? dbGet_("WorkOrders", v.workOrderId) : null, q = w && w.quoteId ? dbGet_("Quotes", w.quoteId) : null;

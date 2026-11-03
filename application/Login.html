@@ -7,7 +7,7 @@ const Public = {
     const langSel = h("select", { class: "lang", "aria-label": t("Langue"), onchange: function (e) { setLang(e.target.value); App.start(); } }, langOpts().map(function (l) { return h("option", { value: l[0] }, l[1]); }));
     langSel.value = S.lang;
     app.appendChild(h("div", { class: "auth" },
-      h("aside", { class: "auth-side" }, h("div", { class: "brand", style: { padding: 0 } }, brandMark(), h("div", null, h("b", null, "ImmoPilot"), h("small", null, ED.tagline))),
+      h("aside", { class: "auth-side" }, h("div", { class: "brand", style: { padding: 0 } }, brandMark(), h("div", null, h("b", null, "DarPilot"), h("small", null, ED.tagline))),
         h("div", null, h("h1", null, t(ED.taglineKey)), h("p", null, t("Réservations, ménage, maintenance, baux et finances réunis pour les propriétaires, les conciergeries et leurs équipes de terrain.")))),
       h("main", { class: "auth-main" }, h("div", { class: "auth-card" }, h("div", { class: "actions", style: { justifyContent: "flex-end", marginBottom: "18px" } }, themeButton(), langSel), h("h2", null, title), sub ? h("p", { class: "muted" }, sub) : null, body))));
   },
@@ -17,7 +17,7 @@ const Public = {
     const body = h("div", { class: "legal-body" }, h("div", { class: "loading" }, t("Chargement…")));
     const goBack = function () { if (back) back(); else if (S.token) App.start(); else Public.login(); };
     app.appendChild(h("div", { class: "legal-page" },
-      h("header", { class: "legal-head" }, h("div", { class: "brand", style: { padding: 0 } }, brandMark(), h("div", null, h("b", null, "ImmoPilot"), h("small", null, ED.tagline))),
+      h("header", { class: "legal-head" }, h("div", { class: "brand", style: { padding: 0 } }, brandMark(), h("div", null, h("b", null, "DarPilot"), h("small", null, ED.tagline))),
         h("div", { class: "actions" }, themeButton(), btn("← " + t("Retour"), goBack))), body));
     const mark = function (text) {
       const out = h("span"); String(text).split(/(\[\[[^\]]+\]\])/).forEach(function (part) {
@@ -80,7 +80,7 @@ const Public = {
       btn(t("S'inscrire : propriétaire ou agence"), function () { Public.signup(); }, "primary join-btn"),
       h("p", { class: "join-title", style: { marginTop: "14px" } }, t("Vous êtes artisan ou prestataire ?")),
       btn("⚒ " + t("Espace artisans"), function () { Public.artisans(); }, "join-btn"));
-    Public.frame(opts && opts.artisan ? t("Espace artisans") : t("Connexion"), opts && opts.artisan ? t("Connectez-vous pour suivre votre référencement, vos demandes de devis et vos interventions.") : t("Accédez à votre espace ImmoPilot."),
+    Public.frame(opts && opts.artisan ? t("Espace artisans") : t("Connexion"), opts && opts.artisan ? t("Connectez-vous pour suivre votre référencement, vos demandes de devis et vos interventions.") : t("Accédez à votre espace DarPilot."),
       h("div", null, ED.publicDemo ? Public.demoPicker() : null, err, f.el, h("p", { class: "small", style: { marginTop: "16px" } }, forgot),
         opts && opts.artisan ? h("div", { class: "join-box" }, h("p", { class: "join-title" }, t("Pas encore référencé ?")), btn("⚒ " + t("Se référencer comme artisan"), function () { Public.providerSignup(); }, "primary join-btn"),
           h("p", { class: "small", style: { marginTop: "12px" } }, h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.login(); } }, "← " + t("Connexion propriétaires et agences")))) : join,
@@ -95,7 +95,7 @@ const Public = {
     const langSel = h("select", { class: "lang", "aria-label": t("Langue"), onchange: function (e) { setLang(e.target.value); Public._redraw && Public._redraw(); } }, langOpts().map(function (l) { return h("option", { value: l[0] }, l[1]); }));
     langSel.value = S.lang;
     app.appendChild(h("div", { class: "signup-page" },
-      h("header", { class: "legal-head" }, h("div", { class: "brand", style: { padding: 0 } }, brandMark(), h("div", null, h("b", null, "ImmoPilot"), h("small", null, ED.tagline))),
+      h("header", { class: "legal-head" }, h("div", { class: "brand", style: { padding: 0 } }, brandMark(), h("div", null, h("b", null, "DarPilot"), h("small", null, ED.tagline))),
         h("div", { class: "actions" }, themeButton(), langSel, btn("← " + t("Retour à la connexion"), function () { Public._redraw = null; Public.login(); }))),
       h("h1", { class: "signup-title" }, title),
       steps ? h("ol", { class: "stepper" }, steps.map(function (s, i) { return h("li", { class: i < current ? "done" : (i === current ? "on" : "") }, h("span", { class: "n" }, i < current ? "✓" : String(i + 1)), h("span", { class: "l" }, t(s))); })) : null,
@@ -103,7 +103,7 @@ const Public = {
     window.scrollTo(0, 0);
   },
   statusBox: function (info, provider) {
-    return h("div", { class: "status-box" }, h("h3", null, "ⓘ " + t(provider ? "Le référencement ImmoPilot" : info.status.title)),
+    return h("div", { class: "status-box" }, h("h3", null, "ⓘ " + t(provider ? "Le référencement DarPilot" : info.status.title)),
       h("ul", null, (provider ? info.status.providerPoints : info.status.points).map(function (x) { return h("li", null, x); })),
       h("p", { class: "small" }, h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.legal(provider ? "referencement" : "cgv", function () { Public._redraw ? Public._redraw() : Public.login(); }); } }, t(provider ? "Lire les conditions de référencement" : "Lire les conditions générales")), " · ",
         h("a", { href: "#", onclick: function (ev) { ev.preventDefault(); Public.legal("confidentialite", function () { Public._redraw ? Public._redraw() : Public.login(); }); } }, t("Politique de confidentialité"))));
@@ -146,7 +146,7 @@ const Public = {
   signup: function () {
     const steps = ["Votre profil", "Votre forfait", "Vos informations", "Confirmation de l'e-mail", "Contrat et paiement"];
     const st8 = { step: 0, profile: "", planCode: "", values: { ownerType: "INDIVIDUAL" } };
-    Public.wide(t("Créer mon compte ImmoPilot"), steps, 0, h("div", { class: "loading" }, t("Chargement…")));
+    Public.wide(t("Créer mon compte DarPilot"), steps, 0, h("div", { class: "loading" }, t("Chargement…")));
     Public.signupInfo().then(function (info) {
       const draw = function () {
         Public._redraw = draw;
@@ -203,10 +203,10 @@ const Public = {
         } else {
           body.appendChild(Public.codeStep(st8.request, function (r) { Public._redraw = null; Public.enterAfterSignup(r, "onboarding"); }, function () { st8.step = 2; draw(); }));
         }
-        Public.wide(t("Créer mon compte ImmoPilot"), steps, st8.step, body);
+        Public.wide(t("Créer mon compte DarPilot"), steps, st8.step, body);
       };
       draw();
-    }).catch(function (e) { Public.wide(t("Créer mon compte ImmoPilot"), steps, 0, h("div", { class: "alert bad" }, errMsg(e))); });
+    }).catch(function (e) { Public.wide(t("Créer mon compte DarPilot"), steps, 0, h("div", { class: "alert bad" }, errMsg(e))); });
   },
   /** Saisie du code reçu par e-mail (commune aux deux parcours). */
   codeStep: function (req, done, back) {
@@ -227,7 +227,7 @@ const Public = {
     apiCacheClear(); S.token = r.token; store("ip_token", r.token); S.me = r.me; S.meta = r.meta || null; S.onboard = true;
     history.replaceState(null, "", location.pathname + "#" + hash);
     App.enter();
-    toast(t("Compte créé. Bienvenue sur ImmoPilot !"), "good");
+    toast(t("Compte créé. Bienvenue sur DarPilot !"), "good");
   },
 
   /** Référencement d'un artisan : 1. métiers, 2. statut, 3. informations légales et assurance, 4. code ; puis dépôt des pièces. */
@@ -310,7 +310,7 @@ const Public = {
     }, { submitLabel: t("Recevoir un lien"), size: "sm", intro: t("Un lien à usage unique vous sera envoyé si un compte actif correspond.") });
   },
   invite: function (token) {
-    Public.frame(t("Rejoindre ImmoPilot"), "", h("div", { class: "loading" }, t("Vérification de l'invitation…")));
+    Public.frame(t("Rejoindre DarPilot"), "", h("div", { class: "loading" }, t("Vérification de l'invitation…")));
     apiP("invite.info", { token: token }).then(function (info) {
       const fields = info.existingAccount ? [{ k: "currentPassword", l: "Mot de passe de votre compte existant", t: "password", req: true }] :
         [{ k: "displayName", l: "Nom affiché", def: info.displayName, req: true }, { k: "password", l: "Choisissez un mot de passe", t: "password", req: true, help: "10 caractères minimum, avec lettres et chiffres.", ac: "new-password" },
@@ -327,7 +327,7 @@ const Public = {
           Public.frame(t("Invitation acceptée"), r.message, h("a", { class: "btn primary", href: (S.boot.appUrl || "") + "?", target: "_top", onclick: function (ev) { ev.preventDefault(); S.boot.mode = "app"; Public.login(); } }, t("Se connecter")));
         }).catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); go.disabled = false; });
       });
-      Public.frame(t("Rejoindre ImmoPilot"), "", h("div", null, h("div", { class: "alert info" }, kv([["Organisation", info.organizationName], ["Rôle", roleLabel(info.role)], ["E-mail", info.email], ["Expire le", fmtDT(info.expiresAt)]])), err, f.el));
+      Public.frame(t("Rejoindre DarPilot"), "", h("div", null, h("div", { class: "alert info" }, kv([["Organisation", info.organizationName], ["Rôle", roleLabel(info.role)], ["E-mail", info.email], ["Expire le", fmtDT(info.expiresAt)]])), err, f.el));
     }).catch(function (e) { Public.frame(t("Invitation"), "", h("div", null, h("div", { class: "alert bad" }, errMsg(e)), btn(t("Aller à la connexion"), function () { Public.login(); }))); });
   },
   reset: function (token) {

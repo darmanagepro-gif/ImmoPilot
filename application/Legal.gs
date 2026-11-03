@@ -3,7 +3,7 @@
  * mentions légales, conditions générales, confidentialité, cookies et, pour la France, accord de sous-traitance (art. 28 RGPD).
  * Les informations propres à l'éditeur (raison sociale, SIRET, hébergeur…) se règlent dans Paramètres › Plateforme (clés legal.*) :
  * tant qu'une valeur manque, elle apparaît surlignée « À compléter ».
- * Ces textes sont des modèles : ils doivent être relus par un professionnel du droit avant la mise en service. ImmoPilot ne garantit pas leur conformité.
+ * Ces textes sont des modèles : ils doivent être relus par un professionnel du droit avant la mise en service. DarPilot ne garantit pas leur conformité.
  */
 /** Date de la version en vigueur des documents juridiques (conservée comme preuve à chaque acceptation ou signature). */
 var LEGAL_VERSION_ = "2026-11-02";
@@ -33,7 +33,7 @@ function legalFill_(text, v) {
 /* Rôle de l'éditeur : commun aux deux éditions. L'éditeur fournit un LOGICIEL ; il n'exerce aucune activité immobilière. */
 function legalRoleSection_() {
   return { h: "Rôle de l'éditeur : un logiciel de gestion, pas un gestionnaire", ul: [
-    "ImmoPilot est un logiciel en ligne (SaaS) mis à disposition du client pour l'aider à organiser lui-même la gestion de ses biens. L'éditeur fournit uniquement l'outil.",
+    "DarPilot est un logiciel en ligne (SaaS) mis à disposition du client pour l'aider à organiser lui-même la gestion de ses biens. L'éditeur fournit uniquement l'outil.",
     "L'éditeur n'est ni agent immobilier, ni administrateur de biens, ni syndic, ni conciergerie, ni mandataire du client. Il n'effectue aucune transaction, ne loue aucun bien, ne détient aucune carte professionnelle immobilière et n'intervient dans aucune négociation.",
     "L'éditeur n'est pas partie aux contrats conclus par le client avec des tiers (baux, réservations, contrats de ménage ou de travaux, contrats avec des agences ou des artisans). Il ne garantit ni leur exécution, ni la solvabilité des locataires ou voyageurs, ni la qualité des prestations des tiers.",
     "L'éditeur ne détient pas et ne gère pas les fonds du client ni ceux de ses locataires ou voyageurs : loyers, cautions et paiements des séjours sont encaissés directement par le client, en dehors de l'application. L'éditeur perçoit uniquement le prix de l'abonnement et, lorsque le client fait appel à un prestataire référencé, la commission de mise en relation prévue à l'article « Mise en relation ».",
@@ -53,7 +53,7 @@ function legalClientDutiesSection_(law) {
 function legalMarketplaceSection_(v) {
   const R = commissionRates_(), fr = edition_().code === "FR";
   return { h: "Mise en relation avec des prestataires référencés", ul: [
-    "En plus du logiciel, ImmoPilot propose un annuaire d'artisans et de prestataires (ménage, plomberie, électricité, climatisation…) référencés par l'éditeur. Le client y choisit librement un prestataire par métier et par zone ; l'éditeur ne choisit pas à sa place.",
+    "En plus du logiciel, DarPilot propose un annuaire d'artisans et de prestataires (ménage, plomberie, électricité, climatisation…) référencés par l'éditeur. Le client y choisit librement un prestataire par métier et par zone ; l'éditeur ne choisit pas à sa place.",
     "Les devis, interventions et factures sont établis par le prestataire, en son nom, et conclus directement entre le client et le prestataire. L'éditeur n'est pas partie à ces contrats et ne garantit ni leur exécution, ni leur qualité, ni leurs délais.",
     "Commission de mise en relation : pour chaque mission réalisée par un prestataire référencé et réglée, le client (commanditaire) doit à l'éditeur une commission de " + R.client + " % du montant hors taxes de la facture du prestataire (TVA en sus au taux de " + R.vat + " %). Elle rémunère le service de mise en relation (sélection et contrôle des prestataires, outils de demande de devis, de suivi et de facturation). Les commissions d'un mois sont réunies dans un récapitulatif envoyé au début du mois suivant et prélevées sur la carte enregistrée pour l'abonnement, ou réglées par lien de paiement.",
     "Règlement du prestataire : le client règle la facture du prestataire soit directement (virement, chèque, espèces), soit en ligne par la plateforme" + (fr ? " : dans ce cas le client paie directement le prestataire sur le compte de paiement de celui-ci, ouvert auprès de Stripe Payments Europe (établissement de paiement agréé) ; le prestataire est le vendeur, apparaît sur le reçu et gère remboursements et litiges ; seule la commission due par le prestataire est versée à l'éditeur, qui ne détient jamais le prix de la prestation." : " lorsque ce mode est proposé.") + " Le client indique dans l'application que la facture est réglée dès qu'il l'a payée directement.",
@@ -64,7 +64,7 @@ function legalMarketplaceSection_(v) {
 /* Conditions de référencement des prestataires (artisans inscrits en ligne). */
 function legalProviderDoc_(fr) {
   return { id: "referencement", title: "Conditions de référencement des prestataires", sections: [
-    { h: "1. Objet", p: ["Les présentes conditions s'appliquent aux artisans et prestataires (« le prestataire ») qui demandent leur référencement dans l'annuaire ImmoPilot édité par {{publisherName}} (« l'éditeur »). Elles sont acceptées en ligne lors de l'inscription. Le référencement est gratuit."] },
+    { h: "1. Objet", p: ["Les présentes conditions s'appliquent aux artisans et prestataires (« le prestataire ») qui demandent leur référencement dans l'annuaire DarPilot édité par {{publisherName}} (« l'éditeur »). Elles sont acceptées en ligne lors de l'inscription. Le référencement est gratuit."] },
     { h: "2. Rôle de l'éditeur", p: ["L'éditeur met à disposition un logiciel et un annuaire permettant aux propriétaires et agences abonnés de trouver un prestataire et de lui adresser des demandes de devis et d'intervention. L'éditeur n'est ni employeur, ni donneur d'ordre, ni mandataire du prestataire ou du client ; il n'est pas partie aux contrats de prestation, ne fixe pas les prix et n'encaisse pas les paiements."] },
     { h: "3. Conditions et pièces exigées", ul: fr ? [
       "Être immatriculé : SIRET actif (auto-entrepreneur) ou société immatriculée au RCS.",
@@ -91,14 +91,14 @@ function legalDocsFR_(v) {
     : "un serveur dédié situé en France (Paris), loué auprès de {{hostName}} ({{hostAddress}}). Les données sensibles (base de données, pièces d'identité, documents) y sont chiffrées au repos (AES-256).";
   return [
     { id: "mentions", title: "Mentions légales", sections: [
-      { h: "Éditeur", p: ["Le logiciel ImmoPilot et le présent site sont édités par {{publisherName}}, {{legalForm}}, dont le siège est situé {{address}}, {{registration}}, n° de TVA intracommunautaire {{vatNumber}}.",
+      { h: "Éditeur", p: ["Le logiciel DarPilot et le présent site sont édités par {{publisherName}}, {{legalForm}}, dont le siège est situé {{address}}, {{registration}}, n° de TVA intracommunautaire {{vatNumber}}.",
         "Contact : {{contactEmail}} — {{phone}}.", "Directeur ou directrice de la publication : {{director}}."] },
       { h: "Hébergeur", p: ["{{hostName}}, {{hostAddress}}" + (google ? "." : " — serveur situé en France (Paris).")] },
-      { h: "Propriété intellectuelle", p: ["Le logiciel, la marque ImmoPilot, son logo et ses contenus sont protégés. Toute reproduction ou réutilisation non autorisée est interdite. Les données saisies par les clients restent leur propriété."] },
+      { h: "Propriété intellectuelle", p: ["Le logiciel, la marque DarPilot, son logo et ses contenus sont protégés. Toute reproduction ou réutilisation non autorisée est interdite. Les données saisies par les clients restent leur propriété."] },
       { h: "Signalement", p: ["Pour signaler un contenu illicite ou exercer vos droits, écrivez à {{contactEmail}}."] }
     ] },
     { id: "cgv", title: "Conditions générales d'abonnement et d'utilisation", sections: [
-      { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement au logiciel en ligne ImmoPilot (gestion de locations courte et longue durée : biens, réservations, voyageurs, ménage, maintenance, baux, finances) fourni par {{publisherName}} (« l'éditeur ») à ses clients (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne lors de la création du compte ou de la souscription ; la version en vigueur reste consultable à tout moment dans l'application."] },
+      { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement au logiciel en ligne DarPilot (gestion de locations courte et longue durée : biens, réservations, voyageurs, ménage, maintenance, baux, finances) fourni par {{publisherName}} (« l'éditeur ») à ses clients (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne lors de la création du compte ou de la souscription ; la version en vigueur reste consultable à tout moment dans l'application."] },
       legalRoleSection_(),
       legalMarketplaceSection_(v),
       { h: "3. Comptes et accès", p: ["L'accès se fait par des comptes personnels protégés par mot de passe. Toute utilisation anormale doit être signalée sans délai à l'éditeur."] },
@@ -151,15 +151,15 @@ function legalDocsFR_(v) {
         "La suppression de votre compte peut être demandée depuis Paramètres › Mon profil. Vous pouvez introduire une réclamation auprès de la CNIL (www.cnil.fr)."] }
     ] },
     { id: "cookies", title: "Cookies et stockage local", sections: [
-      { h: "Ce que nous utilisons", p: ["ImmoPilot n'utilise ni cookie publicitaire ni outil de mesure d'audience. Le navigateur conserve seulement des éléments strictement nécessaires au fonctionnement : le jeton de session (pendant la visite), la langue et le thème clair/sombre choisis. Le formulaire de paiement SumUp peut déposer ses propres traceurs techniques, nécessaires à la sécurité du paiement.",
+      { h: "Ce que nous utilisons", p: ["DarPilot n'utilise ni cookie publicitaire ni outil de mesure d'audience. Le navigateur conserve seulement des éléments strictement nécessaires au fonctionnement : le jeton de session (pendant la visite), la langue et le thème clair/sombre choisis. Le formulaire de paiement SumUp peut déposer ses propres traceurs techniques, nécessaires à la sécurité du paiement.",
         "Ces éléments sont exemptés de consentement (article 82 de la loi Informatique et Libertés et lignes directrices de la CNIL). Vous pouvez les effacer depuis les réglages de votre navigateur ; vous serez alors déconnecté."] }
     ] },
     { id: "dpa", title: "Accord de sous-traitance (article 28 du RGPD)", sections: [
-      { h: "Parties et objet", p: ["Le client (responsable de traitement) confie à {{publisherName}} (sous-traitant) le traitement des données personnelles qu'il enregistre dans ImmoPilot, pour la seule fourniture du service et pendant la durée de l'abonnement."] },
+      { h: "Parties et objet", p: ["Le client (responsable de traitement) confie à {{publisherName}} (sous-traitant) le traitement des données personnelles qu'il enregistre dans DarPilot, pour la seule fourniture du service et pendant la durée de l'abonnement."] },
       { h: "Données et personnes concernées", p: ["Voyageurs, locataires, propriétaires, collaborateurs et prestataires du client : identité, coordonnées, données de séjour ou de location, pièces d'identité, données de naissance et domicile des voyageurs étrangers, paiements, photos et documents."] },
       { h: "Engagements du sous-traitant", ul: [
         "Ne traiter les données que sur instruction documentée du client (le paramétrage et l'utilisation du service valent instructions).",
-        "Garantir la confidentialité des personnes autorisées à y accéder ; l'équipe ImmoPilot n'accède aux données du client qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
+        "Garantir la confidentialité des personnes autorisées à y accéder ; l'équipe DarPilot n'accède aux données du client qu'avec un accès d'assistance accordé par le client, limité dans le temps et journalisé.",
         "Mettre en œuvre les mesures de sécurité décrites dans la politique de confidentialité.",
         "Aider le client à répondre aux demandes d'exercice des droits et à réaliser ses analyses d'impact le cas échéant.",
         "Notifier au client toute violation de données dans les meilleurs délais et au plus tard 48 heures après en avoir eu connaissance.",
@@ -176,13 +176,13 @@ function legalDocsMA_(v) {
   const hosting = google ? "Google (Google Apps Script, Google Sheets, Google Drive)" : "un serveur dédié situé en France (Paris), loué auprès de {{hostName}} ({{hostAddress}}), avec chiffrement au repos (AES-256) des données sensibles";
   return [
     { id: "mentions", title: "Mentions légales", sections: [
-      { h: "Éditeur", p: ["La plateforme ImmoPilot est éditée par {{publisherName}}, {{legalForm}}, société de droit français dont le siège est situé {{address}}, {{registration}}, n° de TVA intracommunautaire {{vatNumber}}.",
+      { h: "Éditeur", p: ["La plateforme DarPilot est éditée par {{publisherName}}, {{legalForm}}, société de droit français dont le siège est situé {{address}}, {{registration}}, n° de TVA intracommunautaire {{vatNumber}}.",
         "Contact : {{contactEmail}} — {{phone}}.", "Directeur ou directrice de la publication : {{director}}."] },
       { h: "Hébergeur", p: ["{{hostName}}, {{hostAddress}}" + (google ? "." : " — serveur situé en France (Paris).")] },
-      { h: "Propriété intellectuelle", p: ["Le logiciel, la marque ImmoPilot, son logo et ses contenus sont protégés. Toute reproduction non autorisée est interdite. Les données saisies par les clients restent leur propriété."] }
+      { h: "Propriété intellectuelle", p: ["Le logiciel, la marque DarPilot, son logo et ses contenus sont protégés. Toute reproduction non autorisée est interdite. Les données saisies par les clients restent leur propriété."] }
     ] },
     { id: "cgv", title: "Conditions générales d'abonnement et d'utilisation", sections: [
-      { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement à la plateforme en ligne ImmoPilot (gestion de locations courte et longue durée) fournie par {{publisherName}} (« l'éditeur ») à ses clients au Maroc (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne, par un clic de confirmation, lors de la création du compte ou de la souscription ; cette acceptation électronique a la même valeur qu'une signature (loi n° 53-05 relative à l'échange électronique de données juridiques). La version en vigueur reste consultable à tout moment dans l'application."] },
+      { h: "1. Objet et acceptation", p: ["Les présentes conditions régissent l'abonnement à la plateforme en ligne DarPilot (gestion de locations courte et longue durée) fournie par {{publisherName}} (« l'éditeur ») à ses clients au Maroc (« le client »), professionnels ou particuliers. Elles sont acceptées en ligne, par un clic de confirmation, lors de la création du compte ou de la souscription ; cette acceptation électronique a la même valeur qu'une signature (loi n° 53-05 relative à l'échange électronique de données juridiques). La version en vigueur reste consultable à tout moment dans l'application."] },
       legalRoleSection_(),
       legalMarketplaceSection_(v),
       { h: "3. Forfaits et prix", p: ["Le service est fourni selon le forfait choisi (fonctionnalités, nombre de biens, d'utilisateurs et stockage indiqués dans l'application). Les prix sont indiqués en dirhams marocains (MAD), toutes taxes comprises lorsque le client est un consommateur. Une période d'essai gratuite peut être proposée ; aucun prélèvement n'a lieu avant sa fin.",
@@ -235,5 +235,5 @@ function legalGet_(a) {
   });
   const missing = Object.keys(LEGAL_FIELDS_).filter(function (k) { return !v[k] && ["vatNumber", "phone", "hostPhone", "dpoEmail", "dataAuthorityRef", "mediator", "platformInsurance"].indexOf(k) < 0; });
   return { edition: edition_().code, updatedAt: LEGAL_VERSION_, docs: a && a.id ? docs.filter(function (d) { return d.id === a.id; }) : docs, missing: missing.map(function (k) { return LEGAL_FIELDS_[k]; }),
-    notice: "Modèles à faire relire par un professionnel du droit avant mise en service. ImmoPilot ne garantit pas leur conformité." };
+    notice: "Modèles à faire relire par un professionnel du droit avant mise en service. DarPilot ne garantit pas leur conformité." };
 }

@@ -2,7 +2,7 @@
  * Prélèvement automatique des abonnements par carte, via SumUp (paiements récurrents avec authentification forte).
  *
  * Parcours : le super administrateur attribue un forfait (sub.assign) → le propriétaire enregistre sa carte UNE fois dans le
- * formulaire sécurisé SumUp (widget, 3D Secure ; aucune donnée de carte ne passe par ImmoPilot) → à chaque échéance (fin d'essai,
+ * formulaire sécurisé SumUp (widget, 3D Secure ; aucune donnée de carte ne passe par DarPilot) → à chaque échéance (fin d'essai,
  * fin de période, ou tout de suite si un règlement est attendu) le serveur débite la carte enregistrée et prolonge l'abonnement
  * (subApplyPayment_). Échec : nouvel essai chaque jour (SUMUP_MAX_ATTEMPTS_ au plus par échéance), notifications, puis la règle
  * habituelle (lecture seule après le délai de grâce) s'applique.
@@ -101,7 +101,7 @@ function sumupPayerSub_(p, orgId) {
   assert_(org && org.type !== "PLATFORM", "Organisation introuvable.");
   if (agencyBillingParent_(org)) throw new AppError("VALIDATION", "Cette agence est incluse dans l'abonnement de son propriétaire : c'est lui qui enregistre la carte.");
   const e = entitlement_(orgId), s = e.subscription;
-  assert_(s && ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0, "Aucun abonnement en cours : l'administrateur ImmoPilot doit d'abord attribuer un forfait.");
+  assert_(s && ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0, "Aucun abonnement en cours : l'administrateur DarPilot doit d'abord attribuer un forfait.");
   return s;
 }
 
@@ -125,7 +125,7 @@ function subCardSetup_(p, a) {
   const c = sumupConf_(), org = dbGet_("Organizations", orgId), customerId = sumupCustomerId_(orgId);
   sumupCall_("post", "/customers", { customer_id: customerId, personal_details: { email: safeText_(p.email, 200), first_name: safeText_(org.name, 100) } }, [409]);
   const co = sumupCall_("post", "/checkouts", { checkout_reference: "CARD-" + orgId.slice(-20) + "-" + Date.now(), amount: SUMUP_SETUP_AMOUNT_, currency: c.currency, merchant_code: c.merchant,
-    description: "ImmoPilot : enregistrement de la carte (montant remboursé)", customer_id: customerId, purpose: "SETUP_RECURRING_PAYMENT" }).body;
+    description: "DarPilot : enregistrement de la carte (montant remboursé)", customer_id: customerId, purpose: "SETUP_RECURRING_PAYMENT" }).body;
   assert_(co && co.id, "SumUp n'a pas créé le paiement de vérification.");
   dbInsert_("BillingCards", { organizationId: orgId, status: "PENDING", customerId: customerId, token: "", label: "", setupCheckoutId: co.id, createdAt: nowIso_(), createdBy: p.email });
   audit_("CARD_SETUP_STARTED", "Organization", orgId, orgId, {});
@@ -216,7 +216,7 @@ function sumupChargeSub_(s, actor) {
   try {
     const plan = dbGet_("SubscriptionPlans", s.planCode) || {};
     const co = sumupCall_("post", "/checkouts", { checkout_reference: ref, amount: amt.amount, currency: amt.currency, merchant_code: c.merchant, customer_id: card.customerId,
-      description: ("ImmoPilot : abonnement " + (plan.name || s.planCode)).slice(0, 120) }).body;
+      description: ("DarPilot : abonnement " + (plan.name || s.planCode)).slice(0, 120) }).body;
     res = sumupCall_("put", "/checkouts/" + encodeURIComponent(co.id), { payment_type: "card", token: card.token, customer_id: card.customerId }).body;
   } catch (e) { res = { status: "FAILED", message: e.message }; }
   if (String(res.status) === "PAID") return sumupRecordPaid_(s, card, res, total, amt, actor);

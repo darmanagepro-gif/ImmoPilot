@@ -224,7 +224,7 @@ function guestPoliceForms_(p, a) {
       "<table class='sign' style='margin-top:10px'><tr><td>Signature du voyageur</td><td>Date</td></tr></table>";
   });
   html += "<p class='muted' style='margin-top:12px'>Fiche à faire signer par chaque voyageur étranger à son arrivée, à conserver 6 mois et à remettre aux services de police ou de gendarmerie sur leur demande. " +
-    "Les enfants de moins de 15 ans peuvent figurer sur la fiche d'un adulte qui les accompagne. ImmoPilot ne garantit pas la conformité juridique : vérifiez les obligations applicables à votre activité.</p>";
+    "Les enfants de moins de 15 ans peuvent figurer sur la fiche d'un adulte qui les accompagne. DarPilot ne garantit pas la conformité juridique : vérifiez les obligations applicables à votre activité.</p>";
   audit_("POLICE_FORMS_PDF", "Reservation", r.reservationId, r.organizationId, { guests: foreign.length });
   return storeGeneratedPdf_(p, htmlToPdf_(pdfShell_("Fiches individuelles de police", html, { subtitle: "Réservation " + String(r.reservationId).slice(-8).toUpperCase() }), "Fiches_police_" + String(r.reservationId).slice(-8)),
     { propertyId: r.propertyId, organizationId: r.organizationId }, "RESERVATION", r.reservationId, "POLICE_FORM");

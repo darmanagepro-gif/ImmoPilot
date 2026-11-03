@@ -1,5 +1,5 @@
 /**
- * Suite de tests automatisés ImmoPilot.
+ * Suite de tests automatisés DarPilot.
  *
  * Exécution dans Google Apps Script : lancer runAllTests() depuis l'éditeur (propriétaire du script).
  *  - Crée un classeur et un dossier Drive TEMPORAIRES (« ImmoPilot_TEST_… »), n'utilise JAMAIS la base de production,
@@ -644,13 +644,13 @@ function TEST_GROUPS_() {
         T.ok(report.indexOf("Rapport de ménage") > 0 && (report.match(/data:image\/jpeg;base64,/g) || []).length === 4 && report.indexOf("AVANT") > 0, "rapport avec 4 photos avant / après");
         T.ok(text(T.call(provTok, "clean.orderPdf", { missionId: withPhotos })).indexOf("Ordre de mission de ménage") > 0, "ordre de mission pour le prestataire");
         T.fails(fx.tok.ownerB, "clean.reportPdf", { missionId: withPhotos }, "FORBIDDEN");
-        // Devis et facture au nom du prestataire (sans la marque ImmoPilot), devis en attente et intervention planifiée
+        // Devis et facture au nom du prestataire (sans la marque DarPilot), devis en attente et intervention planifiée
         T.eq([h.counts.extras.pendingQuote, h.counts.extras.scheduledWorkOrder], [1, 1], "devis en attente et intervention planifiée");
         const art = dbAll_("Artisans").find(function (c) { return c.email === S.provider.email; });
         const q = dbAll_("Quotes").find(function (x) { return x.status === "APPROVED" && String(x.artisanId) === String(art.artisanId); });
         T.ok(parseJson_(q.linesJson, []).length >= 2, "devis type sur plusieurs lignes");
         const qpdf = text(T.call(ownerTok, "quote.pdf", { quoteId: q.quoteId }));
-        T.ok(qpdf.indexOf("Devis n° DEV-") > 0 && qpdf.indexOf("Multiservices") > 0 && qpdf.indexOf("Bon pour accord") > 0 && qpdf.indexOf(PDF_LOGO_PNG_B64_.slice(0, 40)) < 0 && qpdf.indexOf("Immo<span") < 0, "devis sans logo ImmoPilot");
+        T.ok(qpdf.indexOf("Devis n° DEV-") > 0 && qpdf.indexOf("Multiservices") > 0 && qpdf.indexOf("Bon pour accord") > 0 && qpdf.indexOf(PDF_LOGO_PNG_B64_.slice(0, 40)) < 0 && qpdf.indexOf("Immo<span") < 0, "devis sans logo DarPilot");
         T.ok(text(T.call(provTok, "quote.pdf", { quoteId: q.quoteId })).indexOf("Devis") > 0, "le prestataire télécharge son devis");
         T.fails(fx.tok.ownerB, "quote.pdf", { quoteId: q.quoteId }, "FORBIDDEN");
         const pending = dbAll_("Quotes").find(function (x) { return x.status === "PENDING" && String(x.artisanId) === String(art.artisanId); });
@@ -1631,7 +1631,7 @@ function TEST_GROUPS_() {
           T.call(fx.tok.ownerA, "pay.record", { refType: "INVOICE", refId: v1.invoiceId, kind: "INVOICE", amount: 600, method: "TRANSFER", reference: "VIR-1" });
           const fa = dbAll_("PlatformFees").find(function (f) { return f.invoiceId === v1.invoiceId && f.kind === "ARTISAN"; });
           T.eq(fa.status, "LINK_SENT", "lien de paiement envoyé"); T.ok(/pay\.sumup\.test/.test(fa.payUrl), "lien SumUp hébergé");
-          T.ok(/Commission ImmoPilot à régler/.test(T.lastMailTo(art.email).subject) && T.lastMailTo(art.email).body.indexOf(fa.payUrl) >= 0, "e-mail avec le lien");
+          T.ok(/Commission DarPilot à régler/.test(T.lastMailTo(art.email).subject) && T.lastMailTo(art.email).body.indexOf(fa.payUrl) >= 0, "e-mail avec le lien");
           sim.checkouts[fa.checkoutId].status = "PAID";
           commissionCheckPayments_();
           T.eq(dbGet_("PlatformFees", fa.feeId).status, "PAID", "paiement détecté");
