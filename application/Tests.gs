@@ -348,7 +348,13 @@ function TEST_GROUPS_() {
       ["Verrouillage après 5 échecs de connexion", function (T, fx) {
         const u = tMakeUser_(fx.mail("lock"), "OWNER", fx.orgB.organizationId, fx.pw);
         for (let i = 0; i < 5; i++) T.fails(null, "auth.login", { email: u.email, password: "Mauvais-pass9" });
-        T.fails(null, "auth.login", { email: u.email, password: fx.pw }, "LOCKED");
+        // Verrouillé : même avec le bon mot de passe, refus… avec exactement le même message qu'un compte inexistant (pas d'énumération).
+        const eLocked = T.fails(null, "auth.login", { email: u.email, password: fx.pw }, "AUTH");
+        const eNone = T.fails(null, "auth.login", { email: fx.mail("personne-" + Utilities.getUuid().slice(0, 6)), password: fx.pw }, "AUTH");
+        const eBad = T.fails(null, "auth.login", { email: fx.users.ownerB.email, password: "Mauvais-pass9" }, "AUTH");
+        T.eq([eLocked.message, eNone.message], [eBad.message, eBad.message], "message identique : verrouillé, inexistant, mauvais mot de passe");
+        const inv = dbInsert_("Users", { email: fx.mail("pasactive"), displayName: "Pas activé", status: "ACTIVE", createdAt: nowIso_(), createdBy: "tests" });
+        T.eq(T.fails(null, "auth.login", { email: inv.email, password: fx.pw }, "AUTH").message, eBad.message, "compte non activé : même message");
       }],
       ["Utilisateur suspendu : sessions révoquées et connexion refusée", function (T, fx) {
         const u = tMakeUser_(fx.mail("susp"), "OWNER", fx.orgB.organizationId, fx.pw);
@@ -1592,7 +1598,13 @@ function TEST_GROUPS_() {
         T.eq([org.type, org.signupSource], ["OWNER_ORG", "SELF"], "organisation propriétaire");
         T.eq(entitlement_(org.organizationId).subscription.status, "TRIAL", "essai du forfait");
         T.ok(!JSON.stringify(dbGet_("SignupRequests", r.requestId).payloadJson).match(/hash|salt/), "hachage du mot de passe effacé de la demande");
-        T.fails(null, "signup.start", base, "VALIDATION");
+        // Adresse déjà inscrite : même réponse qu'une inscription neuve (pas d'énumération), e-mail « déjà un compte », aucun code utilisable.
+        const dupR = T.pub("signup.start", base);
+        T.eq(Object.keys(dupR).sort(), Object.keys(r).sort(), "réponse de même forme");
+        T.ok(/déjà un compte/.test(T.lastMailTo(email).subject), "le titulaire est prévenu par e-mail");
+        T.fails(null, "signup.confirm", { requestId: dupR.requestId, code: code }, "VALIDATION");
+        T.pub("signup.resend", { requestId: dupR.requestId });
+        T.ok(/déjà un compte/.test(T.lastMailTo(email).subject), "renvoi : toujours pas de code");
         T.fails(null, "signup.confirm", { requestId: r.requestId, code: code }, "VALIDATION");
       }],
       ["Agence : rôles agence + propriétaire, identifiant légal contrôlé (SIRET / ICE)", function (T, fx) {

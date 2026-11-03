@@ -1,0 +1,13 @@
+# Audit continu des dépendances : GitHub propose chaque semaine les mises à jour (et immédiatement les correctifs de sécurité).
+# Rien n'est installé automatiquement : chaque proposition est vérifiée (tests) puis déployée avec « installe ».
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/application/server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    # Délai de prudence : une version publiée depuis moins de 14 jours n'est pas proposée (attaques de la chaîne d'approvisionnement).
+    cooldown:
+      default-days: 14

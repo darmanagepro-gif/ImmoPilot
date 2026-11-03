@@ -754,11 +754,12 @@ function authLogin_(args) {
   rateLimitIp_("login", 30, 600);
   rateLimit_("login:" + email, 10, 600);
   const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });
-  const generic = new AppError("AUTH", "Identifiants invalides.");
-  if (!user) { pbkdf2Hex_(pw, "00", pbkdfIters_()); throw generic; } // même durée qu'un vrai contrôle
+  // Message et durée identiques que le compte existe ou non, soit verrouillé ou pas encore activé : impossible de deviner
+  // quelles adresses ont un compte (énumération). Le verrouillage reste appliqué, il n'est simplement pas annoncé.
+  const generic = new AppError("AUTH", "Identifiants invalides. Après " + LOGIN_MAX_FAILS_ + " échecs, l'accès est suspendu " + LOGIN_LOCK_MINUTES_ + " minutes : en cas d'oubli, utilisez « Mot de passe oublié ».");
+  if (!user || !user.passwordHash) { pbkdf2Hex_(pw, "00", pbkdfIters_()); throw generic; } // même durée qu'un vrai contrôle
   const locked = parseTs_(user.lockedUntil);
-  if (locked && locked.getTime() > Date.now()) throw new AppError("LOCKED", "Compte temporairement verrouillé après plusieurs échecs. Réessayez plus tard ou réinitialisez votre mot de passe.");
-  if (!user.passwordHash) throw new AppError("AUTH", "Compte non activé. Utilisez le lien d'invitation ou « Mot de passe oublié » pour définir votre mot de passe.");
+  if (locked && locked.getTime() > Date.now()) { verifyPassword_(user, pw); auditAs_(email, user.userId, "LOGIN_LOCKED", "User", user.userId, "", {}, "FAIL"); throw generic; }
   if (!verifyPassword_(user, pw)) {
     const fails = (Number(user.failedAttempts) || 0) + 1;
     dbUpdate_("Users", user.userId, { failedAttempts: fails, lockedUntil: fails >= LOGIN_MAX_FAILS_ ? new Date(Date.now() + LOGIN_LOCK_MINUTES_ * 60000).toISOString() : "" });
@@ -1972,7 +1973,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "92e9f702af12";
+var IMMO_BUILD_ = "1c9b9de65cb2";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -8979,12 +8980,19 @@ function signupStart_(a) {
   assert_(a.acceptStatus === true, "Confirmez avoir pris connaissance du statut de la plateforme.");
   assert_(a.acceptPrivacy === true, "Acceptez la politique de confidentialité pour continuer.");
   const pw = validatePassword_(a.password);
-  if (dbAll_("Users").some(function (u) { return normalizeEmail_(u.email) === email; }))
-    throw new AppError("VALIDATION", "Un compte existe déjà avec cette adresse e-mail. Connectez-vous, ou utilisez « Mot de passe oublié ».");
   const data = kind === "CLIENT" ? signupClientInput_(a) : signupProviderInput_(a);
   if (kind === "PROVIDER") assert_(platformOrgId_(), "Le référencement des artisans n'est pas encore ouvert sur cette plateforme.", "CONFIG");
   const salt = sha256Hex_(randomToken_()).slice(0, 32), iters = pbkdfIters_();
   data.pw = { hash: pbkdf2Hex_(pw, salt, iters), salt: salt, iters: iters };
+  // Adresse déjà inscrite : réponse identique à une nouvelle inscription (pas d'énumération des comptes) ; le titulaire
+  // reçoit un e-mail « vous avez déjà un compte » au lieu d'un code. Aucun code valable n'existe pour cette demande.
+  if (dbAll_("Users").some(function (u) { return normalizeEmail_(u.email) === email; })) {
+    const dup = dbInsert_("SignupRequests", { kind: kind, email: email, codeHash: sha256Hex_(randomToken_()), attempts: 0, expiresAt: new Date(Date.now() + SIGNUP_CODE_MINUTES_ * 60000).toISOString(),
+      payloadJson: { existingAccount: true }, status: "PENDING", createdAt: nowIso_(), ip: meta.ip, sends: 1, lastSentAt: nowIso_() });
+    signupSendExisting_(email, dup.requestId);
+    auditAs_(email, "", "SIGNUP_EXISTING_ACCOUNT", "SignupRequest", dup.requestId, "", { kind: kind });
+    return { requestId: dup.requestId, destination: maskEmailAddr_(email), expiresInMinutes: SIGNUP_CODE_MINUTES_ };
+  }
   data.locale = oneOf_(String(a.locale || "fr"), IMMO_LANGS_, "Langue");
   data.consent = { at: nowIso_(), ip: meta.ip, userAgent: meta.userAgent, cgvVersion: LEGAL_VERSION_ };
   const code = signupCode_();
@@ -9005,6 +9013,13 @@ function signupSendCode_(email, code, kind, requestId) {
     "\n\nIl est valable " + SIGNUP_CODE_MINUTES_ + " minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : aucun compte ne sera créé.\n\nDarPilot";
   sendMailSafe_(email, "Votre code de confirmation DarPilot : " + code, body, "signup:" + requestId + ":" + Date.now());
 }
+function signupSendExisting_(email, requestId) {
+  const url = safeAppUrl_();
+  const body = "Bonjour,\n\nUne demande de création de compte DarPilot vient d'être faite avec votre adresse e-mail, mais vous avez déjà un compte.\n\n" +
+    "Connectez-vous" + (url ? " ici : " + url : "") + "\nSi vous avez oublié votre mot de passe, utilisez « Mot de passe oublié » sur la page de connexion.\n\n" +
+    "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : rien n'a été modifié.\n\nDarPilot";
+  sendMailSafe_(email, "Vous avez déjà un compte DarPilot", body, "signup-existing:" + requestId + ":" + Date.now());
+}
 function signupLoad_(requestId) {
   const r = dbGet_("SignupRequests", safeText_(requestId, 120));
   assert_(r && r.status === "PENDING", "Demande d'inscription introuvable ou déjà utilisée. Recommencez l'inscription.");
@@ -9017,10 +9032,10 @@ function signupResend_(a) {
   const r = dbGet_("SignupRequests", safeText_(a.requestId, 120));
   assert_(r && r.status === "PENDING", "Demande d'inscription introuvable. Recommencez l'inscription.");
   assert_((Number(r.sends) || 0) < SIGNUP_MAX_SENDS_, "Trop de codes envoyés. Recommencez l'inscription dans une heure.");
-  const code = signupCode_();
-  dbUpdate_("SignupRequests", r.requestId, { codeHash: sha256Hex_(r.requestId + ":" + code), attempts: 0, sends: (Number(r.sends) || 0) + 1, lastSentAt: nowIso_(),
+  const code = signupCode_(), existing = !!(parseJson_(r.payloadJson, {}) || {}).existingAccount;
+  dbUpdate_("SignupRequests", r.requestId, { codeHash: existing ? sha256Hex_(randomToken_()) : sha256Hex_(r.requestId + ":" + code), attempts: 0, sends: (Number(r.sends) || 0) + 1, lastSentAt: nowIso_(),
     expiresAt: new Date(Date.now() + SIGNUP_CODE_MINUTES_ * 60000).toISOString() });
-  signupSendCode_(r.email, code, r.kind, r.requestId);
+  if (existing) signupSendExisting_(r.email, r.requestId); else signupSendCode_(r.email, code, r.kind, r.requestId);
   return { ok: true, destination: maskEmailAddr_(r.email), expiresInMinutes: SIGNUP_CODE_MINUTES_ };
 }
 
@@ -10468,7 +10483,13 @@ function TEST_GROUPS_() {
       ["Verrouillage après 5 échecs de connexion", function (T, fx) {
         const u = tMakeUser_(fx.mail("lock"), "OWNER", fx.orgB.organizationId, fx.pw);
         for (let i = 0; i < 5; i++) T.fails(null, "auth.login", { email: u.email, password: "Mauvais-pass9" });
-        T.fails(null, "auth.login", { email: u.email, password: fx.pw }, "LOCKED");
+        // Verrouillé : même avec le bon mot de passe, refus… avec exactement le même message qu'un compte inexistant (pas d'énumération).
+        const eLocked = T.fails(null, "auth.login", { email: u.email, password: fx.pw }, "AUTH");
+        const eNone = T.fails(null, "auth.login", { email: fx.mail("personne-" + Utilities.getUuid().slice(0, 6)), password: fx.pw }, "AUTH");
+        const eBad = T.fails(null, "auth.login", { email: fx.users.ownerB.email, password: "Mauvais-pass9" }, "AUTH");
+        T.eq([eLocked.message, eNone.message], [eBad.message, eBad.message], "message identique : verrouillé, inexistant, mauvais mot de passe");
+        const inv = dbInsert_("Users", { email: fx.mail("pasactive"), displayName: "Pas activé", status: "ACTIVE", createdAt: nowIso_(), createdBy: "tests" });
+        T.eq(T.fails(null, "auth.login", { email: inv.email, password: fx.pw }, "AUTH").message, eBad.message, "compte non activé : même message");
       }],
       ["Utilisateur suspendu : sessions révoquées et connexion refusée", function (T, fx) {
         const u = tMakeUser_(fx.mail("susp"), "OWNER", fx.orgB.organizationId, fx.pw);
@@ -11712,7 +11733,13 @@ function TEST_GROUPS_() {
         T.eq([org.type, org.signupSource], ["OWNER_ORG", "SELF"], "organisation propriétaire");
         T.eq(entitlement_(org.organizationId).subscription.status, "TRIAL", "essai du forfait");
         T.ok(!JSON.stringify(dbGet_("SignupRequests", r.requestId).payloadJson).match(/hash|salt/), "hachage du mot de passe effacé de la demande");
-        T.fails(null, "signup.start", base, "VALIDATION");
+        // Adresse déjà inscrite : même réponse qu'une inscription neuve (pas d'énumération), e-mail « déjà un compte », aucun code utilisable.
+        const dupR = T.pub("signup.start", base);
+        T.eq(Object.keys(dupR).sort(), Object.keys(r).sort(), "réponse de même forme");
+        T.ok(/déjà un compte/.test(T.lastMailTo(email).subject), "le titulaire est prévenu par e-mail");
+        T.fails(null, "signup.confirm", { requestId: dupR.requestId, code: code }, "VALIDATION");
+        T.pub("signup.resend", { requestId: dupR.requestId });
+        T.ok(/déjà un compte/.test(T.lastMailTo(email).subject), "renvoi : toujours pas de code");
         T.fails(null, "signup.confirm", { requestId: r.requestId, code: code }, "VALIDATION");
       }],
       ["Agence : rôles agence + propriétaire, identifiant légal contrôlé (SIRET / ICE)", function (T, fx) {

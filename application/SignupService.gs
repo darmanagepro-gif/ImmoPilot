@@ -158,12 +158,19 @@ function signupStart_(a) {
   assert_(a.acceptStatus === true, "Confirmez avoir pris connaissance du statut de la plateforme.");
   assert_(a.acceptPrivacy === true, "Acceptez la politique de confidentialité pour continuer.");
   const pw = validatePassword_(a.password);
-  if (dbAll_("Users").some(function (u) { return normalizeEmail_(u.email) === email; }))
-    throw new AppError("VALIDATION", "Un compte existe déjà avec cette adresse e-mail. Connectez-vous, ou utilisez « Mot de passe oublié ».");
   const data = kind === "CLIENT" ? signupClientInput_(a) : signupProviderInput_(a);
   if (kind === "PROVIDER") assert_(platformOrgId_(), "Le référencement des artisans n'est pas encore ouvert sur cette plateforme.", "CONFIG");
   const salt = sha256Hex_(randomToken_()).slice(0, 32), iters = pbkdfIters_();
   data.pw = { hash: pbkdf2Hex_(pw, salt, iters), salt: salt, iters: iters };
+  // Adresse déjà inscrite : réponse identique à une nouvelle inscription (pas d'énumération des comptes) ; le titulaire
+  // reçoit un e-mail « vous avez déjà un compte » au lieu d'un code. Aucun code valable n'existe pour cette demande.
+  if (dbAll_("Users").some(function (u) { return normalizeEmail_(u.email) === email; })) {
+    const dup = dbInsert_("SignupRequests", { kind: kind, email: email, codeHash: sha256Hex_(randomToken_()), attempts: 0, expiresAt: new Date(Date.now() + SIGNUP_CODE_MINUTES_ * 60000).toISOString(),
+      payloadJson: { existingAccount: true }, status: "PENDING", createdAt: nowIso_(), ip: meta.ip, sends: 1, lastSentAt: nowIso_() });
+    signupSendExisting_(email, dup.requestId);
+    auditAs_(email, "", "SIGNUP_EXISTING_ACCOUNT", "SignupRequest", dup.requestId, "", { kind: kind });
+    return { requestId: dup.requestId, destination: maskEmailAddr_(email), expiresInMinutes: SIGNUP_CODE_MINUTES_ };
+  }
   data.locale = oneOf_(String(a.locale || "fr"), IMMO_LANGS_, "Langue");
   data.consent = { at: nowIso_(), ip: meta.ip, userAgent: meta.userAgent, cgvVersion: LEGAL_VERSION_ };
   const code = signupCode_();
@@ -184,6 +191,13 @@ function signupSendCode_(email, code, kind, requestId) {
     "\n\nIl est valable " + SIGNUP_CODE_MINUTES_ + " minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : aucun compte ne sera créé.\n\nDarPilot";
   sendMailSafe_(email, "Votre code de confirmation DarPilot : " + code, body, "signup:" + requestId + ":" + Date.now());
 }
+function signupSendExisting_(email, requestId) {
+  const url = safeAppUrl_();
+  const body = "Bonjour,\n\nUne demande de création de compte DarPilot vient d'être faite avec votre adresse e-mail, mais vous avez déjà un compte.\n\n" +
+    "Connectez-vous" + (url ? " ici : " + url : "") + "\nSi vous avez oublié votre mot de passe, utilisez « Mot de passe oublié » sur la page de connexion.\n\n" +
+    "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : rien n'a été modifié.\n\nDarPilot";
+  sendMailSafe_(email, "Vous avez déjà un compte DarPilot", body, "signup-existing:" + requestId + ":" + Date.now());
+}
 function signupLoad_(requestId) {
   const r = dbGet_("SignupRequests", safeText_(requestId, 120));
   assert_(r && r.status === "PENDING", "Demande d'inscription introuvable ou déjà utilisée. Recommencez l'inscription.");
@@ -196,10 +210,10 @@ function signupResend_(a) {
   const r = dbGet_("SignupRequests", safeText_(a.requestId, 120));
   assert_(r && r.status === "PENDING", "Demande d'inscription introuvable. Recommencez l'inscription.");
   assert_((Number(r.sends) || 0) < SIGNUP_MAX_SENDS_, "Trop de codes envoyés. Recommencez l'inscription dans une heure.");
-  const code = signupCode_();
-  dbUpdate_("SignupRequests", r.requestId, { codeHash: sha256Hex_(r.requestId + ":" + code), attempts: 0, sends: (Number(r.sends) || 0) + 1, lastSentAt: nowIso_(),
+  const code = signupCode_(), existing = !!(parseJson_(r.payloadJson, {}) || {}).existingAccount;
+  dbUpdate_("SignupRequests", r.requestId, { codeHash: existing ? sha256Hex_(randomToken_()) : sha256Hex_(r.requestId + ":" + code), attempts: 0, sends: (Number(r.sends) || 0) + 1, lastSentAt: nowIso_(),
     expiresAt: new Date(Date.now() + SIGNUP_CODE_MINUTES_ * 60000).toISOString() });
-  signupSendCode_(r.email, code, r.kind, r.requestId);
+  if (existing) signupSendExisting_(r.email, r.requestId); else signupSendCode_(r.email, code, r.kind, r.requestId);
   return { ok: true, destination: maskEmailAddr_(r.email), expiresInMinutes: SIGNUP_CODE_MINUTES_ };
 }
 

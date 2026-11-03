@@ -181,11 +181,12 @@ function authLogin_(args) {
   rateLimitIp_("login", 30, 600);
   rateLimit_("login:" + email, 10, 600);
   const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });
-  const generic = new AppError("AUTH", "Identifiants invalides.");
-  if (!user) { pbkdf2Hex_(pw, "00", pbkdfIters_()); throw generic; } // même durée qu'un vrai contrôle
+  // Message et durée identiques que le compte existe ou non, soit verrouillé ou pas encore activé : impossible de deviner
+  // quelles adresses ont un compte (énumération). Le verrouillage reste appliqué, il n'est simplement pas annoncé.
+  const generic = new AppError("AUTH", "Identifiants invalides. Après " + LOGIN_MAX_FAILS_ + " échecs, l'accès est suspendu " + LOGIN_LOCK_MINUTES_ + " minutes : en cas d'oubli, utilisez « Mot de passe oublié ».");
+  if (!user || !user.passwordHash) { pbkdf2Hex_(pw, "00", pbkdfIters_()); throw generic; } // même durée qu'un vrai contrôle
   const locked = parseTs_(user.lockedUntil);
-  if (locked && locked.getTime() > Date.now()) throw new AppError("LOCKED", "Compte temporairement verrouillé après plusieurs échecs. Réessayez plus tard ou réinitialisez votre mot de passe.");
-  if (!user.passwordHash) throw new AppError("AUTH", "Compte non activé. Utilisez le lien d'invitation ou « Mot de passe oublié » pour définir votre mot de passe.");
+  if (locked && locked.getTime() > Date.now()) { verifyPassword_(user, pw); auditAs_(email, user.userId, "LOGIN_LOCKED", "User", user.userId, "", {}, "FAIL"); throw generic; }
   if (!verifyPassword_(user, pw)) {
     const fails = (Number(user.failedAttempts) || 0) + 1;
     dbUpdate_("Users", user.userId, { failedAttempts: fails, lockedUntil: fails >= LOGIN_MAX_FAILS_ ? new Date(Date.now() + LOGIN_LOCK_MINUTES_ * 60000).toISOString() : "" });
