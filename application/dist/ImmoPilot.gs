@@ -1980,7 +1980,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "7b6c821b8d9d";
+var IMMO_BUILD_ = "cce20a49f6a9";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -9532,7 +9532,7 @@ function salesClientRow_(o, opts) {
   let stage = "INSCRIT";
   if (s && ["CANCELLED", "EXPIRED"].indexOf(s.status) >= 0) stage = "RESILIE";
   else if (s && s.status === "SUSPENDED") stage = "SUSPENDU";
-  else if (signed && signed.signedAt && card && pays.length) stage = s && s.status === "TRIAL" ? "ESSAI_PAYE" : "ACTIF";
+  else if (pays.length) stage = s && s.status === "TRIAL" ? "ESSAI_PAYE" : "ACTIF";
   else if (signed && signed.signedAt) stage = "SIGNE";
   const out = { organizationId: o.organizationId, name: o.name, city: o.city || "", type: o.type, createdAt: o.createdAt, contactName: o.contactName || "", phone: o.phone || "", email: o.billingEmail || "",
     planCode: s ? s.planCode : "", planName: plan ? plan.name : (s ? s.planCode : ""), price: s ? num_(s.price) : 0, currency: s ? (s.currency || cur_()) : cur_(), subStatus: s ? s.status : "",

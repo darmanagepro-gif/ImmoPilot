@@ -182,7 +182,7 @@ function salesClientRow_(o, opts) {
   let stage = "INSCRIT";
   if (s && ["CANCELLED", "EXPIRED"].indexOf(s.status) >= 0) stage = "RESILIE";
   else if (s && s.status === "SUSPENDED") stage = "SUSPENDU";
-  else if (signed && signed.signedAt && card && pays.length) stage = s && s.status === "TRIAL" ? "ESSAI_PAYE" : "ACTIF";
+  else if (pays.length) stage = s && s.status === "TRIAL" ? "ESSAI_PAYE" : "ACTIF";
   else if (signed && signed.signedAt) stage = "SIGNE";
   const out = { organizationId: o.organizationId, name: o.name, city: o.city || "", type: o.type, createdAt: o.createdAt, contactName: o.contactName || "", phone: o.phone || "", email: o.billingEmail || "",
     planCode: s ? s.planCode : "", planName: plan ? plan.name : (s ? s.planCode : ""), price: s ? num_(s.price) : 0, currency: s ? (s.currency || cur_()) : cur_(), subStatus: s ? s.status : "",
