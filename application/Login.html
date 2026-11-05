@@ -186,6 +186,10 @@ const Public = {
           if (ag && info.country === "FR") fields.push({ k: "cardNumber", l: "N° de carte professionnelle (loi Hoguet)", help: "Mention « Gestion immobilière » ou « Transactions » : obligatoire pour gérer ou louer les biens de tiers." },
             { k: "cardIssuer", l: "CCI qui a délivré la carte" }, { k: "guarantor", l: "Garant financier" });
           Public.accountFields().forEach(function (x) { fields.push(x); });
+          // Commercial DarPilot qui accompagne le client (facultatif) : pré-rempli par le lien de parrainage ?ref=CODE.
+          let ref = ""; try { ref = (new URLSearchParams(location.search).get("ref") || "").slice(0, 80); } catch (e) { ref = ""; }
+          if (ref && !st8.values.salesRef) st8.values.salesRef = ref;
+          fields.push({ k: "salesRef", l: "Votre commercial DarPilot (facultatif)", full: true, help: "Nom et prénom ou code du commercial qui vous a présenté DarPilot." });
           const f = buildForm(fields, st8.values), err = h("div", { class: "alert bad hidden" });
           body.appendChild(h("h2", null, ag ? t("Votre agence et vous") : t("Vos informations")));
           body.appendChild(h("p", { class: "muted" }, t("Ces informations figurent sur votre contrat d'abonnement et vos factures.")));

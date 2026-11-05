@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-05T12:53:57.831Z",
-  "durationMs": 38921,
+  "ranAt": "2026-11-05T15:20:52.234Z",
+  "durationMs": 31344,
   "node": "v22.23.4",
   "filesLoaded": [
     "Code.gs",
@@ -35,6 +35,7 @@
     "RentAutomationService.gs",
     "ReportsService.gs",
     "ReservationService.gs",
+    "SalesService.gs",
     "SignatureService.gs",
     "SignupService.gs",
     "StripeService.gs",
@@ -48,11 +49,11 @@
     "WorkOrderService.gs"
   ],
   "summary": {
-    "total": 92,
-    "passed": 92,
+    "total": 96,
+    "passed": 96,
     "failed": 0,
     "skipped": 0,
-    "ranAt": "2026-11-05T12:53:37.777Z"
+    "ranAt": "2026-11-05T15:20:36.723Z"
   },
   "results": [
     {
@@ -602,6 +603,30 @@
       "detail": ""
     },
     {
+      "group": "Espace commercial (commerciaux terrain et commissions)",
+      "name": "Commercial créé par le super administrateur : invitation, connexion, accès limité à ses données",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Espace commercial (commerciaux terrain et commissions)",
+      "name": "Inscription : la case « Votre commercial » rattache le client (code ou nom, dans les deux sens) ; sinon à rattacher",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Espace commercial (commerciaux terrain et commissions)",
+      "name": "Commissions : prime en attente pendant l'essai, acquise au paiement après l'essai, mensuelles plafonnées, paiement, reprise",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Espace commercial (commerciaux terrain et commissions)",
+      "name": "Prospects d'un commercial : visibles par lui et le super administrateur seulement, jamais contactés par les agents",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
       "group": "Cloisonnement entre clients (attaque de toutes les routes)",
       "name": "Un autre client et une agence sans mandat appellent TOUTES les routes avec les identifiants du client A : aucune donnée de A ne sort",
       "status": "PASS",
@@ -609,9 +634,9 @@
     }
   ],
   "routes": {
-    "serverRoutes": 239,
+    "serverRoutes": 253,
     "publicRoutes": 17,
-    "clientCalls": 80,
+    "clientCalls": 91,
     "missingOnServer": [],
     "notReferencedByUi": [
       "admin.accounts",
@@ -769,6 +794,9 @@
       "assistant.kb",
       "assistant.ask",
       "prospect.list",
+      "prospect.export",
+      "sales.clients",
+      "sales.commissions",
       "dash.get",
       "pareto.run",
       "pareto.export",
@@ -788,7 +816,7 @@
       {
         "name": "setupProject() crée la base, le dossier privé et le schéma",
         "status": "PASS",
-        "detail": "base ss_859b8d5fc5f09c046c20a2272, 3 migrations"
+        "detail": "base ss_038ae7ff1f72e700c9950e3f2, 3 migrations"
       },
       {
         "name": "Avant déploiement : pas de lien envoyé, message explicite",

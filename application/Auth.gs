@@ -378,6 +378,7 @@ function meBootstrap_(p) {
     userId: p.userId, email: p.email, displayName: p.displayName, phone: (user && user.phone) || "", locale: (user && user.locale) || "fr", isSuper: p.isSuper, impersonator: p.impersonator || null,
     demoView: p.demoView || null, demoViews: p.demoView ? demoViewList_() : [],
     provider: (function () { const c = myProviderRow_(p); return c ? { artisanId: c.artisanId, status: c.status } : null; })(),
+    salesRep: salesMe_(p),
     onboarding: !p.impersonator && !p.demoView && signupOnboardingPending_(p),
     roles: p.roles.map(function (r) { return { role: r.role, organizationId: r.organizationId, organizationName: (orgs[r.organizationId] || {}).name || "" }; }),
     caps: uiCaps_(p).concat(p.isSuper ? ["platform.admin"] : []),

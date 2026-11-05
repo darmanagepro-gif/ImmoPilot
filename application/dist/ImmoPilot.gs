@@ -1,6 +1,6 @@
 /**
  * ImmoPilot 2.8.0 — CODE SERVEUR COMPLET EN UN SEUL FICHIER (IMMOPILOT_BUNDLE).
- * Contient les 43 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, CommissionService.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, ProspectService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SignatureService.gs, SignupService.gs, StripeService.gs, SubscriptionService.gs, SumUpService.gs, TemplateService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
+ * Contient les 44 fichiers : Admin.gs, Assistant.gs, AuditService.gs, Auth.gs, CheckInOutService.gs, CleaningService.gs, Code.gs, CommissionService.gs, Compat.gs, Config.gs, ContractorService.gs, DashboardService.gs, Database.gs, Demo.gs, DriveService.gs, FinanceService.gs, GuestService.gs, IncidentService.gs, InvoiceService.gs, LeaseAgentService.gs, LeaseService.gs, Legal.gs, Migrations.gs, NotificationService.gs, OrganizationService.gs, ParetoService.gs, Permissions.gs, PropertyService.gs, ProspectService.gs, RentAutomationService.gs, ReportsService.gs, ReservationService.gs, SalesService.gs, SignatureService.gs, SignupService.gs, StripeService.gs, SubscriptionService.gs, SumUpService.gs, TemplateService.gs, Tests.gs, Triggers.gs, UserService.gs, Utils.gs, WorkOrderService.gs.
  * À coller seul dans le projet Apps Script (aucun autre fichier .gs ne doit rester dans le projet).
  */
 
@@ -951,6 +951,7 @@ function meBootstrap_(p) {
     userId: p.userId, email: p.email, displayName: p.displayName, phone: (user && user.phone) || "", locale: (user && user.locale) || "fr", isSuper: p.isSuper, impersonator: p.impersonator || null,
     demoView: p.demoView || null, demoViews: p.demoView ? demoViewList_() : [],
     provider: (function () { const c = myProviderRow_(p); return c ? { artisanId: c.artisanId, status: c.status } : null; })(),
+    salesRep: salesMe_(p),
     onboarding: !p.impersonator && !p.demoView && signupOnboardingPending_(p),
     roles: p.roles.map(function (r) { return { role: r.role, organizationId: r.organizationId, organizationName: (orgs[r.organizationId] || {}).name || "" }; }),
     caps: uiCaps_(p).concat(p.isSuper ? ["platform.admin"] : []),
@@ -1514,6 +1515,9 @@ function routes_() { return {
   "prospect.dashboard": "prospectDashboard_", "prospect.list": "prospectList_", "prospect.get": "prospectGet_", "prospect.save": "prospectSave_", "prospect.setStatus": "prospectSetStatus_",
   "prospect.note": "prospectNote_", "prospect.doNotContact": "prospectDoNotContact_", "prospect.export": "prospectExport_", "prospect.importPreview": "prospectImportPreview_",
   "prospect.importCommit": "prospectImportCommit_", "prospect.agents": "prospectAgentsInfo_", "prospect.agentsSettings": "prospectAgentsSettings_", "prospect.sendInstructions": "prospectSendNow_",
+  "sales.mine": "salesMine_", "sales.overview": "salesOverview_", "sales.reps": "salesRepList_", "sales.repGet": "salesRepGet_", "sales.repCreate": "salesRepCreate_", "sales.repUpdate": "salesRepUpdate_",
+  "sales.clients": "salesClients_", "sales.assign": "salesAssign_", "sales.commissions": "salesCommissionList_", "sales.markPaid": "salesMarkPaid_", "sales.export": "salesCommissionExport_",
+  "sales.planGet": "salesPlanGet_", "sales.planSave": "salesPlanSave_", "sales.recompute": "salesRecompute_",
   "dash.get": "dashGet_", "pareto.run": "paretoRun_", "pareto.export": "paretoExport_", "report.run": "reportRun_", "report.export": "reportExport_"
 }; }
 function publicRoutes_() { return {
@@ -1528,7 +1532,7 @@ function publicRoutes_() { return {
  */
 var INSTALL_HTML_FILES_ = ["Index", "Styles", "Components", "I18n", "Login", "Dashboard", "Pages", "Scripts", "Assistant"];
 /* Première et dernière fonction de chaque fichier : détecte un fichier absent ET un fichier collé incomplètement. */
-var INSTALL_GS_SENTINELS_ = { ProspectService: ["prospectClean_", "prospectInboundHook_"], Admin: ["assertEditor_", "auditList_"], Legal: ["legalGet_", "legalValues_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], LeaseAgentService: ["laFill_", "inspectionCancel_"], RentAutomationService: ["rentReminderDays_", "rentMailingsOf_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SubscriptionService: ["planOut_", "subscriptionJob_"], SumUpService: ["sumupConf_", "sumupChargeJob_"], TemplateService: ["docTemplateHtml_", "templatePreview_"], SignatureService: ["subSignStart_", "subSignConfirm_"], SignupService: ["luhnOk_", "providerExpiryJob_"], CommissionService: ["commissionRates_", "commissionRunMonthly_"], StripeService: ["stripeConf_", "stripeWebhookApply_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
+var INSTALL_GS_SENTINELS_ = { ProspectService: ["prospectClean_", "prospectInboundHook_"], SalesService: ["salesPlan_", "salesComputeOrg_"], Admin: ["assertEditor_", "auditList_"], Legal: ["legalGet_", "legalValues_"], Assistant: ["assistantRoles_", "testerAssistantIA"], Demo: ["creerEnvironnementDemo", "demoSummaryText_"], AuditService: ["auditRedact_", "diff_"], Auth: ["pbkdfIters_", "meBootstrap_"], CheckInOutService: ["checkEventOut_", "opsReport_"], CleaningService: ["cleanMine_", "cleaningExpireJob_"], Code: ["routes_", "metaGet_"], Compat: ["p4ExpireCleaningMissions", "installPhase4Triggers"], Config: ["include"], ContractorService: ["contractorUsableFor_", "ctrUpdate_"], DashboardService: ["dashGet_", "dashLease_"], Database: ["dbReset_", "setSetting_"], DriveService: ["driveRoot_", "purgeExpiredDocuments_"], FinanceService: ["finScopeProps_", "finSummary_"], GuestService: ["maskIdRef_", "guestPortalIncident_"], IncidentService: ["incidentInsert_", "incidentAlertsJob_"], InvoiceService: ["invoiceOut_", "invRefreshPaid_"], LeaseService: ["rentPaid_", "leaseJob_"], LeaseAgentService: ["laFill_", "inspectionCancel_"], RentAutomationService: ["rentReminderDays_", "rentMailingsOf_"], Migrations: ["migSchemaSync_", "listBackups_"], NotificationService: ["sendMailSafe_", "notifSendEmail_"], OrganizationService: ["orgPublic_", "supportList_"], ParetoService: ["paretoCompute_", "paretoExport_"], Permissions: ["ctxReset_", "assertQuota_"], PropertyService: ["propertyInput_", "propertyStaffRevoke_"], ReportsService: ["reportBuild_", "reportExport_"], ReservationService: ["idemRun_", "resvSheet_"], SubscriptionService: ["planOut_", "subscriptionJob_"], SumUpService: ["sumupConf_", "sumupChargeJob_"], TemplateService: ["docTemplateHtml_", "templatePreview_"], SignatureService: ["subSignStart_", "subSignConfirm_"], SignupService: ["luhnOk_", "providerExpiryJob_"], CommissionService: ["commissionRates_", "commissionRunMonthly_"], StripeService: ["stripeConf_", "stripeWebhookApply_"], Tests: ["runAllTests", "TEST_GROUPS_"], Triggers: ["installTriggers", "guestTokenExpireJob_"], UserService: ["bestRoleIn_", "userSendActivation_"], Utils: ["assert_", "isDateObj_"], WorkOrderService: ["quoteOut_", "woOrderPdf_"] };
 function installCheck_() {
   const g = typeof globalThis !== "undefined" ? globalThis : this;
   const missingGs = Object.keys(INSTALL_GS_SENTINELS_).filter(function (f) { return INSTALL_GS_SENTINELS_[f].some(function (n) { return typeof g[n] !== "function"; }); });
@@ -1976,7 +1980,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "9eadcc3f57b5";
+var IMMO_BUILD_ = "f42774918836";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -2015,7 +2019,7 @@ var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "DarPilot",
   VERSION: "2.8.0",
-  SCHEMA_VERSION: 17,
+  SCHEMA_VERSION: 18,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -2028,7 +2032,7 @@ var IMMO_CONFIG = Object.freeze({
   MAX_UPLOAD_BYTES: 4 * 1024 * 1024,
   MAX_PAGE_SIZE: 200,
   MAX_EXPORT_ROWS: 5000,
-  ROLES: ["SUPER_ADMIN", "OWNER", "AGENCY_ADMIN", "AGENCY_USER", "GUARD", "CLEANER", "ARTISAN", "TENANT"]
+  ROLES: ["SUPER_ADMIN", "OWNER", "AGENCY_ADMIN", "AGENCY_USER", "GUARD", "CLEANER", "ARTISAN", "TENANT", "SALES"]
 });
 
 /** Capacités par rôle (plafond). UserRoles.permissionsJson peut seulement retirer ("-cap") ou restaurer ("+cap") dans ce plafond. */
@@ -2047,7 +2051,9 @@ var ROLE_CAPS = Object.freeze({
   GUARD: ["checkin.operate", "incident.report", "guest.view.min"],
   CLEANER: ["cleaning.operate", "incident.report"],
   ARTISAN: ["workorder.operate", "quote.submit", "invoice.submit"],
-  TENANT: ["lease.self", "incident.report"]
+  TENANT: ["lease.self", "incident.report"],
+  // Commercial terrain (espace commercial) : voit uniquement ses clients, ses commissions et ses prospects (SalesService.gs).
+  SALES: ["sales.self"]
 });
 
 /** Droits portés par une attribution agence↔bien (AgencyPropertyPermissions). */
@@ -2151,13 +2157,19 @@ var PROSPECT_EVENT_KINDS_ = ["DRAFT", "SENT", "REPLY", "FOLLOWUP", "STATUS", "NO
 var TABLES_SRC = {
   // Espace Prospects (super administrateur) : voir ProspectService.gs.
   Prospects: { pk: "prospectId", idp: "pro", req: "target", enums: { target: PROSPECT_TARGETS_, status: PROSPECT_STATUSES_, sourceType: ["AGENTS", "IMPORT", "MANUAL"], country: ["FR", "MA"] },
-    cols: "prospectId,target,status,createdAt#t,createdBy|country,territory,city,company,contactName,role,email,phone,address,website,trade,sourceType,sourceUrl,sourceFile,importId,legalBasis,consent,score#n,angle,nextAction,nextActionDate,followUps#n,lastContactAt#t,lastReplyAt#t,plan,notes,doNotContact#b,agentPending#b,externalKey,updatedAt#t,updatedBy,updatedSource" },
+    cols: "prospectId,target,status,createdAt#t,createdBy|country,territory,city,company,contactName,role,email,phone,address,website,trade,sourceType,sourceUrl,sourceFile,importId,legalBasis,consent,score#n,angle,nextAction,nextActionDate,followUps#n,lastContactAt#t,lastReplyAt#t,plan,notes,doNotContact#b,agentPending#b,externalKey,updatedAt#t,updatedBy,updatedSource,ownerRepId" },
   ProspectEvents: { pk: "eventId", idp: "pev", req: "prospectId,kind", enums: { kind: PROSPECT_EVENT_KINDS_ },
     cols: "eventId,prospectId,kind,at#t,source|summary,channel,detailsJson#j,actorEmail" },
   ProspectSyncs: { pk: "syncId", idp: "psy", req: "direction", enums: { direction: ["IN", "OUT"], status: ["OK", "PARTIAL", "REJECTED", "FAILED"] },
     cols: "syncId,direction,at#t,status|items#n,created#n,updated#n,events#n,error,ref,detailsJson#j" },
+  // Espace commercial : commerciaux terrain et commissions (voir SalesService.gs).
+  SalesReps: { pk: "repId", idp: "rep", req: "displayName,email", enums: { status: ["ACTIVE", "SUSPENDED"], country: ["FR", "MA"] },
+    cols: "repId,displayName,email,code,status,createdAt#t,createdBy|userId,phone,country,territory,bonusRate#n,recurringRate#n,recurringMonths#n,updatedAt#t" },
+  SalesCommissions: { pk: "commissionId", idp: "scm", org: "organizationId", req: "repId,organizationId,kind",
+    enums: { kind: ["SIGNUP", "RECURRING", "CLAWBACK", "ADJUST"], status: ["PENDING", "EARNED", "PAID", "CANCELLED"] },
+    cols: "commissionId,repId,organizationId,kind,status,amount#n,currency,createdAt#t|subscriptionId,planCode,period,baseAmount#n,rate#n,earnedAt#t,paidAt#t,paidRef,paymentId,note,updatedAt#t" },
   Organizations: { pk: "organizationId", idp: "org", org: "organizationId", req: "name", enums: { status: ["ACTIVE", "SUSPENDED", "INACTIVE"], type: ["OWNER_ORG", "AGENCY", "PROVIDER", "PLATFORM"] },
-    cols: "organizationId,name,status,createdAt#t,createdBy|type,country,city,timezone,locale,planCode,billingEmail,suspendedAt#t,suspensionReason,updatedAt#t,isDemo#b,managedByOrgId,phone,address,contactName,legalJson#j,signupSource" },
+    cols: "organizationId,name,status,createdAt#t,createdBy|type,country,city,timezone,locale,planCode,billingEmail,suspendedAt#t,suspensionReason,updatedAt#t,isDemo#b,managedByOrgId,phone,address,contactName,legalJson#j,signupSource,salesRepId,salesRepDeclared,salesLinkedAt#t,salesLinkedBy" },
   Users: { pk: "userId", idp: "usr", req: "email", enums: { status: ["ACTIVE", "SUSPENDED", "DISABLED", "INVITED"] },
     cols: "userId,email,displayName,status,createdAt#t,createdBy|passwordHash,passwordSalt,passwordIters#n,failedAttempts#n,lockedUntil#t,lastLoginAt#t,locale,phone,notifPrefsJson#j,updatedAt#t,pwChangedAt#t" },
   Invitations: { pk: "invitationId", idp: "inv", org: "organizationId", req: "email,role", enums: { status: ["PENDING", "ACCEPTED", "REVOKED", "EXPIRED", "EMAIL_FAILED"] },
@@ -7865,6 +7877,10 @@ function prospectOut_(p) {
   o.awaitingReply = !!(p.lastReplyAt && (!p.lastContactAt || String(p.lastReplyAt) > String(p.lastContactAt)));
   return o;
 }
+/** Qui agit : le super administrateur (tout) ou un commercial (uniquement ses propres prospects). */
+function prospectActor_(p) { if (p.isSuper) return { admin: true, rep: null }; return { admin: false, rep: requireRep_(p) }; }
+function prospectOwned_(actor, x) { return actor.admin || (x && String(x.ownerRepId) === String(actor.rep.repId)); }
+function prospectRequireFor_(actor, id) { const x = prospectRequire_(id); if (!prospectOwned_(actor, x)) throw new AppError("NOT_FOUND", "Prospect introuvable."); return x; }
 function prospectRequire_(id) { const p = dbGet_("Prospects", safeText_(id, 80)); if (!p) throw new AppError("NOT_FOUND", "Prospect introuvable."); return p; }
 
 /* ------------------------------ routes (super administrateur) ------------------------------ */
@@ -7903,15 +7919,17 @@ function prospectDashboard_(p, a) {
   };
 }
 
-function prospectFilter_(a) {
+function prospectFilter_(a, actor) {
   const q = String(a.q || "").toLowerCase().trim(), today = todayStr_();
   return dbAll_("Prospects").filter(function (x) {
+    if (actor && !actor.admin && String(x.ownerRepId) !== String(actor.rep.repId)) return false;
+    if (a.ownerRepId && String(x.ownerRepId) !== String(a.ownerRepId)) return false;
     if (a.status && x.status !== a.status) return false;
     if (a.target && x.target !== a.target) return false;
     if (a.targetGroup === "CLIENTS" && x.target === "ARTISAN") return false;
     if (a.country && x.country !== a.country) return false;
     if (a.territory && String(x.territory || "").toLowerCase() !== String(a.territory).toLowerCase()) return false;
-    if (a.source && x.sourceType !== a.source) return false;
+    if (a.source === "REP") { if (!x.ownerRepId) return false; } else if (a.source && (x.sourceType !== a.source || x.ownerRepId)) return false;
     if (bool_(a.due) && !(x.nextActionDate && x.nextActionDate <= today && PROSPECT_STOP_STATUSES_.indexOf(x.status) < 0 && !bool_(x.doNotContact))) return false;
     if (bool_(a.replies) && !(x.lastReplyAt && (!x.lastContactAt || String(x.lastReplyAt) > String(x.lastContactAt)))) return false;
     if (q && [x.company, x.contactName, x.email, x.phone, x.city, x.territory, x.trade, x.notes].join(" ").toLowerCase().indexOf(q) < 0) return false;
@@ -7919,27 +7937,28 @@ function prospectFilter_(a) {
   });
 }
 function prospectList_(p, a) {
-  requireSuper_(p);
-  const rows = prospectFilter_(a);
+  const actor = prospectActor_(p);
+  const rows = prospectFilter_(a, actor);
   rows.sort(function (x, y) { return String(y.updatedAt || y.createdAt).localeCompare(String(x.updatedAt || x.createdAt)); });
   const pageSize = Math.min(Math.max(parseInt(a.pageSize, 10) || 25, 5), 200), page = Math.max(parseInt(a.page, 10) || 1, 1);
-  return { items: rows.slice((page - 1) * pageSize, page * pageSize).map(prospectOut_), total: rows.length, page: page, pageSize: pageSize };
+  const reps = actor.admin ? indexBy_(dbAll_("SalesReps"), "repId") : {};
+  return { items: rows.slice((page - 1) * pageSize, page * pageSize).map(function (x) { const o = prospectOut_(x); if (x.ownerRepId) o.repName = actor.admin ? (reps[x.ownerRepId] || {}).displayName || "" : actor.rep.displayName; return o; }), total: rows.length, page: page, pageSize: pageSize };
 }
 
 function prospectGet_(p, a) {
-  requireSuper_(p);
-  const x = prospectRequire_(a.prospectId), id = String(x.prospectId);
+  const actor = prospectActor_(p);
+  const x = prospectRequireFor_(actor, a.prospectId), id = String(x.prospectId);
   const events = dbAll_("ProspectEvents").filter(function (e) { return String(e.prospectId) === id; }).sort(function (u, v) { return String(v.at).localeCompare(String(u.at)); }).slice(0, 300)
     .map(function (e) { return { eventId: e.eventId, kind: e.kind, at: e.at, source: e.source, summary: e.summary, channel: e.channel, actorEmail: e.actorEmail }; });
-  return Object.assign(prospectOut_(x), { events: events });
+  return Object.assign(prospectOut_(x), { events: events, repName: x.ownerRepId ? ((dbGet_("SalesReps", x.ownerRepId) || {}).displayName || "") : "", ownedByRep: !!x.ownerRepId });
 }
 
 /** Création ou modification manuelle. Création : refus si doublon probable (sauf force). */
 function prospectSave_(p, a) {
-  requireSuper_(p);
+  const actor = prospectActor_(p);
   const c = prospectClean_(a);
   if (a.prospectId) {
-    const x = prospectRequire_(a.prospectId);
+    const x = prospectRequireFor_(actor, a.prospectId);
     const patch = Object.assign({}, c, { updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true });
     PROSPECT_FIELDS_.forEach(function (k) { if (a[k] !== undefined && String(a[k]).trim() === "" && k !== "status" && k !== "target") patch[k] = ""; });
     if (c.status && c.status !== x.status) prospectEvent_(x.prospectId, "STATUS", (x.status || "—") + " → " + c.status, "APP", { actor: p.email });
@@ -7949,17 +7968,19 @@ function prospectSave_(p, a) {
   }
   assert_(c.company || c.contactName, "Indiquez au moins le nom de la structure ou du contact.");
   assert_(c.target, "Choisissez la cible (agence, conciergerie, syndic, propriétaire, artisan).");
-  if (!bool_(a.force)) { const dup = prospectFind_(prospectIndex_(), c); if (dup) throw new AppError("VALIDATION", "Doublon probable : " + (dup.company || dup.contactName || dup.email) + ". Ouvrez sa fiche ou confirmez la création."); }
+  const dup0 = prospectFind_(prospectIndex_(), c);
+  if (dup0 && !actor.admin && !prospectOwned_(actor, dup0)) throw new AppError("VALIDATION", "Ce prospect est déjà suivi par DarPilot : il ne peut pas être ajouté à votre portefeuille. Parlez-en à votre responsable.");
+  if (dup0 && !bool_(a.force)) throw new AppError("VALIDATION", "Doublon probable : " + (dup0.company || dup0.contactName || dup0.email) + ". Ouvrez sa fiche ou confirmez la création.");
   const row = dbInsert_("Prospects", Object.assign({ status: c.status || (c.target === "ARTISAN" ? "a_contacter" : "a_qualifier"), sourceType: "MANUAL", createdAt: nowIso_(), createdBy: p.email,
-    updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true, legalBasis: c.legalBasis || (c.target === "PROPRIETAIRE" ? "consentement" : "interet_legitime_b2b") }, c));
+    updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true, legalBasis: c.legalBasis || (c.target === "PROPRIETAIRE" ? "consentement" : "interet_legitime_b2b"),
+    ownerRepId: actor.admin ? "" : actor.rep.repId }, c));
   prospectEvent_(row.prospectId, "NOTE", "Prospect ajouté manuellement", "APP", { actor: p.email });
   audit_("PROSPECT_CREATED", "Prospect", row.prospectId, "", { target: row.target, country: row.country || "" });
   return { ok: true, prospectId: row.prospectId };
 }
 
 function prospectSetStatus_(p, a) {
-  requireSuper_(p);
-  const x = prospectRequire_(a.prospectId), status = prospectStatus_(a.status);
+  const x = prospectRequireFor_(prospectActor_(p), a.prospectId), status = prospectStatus_(a.status);
   assert_(status, "Statut invalide.");
   const patch = { status: status, updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true };
   if (a.nextAction !== undefined) patch.nextAction = safeText_(a.nextAction, 300);
@@ -7971,8 +7992,7 @@ function prospectSetStatus_(p, a) {
 }
 
 function prospectNote_(p, a) {
-  requireSuper_(p);
-  const x = prospectRequire_(a.prospectId), kind = oneOf_(a.kind || "NOTE", ["NOTE", "CALL", "MEETING"], "Type");
+  const x = prospectRequireFor_(prospectActor_(p), a.prospectId), kind = oneOf_(a.kind || "NOTE", ["NOTE", "CALL", "MEETING"], "Type");
   prospectEvent_(x.prospectId, kind, reqText_(a.text, "Texte", 2, 1500), "APP", { actor: p.email });
   const patch = { updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP" };
   if (kind !== "NOTE") patch.lastContactAt = nowIso_();
@@ -7981,16 +8001,14 @@ function prospectNote_(p, a) {
 }
 
 function prospectDoNotContact_(p, a) {
-  requireSuper_(p);
-  const x = prospectRequire_(a.prospectId), on = bool_(a.on);
+  const x = prospectRequireFor_(prospectActor_(p), a.prospectId), on = bool_(a.on);
   dbUpdate_("Prospects", x.prospectId, { doNotContact: on, status: on ? "desinscrit" : (x.status === "desinscrit" ? "a_qualifier" : x.status), updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true });
   prospectEvent_(x.prospectId, "STATUS", on ? "Ne plus contacter (désinscrit)" : "Contact de nouveau autorisé", "APP", { actor: p.email });
   return { ok: true };
 }
 
 function prospectExport_(p, a) {
-  requireSuper_(p);
-  const rows = prospectFilter_(a);
+  const rows = prospectFilter_(a, prospectActor_(p));
   const cols = ["prospectId", "country", "territory", "city", "target", "company", "contactName", "role", "email", "phone", "address", "website", "trade", "status", "score", "nextAction", "nextActionDate",
     "followUps", "lastContactAt", "lastReplyAt", "sourceType", "sourceUrl", "legalBasis", "consent", "doNotContact", "notes", "createdAt"];
   // Une cellule qui commence par = ou @ (ou + / - suivi d'autre chose qu'un chiffre) serait lue comme une formule par Excel : neutralisée.
@@ -8045,7 +8063,7 @@ function prospectRowsToRecords_(rows) {
   return { records: records, mapping: hi >= 0 ? rows[hi].map(function (h, i) { return { header: String(h == null ? "" : h), field: map[i] || "" }; }) : [] };
 }
 /** Prépare l'aperçu : fiches nettoyées, doublons signalés (dans la base et dans le fichier), anomalies. */
-function prospectPreviewFrom_(records, defaults) {
+function prospectPreviewFrom_(records, defaults, actor) {
   const idx = prospectIndex_(), seen = {};
   const candidates = (records || []).slice(0, PROSPECT_LIMITS_.importRows).map(function (r, i) {
     const c = prospectClean_(r, defaults), issues = [];
@@ -8056,7 +8074,8 @@ function prospectPreviewFrom_(records, defaults) {
     if (c.target === "PROPRIETAIRE") issues.push("particulier : contact seulement avec consentement");
     const dup = prospectFind_(idx, c), ks = prospectKeys_(c), dupFile = ks.some(function (k) { return seen[k] !== undefined; });
     ks.forEach(function (k) { if (seen[k] === undefined) seen[k] = i; });
-    return { row: i + 1, data: c, duplicateOf: dup ? { prospectId: dup.prospectId, label: dup.company || dup.contactName || dup.email || "" } : null, duplicateInFile: dupFile, issues: issues,
+    const mineDup = dup && (!actor || prospectOwned_(actor, dup));
+    return { row: i + 1, data: c, duplicateOf: dup ? (mineDup ? { prospectId: dup.prospectId, label: dup.company || dup.contactName || dup.email || "" } : { prospectId: "", label: "déjà suivi par DarPilot" }) : null, duplicateInFile: dupFile, issues: issues,
       selected: !dup && !dupFile && !!(c.company || c.contactName) && !!(c.email || c.phone) };
   });
   return { candidates: candidates, stats: { rows: candidates.length, selected: candidates.filter(function (c) { return c.selected; }).length,
@@ -8068,17 +8087,17 @@ function prospectDefaults_(d) {
 }
 /** Aperçu d'un tableau (Excel / CSV lu dans le navigateur) : { rows: [[...], ...] } ou { records: [{...}] }. */
 function prospectImportPreview_(p, a) {
-  requireSuper_(p);
+  const actor = prospectActor_(p);
   const defaults = prospectDefaults_(a.defaults);
   let mapping = [], records;
   if (Array.isArray(a.rows)) { const r = prospectRowsToRecords_(a.rows); records = r.records; mapping = r.mapping; }
   else records = Array.isArray(a.records) ? a.records.filter(function (x) { return x && typeof x === "object"; }) : [];
   assert_(records.length, "Aucune ligne exploitable dans ce fichier.");
-  return Object.assign(prospectPreviewFrom_(records, defaults), { mapping: mapping, fileName: safeText_(a.fileName || "", 160) });
+  return Object.assign(prospectPreviewFrom_(records, defaults, actor), { mapping: mapping, fileName: safeText_(a.fileName || "", 160) });
 }
 /** Enregistre les lignes cochées. Les doublons de la base sont complétés (champs vides seulement) si merge=true. */
 function prospectImportCommit_(p, a) {
-  requireSuper_(p);
+  const actor = prospectActor_(p);
   const defaults = prospectDefaults_(a.defaults), list = (Array.isArray(a.candidates) ? a.candidates : []).slice(0, PROSPECT_LIMITS_.importRows);
   assert_(list.length, "Aucune ligne sélectionnée.");
   const importId = newId_("imp"), file = safeText_(a.fileName || "", 160), idx = prospectIndex_();
@@ -8090,14 +8109,15 @@ function prospectImportCommit_(p, a) {
       if (!(c.company || c.contactName) || !(c.email || c.phone)) { skipped++; return; }
       const dup = prospectFind_(idx, c);
       if (dup) {
-        if (!bool_(a.merge)) { skipped++; return; }
+        if (!bool_(a.merge) || !prospectOwned_(actor, dup)) { skipped++; return; }
         const patch = {}; Object.keys(c).forEach(function (k) { if (k !== "status" && (dup[k] === undefined || dup[k] === "")) patch[k] = c[k]; });
         if (Object.keys(patch).length) { dbUpdate_("Prospects", dup.prospectId, Object.assign(patch, { updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true })); prospectEvent_(dup.prospectId, "IMPORT", "Complété par l'import « " + file + " »", "APP", { actor: p.email }); merged++; }
         else skipped++;
         return;
       }
       const row = dbInsert_("Prospects", Object.assign({ status: c.target === "ARTISAN" ? "a_contacter" : "a_qualifier", sourceType: "IMPORT", sourceFile: file, importId: importId,
-        legalBasis: c.target === "PROPRIETAIRE" ? "consentement" : "interet_legitime_b2b", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true }, c));
+        legalBasis: c.target === "PROPRIETAIRE" ? "consentement" : "interet_legitime_b2b", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true,
+        ownerRepId: actor.admin ? "" : actor.rep.repId }, c));
       prospectKeys_(row).forEach(function (k) { if (!idx[k]) idx[k] = row; });
       prospectEvent_(row.prospectId, "IMPORT", "Importé depuis « " + file + " »", "APP", { actor: p.email });
       created++;
@@ -8112,7 +8132,7 @@ function prospectServerRun_(token, fn) {
   ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0; dbcBegin_("request");
   try {
     ensureSchemaCurrent_();
-    const p = principalFromToken_(token); CTX_.principal = p; requireSuper_(p);
+    const p = principalFromToken_(token); CTX_.principal = p; if (!p.isSuper) requireRep_(p);
     return { ok: true, data: fn(p) };
   } catch (e) { return errorResponse_(e, "prospect.extract"); } finally { dbcCommit_(); }
 }
@@ -8126,7 +8146,7 @@ var PROSPECT_AI_SYSTEM_ = "Tu extrais des fiches de contacts professionnels à p
 /** Contrôle d'accès + configuration IA (retour réservé à server.js). */
 function prospectExtractGate_(token) {
   return prospectServerRun_(token, function (p) {
-    rateLimit_("prospect-ai:" + p.userId, PROSPECT_LIMITS_.aiPerHour, 3600);
+    rateLimit_("prospect-ai:" + p.userId, p.isSuper ? PROSPECT_LIMITS_.aiPerHour : 20, 3600);
     const cfg = aiConfig_();
     if (!cfg || cfg.provider !== "anthropic") throw new AppError("CONFIG", "Lecture des PDF et photos : renseignez la clé de l'IA Claude (IMMO_AI_PROVIDER = anthropic et IMMO_AI_API_KEY) dans la configuration du serveur. Les fichiers Excel et CSV fonctionnent sans IA.");
     let model = ""; try { model = String(PropertiesService.getScriptProperties().getProperty("IMMO_AI_DOC_MODEL") || "").trim(); } catch (e) { model = ""; }
@@ -8138,7 +8158,7 @@ function prospectExtractFinish_(token, records, meta) {
   return prospectServerRun_(token, function (p) {
     meta = meta || {};
     audit_("PROSPECT_AI_EXTRACT", "Prospect", "", "", { file: safeText_(meta.fileName || "", 160), rows: (records || []).length });
-    return Object.assign(prospectPreviewFrom_(Array.isArray(records) ? records.filter(function (x) { return x && typeof x === "object"; }) : [], prospectDefaults_(meta.defaults)),
+    return Object.assign(prospectPreviewFrom_(Array.isArray(records) ? records.filter(function (x) { return x && typeof x === "object"; }) : [], prospectDefaults_(meta.defaults), prospectActor_(p)),
       { mapping: [], fileName: safeText_(meta.fileName || "", 160), ai: true });
   });
 }
@@ -8234,6 +8254,7 @@ function prospectApplyAgents_(payload, ref, from) {
       const c = prospectClean_(r), key = safeText_(r.key || r.id || c.email || "", 200);
       if (key) c.externalKey = key.toLowerCase();
       let x = prospectFind_(idx, c);
+      if (x && x.ownerRepId) return; // suivi par un commercial terrain : les agents n'y touchent pas
       if (!x) {
         if (!(c.company || c.contactName) || !(c.email || c.phone)) return;
         x = dbInsert_("Prospects", Object.assign({ target: c.target || "AUTRE", status: c.status || (c.target === "ARTISAN" ? "a_contacter" : "a_qualifier"), sourceType: "AGENTS",
@@ -8262,7 +8283,7 @@ function prospectApplyAgents_(payload, ref, from) {
       if (!e || typeof e !== "object") return;
       const k = String(e.key || e.email || "").toLowerCase(), kind = String(e.kind || "").toUpperCase();
       let x = byKey[k] || (k ? prospectFind_(idx, { externalKey: k, email: prospectEmail_(k) }) : null);
-      if (!x || PROSPECT_EVENT_KINDS_.indexOf(kind) < 0) return;
+      if (!x || x.ownerRepId || PROSPECT_EVENT_KINDS_.indexOf(kind) < 0) return;
       const at = /^\d{4}-\d{2}-\d{2}/.test(String(e.at || "")) ? new Date(e.at).toISOString() : nowIso_();
       prospectEvent_(x.prospectId, kind, e.summary || kind, "AGENTS", { at: at, channel: e.channel || "email" });
       const fresh = dbGet_("Prospects", x.prospectId), patch = {};
@@ -8286,7 +8307,8 @@ function prospectInstructionsPayload_() {
     prospects: pending.map(function (x) {
       const o = { key: x.externalKey || x.email || x.prospectId, prospectId: x.prospectId };
       ["country", "territory", "city", "target", "company", "contactName", "role", "email", "phone", "address", "website", "trade", "status", "nextAction", "nextActionDate", "legalBasis", "consent", "sourceType"].forEach(function (k) { if (x[k] !== undefined && x[k] !== "") o[k] = x[k]; });
-      o.doNotContact = bool_(x.doNotContact);
+      o.doNotContact = bool_(x.doNotContact) || !!x.ownerRepId;
+      if (x.ownerRepId) o.note = "Suivi par un commercial terrain : ne pas contacter.";
       return o;
     }) } };
 }
@@ -9255,6 +9277,376 @@ function resvSheet_(p, a) {
 }
 
 /* ======================================================================
+ * SalesService.gs
+ * ====================================================================== */
+/**
+ * Espace commercial : commerciaux terrain (rôle SALES), rattachement des clients et commissions.
+ *
+ *  - Un commercial est un compte (rôle SALES dans l'organisation plateforme) lié à une fiche SalesReps (code de parrainage unique).
+ *  - Rattachement d'un client : à l'inscription en ligne, champ facultatif « Votre commercial » (nom et prénom ou code,
+ *    pré-rempli par le lien ?action=signup&ref=CODE) ; sinon le super administrateur rattache le client à la main.
+ *  - Plan de commissionnement (PlatformSettings « sales.plan », modifiable par le super administrateur) :
+ *      prime de signature = bonusRate × prix mensuel HT du forfait (hors options), ACQUISE quand le 1er paiement est reçu
+ *        et que l'essai est terminé sans résiliation ;
+ *      commission récurrente = recurringRate × prix mensuel HT, sur chacun des recurringMonths paiements suivants ;
+ *      reprise : client résilié ou suspendu dans les clawbackDays après la prime → prime annulée (ou déduite si déjà payée).
+ *  - Le calcul est refait chaque jour (jobDaily) et à la demande ; il est idempotent (une prime par client, une commission par paiement).
+ *  Les commerciaux ne voient que leurs clients, leurs commissions et leurs prospects.
+ */
+
+var SALES_DEFAULT_PLAN_ = { bonusRate: 1, recurringRate: 0.10, recurringMonths: 12, clawbackDays: 90 };
+
+/* ------------------------------ plan, commercial courant ------------------------------ */
+function salesPlan_() {
+  // Réglage de plateforme lu directement (pas dans DEFAULT_SETTINGS : il ne doit jamais apparaître dans les paramètres des clients).
+  let v = {}; try { const row = dbGet_("PlatformSettings", "sales.plan"); v = row ? parseJson_(row.settingValue, {}) || {} : {}; } catch (e) { v = {}; }
+  const out = Object.assign({}, SALES_DEFAULT_PLAN_);
+  Object.keys(SALES_DEFAULT_PLAN_).forEach(function (k) { if (v[k] !== undefined && v[k] !== "" && isFinite(Number(v[k]))) out[k] = Number(v[k]); });
+  return out;
+}
+/** Taux effectifs d'un commercial (ses taux particuliers remplacent ceux du plan). */
+function salesRates_(rep) {
+  const pl = salesPlan_(), o = Object.assign({}, pl);
+  ["bonusRate", "recurringRate", "recurringMonths"].forEach(function (k) { if (rep && rep[k] !== undefined && rep[k] !== "" && rep[k] !== null && isFinite(Number(rep[k]))) o[k] = Number(rep[k]); });
+  return o;
+}
+function salesRepOfUser_(p) {
+  if (!p || !p.userId) return null;
+  // Le compte est créé à l'acceptation de l'invitation : la fiche est retrouvée par l'utilisateur, sinon par l'e-mail.
+  const reps = dbAll_("SalesReps"), em = normalizeEmail_(p.email || "");
+  return reps.find(function (r) { return r.userId && String(r.userId) === String(p.userId); }) || reps.find(function (r) { return !r.userId && em && normalizeEmail_(r.email) === em; }) || null;
+}
+/** Commercial connecté (rôle SALES actif + fiche active) ou refus. */
+function requireRep_(p) {
+  const ok = (p.roles || []).some(function (r) { return r.role === "SALES"; }), rep = ok ? salesRepOfUser_(p) : null;
+  if (!rep || rep.status !== "ACTIVE") forbid_("Réservé aux commerciaux DarPilot.");
+  return rep;
+}
+/** Bloc « me » : présent seulement pour un commercial. */
+function salesMe_(p) {
+  try {
+    if (!(p.roles || []).some(function (r) { return r.role === "SALES"; })) return null;
+    const rep = salesRepOfUser_(p); if (!rep) return null;
+    return { repId: rep.repId, code: rep.code, name: rep.displayName, status: rep.status };
+  } catch (e) { return null; }
+}
+function salesNorm_(s) { return String(s == null ? "" : s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim(); }
+function salesNewCode_(name) {
+  const base = salesNorm_(name).split(" ").filter(function (w) { return /^[a-z]/.test(w); }).map(function (w) { return w.charAt(0); }).join("").toUpperCase().slice(0, 3) || "DP";
+  const used = {}; dbAll_("SalesReps").forEach(function (r) { used[String(r.code).toUpperCase()] = true; });
+  for (let i = 0; i < 50; i++) { const c = base + "-" + randomToken_().replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(0, 4); if (!used[c]) return c; }
+  return base + "-" + Date.now().toString(36).toUpperCase();
+}
+/** Commercial désigné par un code ou par « prénom nom » (dans un sens ou dans l'autre) ; null si inconnu ou ambigu. */
+function salesFindRep_(ref) {
+  const raw = String(ref || "").trim(); if (!raw) return null;
+  const reps = dbAll_("SalesReps").filter(function (r) { return r.status === "ACTIVE"; });
+  const byCode = reps.find(function (r) { return String(r.code).toUpperCase() === raw.toUpperCase().replace(/\s+/g, ""); });
+  if (byCode) return byCode;
+  // « Prénom Nom » ou « Nom Prénom » : mêmes mots, dans n'importe quel ordre.
+  const key = function (v) { return salesNorm_(v).split(" ").filter(Boolean).sort().join(" "); }, n = key(raw);
+  const m = n ? reps.filter(function (r) { return key(r.displayName) === n; }) : [];
+  return m.length === 1 ? m[0] : null;
+}
+/** Rattache un client à un commercial (inscription ou super administrateur). Retourne le commercial ou null. */
+function salesLinkOrg_(orgId, rep, declared, actor) {
+  const org = dbGet_("Organizations", orgId); if (!org) return null;
+  const patch = { salesRepDeclared: safeText_(declared || "", 120), updatedAt: nowIso_() };
+  if (rep) Object.assign(patch, { salesRepId: rep.repId, salesLinkedAt: nowIso_(), salesLinkedBy: actor || "" });
+  dbUpdate_("Organizations", orgId, patch);
+  if (rep) salesComputeOrg_(dbGet_("Organizations", orgId));
+  return rep;
+}
+/** Appelé par l'inscription en ligne (signupCreateClient_). */
+function salesLinkAtSignup_(orgId, ref, email) {
+  const r = String(ref || "").trim(); if (!r) return null;
+  const rep = salesFindRep_(r);
+  salesLinkOrg_(orgId, rep, r, "signup:" + email);
+  if (!rep) notify_({ eventKey: "sales-unlinked:" + orgId, userIds: superAdminIds_(), type: "SIGNUP", organizationId: "", title: "Commercial à rattacher",
+    body: "Inscription avec le commercial « " + r + " » non reconnu : rattachez-la dans Espace commercial › Inscriptions.", link: "#commercial" });
+  return rep;
+}
+
+/* ------------------------------ moteur de commissions ------------------------------ */
+function salesSubOf_(orgId) {
+  const subs = dbAll_("Subscriptions").filter(function (s) { return String(s.organizationId) === String(orgId); });
+  subs.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });
+  return subs.find(function (s) { return ["CANCELLED", "EXPIRED"].indexOf(s.status) < 0; }) || subs[0] || null;
+}
+function salesPaymentsOf_(orgId) {
+  const subIds = {}; dbAll_("Subscriptions").forEach(function (s) { if (String(s.organizationId) === String(orgId)) subIds[String(s.subscriptionId)] = true; });
+  return dbAll_("Payments").filter(function (x) { return x.refType === "SUBSCRIPTION" && subIds[String(x.refId)] && x.direction !== "OUT"; })
+    .sort(function (a, b) { return String(a.paidAt || a.createdAt).localeCompare(String(b.paidAt || b.createdAt)); });
+}
+/** (Re)calcule les commissions d'un client rattaché. Idempotent. */
+function salesComputeOrg_(org) {
+  if (!org || !org.salesRepId) return { changed: 0 };
+  const rep = dbGet_("SalesReps", org.salesRepId); if (!rep) return { changed: 0 };
+  const rates = salesRates_(rep), pl = salesPlan_(), s = salesSubOf_(org.organizationId);
+  const mine = dbAll_("SalesCommissions").filter(function (c) { return String(c.organizationId) === String(org.organizationId) && String(c.repId) === String(rep.repId); });
+  const today = todayStr_(), now = nowIso_();
+  let changed = 0;
+  if (!s) return { changed: 0 };
+  const price = num_(s.price), cur = s.currency || cur_(), pays = salesPaymentsOf_(org.organizationId);
+  const live = pays.filter(function (x) { return x.status === "RECORDED"; });
+  const ended = ["CANCELLED", "EXPIRED", "SUSPENDED"].indexOf(s.status) >= 0;
+  // Prime de signature : une seule par client et par commercial.
+  let bonus = mine.find(function (c) { return c.kind === "SIGNUP"; });
+  if (!bonus) {
+    bonus = dbInsert_("SalesCommissions", { repId: rep.repId, organizationId: org.organizationId, subscriptionId: s.subscriptionId, planCode: s.planCode, kind: "SIGNUP",
+      baseAmount: price, rate: rates.bonusRate, amount: round2_(price * rates.bonusRate), currency: cur, status: "PENDING", createdAt: now, updatedAt: now,
+      note: s.trialEnd ? "Acquise après l'essai (jusqu'au " + s.trialEnd + ") et le 1er paiement" : "Acquise au 1er paiement" });
+    changed++;
+  }
+  if (bonus.status === "PENDING") {
+    if (ended) { dbUpdate_("SalesCommissions", bonus.commissionId, { status: "CANCELLED", note: "Client résilié ou suspendu avant la fin de l'essai", updatedAt: now }); changed++; }
+    else if (live.length && (!s.trialEnd || today >= String(s.trialEnd)) && ["ACTIVE", "PAST_DUE", "TRIAL"].indexOf(s.status) >= 0) {
+      dbUpdate_("SalesCommissions", bonus.commissionId, { status: "EARNED", earnedAt: now, subscriptionId: s.subscriptionId, planCode: s.planCode, baseAmount: price, amount: round2_(price * num_(bonus.rate)),
+        currency: cur, paymentId: live[0].paymentId, note: "Prime de signature acquise", updatedAt: now }); changed++;
+    } else if (num_(bonus.baseAmount) !== price || bonus.planCode !== s.planCode) { dbUpdate_("SalesCommissions", bonus.commissionId, { baseAmount: price, planCode: s.planCode, subscriptionId: s.subscriptionId, amount: round2_(price * num_(bonus.rate)), updatedAt: now }); changed++; }
+  }
+  // Reprise : résiliation ou suspension dans le délai après l'acquisition de la prime.
+  const fresh = dbGet_("SalesCommissions", bonus.commissionId);
+  if (ended && (fresh.status === "EARNED" || fresh.status === "PAID") && fresh.earnedAt) {
+    const endAt = String(s.canceledAt || s.suspendedAt || s.updatedAt || now);
+    const within = (parseTs_(endAt) || new Date()).getTime() - (parseTs_(fresh.earnedAt) || new Date()).getTime() <= pl.clawbackDays * 86400000;
+    if (within && fresh.status === "EARNED") { dbUpdate_("SalesCommissions", fresh.commissionId, { status: "CANCELLED", note: "Reprise : client parti dans les " + pl.clawbackDays + " jours", updatedAt: now }); changed++; }
+    if (within && fresh.status === "PAID" && !mine.some(function (c) { return c.kind === "CLAWBACK"; })) {
+      dbInsert_("SalesCommissions", { repId: rep.repId, organizationId: org.organizationId, subscriptionId: s.subscriptionId, planCode: s.planCode, kind: "CLAWBACK", baseAmount: num_(fresh.amount), rate: -1,
+        amount: -round2_(num_(fresh.amount)), currency: fresh.currency, status: "EARNED", earnedAt: now, createdAt: now, updatedAt: now, note: "Reprise de la prime : client parti dans les " + pl.clawbackDays + " jours" }); changed++;
+    }
+  }
+  // Commissions récurrentes : paiements suivant le 1er (couvert par la prime), dans la limite de recurringMonths.
+  const byPay = {}; mine.forEach(function (c) { if (c.kind === "RECURRING" && c.paymentId) byPay[String(c.paymentId)] = c; });
+  pays.slice(1).forEach(function (x, i) {
+    const c = byPay[String(x.paymentId)];
+    if (x.status !== "RECORDED") { if (c && c.status === "EARNED") { dbUpdate_("SalesCommissions", c.commissionId, { status: "CANCELLED", note: "Paiement annulé", updatedAt: now }); changed++; } return; }
+    if (c || i >= rates.recurringMonths || rates.recurringRate <= 0) return;
+    dbInsert_("SalesCommissions", { repId: rep.repId, organizationId: org.organizationId, subscriptionId: x.refId, planCode: s.planCode, kind: "RECURRING", period: String(x.paidAt || x.createdAt).slice(0, 7),
+      baseAmount: price, rate: rates.recurringRate, amount: round2_(price * rates.recurringRate), currency: x.currency || cur, status: "EARNED", earnedAt: now, paymentId: x.paymentId,
+      createdAt: now, updatedAt: now, note: "Paiement " + (i + 2) + " (récurrente " + (i + 1) + "/" + rates.recurringMonths + ")" });
+    changed++;
+  });
+  return { changed: changed };
+}
+function salesComputeAll_() {
+  let orgs = 0, changed = 0;
+  dbAll_("Organizations").forEach(function (o) { if (!o.salesRepId) return; orgs++; changed += salesComputeOrg_(o).changed; });
+  return { clients: orgs, changed: changed };
+}
+/** Tâche quotidienne (jobDaily). */
+function salesDailyJob_() { return salesComputeAll_(); }
+
+/* ------------------------------ état d'un client (vue commerciale) ------------------------------ */
+function salesClientRow_(o, opts) {
+  opts = opts || {};
+  const s = salesSubOf_(o.organizationId), plan = s ? dbGet_("SubscriptionPlans", s.planCode) : null;
+  const signed = s ? dbAll_("ContractSignatures").filter(function (x) { return String(x.subscriptionId) === String(s.subscriptionId) || String(x.organizationId) === String(o.organizationId); })
+    .sort(function (a, b) { return String(b.signedAt || b.createdAt || "").localeCompare(String(a.signedAt || a.createdAt || "")); })[0] : null;
+  const card = dbAll_("BillingCards").find(function (c) { return String(c.organizationId) === String(o.organizationId) && c.status === "ACTIVE"; });
+  const pays = salesPaymentsOf_(o.organizationId).filter(function (x) { return x.status === "RECORDED"; });
+  const coms = dbAll_("SalesCommissions").filter(function (c) { return String(c.organizationId) === String(o.organizationId) && (!opts.repId || String(c.repId) === String(opts.repId)); });
+  const sum = function (st) { return round2_(coms.filter(function (c) { return st.indexOf(c.status) >= 0; }).reduce(function (t, c) { return t + num_(c.amount); }, 0)); };
+  let stage = "INSCRIT";
+  if (s && ["CANCELLED", "EXPIRED"].indexOf(s.status) >= 0) stage = "RESILIE";
+  else if (s && s.status === "SUSPENDED") stage = "SUSPENDU";
+  else if (signed && signed.signedAt && card && pays.length) stage = s && s.status === "TRIAL" ? "ESSAI_PAYE" : "ACTIF";
+  else if (signed && signed.signedAt) stage = "SIGNE";
+  const out = { organizationId: o.organizationId, name: o.name, city: o.city || "", type: o.type, createdAt: o.createdAt, contactName: o.contactName || "", phone: o.phone || "", email: o.billingEmail || "",
+    planCode: s ? s.planCode : "", planName: plan ? plan.name : (s ? s.planCode : ""), price: s ? num_(s.price) : 0, currency: s ? (s.currency || cur_()) : cur_(), subStatus: s ? s.status : "",
+    trialEnd: s ? s.trialEnd || "" : "", signed: !!(signed && signed.signedAt), signedAt: signed ? signed.signedAt || "" : "", card: !!card, payments: pays.length, firstPaymentAt: pays.length ? pays[0].paidAt : "",
+    stage: stage, commissionPending: sum(["PENDING"]), commissionEarned: sum(["EARNED"]), commissionPaid: sum(["PAID"]) };
+  if (opts.admin) { out.salesRepId = o.salesRepId || ""; out.salesRepDeclared = o.salesRepDeclared || ""; out.signupSource = o.signupSource || ""; }
+  return out;
+}
+function salesCommissionOut_(c, orgs, reps) {
+  return { commissionId: c.commissionId, repId: c.repId, repName: reps && reps[c.repId] ? reps[c.repId].displayName : "", organizationId: c.organizationId, clientName: orgs[c.organizationId] ? orgs[c.organizationId].name : "",
+    kind: c.kind, planCode: c.planCode, period: c.period || "", baseAmount: num_(c.baseAmount), rate: num_(c.rate), amount: num_(c.amount), currency: c.currency, status: c.status,
+    earnedAt: c.earnedAt || "", paidAt: c.paidAt || "", paidRef: c.paidRef || "", note: c.note || "", createdAt: c.createdAt };
+}
+function salesTotals_(coms) {
+  const t = {}; coms.forEach(function (c) { const k = c.currency || ""; t[k] = t[k] || { PENDING: 0, EARNED: 0, PAID: 0 }; if (t[k][c.status] !== undefined) t[k][c.status] = round2_(t[k][c.status] + num_(c.amount)); });
+  return Object.keys(t).map(function (k) { return Object.assign({ currency: k }, t[k]); });
+}
+/** Simulation du plan pour chaque forfait (affichée au commercial et au super administrateur). */
+function salesSimulation_(rates) {
+  return dbAll_("SubscriptionPlans").filter(function (pl) { return pl.status === "ACTIVE"; }).sort(function (a, b) { return num_(a.sortOrder) - num_(b.sortOrder); }).map(function (pl) {
+    const pr = num_(pl.price), bonus = round2_(pr * rates.bonusRate), rec = round2_(pr * rates.recurringRate);
+    return { planCode: pl.planCode, name: pl.name, price: pr, currency: pl.currency || cur_(), bonus: bonus, recurring: rec, months: rates.recurringMonths, firstYear: round2_(bonus + rec * rates.recurringMonths) };
+  });
+}
+
+/* ------------------------------ routes : commercial ------------------------------ */
+function salesMine_(p, a) {
+  const rep = requireRep_(p), rates = salesRates_(rep);
+  const clients = dbAll_("Organizations").filter(function (o) { return String(o.salesRepId) === String(rep.repId); }).map(function (o) { return salesClientRow_(o, { repId: rep.repId }); })
+    .sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); });
+  const orgs = indexBy_(dbAll_("Organizations"), "organizationId");
+  const coms = dbAll_("SalesCommissions").filter(function (c) { return String(c.repId) === String(rep.repId); }).sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); });
+  let url = ""; try { url = appUrl_(); } catch (e) { url = ""; }
+  const pros = dbAll_("Prospects").filter(function (x) { return String(x.ownerRepId) === String(rep.repId); });
+  return { rep: { repId: rep.repId, name: rep.displayName, code: rep.code, territory: rep.territory || "", country: rep.country || "" },
+    signupLink: url ? url + "?action=signup&ref=" + encodeURIComponent(rep.code) : "", rates: rates, simulation: salesSimulation_(rates),
+    kpis: { clients: clients.length, trial: clients.filter(function (c) { return c.subStatus === "TRIAL"; }).length, active: clients.filter(function (c) { return c.stage === "ACTIF" || c.stage === "ESSAI_PAYE"; }).length,
+      notSigned: clients.filter(function (c) { return !c.signed && c.stage !== "RESILIE"; }).length, lost: clients.filter(function (c) { return c.stage === "RESILIE" || c.stage === "SUSPENDU"; }).length,
+      prospects: pros.length, prospectsTalking: pros.filter(function (x) { return ["en_discussion", "rdv_pris", "demo_faite", "devis_envoye"].indexOf(x.status) >= 0; }).length },
+    totals: salesTotals_(coms), clients: clients, commissions: coms.slice(0, 500).map(function (c) { return salesCommissionOut_(c, orgs, null); }) };
+}
+
+/* ------------------------------ routes : super administrateur ------------------------------ */
+function salesOverview_(p, a) {
+  requireSuper_(p);
+  const reps = dbAll_("SalesReps"), coms = dbAll_("SalesCommissions"), orgs = dbAll_("Organizations").filter(function (o) { return o.type !== "PLATFORM"; });
+  const linked = orgs.filter(function (o) { return o.salesRepId; });
+  return { reps: reps.length, activeReps: reps.filter(function (r) { return r.status === "ACTIVE"; }).length, linkedClients: linked.length,
+    toLink: orgs.filter(function (o) { return !o.salesRepId && o.salesRepDeclared; }).length,
+    selfSignups: orgs.filter(function (o) { return o.signupSource === "SELF"; }).length, totals: salesTotals_(coms), plan: salesPlan_() };
+}
+function salesRepList_(p, a) {
+  requireSuper_(p);
+  const users = indexBy_(dbAll_("Users"), "userId"), orgs = dbAll_("Organizations"), coms = dbAll_("SalesCommissions"), pros = dbAll_("Prospects");
+  return dbAll_("SalesReps").sort(function (x, y) { return String(x.displayName).localeCompare(String(y.displayName)); }).map(function (r) {
+    const mine = orgs.filter(function (o) { return String(o.salesRepId) === String(r.repId); }).map(function (o) { return salesClientRow_(o, { repId: r.repId }); });
+    const rc = coms.filter(function (c) { return String(c.repId) === String(r.repId); }), u = users[r.userId] || {};
+    return { repId: r.repId, name: r.displayName, email: r.email, phone: r.phone || "", code: r.code, country: r.country || "", territory: r.territory || "", status: r.status,
+      accountActive: !!u.passwordHash && u.status === "ACTIVE", bonusRate: r.bonusRate === "" ? null : r.bonusRate, recurringRate: r.recurringRate === "" ? null : r.recurringRate, recurringMonths: r.recurringMonths === "" ? null : r.recurringMonths,
+      clients: mine.length, active: mine.filter(function (c) { return c.stage === "ACTIF" || c.stage === "ESSAI_PAYE"; }).length, notSigned: mine.filter(function (c) { return !c.signed && c.stage !== "RESILIE"; }).length,
+      mrr: round2_(mine.filter(function (c) { return c.stage === "ACTIF" || c.stage === "ESSAI_PAYE"; }).reduce(function (t, c) { return t + c.price; }, 0)),
+      prospects: pros.filter(function (x) { return String(x.ownerRepId) === String(r.repId); }).length, totals: salesTotals_(rc) };
+  });
+}
+function salesRepGet_(p, a) {
+  requireSuper_(p);
+  const rep = dbGet_("SalesReps", safeText_(a.repId, 80)); if (!rep) notFound_("Commercial");
+  const orgs = indexBy_(dbAll_("Organizations"), "organizationId"), rates = salesRates_(rep);
+  return { repId: rep.repId, name: rep.displayName, email: rep.email, phone: rep.phone || "", code: rep.code, country: rep.country || "", territory: rep.territory || "", status: rep.status, rates: rates,
+    simulation: salesSimulation_(rates),
+    clients: dbAll_("Organizations").filter(function (o) { return String(o.salesRepId) === String(rep.repId); }).map(function (o) { return salesClientRow_(o, { repId: rep.repId }); }),
+    commissions: dbAll_("SalesCommissions").filter(function (c) { return String(c.repId) === String(rep.repId); }).sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); }).map(function (c) { return salesCommissionOut_(c, orgs, null); }),
+    totals: salesTotals_(dbAll_("SalesCommissions").filter(function (c) { return String(c.repId) === String(rep.repId); })) };
+}
+function salesRateInput_(v, label, max) {
+  if (v === undefined || v === null || String(v).trim() === "") return "";
+  const n = Number(String(v).replace(",", ".")); assert_(isFinite(n) && n >= 0 && n <= max, label + " invalide."); return n;
+}
+/** Crée un commercial : fiche + invitation (rôle SALES dans l'organisation plateforme). */
+function salesRepCreate_(p, a) {
+  requireSuper_(p);
+  const email = validateEmail_(a.email), name = reqText_(a.name, "Nom et prénom", 3, 100);
+  assert_(!dbAll_("SalesReps").some(function (r) { return normalizeEmail_(r.email) === email; }), "Un commercial existe déjà avec cet e-mail.");
+  const pf = platformOrgId_(), org = dbGet_("Organizations", pf);
+  assert_(org, "Organisation plateforme introuvable.", "CONFIG");
+  return withLock_(function () {
+    const user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });
+    const rep = dbInsert_("SalesReps", { displayName: name, email: email, userId: user ? user.userId : "", code: salesNewCode_(name), phone: safeText_(a.phone || "", 30), country: oneOf_(String(a.country || edition_().code), ["FR", "MA"], "Pays"),
+      territory: safeText_(a.territory || "", 120), status: "ACTIVE", bonusRate: salesRateInput_(a.bonusRate, "Prime", 5), recurringRate: salesRateInput_(a.recurringRate, "Taux récurrent", 1),
+      recurringMonths: salesRateInput_(a.recurringMonths, "Durée", 60), createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
+    let invite = null;
+    if (!(user && dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(user.userId) && r.role === "SALES" && r.status === "ACTIVE"; })))
+      invite = invitationInsertAndSend_(p, { email: email, displayName: name, organizationId: pf, role: "SALES" }, org);
+    audit_("SALES_REP_CREATED", "SalesRep", rep.repId, "", { email: email, code: rep.code });
+    return { ok: true, repId: rep.repId, code: rep.code, invited: !!invite };
+  });
+}
+function salesRepUpdate_(p, a) {
+  requireSuper_(p);
+  const rep = dbGet_("SalesReps", safeText_(a.repId, 80)); if (!rep) notFound_("Commercial");
+  const patch = { updatedAt: nowIso_() };
+  if (a.name !== undefined) patch.displayName = reqText_(a.name, "Nom et prénom", 3, 100);
+  if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
+  if (a.territory !== undefined) patch.territory = safeText_(a.territory, 120);
+  if (a.country !== undefined && a.country !== "") patch.country = oneOf_(String(a.country), ["FR", "MA"], "Pays");
+  if (a.status !== undefined) patch.status = oneOf_(String(a.status), ["ACTIVE", "SUSPENDED"], "Statut");
+  ["bonusRate", "recurringRate", "recurringMonths"].forEach(function (k, i) { if (a[k] !== undefined) patch[k] = salesRateInput_(a[k], ["Prime", "Taux récurrent", "Durée"][i], [5, 1, 60][i]); });
+  dbUpdate_("SalesReps", rep.repId, patch);
+  if (patch.status) {
+    const u = rep.userId || (dbAll_("Users").find(function (x) { return normalizeEmail_(x.email) === normalizeEmail_(rep.email); }) || {}).userId;
+    if (u) dbAll_("UserRoles").filter(function (r) { return String(r.userId) === String(u) && r.role === "SALES"; }).forEach(function (r) { dbUpdate_("UserRoles", r.userRoleId, { status: patch.status === "ACTIVE" ? "ACTIVE" : "SUSPENDED" }); });
+  }
+  audit_("SALES_REP_UPDATED", "SalesRep", rep.repId, "", { status: patch.status || "" });
+  return { ok: true };
+}
+/** Inscriptions et clients (avec leur commercial) : pour rattacher ou contrôler. */
+function salesClients_(p, a) {
+  requireSuper_(p);
+  const reps = indexBy_(dbAll_("SalesReps"), "repId");
+  let rows = dbAll_("Organizations").filter(function (o) { return (o.type === "OWNER_ORG" || o.type === "AGENCY") && !o.managedByOrgId && !bool_(o.isDemo); });
+  if (a.filter === "LINKED") rows = rows.filter(function (o) { return o.salesRepId; });
+  if (a.filter === "TO_LINK") rows = rows.filter(function (o) { return !o.salesRepId && o.salesRepDeclared; });
+  if (a.filter === "NONE") rows = rows.filter(function (o) { return !o.salesRepId; });
+  if (a.repId) rows = rows.filter(function (o) { return String(o.salesRepId) === String(a.repId); });
+  const q = salesNorm_(a.q || "");
+  if (q) rows = rows.filter(function (o) { return salesNorm_([o.name, o.city, o.billingEmail, o.salesRepDeclared].join(" ")).indexOf(q) >= 0; });
+  rows.sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); });
+  return rows.slice(0, 500).map(function (o) { const r = salesClientRow_(o, { admin: true }); r.repName = o.salesRepId && reps[o.salesRepId] ? reps[o.salesRepId].displayName : ""; return r; });
+}
+function salesAssign_(p, a) {
+  requireSuper_(p);
+  const org = dbGet_("Organizations", safeText_(a.organizationId, 120));
+  assert_(org && (org.type === "OWNER_ORG" || org.type === "AGENCY"), "Client introuvable.");
+  if (!a.repId) {
+    assert_(!dbAll_("SalesCommissions").some(function (c) { return String(c.organizationId) === String(org.organizationId) && c.status === "PAID"; }), "Des commissions ont déjà été payées pour ce client : le rattachement ne peut plus être retiré.");
+    dbAll_("SalesCommissions").filter(function (c) { return String(c.organizationId) === String(org.organizationId) && (c.status === "PENDING" || c.status === "EARNED"); })
+      .forEach(function (c) { dbUpdate_("SalesCommissions", c.commissionId, { status: "CANCELLED", note: "Rattachement retiré", updatedAt: nowIso_() }); });
+    dbUpdate_("Organizations", org.organizationId, { salesRepId: "", salesLinkedAt: "", salesLinkedBy: p.email, updatedAt: nowIso_() });
+    audit_("SALES_CLIENT_UNLINKED", "Organization", org.organizationId, org.organizationId, {});
+    return { ok: true };
+  }
+  const rep = dbGet_("SalesReps", safeText_(a.repId, 80)); assert_(rep, "Commercial introuvable.");
+  if (org.salesRepId && String(org.salesRepId) !== String(rep.repId)) {
+    assert_(!dbAll_("SalesCommissions").some(function (c) { return String(c.organizationId) === String(org.organizationId) && c.status === "PAID"; }), "Des commissions ont déjà été payées à un autre commercial pour ce client.");
+    dbAll_("SalesCommissions").filter(function (c) { return String(c.organizationId) === String(org.organizationId) && (c.status === "PENDING" || c.status === "EARNED"); })
+      .forEach(function (c) { dbUpdate_("SalesCommissions", c.commissionId, { status: "CANCELLED", note: "Client rattaché à un autre commercial", updatedAt: nowIso_() }); });
+  }
+  salesLinkOrg_(org.organizationId, rep, org.salesRepDeclared || "", p.email);
+  audit_("SALES_CLIENT_LINKED", "Organization", org.organizationId, org.organizationId, { repId: rep.repId });
+  return { ok: true };
+}
+function salesCommissionList_(p, a) {
+  requireSuper_(p);
+  const orgs = indexBy_(dbAll_("Organizations"), "organizationId"), reps = indexBy_(dbAll_("SalesReps"), "repId");
+  let rows = dbAll_("SalesCommissions");
+  if (a.status) rows = rows.filter(function (c) { return c.status === a.status; });
+  if (a.repId) rows = rows.filter(function (c) { return String(c.repId) === String(a.repId); });
+  rows.sort(function (x, y) { return String(y.createdAt).localeCompare(String(x.createdAt)); });
+  return { items: rows.slice(0, 1000).map(function (c) { return salesCommissionOut_(c, orgs, reps); }), totals: salesTotals_(rows) };
+}
+/** Marque payées les commissions acquises (toutes celles d'un commercial, ou une liste). */
+function salesMarkPaid_(p, a) {
+  requireSuper_(p);
+  const ref = safeText_(a.reference || "", 120), ids = Array.isArray(a.commissionIds) ? a.commissionIds.map(String) : null;
+  assert_(ids || a.repId, "Choisissez un commercial ou des commissions.");
+  let n = 0, total = 0;
+  withLock_(function () {
+    dbAll_("SalesCommissions").filter(function (c) { return c.status === "EARNED" && (ids ? ids.indexOf(String(c.commissionId)) >= 0 : String(c.repId) === String(a.repId)); }).forEach(function (c) {
+      dbUpdate_("SalesCommissions", c.commissionId, { status: "PAID", paidAt: nowIso_(), paidRef: ref, updatedAt: nowIso_() }); n++; total += num_(c.amount);
+    });
+  });
+  audit_("SALES_COMMISSIONS_PAID", "SalesRep", a.repId || "", "", { count: n, total: round2_(total), reference: ref });
+  return { ok: true, count: n, total: round2_(total) };
+}
+function salesCommissionExport_(p, a) {
+  const list = salesCommissionList_(p, a).items;
+  const cols = [["repName", "Commercial"], ["clientName", "Client"], ["kind", "Type"], ["planCode", "Forfait"], ["period", "Période"], ["baseAmount", "Base HT"], ["rate", "Taux"], ["amount", "Montant"], ["currency", "Devise"],
+    ["status", "Statut"], ["earnedAt", "Acquise le"], ["paidAt", "Payée le"], ["paidRef", "Référence"], ["note", "Note"]];
+  const esc = function (v) { let s = String(v == null ? "" : v); if (/^[=@\t\r]|^[+-][^\d\s]/.test(s)) s = "'" + s; return /[";\n,]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  return { fileName: "commissions-darpilot-" + todayStr_() + ".csv", mimeType: "text/csv", content: [cols.map(function (c) { return c[1]; }).join(";")].concat(list.map(function (r) { return cols.map(function (c) { return esc(r[c[0]]); }).join(";"); })).join("\n") };
+}
+function salesPlanGet_(p, a) { requireSuper_(p); const pl = salesPlan_(); return { plan: pl, simulation: salesSimulation_(pl) }; }
+function salesPlanSave_(p, a) {
+  requireSuper_(p);
+  const pl = { bonusRate: salesRateInput_(a.bonusRate, "Prime de signature", 5), recurringRate: salesRateInput_(a.recurringRate, "Commission récurrente", 1),
+    recurringMonths: salesRateInput_(a.recurringMonths, "Durée", 60), clawbackDays: salesRateInput_(a.clawbackDays, "Délai de reprise", 365) };
+  Object.keys(pl).forEach(function (k) { if (pl[k] === "") pl[k] = SALES_DEFAULT_PLAN_[k]; });
+  pl.recurringMonths = Math.round(pl.recurringMonths); pl.clawbackDays = Math.round(pl.clawbackDays);
+  if (dbGet_("PlatformSettings", "sales.plan")) dbUpdate_("PlatformSettings", "sales.plan", { settingValue: jsonSafe_(pl), updatedAt: nowIso_(), updatedBy: p.email });
+  else dbInsert_("PlatformSettings", { settingKey: "sales.plan", settingValue: jsonSafe_(pl), updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("SALES_PLAN_SAVED", "Settings", "sales.plan", "", pl);
+  return { ok: true, plan: salesPlan_(), simulation: salesSimulation_(salesPlan_()) };
+}
+function salesRecompute_(p, a) { requireSuper_(p); return withLock_(function () { return salesComputeAll_(); }); }
+
+/* ======================================================================
  * SignatureService.gs
  * ====================================================================== */
 /**
@@ -9521,6 +9913,8 @@ function signupClientInput_(a) {
     else o.address = reqText_(a.homeAddress || a.address, "Adresse postale", 5, 300);
   }
   o.orgName = o.company ? o.company.legalName : (person.firstName + " " + person.lastName);
+  // Commercial qui accompagne le client (facultatif) : nom et prénom ou code de parrainage (SalesService.gs).
+  o.salesRef = safeText_(a.salesRef || "", 80);
   return o;
 }
 function signupProviderInput_(a) {
@@ -9666,6 +10060,7 @@ function signupCreateClient_(user, d) {
   });
   const plan = dbGet_("SubscriptionPlans", d.planCode);
   subCreate_(org.organizationId, plan, Number(plan.trialDays) > 0, todayStr_(), user.email);
+  if (d.salesRef) { try { salesLinkAtSignup_(org.organizationId, d.salesRef, user.email); } catch (e) { console.error("Rattachement commercial : " + e.message); } }
   notify_({ eventKey: "signup-client:" + org.organizationId, userIds: superAdminIds_(), type: "SIGNUP", organizationId: "", title: "Nouvelle inscription : " + org.name,
     body: (d.profile === "AGENCY" ? "Agence" : "Propriétaire") + " · forfait " + plan.name + " · " + user.email + " · " + d.person.phone, link: "#accounts" });
   return { id: org.organizationId, orgId: org.organizationId };
@@ -12639,6 +13034,78 @@ function TEST_GROUPS_() {
         } finally { TEST_HOOKS_.aiConfig = false; }
       }]
     ] },
+    { name: "Espace commercial (commerciaux terrain et commissions)", tests: [
+      ["Commercial créé par le super administrateur : invitation, connexion, accès limité à ses données", function (T, fx) {
+        const email = fx.mail("vendeur"), r = T.call(fx.tok.superA, "sales.repCreate", { name: "Karim Benali " + fx.run, email: email, country: "MA", territory: "Marrakech" });
+        T.ok(/^[A-Z]{1,3}-[A-Z0-9]{4}$/.test(r.code) && r.invited, "code " + r.code + " et invitation");
+        const token = T.tokenFrom(T.lastMailTo(email).body, "accept"); T.ok(token, "lien d'invitation");
+        T.pub("invite.accept", { token: token, password: "Vendeur-Pass1" });
+        const tok = T.pub("auth.login", { email: email, password: "Vendeur-Pass1" }).token;
+        const me = T.call(tok, "me.get", {});
+        T.ok(me.salesRep && me.salesRep.code === r.code, "espace commercial ouvert au commercial");
+        const mine = T.call(tok, "sales.mine", {});
+        T.ok(/action=signup&ref=/.test(mine.signupLink) && mine.simulation.length === 3, "lien de parrainage et plan");
+        ["sales.reps", "sales.clients", "sales.commissions", "sales.planSave", "prospect.dashboard", "prospect.agents", "sales.markPaid"].forEach(function (rt) { T.fails(tok, rt, { repId: r.repId }, "FORBIDDEN"); });
+        T.fails(fx.tok.ownerA, "sales.mine", {}, "FORBIDDEN");
+        fx.salesRep = { repId: r.repId, code: r.code, tok: tok, email: email };
+      }],
+      ["Inscription : la case « Votre commercial » rattache le client (code ou nom, dans les deux sens) ; sinon à rattacher", function (T, fx) {
+        T.ok(fx.salesRep, "commercial du test précédent");
+        const plan = dbGet_("SubscriptionPlans", "PRO"), mk = function (n) { const o = tOrg_("Client " + n + " " + fx.run, "OWNER_ORG"); subCreate_(o.organizationId, plan, true, todayStr_(), "test"); return o; };
+        T.eq(signupClientInput_({ profile: "OWNER", planCode: "PRO", firstName: "A", lastName: "B", phone: "+33612345678", city: "Lyon", homeAddress: "1 rue de la Paix", salesRef: fx.salesRep.code }).salesRef, fx.salesRep.code, "case transmise");
+        const a = mk("code"), b = mk("nom"), c = mk("inconnu");
+        T.ok(salesLinkAtSignup_(a.organizationId, fx.salesRep.code.toLowerCase(), "x@y.fr"), "par le code");
+        T.ok(salesLinkAtSignup_(b.organizationId, "benali karim " + fx.run, "x@y.fr"), "par « nom prénom »");
+        T.ok(!salesLinkAtSignup_(c.organizationId, "Jean Inconnu", "x@y.fr"), "inconnu : non rattaché");
+        T.eq(dbGet_("Organizations", c.organizationId).salesRepDeclared, "Jean Inconnu", "nom indiqué conservé pour le super administrateur");
+        T.ok(T.call(fx.tok.superA, "sales.clients", { filter: "TO_LINK" }).some(function (x) { return x.organizationId === c.organizationId; }), "liste « à rattacher »");
+        T.call(fx.tok.superA, "sales.assign", { organizationId: c.organizationId, repId: fx.salesRep.repId });
+        const mine = T.call(fx.salesRep.tok, "sales.mine", {});
+        T.eq(mine.clients.filter(function (x) { return / (code|nom|inconnu) /.test(x.name); }).length, 3, "le commercial voit ses 3 clients");
+        T.ok(mine.clients.every(function (x) { return x.stage === "INSCRIT" && !x.signed && x.planCode === "PRO"; }), "statut : inscrit, contrat non signé, forfait Pro");
+        fx.salesOrg = a;
+      }],
+      ["Commissions : prime en attente pendant l'essai, acquise au paiement après l'essai, mensuelles plafonnées, paiement, reprise", function (T, fx) {
+        const org = fx.salesOrg, s = salesSubOf_(org.organizationId), price = num_(s.price), pl = salesPlan_();
+        T.eq([pl.bonusRate, pl.recurringRate, pl.recurringMonths, pl.clawbackDays], [1, 0.1, 12, 90], "plan par défaut");
+        const bonus = function () { return dbAll_("SalesCommissions").find(function (c) { return c.organizationId === org.organizationId && c.kind === "SIGNUP"; }); };
+        T.eq([bonus().status, num_(bonus().amount)], ["PENDING", price], "prime en attente = 1 mois HT");
+        const pay = function (d) { return dbInsert_("Payments", { organizationId: org.organizationId, kind: "SUBSCRIPTION", refType: "SUBSCRIPTION", refId: s.subscriptionId, direction: "IN", amount: price, currency: s.currency, paidAt: d + "T08:00:00Z", status: "RECORDED", createdAt: nowIso_() }); };
+        pay("2026-01-05"); salesComputeOrg_(dbGet_("Organizations", org.organizationId));
+        T.eq(bonus().status, "PENDING", "1er paiement reçu mais essai en cours : toujours en attente");
+        dbUpdate_("Subscriptions", s.subscriptionId, { status: "ACTIVE", trialEnd: addDaysStr_(todayStr_(), -1) });
+        T.call(fx.tok.superA, "sales.recompute", {});
+        T.eq(bonus().status, "EARNED", "prime acquise après l'essai");
+        for (let i = 0; i < 14; i++) pay("2026-0" + (1 + (i % 9)) + "-1" + (i % 9));
+        salesComputeAll_(); salesComputeAll_();
+        const rec = dbAll_("SalesCommissions").filter(function (c) { return c.organizationId === org.organizationId && c.kind === "RECURRING"; });
+        T.eq([rec.length, num_(rec[0].amount)], [12, round2_(price * 0.1)], "12 commissions mensuelles de 10 %, calcul idempotent");
+        const mp = T.call(fx.tok.superA, "sales.markPaid", { repId: fx.salesRep.repId, reference: "VIR-001" });
+        T.ok(mp.count === 13 && mp.total === round2_(price + 12 * round2_(price * 0.1)), "13 commissions payées : " + mp.total);
+        dbUpdate_("Subscriptions", s.subscriptionId, { status: "CANCELLED", canceledAt: nowIso_() });
+        salesComputeAll_(); salesComputeAll_();
+        const cb = dbAll_("SalesCommissions").filter(function (c) { return c.organizationId === org.organizationId && c.kind === "CLAWBACK"; });
+        T.eq([cb.length, num_(cb[0].amount), cb[0].status], [1, -price, "EARNED"], "reprise de la prime déjà payée (client parti en moins de 90 jours)");
+        const mine = T.call(fx.salesRep.tok, "sales.mine", {});
+        T.ok(mine.commissions.length >= 14 && mine.clients.some(function (x) { return x.organizationId === org.organizationId && x.stage === "RESILIE"; }), "le commercial voit ses commissions et le client résilié");
+        T.fails(fx.tok.superA, "sales.assign", { organizationId: org.organizationId, repId: "" });
+      }],
+      ["Prospects d'un commercial : visibles par lui et le super administrateur seulement, jamais contactés par les agents", function (T, fx) {
+        const tok = fx.salesRep.tok, em = "riad." + fx.run + "@exemple.ma";
+        const id = T.call(tok, "prospect.save", { target: "CONCIERGERIE", company: "Riad Conciergerie " + fx.run, email: em, country: "MA", city: "Marrakech" }).prospectId;
+        T.eq(T.call(tok, "prospect.list", {}).items.map(function (x) { return x.prospectId; }), [id], "le commercial ne voit que son prospect");
+        T.ok(T.call(tok, "prospect.get", { prospectId: id }).ownedByRep, "fiche accessible");
+        const other = dbAll_("Prospects").find(function (x) { return !x.ownerRepId; });
+        if (other) T.fails(tok, "prospect.get", { prospectId: other.prospectId }, "NOT_FOUND");
+        T.ok(T.call(fx.tok.superA, "prospect.list", { source: "REP", q: fx.run }).items.some(function (x) { return x.prospectId === id && /Karim Benali/.test(x.repName); }), "le super administrateur le voit avec le nom du commercial");
+        const block = prospectInstructionsPayload_().payload.prospects.find(function (x) { return x.email === em; });
+        T.ok(block && block.doNotContact, "consignes : les agents ne doivent pas le contacter");
+        prospectApplyAgents_({ prospects: [{ key: em, email: em, company: "Riad Conciergerie " + fx.run, status: "a_envoyer" }], events: [{ key: em, kind: "DRAFT", summary: "x" }] }, "run-rep-" + fx.run, "agents@x.test");
+        const x = dbGet_("Prospects", id);
+        T.ok(x.status !== "a_envoyer" && !dbAll_("ProspectEvents").some(function (e) { return e.prospectId === id && e.source === "AGENTS"; }), "les agents n'y touchent pas");
+        T.fails(tok, "prospect.save", { target: "AGENCE", company: "Autre " + fx.run, email: (other || {}).email || "zz@zz.zz" }, "VALIDATION");
+      }]
+    ] },
     { name: "Cloisonnement entre clients (attaque de toutes les routes)", tests: [
       ["Un autre client et une agence sans mandat appellent TOUTES les routes avec les identifiants du client A : aucune donnée de A ne sort", function (T, fx) {
         const A = String(fx.orgA.organizationId), S = schema_();
@@ -12742,7 +13209,7 @@ function jobSummary_(r) { return { ok: !!(r && r.ok), skipped: !!(r && r.skipped
 /** Chaque jour : baux, abonnements, devis expirés, alertes incidents, rétention, arrivées imminentes, sauvegarde. */
 function jobDaily() {
   return jobSummary_(runJob_("jobDaily", { leases: leaseJob_, cardPayments: sumupChargeJob_, subscriptions: subscriptionJob_, quotes: quoteExpireJob_, incidents: incidentAlertsJob_, retention: purgeExpiredDocuments_,
-    arrivals: upcomingArrivalsJob_, providerInsurance: providerExpiryJob_, commissions: commissionDailyJob_, guestTokens: guestTokenExpireJob_, prospects: prospectDailyJob_, backup: function () { return backupDatabase_("quotidien").name; } }));
+    arrivals: upcomingArrivalsJob_, providerInsurance: providerExpiryJob_, commissions: commissionDailyJob_, guestTokens: guestTokenExpireJob_, prospects: prospectDailyJob_, salesCommissions: salesDailyJob_, backup: function () { return backupDatabase_("quotidien").name; } }));
 }
 
 /** Arrivées non enregistrées et départs dépassés (une alerte par réservation). */

@@ -121,6 +121,10 @@ function prospectOut_(p) {
   o.awaitingReply = !!(p.lastReplyAt && (!p.lastContactAt || String(p.lastReplyAt) > String(p.lastContactAt)));
   return o;
 }
+/** Qui agit : le super administrateur (tout) ou un commercial (uniquement ses propres prospects). */
+function prospectActor_(p) { if (p.isSuper) return { admin: true, rep: null }; return { admin: false, rep: requireRep_(p) }; }
+function prospectOwned_(actor, x) { return actor.admin || (x && String(x.ownerRepId) === String(actor.rep.repId)); }
+function prospectRequireFor_(actor, id) { const x = prospectRequire_(id); if (!prospectOwned_(actor, x)) throw new AppError("NOT_FOUND", "Prospect introuvable."); return x; }
 function prospectRequire_(id) { const p = dbGet_("Prospects", safeText_(id, 80)); if (!p) throw new AppError("NOT_FOUND", "Prospect introuvable."); return p; }
 
 /* ------------------------------ routes (super administrateur) ------------------------------ */
@@ -159,15 +163,17 @@ function prospectDashboard_(p, a) {
   };
 }
 
-function prospectFilter_(a) {
+function prospectFilter_(a, actor) {
   const q = String(a.q || "").toLowerCase().trim(), today = todayStr_();
   return dbAll_("Prospects").filter(function (x) {
+    if (actor && !actor.admin && String(x.ownerRepId) !== String(actor.rep.repId)) return false;
+    if (a.ownerRepId && String(x.ownerRepId) !== String(a.ownerRepId)) return false;
     if (a.status && x.status !== a.status) return false;
     if (a.target && x.target !== a.target) return false;
     if (a.targetGroup === "CLIENTS" && x.target === "ARTISAN") return false;
     if (a.country && x.country !== a.country) return false;
     if (a.territory && String(x.territory || "").toLowerCase() !== String(a.territory).toLowerCase()) return false;
-    if (a.source && x.sourceType !== a.source) return false;
+    if (a.source === "REP") { if (!x.ownerRepId) return false; } else if (a.source && (x.sourceType !== a.source || x.ownerRepId)) return false;
     if (bool_(a.due) && !(x.nextActionDate && x.nextActionDate <= today && PROSPECT_STOP_STATUSES_.indexOf(x.status) < 0 && !bool_(x.doNotContact))) return false;
     if (bool_(a.replies) && !(x.lastReplyAt && (!x.lastContactAt || String(x.lastReplyAt) > String(x.lastContactAt)))) return false;
     if (q && [x.company, x.contactName, x.email, x.phone, x.city, x.territory, x.trade, x.notes].join(" ").toLowerCase().indexOf(q) < 0) return false;
@@ -175,27 +181,28 @@ function prospectFilter_(a) {
   });
 }
 function prospectList_(p, a) {
-  requireSuper_(p);
-  const rows = prospectFilter_(a);
+  const actor = prospectActor_(p);
+  const rows = prospectFilter_(a, actor);
   rows.sort(function (x, y) { return String(y.updatedAt || y.createdAt).localeCompare(String(x.updatedAt || x.createdAt)); });
   const pageSize = Math.min(Math.max(parseInt(a.pageSize, 10) || 25, 5), 200), page = Math.max(parseInt(a.page, 10) || 1, 1);
-  return { items: rows.slice((page - 1) * pageSize, page * pageSize).map(prospectOut_), total: rows.length, page: page, pageSize: pageSize };
+  const reps = actor.admin ? indexBy_(dbAll_("SalesReps"), "repId") : {};
+  return { items: rows.slice((page - 1) * pageSize, page * pageSize).map(function (x) { const o = prospectOut_(x); if (x.ownerRepId) o.repName = actor.admin ? (reps[x.ownerRepId] || {}).displayName || "" : actor.rep.displayName; return o; }), total: rows.length, page: page, pageSize: pageSize };
 }
 
 function prospectGet_(p, a) {
-  requireSuper_(p);
-  const x = prospectRequire_(a.prospectId), id = String(x.prospectId);
+  const actor = prospectActor_(p);
+  const x = prospectRequireFor_(actor, a.prospectId), id = String(x.prospectId);
   const events = dbAll_("ProspectEvents").filter(function (e) { return String(e.prospectId) === id; }).sort(function (u, v) { return String(v.at).localeCompare(String(u.at)); }).slice(0, 300)
     .map(function (e) { return { eventId: e.eventId, kind: e.kind, at: e.at, source: e.source, summary: e.summary, channel: e.channel, actorEmail: e.actorEmail }; });
-  return Object.assign(prospectOut_(x), { events: events });
+  return Object.assign(prospectOut_(x), { events: events, repName: x.ownerRepId ? ((dbGet_("SalesReps", x.ownerRepId) || {}).displayName || "") : "", ownedByRep: !!x.ownerRepId });
 }
 
 /** Création ou modification manuelle. Création : refus si doublon probable (sauf force). */
 function prospectSave_(p, a) {
-  requireSuper_(p);
+  const actor = prospectActor_(p);
   const c = prospectClean_(a);
   if (a.prospectId) {
-    const x = prospectRequire_(a.prospectId);
+    const x = prospectRequireFor_(actor, a.prospectId);
     const patch = Object.assign({}, c, { updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true });
     PROSPECT_FIELDS_.forEach(function (k) { if (a[k] !== undefined && String(a[k]).trim() === "" && k !== "status" && k !== "target") patch[k] = ""; });
     if (c.status && c.status !== x.status) prospectEvent_(x.prospectId, "STATUS", (x.status || "—") + " → " + c.status, "APP", { actor: p.email });
@@ -205,17 +212,19 @@ function prospectSave_(p, a) {
   }
   assert_(c.company || c.contactName, "Indiquez au moins le nom de la structure ou du contact.");
   assert_(c.target, "Choisissez la cible (agence, conciergerie, syndic, propriétaire, artisan).");
-  if (!bool_(a.force)) { const dup = prospectFind_(prospectIndex_(), c); if (dup) throw new AppError("VALIDATION", "Doublon probable : " + (dup.company || dup.contactName || dup.email) + ". Ouvrez sa fiche ou confirmez la création."); }
+  const dup0 = prospectFind_(prospectIndex_(), c);
+  if (dup0 && !actor.admin && !prospectOwned_(actor, dup0)) throw new AppError("VALIDATION", "Ce prospect est déjà suivi par DarPilot : il ne peut pas être ajouté à votre portefeuille. Parlez-en à votre responsable.");
+  if (dup0 && !bool_(a.force)) throw new AppError("VALIDATION", "Doublon probable : " + (dup0.company || dup0.contactName || dup0.email) + ". Ouvrez sa fiche ou confirmez la création.");
   const row = dbInsert_("Prospects", Object.assign({ status: c.status || (c.target === "ARTISAN" ? "a_contacter" : "a_qualifier"), sourceType: "MANUAL", createdAt: nowIso_(), createdBy: p.email,
-    updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true, legalBasis: c.legalBasis || (c.target === "PROPRIETAIRE" ? "consentement" : "interet_legitime_b2b") }, c));
+    updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true, legalBasis: c.legalBasis || (c.target === "PROPRIETAIRE" ? "consentement" : "interet_legitime_b2b"),
+    ownerRepId: actor.admin ? "" : actor.rep.repId }, c));
   prospectEvent_(row.prospectId, "NOTE", "Prospect ajouté manuellement", "APP", { actor: p.email });
   audit_("PROSPECT_CREATED", "Prospect", row.prospectId, "", { target: row.target, country: row.country || "" });
   return { ok: true, prospectId: row.prospectId };
 }
 
 function prospectSetStatus_(p, a) {
-  requireSuper_(p);
-  const x = prospectRequire_(a.prospectId), status = prospectStatus_(a.status);
+  const x = prospectRequireFor_(prospectActor_(p), a.prospectId), status = prospectStatus_(a.status);
   assert_(status, "Statut invalide.");
   const patch = { status: status, updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true };
   if (a.nextAction !== undefined) patch.nextAction = safeText_(a.nextAction, 300);
@@ -227,8 +236,7 @@ function prospectSetStatus_(p, a) {
 }
 
 function prospectNote_(p, a) {
-  requireSuper_(p);
-  const x = prospectRequire_(a.prospectId), kind = oneOf_(a.kind || "NOTE", ["NOTE", "CALL", "MEETING"], "Type");
+  const x = prospectRequireFor_(prospectActor_(p), a.prospectId), kind = oneOf_(a.kind || "NOTE", ["NOTE", "CALL", "MEETING"], "Type");
   prospectEvent_(x.prospectId, kind, reqText_(a.text, "Texte", 2, 1500), "APP", { actor: p.email });
   const patch = { updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP" };
   if (kind !== "NOTE") patch.lastContactAt = nowIso_();
@@ -237,16 +245,14 @@ function prospectNote_(p, a) {
 }
 
 function prospectDoNotContact_(p, a) {
-  requireSuper_(p);
-  const x = prospectRequire_(a.prospectId), on = bool_(a.on);
+  const x = prospectRequireFor_(prospectActor_(p), a.prospectId), on = bool_(a.on);
   dbUpdate_("Prospects", x.prospectId, { doNotContact: on, status: on ? "desinscrit" : (x.status === "desinscrit" ? "a_qualifier" : x.status), updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true });
   prospectEvent_(x.prospectId, "STATUS", on ? "Ne plus contacter (désinscrit)" : "Contact de nouveau autorisé", "APP", { actor: p.email });
   return { ok: true };
 }
 
 function prospectExport_(p, a) {
-  requireSuper_(p);
-  const rows = prospectFilter_(a);
+  const rows = prospectFilter_(a, prospectActor_(p));
   const cols = ["prospectId", "country", "territory", "city", "target", "company", "contactName", "role", "email", "phone", "address", "website", "trade", "status", "score", "nextAction", "nextActionDate",
     "followUps", "lastContactAt", "lastReplyAt", "sourceType", "sourceUrl", "legalBasis", "consent", "doNotContact", "notes", "createdAt"];
   // Une cellule qui commence par = ou @ (ou + / - suivi d'autre chose qu'un chiffre) serait lue comme une formule par Excel : neutralisée.
@@ -301,7 +307,7 @@ function prospectRowsToRecords_(rows) {
   return { records: records, mapping: hi >= 0 ? rows[hi].map(function (h, i) { return { header: String(h == null ? "" : h), field: map[i] || "" }; }) : [] };
 }
 /** Prépare l'aperçu : fiches nettoyées, doublons signalés (dans la base et dans le fichier), anomalies. */
-function prospectPreviewFrom_(records, defaults) {
+function prospectPreviewFrom_(records, defaults, actor) {
   const idx = prospectIndex_(), seen = {};
   const candidates = (records || []).slice(0, PROSPECT_LIMITS_.importRows).map(function (r, i) {
     const c = prospectClean_(r, defaults), issues = [];
@@ -312,7 +318,8 @@ function prospectPreviewFrom_(records, defaults) {
     if (c.target === "PROPRIETAIRE") issues.push("particulier : contact seulement avec consentement");
     const dup = prospectFind_(idx, c), ks = prospectKeys_(c), dupFile = ks.some(function (k) { return seen[k] !== undefined; });
     ks.forEach(function (k) { if (seen[k] === undefined) seen[k] = i; });
-    return { row: i + 1, data: c, duplicateOf: dup ? { prospectId: dup.prospectId, label: dup.company || dup.contactName || dup.email || "" } : null, duplicateInFile: dupFile, issues: issues,
+    const mineDup = dup && (!actor || prospectOwned_(actor, dup));
+    return { row: i + 1, data: c, duplicateOf: dup ? (mineDup ? { prospectId: dup.prospectId, label: dup.company || dup.contactName || dup.email || "" } : { prospectId: "", label: "déjà suivi par DarPilot" }) : null, duplicateInFile: dupFile, issues: issues,
       selected: !dup && !dupFile && !!(c.company || c.contactName) && !!(c.email || c.phone) };
   });
   return { candidates: candidates, stats: { rows: candidates.length, selected: candidates.filter(function (c) { return c.selected; }).length,
@@ -324,17 +331,17 @@ function prospectDefaults_(d) {
 }
 /** Aperçu d'un tableau (Excel / CSV lu dans le navigateur) : { rows: [[...], ...] } ou { records: [{...}] }. */
 function prospectImportPreview_(p, a) {
-  requireSuper_(p);
+  const actor = prospectActor_(p);
   const defaults = prospectDefaults_(a.defaults);
   let mapping = [], records;
   if (Array.isArray(a.rows)) { const r = prospectRowsToRecords_(a.rows); records = r.records; mapping = r.mapping; }
   else records = Array.isArray(a.records) ? a.records.filter(function (x) { return x && typeof x === "object"; }) : [];
   assert_(records.length, "Aucune ligne exploitable dans ce fichier.");
-  return Object.assign(prospectPreviewFrom_(records, defaults), { mapping: mapping, fileName: safeText_(a.fileName || "", 160) });
+  return Object.assign(prospectPreviewFrom_(records, defaults, actor), { mapping: mapping, fileName: safeText_(a.fileName || "", 160) });
 }
 /** Enregistre les lignes cochées. Les doublons de la base sont complétés (champs vides seulement) si merge=true. */
 function prospectImportCommit_(p, a) {
-  requireSuper_(p);
+  const actor = prospectActor_(p);
   const defaults = prospectDefaults_(a.defaults), list = (Array.isArray(a.candidates) ? a.candidates : []).slice(0, PROSPECT_LIMITS_.importRows);
   assert_(list.length, "Aucune ligne sélectionnée.");
   const importId = newId_("imp"), file = safeText_(a.fileName || "", 160), idx = prospectIndex_();
@@ -346,14 +353,15 @@ function prospectImportCommit_(p, a) {
       if (!(c.company || c.contactName) || !(c.email || c.phone)) { skipped++; return; }
       const dup = prospectFind_(idx, c);
       if (dup) {
-        if (!bool_(a.merge)) { skipped++; return; }
+        if (!bool_(a.merge) || !prospectOwned_(actor, dup)) { skipped++; return; }
         const patch = {}; Object.keys(c).forEach(function (k) { if (k !== "status" && (dup[k] === undefined || dup[k] === "")) patch[k] = c[k]; });
         if (Object.keys(patch).length) { dbUpdate_("Prospects", dup.prospectId, Object.assign(patch, { updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true })); prospectEvent_(dup.prospectId, "IMPORT", "Complété par l'import « " + file + " »", "APP", { actor: p.email }); merged++; }
         else skipped++;
         return;
       }
       const row = dbInsert_("Prospects", Object.assign({ status: c.target === "ARTISAN" ? "a_contacter" : "a_qualifier", sourceType: "IMPORT", sourceFile: file, importId: importId,
-        legalBasis: c.target === "PROPRIETAIRE" ? "consentement" : "interet_legitime_b2b", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true }, c));
+        legalBasis: c.target === "PROPRIETAIRE" ? "consentement" : "interet_legitime_b2b", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email, updatedSource: "APP", agentPending: true,
+        ownerRepId: actor.admin ? "" : actor.rep.repId }, c));
       prospectKeys_(row).forEach(function (k) { if (!idx[k]) idx[k] = row; });
       prospectEvent_(row.prospectId, "IMPORT", "Importé depuis « " + file + " »", "APP", { actor: p.email });
       created++;
@@ -368,7 +376,7 @@ function prospectServerRun_(token, fn) {
   ctxReset_(); dbReset_(); LOCK_DEPTH_ = 0; dbcBegin_("request");
   try {
     ensureSchemaCurrent_();
-    const p = principalFromToken_(token); CTX_.principal = p; requireSuper_(p);
+    const p = principalFromToken_(token); CTX_.principal = p; if (!p.isSuper) requireRep_(p);
     return { ok: true, data: fn(p) };
   } catch (e) { return errorResponse_(e, "prospect.extract"); } finally { dbcCommit_(); }
 }
@@ -382,7 +390,7 @@ var PROSPECT_AI_SYSTEM_ = "Tu extrais des fiches de contacts professionnels à p
 /** Contrôle d'accès + configuration IA (retour réservé à server.js). */
 function prospectExtractGate_(token) {
   return prospectServerRun_(token, function (p) {
-    rateLimit_("prospect-ai:" + p.userId, PROSPECT_LIMITS_.aiPerHour, 3600);
+    rateLimit_("prospect-ai:" + p.userId, p.isSuper ? PROSPECT_LIMITS_.aiPerHour : 20, 3600);
     const cfg = aiConfig_();
     if (!cfg || cfg.provider !== "anthropic") throw new AppError("CONFIG", "Lecture des PDF et photos : renseignez la clé de l'IA Claude (IMMO_AI_PROVIDER = anthropic et IMMO_AI_API_KEY) dans la configuration du serveur. Les fichiers Excel et CSV fonctionnent sans IA.");
     let model = ""; try { model = String(PropertiesService.getScriptProperties().getProperty("IMMO_AI_DOC_MODEL") || "").trim(); } catch (e) { model = ""; }
@@ -394,7 +402,7 @@ function prospectExtractFinish_(token, records, meta) {
   return prospectServerRun_(token, function (p) {
     meta = meta || {};
     audit_("PROSPECT_AI_EXTRACT", "Prospect", "", "", { file: safeText_(meta.fileName || "", 160), rows: (records || []).length });
-    return Object.assign(prospectPreviewFrom_(Array.isArray(records) ? records.filter(function (x) { return x && typeof x === "object"; }) : [], prospectDefaults_(meta.defaults)),
+    return Object.assign(prospectPreviewFrom_(Array.isArray(records) ? records.filter(function (x) { return x && typeof x === "object"; }) : [], prospectDefaults_(meta.defaults), prospectActor_(p)),
       { mapping: [], fileName: safeText_(meta.fileName || "", 160), ai: true });
   });
 }
@@ -490,6 +498,7 @@ function prospectApplyAgents_(payload, ref, from) {
       const c = prospectClean_(r), key = safeText_(r.key || r.id || c.email || "", 200);
       if (key) c.externalKey = key.toLowerCase();
       let x = prospectFind_(idx, c);
+      if (x && x.ownerRepId) return; // suivi par un commercial terrain : les agents n'y touchent pas
       if (!x) {
         if (!(c.company || c.contactName) || !(c.email || c.phone)) return;
         x = dbInsert_("Prospects", Object.assign({ target: c.target || "AUTRE", status: c.status || (c.target === "ARTISAN" ? "a_contacter" : "a_qualifier"), sourceType: "AGENTS",
@@ -518,7 +527,7 @@ function prospectApplyAgents_(payload, ref, from) {
       if (!e || typeof e !== "object") return;
       const k = String(e.key || e.email || "").toLowerCase(), kind = String(e.kind || "").toUpperCase();
       let x = byKey[k] || (k ? prospectFind_(idx, { externalKey: k, email: prospectEmail_(k) }) : null);
-      if (!x || PROSPECT_EVENT_KINDS_.indexOf(kind) < 0) return;
+      if (!x || x.ownerRepId || PROSPECT_EVENT_KINDS_.indexOf(kind) < 0) return;
       const at = /^\d{4}-\d{2}-\d{2}/.test(String(e.at || "")) ? new Date(e.at).toISOString() : nowIso_();
       prospectEvent_(x.prospectId, kind, e.summary || kind, "AGENTS", { at: at, channel: e.channel || "email" });
       const fresh = dbGet_("Prospects", x.prospectId), patch = {};
@@ -542,7 +551,8 @@ function prospectInstructionsPayload_() {
     prospects: pending.map(function (x) {
       const o = { key: x.externalKey || x.email || x.prospectId, prospectId: x.prospectId };
       ["country", "territory", "city", "target", "company", "contactName", "role", "email", "phone", "address", "website", "trade", "status", "nextAction", "nextActionDate", "legalBasis", "consent", "sourceType"].forEach(function (k) { if (x[k] !== undefined && x[k] !== "") o[k] = x[k]; });
-      o.doNotContact = bool_(x.doNotContact);
+      o.doNotContact = bool_(x.doNotContact) || !!x.ownerRepId;
+      if (x.ownerRepId) o.note = "Suivi par un commercial terrain : ne pas contacter.";
       return o;
     }) } };
 }

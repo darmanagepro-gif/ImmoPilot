@@ -45,7 +45,7 @@ var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "DarPilot",
   VERSION: "2.8.0",
-  SCHEMA_VERSION: 17,
+  SCHEMA_VERSION: 18,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -58,7 +58,7 @@ var IMMO_CONFIG = Object.freeze({
   MAX_UPLOAD_BYTES: 4 * 1024 * 1024,
   MAX_PAGE_SIZE: 200,
   MAX_EXPORT_ROWS: 5000,
-  ROLES: ["SUPER_ADMIN", "OWNER", "AGENCY_ADMIN", "AGENCY_USER", "GUARD", "CLEANER", "ARTISAN", "TENANT"]
+  ROLES: ["SUPER_ADMIN", "OWNER", "AGENCY_ADMIN", "AGENCY_USER", "GUARD", "CLEANER", "ARTISAN", "TENANT", "SALES"]
 });
 
 /** Capacités par rôle (plafond). UserRoles.permissionsJson peut seulement retirer ("-cap") ou restaurer ("+cap") dans ce plafond. */
@@ -77,7 +77,9 @@ var ROLE_CAPS = Object.freeze({
   GUARD: ["checkin.operate", "incident.report", "guest.view.min"],
   CLEANER: ["cleaning.operate", "incident.report"],
   ARTISAN: ["workorder.operate", "quote.submit", "invoice.submit"],
-  TENANT: ["lease.self", "incident.report"]
+  TENANT: ["lease.self", "incident.report"],
+  // Commercial terrain (espace commercial) : voit uniquement ses clients, ses commissions et ses prospects (SalesService.gs).
+  SALES: ["sales.self"]
 });
 
 /** Droits portés par une attribution agence↔bien (AgencyPropertyPermissions). */
@@ -181,13 +183,19 @@ var PROSPECT_EVENT_KINDS_ = ["DRAFT", "SENT", "REPLY", "FOLLOWUP", "STATUS", "NO
 var TABLES_SRC = {
   // Espace Prospects (super administrateur) : voir ProspectService.gs.
   Prospects: { pk: "prospectId", idp: "pro", req: "target", enums: { target: PROSPECT_TARGETS_, status: PROSPECT_STATUSES_, sourceType: ["AGENTS", "IMPORT", "MANUAL"], country: ["FR", "MA"] },
-    cols: "prospectId,target,status,createdAt#t,createdBy|country,territory,city,company,contactName,role,email,phone,address,website,trade,sourceType,sourceUrl,sourceFile,importId,legalBasis,consent,score#n,angle,nextAction,nextActionDate,followUps#n,lastContactAt#t,lastReplyAt#t,plan,notes,doNotContact#b,agentPending#b,externalKey,updatedAt#t,updatedBy,updatedSource" },
+    cols: "prospectId,target,status,createdAt#t,createdBy|country,territory,city,company,contactName,role,email,phone,address,website,trade,sourceType,sourceUrl,sourceFile,importId,legalBasis,consent,score#n,angle,nextAction,nextActionDate,followUps#n,lastContactAt#t,lastReplyAt#t,plan,notes,doNotContact#b,agentPending#b,externalKey,updatedAt#t,updatedBy,updatedSource,ownerRepId" },
   ProspectEvents: { pk: "eventId", idp: "pev", req: "prospectId,kind", enums: { kind: PROSPECT_EVENT_KINDS_ },
     cols: "eventId,prospectId,kind,at#t,source|summary,channel,detailsJson#j,actorEmail" },
   ProspectSyncs: { pk: "syncId", idp: "psy", req: "direction", enums: { direction: ["IN", "OUT"], status: ["OK", "PARTIAL", "REJECTED", "FAILED"] },
     cols: "syncId,direction,at#t,status|items#n,created#n,updated#n,events#n,error,ref,detailsJson#j" },
+  // Espace commercial : commerciaux terrain et commissions (voir SalesService.gs).
+  SalesReps: { pk: "repId", idp: "rep", req: "displayName,email", enums: { status: ["ACTIVE", "SUSPENDED"], country: ["FR", "MA"] },
+    cols: "repId,displayName,email,code,status,createdAt#t,createdBy|userId,phone,country,territory,bonusRate#n,recurringRate#n,recurringMonths#n,updatedAt#t" },
+  SalesCommissions: { pk: "commissionId", idp: "scm", org: "organizationId", req: "repId,organizationId,kind",
+    enums: { kind: ["SIGNUP", "RECURRING", "CLAWBACK", "ADJUST"], status: ["PENDING", "EARNED", "PAID", "CANCELLED"] },
+    cols: "commissionId,repId,organizationId,kind,status,amount#n,currency,createdAt#t|subscriptionId,planCode,period,baseAmount#n,rate#n,earnedAt#t,paidAt#t,paidRef,paymentId,note,updatedAt#t" },
   Organizations: { pk: "organizationId", idp: "org", org: "organizationId", req: "name", enums: { status: ["ACTIVE", "SUSPENDED", "INACTIVE"], type: ["OWNER_ORG", "AGENCY", "PROVIDER", "PLATFORM"] },
-    cols: "organizationId,name,status,createdAt#t,createdBy|type,country,city,timezone,locale,planCode,billingEmail,suspendedAt#t,suspensionReason,updatedAt#t,isDemo#b,managedByOrgId,phone,address,contactName,legalJson#j,signupSource" },
+    cols: "organizationId,name,status,createdAt#t,createdBy|type,country,city,timezone,locale,planCode,billingEmail,suspendedAt#t,suspensionReason,updatedAt#t,isDemo#b,managedByOrgId,phone,address,contactName,legalJson#j,signupSource,salesRepId,salesRepDeclared,salesLinkedAt#t,salesLinkedBy" },
   Users: { pk: "userId", idp: "usr", req: "email", enums: { status: ["ACTIVE", "SUSPENDED", "DISABLED", "INVITED"] },
     cols: "userId,email,displayName,status,createdAt#t,createdBy|passwordHash,passwordSalt,passwordIters#n,failedAttempts#n,lockedUntil#t,lastLoginAt#t,locale,phone,notifPrefsJson#j,updatedAt#t,pwChangedAt#t" },
   Invitations: { pk: "invitationId", idp: "inv", org: "organizationId", req: "email,role", enums: { status: ["PENDING", "ACCEPTED", "REVOKED", "EXPIRED", "EMAIL_FAILED"] },

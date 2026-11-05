@@ -48,12 +48,19 @@ async function main() {
     return o; })()`, ctx);
   // Super administrateur entré dans l'espace du propriétaire A (session « voir comme »).
   vm.runInContext(`__fx.tok.impOwner = api(__fx.tok.superA, "admin.impersonate", { userId: __fx.users.ownerA.userId }).data.token;`, ctx);
+  // Commercial terrain (espace commercial) : un client rattaché et un prospect.
+  vm.runInContext(`(function(){ var T=testKit_([]), em="commercial."+Utilities.getUuid().slice(0,6)+"@example.test";
+    var r=T.call(__fx.tok.superA,"sales.repCreate",{name:"Nadia Commerciale",email:em,country:"FR"});
+    T.pub("invite.accept",{token:T.tokenFrom(T.lastMailTo(em).body,"accept"),password:"Vendeur-Pass1"});
+    __fx.tok.sales=T.pub("auth.login",{email:em,password:"Vendeur-Pass1"}).token;
+    T.call(__fx.tok.superA,"sales.assign",{organizationId:__fx.orgB.organizationId,repId:r.repId});
+    T.call(__fx.tok.sales,"prospect.save",{target:"AGENCE",company:"Agence Smoke",email:"smoke@agence.fr",country:"FR",city:"Lyon"}); })()`, ctx);
   const fx = vm.runInContext("({ tok: __fx.tok, propA: __fx.propA })", ctx);
 
   const report = [];
-  const roles = [["ownerA", "Propriétaire"], ["ag1", "Agence (admin)"], ["ag1u", "Agence (collaborateur)"], ["guard", "Gardien"], ["cleaner", "Ménage"], ["artisan", "Artisan"], ["tenant", "Locataire"], ["superA", "Super administrateur"], ["impOwner", "Super administrateur dans l'espace du propriétaire"]];
+  const roles = [["ownerA", "Propriétaire"], ["ag1", "Agence (admin)"], ["ag1u", "Agence (collaborateur)"], ["guard", "Gardien"], ["cleaner", "Ménage"], ["artisan", "Artisan"], ["tenant", "Locataire"], ["sales", "Commercial terrain"], ["superA", "Super administrateur"], ["impOwner", "Super administrateur dans l'espace du propriétaire"]];
   // Matrice d'accès attendue aux fiches de détail (P=bien, R=réservation, I=incident, C=ménage, W=intervention, F=facture, B=bail, A=prestataire).
-  const EXPECT = { ownerA: "PRICWFBA", ag1: "PRICWFA", ag1u: "PRICWA", guard: "PR", cleaner: "PC", artisan: "PIWFA", tenant: "B", superA: "", impOwner: "PRICWFBA" };
+  const EXPECT = { ownerA: "PRICWFBA", ag1: "PRICWFA", ag1u: "PRICWA", guard: "PR", cleaner: "PC", artisan: "PIWFA", tenant: "B", sales: "", superA: "", impOwner: "PRICWFBA" };
   const LETTERS = "PRICWFBA";
   const details = ["property/" + fx.propA, "reservation/" + ids.resv, "incident/" + ids.incident, "cleaning/" + ids.mission, "workorder/" + ids.wo, "invoice/" + ids.invoice, "lease/" + ids.lease, "contractors/" + ids.artisan];
 

@@ -30,13 +30,14 @@ const NAV = [
     { r: "invoices", l: "Factures", i: "€", show: function () { return can("invoice.view") || can("invoice.submit"); } } ] },
   { g: "Mon espace", items: [
     { r: "mylease", l: "Mon bail", i: "✉", show: function () { return can("lease.self"); } },
+    { r: "sales", l: "Mon espace commercial", i: "◎", show: function () { return !!S.me.salesRep; } },
     { r: "referencing", l: "Mon référencement", i: "✔", show: function () { return !!S.me.provider; } },
     { r: "notifications", l: "Notifications", i: "🔔", show: function () { return true; }, badge: function () { return S.me.unreadNotifications; } } ] },
   { g: "Administration", items: [
     { r: "users", l: "Utilisateurs", i: "☰", show: function () { return can("user.invite") || can("user.manage") || S.me.isSuper; } },
     { r: "subscriptions", l: "Abonnements", i: "◈", show: function () { return can("subscription.view") || S.me.isSuper; } },
     { r: "settings", l: "Paramètres", i: "⚙", show: function () { return true; } },
-    { r: "prospects", l: "Prospects", i: "◎", show: function () { return S.me.isSuper; } },
+    { r: "commercial", l: "Espace commercial", i: "◎", show: function () { return S.me.isSuper; } },
     { r: "accounts", l: "Comptes clients", i: "◉", show: function () { return S.me.isSuper; } },
     { r: "referencements", l: "Référencements artisans", i: "✔", show: function () { return S.me.isSuper; } },
     { r: "commissions", l: "Commissions", i: "%", show: function () { return S.me.isSuper; } },
@@ -78,7 +79,7 @@ const App = window.App = {
   renderLogin: function (msg) { Public.login(msg); },
   enter: function () {
     if (!lstore("ip_lang") && S.me.locale) setLang(S.me.locale);
-    const home = S.me.provider && S.me.provider.status !== "ACTIVE" ? "referencing" : (S.me.onboarding ? "onboarding" : "dashboard");
+    const home = S.me.salesRep && !S.me.isSuper ? "sales" : S.me.provider && S.me.provider.status !== "ACTIVE" ? "referencing" : (S.me.onboarding ? "onboarding" : "dashboard");
     const show = function () { App.shell(); App.go(location.hash.replace(/^#/, "") || home); if (!S.onboard) Tour.maybeStart(); };
     if (S.meta) { show(); return; }
     api("meta.get").then(function (m) { S.meta = m; show(); }).catch(showErr);
@@ -530,18 +531,8 @@ function prospectAddDialog(after) {
 }
 
 PAGES.prospects = function (el, id) {
-  if (!S.me.isSuper) { el.appendChild(h("div", { class: "alert bad" }, t("Réservé au super administrateur."))); return; }
   if (id) return prospectDetail(el, id);
-  el.appendChild(pageHead(t("Prospects"), t("Le suivi de votre prospection DarPilot en France et au Maroc : le travail des agents, les réponses, les relances et vos imports."), [
-    btn("⇪ " + t("Importer une liste"), function () { prospectImportDialog(); }, "primary"),
-    btn("＋ " + t("Ajouter"), function () { prospectAddDialog(); }),
-    btn("⇩ " + t("Exporter"), function () { api("prospect.export", {}).then(download).catch(showErr); })]));
-  tabs(el, [
-    { id: "dash", label: t("Tableau de bord"), render: prospectDashboardTab },
-    { id: "clients", label: t("Clients à signer"), render: function (b) { prospectListTab(b, { targetGroup: "CLIENTS" }); } },
-    { id: "artisans", label: t("Artisans à référencer"), render: function (b) { prospectListTab(b, { target: "ARTISAN" }); } },
-    { id: "agents", label: t("Équipe d'agents"), render: prospectAgentsTab }
-  ]);
+  NAV_HASH.v = S.me.isSuper ? "commercial" : S.me.salesRep ? "sales" : "dashboard";
 };
 function prospectDashboardTab(b) {
   b.appendChild(h("div", { class: "loading" }, t("Chargement…")));
@@ -564,11 +555,12 @@ function prospectDashboardTab(b) {
     b.appendChild(panel("Par cible", table([{ l: "Cible", f: function (r) { return t(PROSPECT_TG[r.key] || r.key); } }, { l: "Prospects", num: true, k: "count" }], d.byTarget, { empty: "Aucune donnée." })));
   }).catch(function (e) { clear(b).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
 }
-function prospectListTab(b, args) {
+function prospectListTab(b, args, admin) {
   listView(b, { route: "prospect.list", args: args, filters: [
+      admin ? { k: "ownerRepId", l: "Commercial", t: "select", opts: function () { return salesRepChoices(); } } : null,
       { k: "status", l: "Statut", t: "select", opts: prospectOpts(PROSPECT_ST) }, { k: "country", l: "Pays", t: "select", opts: PROSPECT_COUNTRIES },
       args.target ? null : { k: "target", l: "Cible", t: "select", opts: prospectOpts(PROSPECT_TG).filter(function (o) { return o[0] !== "ARTISAN"; }) },
-      { k: "source", l: "Origine", t: "select", opts: [["AGENTS", t("Agents")], ["IMPORT", t("Import")], ["MANUAL", t("Saisie")]] },
+      admin ? { k: "source", l: "Origine", t: "select", opts: [["AGENTS", t("Équipe d'agents")], ["REP", t("Commerciaux terrain")], ["IMPORT", t("Import")], ["MANUAL", t("Saisie")]] } : null,
       { k: "replies", l: "Réponses à traiter", t: "checkbox" }, { k: "due", l: "Relances dues", t: "checkbox" }].filter(Boolean),
     columns: [{ l: "Structure / contact", f: function (r) { return h("div", null, h("b", null, r.company || r.contactName || "—"), r.company && r.contactName ? h("div", { class: "small muted" }, r.contactName) : null); } },
       { l: args.target ? "Métier" : "Cible", f: function (r) { return args.target ? (r.trade || "—") : t(PROSPECT_TG[r.target] || r.target); } },
@@ -576,7 +568,7 @@ function prospectListTab(b, args) {
       { l: "Contact", f: function (r) { return h("div", { class: "small" }, r.email || "", r.email && r.phone ? h("br") : null, r.phone || ""); } },
       { l: "Statut", f: function (r) { return h("span", null, prospectStTag(r.status), r.awaitingReply ? " " : "", r.awaitingReply ? tag(t("Réponse"), "warn") : null, r.doNotContact ? " " : "", r.doNotContact ? tag(t("Ne plus contacter"), "bad") : null); } },
       { l: "Prochaine action", f: function (r) { return r.nextActionDate ? h("span", { class: r.due ? "bad" : "" }, fmtDate(r.nextActionDate) + (r.nextAction ? " · " + r.nextAction : "")) : (r.nextAction || "—"); } },
-      { l: "Dernier contact", dt: true, k: "lastContactAt" }],
+      { l: "Dernier contact", dt: true, k: "lastContactAt" }, admin ? { l: "Suivi par", f: function (r) { return r.repName ? r.repName : r.sourceType === "AGENTS" ? t("Agents") : "—"; } } : null].filter(Boolean),
     empty: "Aucun prospect.", onRow: function (r) { NAV_HASH.v = "prospects/" + r.prospectId; } });
 }
 function prospectDetail(el, id) {
@@ -587,9 +579,10 @@ function prospectDetail(el, id) {
       x.email ? h("a", { class: "btn", href: "mailto:" + x.email }, "✉ " + t("E-mail")) : null, x.phone ? h("a", { class: "btn", href: "tel:" + x.phone }, "☎ " + t("Appeler")) : null,
       x.phone ? h("a", { class: "btn", href: "https://wa.me/" + waNumber(x.phone), target: "_blank", rel: "noopener" }, "WhatsApp") : null,
       btn(t("Modifier"), function () { formModal(t("Modifier le prospect"), prospectFields(false), x, function (v) { return api("prospect.save", Object.assign({ prospectId: id }, v)).then(reload); }, { size: "lg" }); }),
-      btn("← " + t("Prospects"), function () { NAV_HASH.v = "prospects"; })]));
+      btn("← " + t("Retour"), function () { NAV_HASH.v = S.me.isSuper ? "commercial" : "sales"; })]));
     if (x.doNotContact) el.appendChild(h("div", { class: "alert bad" }, t("Ne plus contacter : les agents ne prépareront plus aucun message pour ce prospect.")));
     if (x.awaitingReply) el.appendChild(h("div", { class: "alert info" }, t("Réponse reçue le") + " " + fmtDT(x.lastReplyAt) + " : " + t("la réponse proposée par les agents vous attend dans vos brouillons Gmail.")));
+    if (x.ownedByRep && S.me.isSuper) el.appendChild(h("div", { class: "alert info" }, t("Suivi par le commercial terrain") + " " + x.repName + t(" : les agents ne le contactent pas.")));
     el.appendChild(panel("Fiche", kv([["Structure", x.company], ["Contact", [x.contactName, x.role].filter(Boolean).join(" — ")], ["E-mail", x.email], ["Téléphone", x.phone], ["Adresse", x.address],
       ["Ville", x.city], ["Département / région", x.territory], ["Pays", x.country === "MA" ? t("Maroc") : x.country === "FR" ? t("France") : ""],
       ["Site web", x.website ? h("a", { href: x.website, target: "_blank", rel: "noopener" }, x.website) : ""], ["Origine", { AGENTS: t("Équipe d'agents"), IMPORT: t("Import") + (x.sourceFile ? " « " + x.sourceFile + " »" : ""), MANUAL: t("Saisie manuelle") }[x.sourceType] || ""],
@@ -714,6 +707,174 @@ function prospectPreviewDialog(pv, def) {
   count();
   return m;
 }
+/* ------------------------------ Espace commercial : commerciaux terrain et commissions ------------------------------ */
+const SALES_STAGE = { INSCRIT: ["Inscrit, contrat non signé", "warn"], SIGNE: ["Contrat signé, carte à enregistrer", "info"], ESSAI_PAYE: ["Signé et payé, en essai", "good"], ACTIF: ["Abonné actif", "good"],
+  SUSPENDU: ["Suspendu", "bad"], RESILIE: ["Résilié", "bad"] };
+const SALES_KIND = { SIGNUP: "Prime de signature", RECURRING: "Commission mensuelle", CLAWBACK: "Reprise", ADJUST: "Ajustement" };
+const SALES_ST = { PENDING: ["En attente", "warn"], EARNED: ["Acquise, à payer", "info"], PAID: ["Payée", "good"], CANCELLED: ["Annulée", "bad"] };
+function salesStageTag(s) { const x = SALES_STAGE[s] || [s, ""]; return tag(t(x[0]), x[1]); }
+function salesStTag(s) { const x = SALES_ST[s] || [s, ""]; return tag(t(x[0]), x[1]); }
+function salesMoney(v, cur) { return (Number(v) || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + (cur === "EUR" ? "€" : cur || ""); }
+function salesTotalsKpis(totals) {
+  if (!totals || !totals.length) return kpis([{ l: "Commissions en attente", v: "0" }, { l: "Acquises, à payer", v: "0" }, { l: "Déjà payées", v: "0" }]);
+  return kpis([].concat.apply([], totals.map(function (x) { return [{ l: "En attente (" + x.currency + ")", v: salesMoney(x.PENDING, x.currency), sub: t("clients en essai") },
+    { l: "Acquises, à payer (" + x.currency + ")", v: salesMoney(x.EARNED, x.currency), tone: x.EARNED ? "warn" : "" }, { l: "Payées (" + x.currency + ")", v: salesMoney(x.PAID, x.currency), tone: "good" }]; })));
+}
+function salesClientColumns(admin) {
+  return [{ l: "Client", f: function (r) { return h("div", null, h("b", null, r.name), h("div", { class: "small muted" }, [r.contactName, r.city].filter(Boolean).join(" · "))); } },
+    { l: "Inscrit le", date: true, k: "createdAt" }, { l: "Abonnement", f: function (r) { return r.planName ? r.planName + " · " + salesMoney(r.price, r.currency) + "/" + t("mois") : "—"; } },
+    { l: "Dossier", f: function (r) { return salesStageTag(r.stage); } },
+    { l: "Contrat", f: function (r) { return r.signed ? "✓ " + fmtDate(r.signedAt) : "✗"; } }, { l: "Carte", f: function (r) { return r.card ? "✓" : "✗"; } },
+    { l: "Fin d'essai", f: function (r) { return r.trialEnd ? fmtDate(r.trialEnd) : "—"; } },
+    admin ? { l: "Commercial", f: function (r) { return r.repName ? r.repName : r.salesRepDeclared ? tag(t("À rattacher") + " : " + r.salesRepDeclared, "warn") : "—"; } } : null,
+    { l: "Commission", f: function (r) { return h("div", { class: "small" }, r.commissionPending ? t("en attente") + " " + salesMoney(r.commissionPending, r.currency) : "", r.commissionEarned ? h("div", null, t("à payer") + " " + salesMoney(r.commissionEarned, r.currency)) : null, r.commissionPaid ? h("div", null, t("payée") + " " + salesMoney(r.commissionPaid, r.currency)) : null); } }].filter(Boolean);
+}
+function salesCommissionColumns(admin) {
+  return [admin ? { l: "Commercial", k: "repName" } : null, { l: "Client", k: "clientName" }, { l: "Type", f: function (r) { return t(SALES_KIND[r.kind] || r.kind) + (r.period ? " · " + r.period : ""); } },
+    { l: "Forfait", k: "planCode" }, { l: "Base HT", f: function (r) { return salesMoney(r.baseAmount, r.currency); } }, { l: "Taux", f: function (r) { return Math.round(r.rate * 1000) / 10 + " %"; } },
+    { l: "Montant", f: function (r) { return h("b", null, salesMoney(r.amount, r.currency)); } }, { l: "Statut", f: function (r) { return salesStTag(r.status); } },
+    { l: "Détail", f: function (r) { return h("span", { class: "small muted" }, (r.paidAt ? t("payée le") + " " + fmtDate(r.paidAt) + (r.paidRef ? " (" + r.paidRef + ")" : "") + " · " : "") + (r.note || "")); } }].filter(Boolean);
+}
+function salesSimulationTable(sim, rates) {
+  return h("div", null, table([{ l: "Forfait", k: "name" }, { l: "Prix mensuel HT", f: function (r) { return salesMoney(r.price, r.currency); } },
+    { l: "Prime de signature", f: function (r) { return h("b", null, salesMoney(r.bonus, r.currency)); } }, { l: "Par mois ensuite", f: function (r) { return salesMoney(r.recurring, r.currency) + " × " + r.months; } },
+    { l: "Total sur la 1re année", f: function (r) { return h("b", null, salesMoney(r.firstYear, r.currency)); } }], sim, { empty: "Aucun forfait." }),
+    h("p", { class: "small muted" }, t("Prime de signature") + " : " + Math.round(rates.bonusRate * 100) + " % " + t("du prix mensuel HT du forfait (hors options), acquise quand le client a payé et que son essai se termine sans résiliation.") + " " +
+      t("Commission mensuelle") + " : " + Math.round(rates.recurringRate * 1000) / 10 + " % " + t("sur chacun des") + " " + rates.recurringMonths + " " + t("paiements suivants.") +
+      (rates.clawbackDays ? " " + t("Reprise si le client part dans les") + " " + rates.clawbackDays + " " + t("jours suivant l'acquisition de la prime.") : "")));
+}
+function salesRepChoices() { return api("sales.reps", {}).then(function (l) { return l.map(function (r) { return [r.repId, r.name + " (" + r.code + ")"]; }); }); }
+
+PAGES.commercial = function (el) {
+  if (!S.me.isSuper) { NAV_HASH.v = S.me.salesRep ? "sales" : "dashboard"; return; }
+  el.appendChild(pageHead(t("Espace commercial"), t("Toute votre commercialisation en un seul endroit : prospection des agents, commerciaux terrain, inscriptions, commissions."), [
+    btn("⇪ " + t("Importer une liste"), function () { prospectImportDialog(); }, "primary"), btn("＋ " + t("Prospect"), function () { prospectAddDialog(); }),
+    btn("＋ " + t("Commercial"), function () { salesRepCreateDialog(); })]));
+  tabs(el, [
+    { id: "dash", label: t("Vue d'ensemble"), render: function (b) { salesOverviewBlock(b); prospectDashboardTab(b); } },
+    { id: "clients", label: t("Prospects clients"), render: function (b) { prospectListTab(b, { targetGroup: "CLIENTS" }, true); } },
+    { id: "artisans", label: t("Artisans"), render: function (b) { prospectListTab(b, { target: "ARTISAN" }, true); } },
+    { id: "reps", label: t("Commerciaux terrain"), render: salesRepsTab },
+    { id: "signups", label: t("Inscriptions"), render: salesClientsTab },
+    { id: "commissions", label: t("Commissions"), render: salesCommissionsTab },
+    { id: "agents", label: t("Équipe d'agents"), render: prospectAgentsTab },
+    { id: "plan", label: t("Plan de commissionnement"), render: salesPlanTab }
+  ]);
+};
+function salesOverviewBlock(b) {
+  const box = h("div"); b.appendChild(box);
+  api("sales.overview", {}).then(function (o) {
+    box.appendChild(panel("Commerciaux terrain", h("div", null, kpis([{ l: "Commerciaux actifs", v: fmtNum(o.activeReps, 0) }, { l: "Clients rattachés", v: fmtNum(o.linkedClients, 0) },
+      { l: "Inscriptions à rattacher", v: fmtNum(o.toLink, 0), tone: o.toLink ? "warn" : "" }, { l: "Inscriptions en ligne", v: fmtNum(o.selfSignups, 0) }]), salesTotalsKpis(o.totals))));
+  }).catch(function (e) { box.appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+}
+function salesRepCreateDialog(after) {
+  formModal(t("Nouveau commercial terrain"), [{ k: "name", l: "Nom et prénom", req: true }, { k: "email", l: "E-mail", t: "email", req: true }, { k: "phone", l: "Téléphone", t: "tel" },
+    { k: "country", l: "Pays", t: "select", req: true, opts: PROSPECT_COUNTRIES }, { k: "territory", l: "Secteur (départements, villes…)", full: true },
+    { k: "bonusRate", l: "Prime de signature particulière (%, vide = plan)", t: "number" }, { k: "recurringRate", l: "Commission mensuelle particulière (%, vide = plan)", t: "number" },
+    { k: "recurringMonths", l: "Nombre de mois particulier (vide = plan)", t: "number" }], { country: "FR" }, function (v) {
+    ["bonusRate", "recurringRate"].forEach(function (k) { if (v[k] !== "" && v[k] != null) v[k] = Number(v[k]) / 100; });
+    return api("sales.repCreate", v).then(function (r) { toast(t("Commercial créé, code") + " " + r.code + (r.invited ? " · " + t("invitation envoyée par e-mail") : ""), "good"); if (after) after(); else App.go("commercial"); });
+  }, { size: "lg", intro: t("Il reçoit un e-mail pour créer son mot de passe, puis accède à « Mon espace commercial » : ses clients, ses commissions et ses prospects, rien d'autre.") });
+}
+function salesRepsTab(b) {
+  b.appendChild(h("div", { class: "loading" }, t("Chargement…")));
+  api("sales.reps", {}, { fresh: true }).then(function (l) {
+    clear(b).appendChild(h("div", { class: "actions", style: { marginBottom: "10px" } }, btn("＋ " + t("Nouveau commercial"), function () { salesRepCreateDialog(); }, "primary")));
+    b.appendChild(table([{ l: "Commercial", f: function (r) { return h("div", null, h("b", null, r.name), h("div", { class: "small muted" }, r.email + (r.phone ? " · " + r.phone : ""))); } },
+      { l: "Code", f: function (r) { return h("code", null, r.code); } }, { l: "Secteur", f: function (r) { return [r.country, r.territory].filter(Boolean).join(" · "); } },
+      { l: "Clients", num: true, k: "clients" }, { l: "Actifs", num: true, k: "active" }, { l: "Non signés", num: true, k: "notSigned" }, { l: "Prospects", num: true, k: "prospects" },
+      { l: "Abonnements générés / mois", f: function (r) { return fmtMoney(r.mrr); } },
+      { l: "À payer", f: function (r) { return (r.totals || []).map(function (x) { return salesMoney(x.EARNED, x.currency); }).join(" · ") || "—"; } },
+      { l: "Statut", f: function (r) { return h("span", null, tag(r.status === "ACTIVE" ? t("Actif") : t("Suspendu"), r.status === "ACTIVE" ? "good" : "bad"), r.accountActive ? "" : " ", r.accountActive ? null : tag(t("Compte à activer"), "warn")); } }],
+      l, { empty: "Aucun commercial : créez-en un.", onRow: function (r) { NAV_HASH.v = "salesrep/" + r.repId; } }));
+  }).catch(function (e) { clear(b).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+}
+PAGES.salesrep = function (el, id) {
+  if (!S.me.isSuper || !id) { NAV_HASH.v = "commercial"; return; }
+  return api("sales.repGet", { repId: id }, { fresh: true }).then(function (r) {
+    const reload = function () { apiCacheClear(); App.go("salesrep/" + id); };
+    $("page-title").textContent = r.name;
+    el.appendChild(pageHead(r.name, t("Commercial terrain") + " · " + t("code") + " " + r.code + (r.territory ? " · " + r.territory : ""), [
+      tag(r.status === "ACTIVE" ? t("Actif") : t("Suspendu"), r.status === "ACTIVE" ? "good" : "bad"),
+      r.phone ? h("a", { class: "btn", href: "tel:" + r.phone }, "☎ " + t("Appeler")) : null, h("a", { class: "btn", href: "mailto:" + r.email }, "✉ " + t("E-mail")),
+      btn(t("Modifier"), function () {
+        formModal(t("Modifier le commercial"), [{ k: "name", l: "Nom et prénom", req: true }, { k: "phone", l: "Téléphone", t: "tel" }, { k: "country", l: "Pays", t: "select", opts: PROSPECT_COUNTRIES },
+          { k: "territory", l: "Secteur", full: true }, { k: "bonusRate", l: "Prime de signature particulière (%, vide = plan)", t: "number" }, { k: "recurringRate", l: "Commission mensuelle particulière (%, vide = plan)", t: "number" },
+          { k: "recurringMonths", l: "Nombre de mois particulier (vide = plan)", t: "number" }], { name: r.name, phone: r.phone, country: r.country, territory: r.territory },
+        function (v) { ["bonusRate", "recurringRate"].forEach(function (k) { if (v[k] !== "" && v[k] != null) v[k] = Number(v[k]) / 100; }); return api("sales.repUpdate", Object.assign({ repId: id }, v)).then(reload); });
+      }),
+      btn(r.status === "ACTIVE" ? t("Suspendre") : t("Réactiver"), function () { confirmBox(r.status === "ACTIVE" ? t("Suspendre ce commercial ? Il ne pourra plus se connecter ; ses commissions acquises restent dues.") : t("Réactiver ce commercial ?"), { danger: r.status === "ACTIVE" })
+        .then(function (ok) { if (ok) api("sales.repUpdate", { repId: id, status: r.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE" }).then(reload).catch(showErr); }); }, r.status === "ACTIVE" ? "danger" : ""),
+      btn("← " + t("Espace commercial"), function () { NAV_HASH.v = "commercial"; })]));
+    el.appendChild(salesTotalsKpis(r.totals));
+    el.appendChild(panel("Clients et état des dossiers", table(salesClientColumns(false), r.clients, { empty: "Aucun client rattaché." })));
+    el.appendChild(panel("Commissions", table(salesCommissionColumns(false), r.commissions, { empty: "Aucune commission." }),
+      [btn(t("Marquer les commissions acquises comme payées"), function () {
+        formModal(t("Paiement des commissions"), [{ k: "reference", l: "Référence du virement", req: true }], {}, function (v) {
+          return api("sales.markPaid", { repId: id, reference: v.reference }).then(function (x) { toast(x.count + " " + t("commission(s) payée(s)") + " · " + fmtMoney(x.total), "good"); reload(); });
+        });
+      }, "primary")]));
+    el.appendChild(panel("Son plan de commissionnement", salesSimulationTable(r.simulation, r.rates)));
+    const pb = h("div"); el.appendChild(panel("Ses prospects", pb)); prospectListTab(pb, { ownerRepId: id }, false);
+  }).catch(function (e) { el.appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+};
+function salesClientsTab(b) {
+  listView(b, { route: "sales.clients", initial: { filter: "" }, search: true, filters: [{ k: "filter", l: "Affichage", t: "select", opts: [["TO_LINK", t("À rattacher")], ["LINKED", t("Avec commercial")], ["NONE", t("Sans commercial")]] },
+      { k: "repId", l: "Commercial", t: "select", opts: function () { return salesRepChoices(); } }],
+    columns: salesClientColumns(true).concat([{ l: "", f: function (r) { return btn(r.repName ? t("Changer") : t("Rattacher"), function () {
+      formModal(t("Rattacher à un commercial"), [{ k: "repId", l: "Commercial", t: "select", opts: function () { return salesRepChoices(); } }], { repId: r.salesRepId || "" },
+        function (v) { return api("sales.assign", { organizationId: r.organizationId, repId: v.repId || "" }).then(function () { toast(t("Rattachement enregistré."), "good"); App.go("commercial"); }); },
+        { intro: (r.salesRepDeclared ? t("Commercial indiqué à l'inscription") + " : « " + r.salesRepDeclared + " ». " : "") + t("Laissez vide pour retirer le rattachement.") });
+    }, "sm"); } }]), empty: "Aucune inscription." });
+}
+function salesCommissionsTab(b) {
+  const head = h("div"); b.appendChild(head);
+  listView(b, { route: "sales.commissions", search: false, filters: [{ k: "status", l: "Statut", t: "select", opts: Object.keys(SALES_ST).map(function (k) { return [k, t(SALES_ST[k][0])]; }) },
+      { k: "repId", l: "Commercial", t: "select", opts: function () { return salesRepChoices(); } }],
+    tools: function (state) { return [btn("⇩ " + t("Exporter"), function () { api("sales.export", state).then(download).catch(showErr); }),
+      btn(t("Recalculer"), function () { api("sales.recompute", {}).then(function (r) { toast(r.changed + " " + t("mise(s) à jour"), "good"); App.go("commercial"); }).catch(showErr); })]; },
+    render: function (items, r) { return h("div", null, salesTotalsKpis(r.totals), table(salesCommissionColumns(true), items, { empty: "Aucune commission." })); } });
+}
+function salesPlanTab(b) {
+  b.appendChild(h("div", { class: "loading" }, t("Chargement…")));
+  api("sales.planGet", {}).then(function (d) {
+    const pl = d.plan;
+    clear(b).appendChild(panel("Plan de commissionnement des commerciaux terrain", salesSimulationTable(d.simulation, pl), [btn(t("Modifier le plan"), function () {
+      formModal(t("Plan de commissionnement"), [{ k: "bonusRate", l: "Prime de signature (% du 1er mois HT)", t: "number", req: true }, { k: "recurringRate", l: "Commission mensuelle (% du prix HT)", t: "number", req: true },
+        { k: "recurringMonths", l: "Pendant combien de mois", t: "number", req: true }, { k: "clawbackDays", l: "Reprise de la prime si le client part dans les (jours)", t: "number", req: true }],
+        { bonusRate: Math.round(pl.bonusRate * 100), recurringRate: Math.round(pl.recurringRate * 1000) / 10, recurringMonths: pl.recurringMonths, clawbackDays: pl.clawbackDays },
+        function (v) { return api("sales.planSave", { bonusRate: Number(v.bonusRate) / 100, recurringRate: Number(v.recurringRate) / 100, recurringMonths: v.recurringMonths, clawbackDays: v.clawbackDays }).then(function () { toast(t("Plan enregistré."), "good"); App.go("commercial"); }); },
+        { intro: t("S'applique aux prochaines commissions ; les commissions déjà acquises ne changent pas. Un commercial peut avoir des taux particuliers (sa fiche).") });
+    }, "primary")]));
+    b.appendChild(h("div", { class: "alert info" }, t("Commissions calculées sur le prix du forfait HT (hors options), versées au commercial sur facture (auto-entrepreneur ou société). Faites valider votre contrat de commercial ou d'apporteur d'affaires par un professionnel du droit.")));
+  }).catch(function (e) { clear(b).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+}
+
+/* Espace du commercial terrain : ses clients, ses commissions, ses prospects. */
+PAGES.sales = function (el) {
+  if (!S.me.salesRep) { NAV_HASH.v = "dashboard"; return; }
+  el.appendChild(h("div", { class: "loading" }, t("Chargement…")));
+  return api("sales.mine", {}, { fresh: true }).then(function (d) {
+    clear(el);
+    el.appendChild(pageHead(t("Mon espace commercial"), d.rep.name + " · " + t("code") + " " + d.rep.code + (d.rep.territory ? " · " + d.rep.territory : ""), [
+      btn("⇪ " + t("Importer une liste"), function () { prospectImportDialog(); }), btn("＋ " + t("Prospect"), function () { prospectAddDialog(); }, "primary")]));
+    const link = d.signupLink;
+    el.appendChild(panel("Votre lien d'inscription", h("div", null,
+      h("p", null, t("Envoyez ce lien à vos clients : leur inscription vous est rattachée automatiquement. Ils peuvent aussi indiquer votre code") + " ", h("b", null, d.rep.code), " " + t("ou vos nom et prénom dans la case « Votre commercial » du formulaire.")),
+      link ? h("div", { class: "actions" }, h("code", { style: { wordBreak: "break-all" } }, link), btn(t("Copier"), function () { try { navigator.clipboard.writeText(link).then(function () { toast(t("Lien copié."), "good"); }); } catch (e) { toast(link); } }),
+        h("a", { class: "btn", href: "https://wa.me/?text=" + encodeURIComponent(t("Inscrivez-vous à DarPilot (2 mois offerts) :") + " " + link), target: "_blank", rel: "noopener" }, "WhatsApp")) : null)));
+    el.appendChild(kpis([{ l: "Mes clients", v: fmtNum(d.kpis.clients, 0) }, { l: "Contrat à signer", v: fmtNum(d.kpis.notSigned, 0), tone: d.kpis.notSigned ? "warn" : "" },
+      { l: "En essai", v: fmtNum(d.kpis.trial, 0) }, { l: "Actifs et payés", v: fmtNum(d.kpis.active, 0), tone: "good" }, { l: "Mes prospects", v: fmtNum(d.kpis.prospects, 0), sub: d.kpis.prospectsTalking + " " + t("en discussion") }]));
+    el.appendChild(salesTotalsKpis(d.totals));
+    tabs(el, [
+      { id: "clients", label: t("Mes clients"), render: function (b) { b.appendChild(table(salesClientColumns(false), d.clients, { empty: "Aucun client pour l'instant : partagez votre lien d'inscription." })); } },
+      { id: "prospects", label: t("Mes prospects"), render: function (b) { prospectListTab(b, {}, false); } },
+      { id: "commissions", label: t("Mes commissions"), render: function (b) { b.appendChild(table(salesCommissionColumns(false), d.commissions, { empty: "Aucune commission pour l'instant." })); } },
+      { id: "plan", label: t("Mon plan"), render: function (b) { b.appendChild(salesSimulationTable(d.simulation, d.rates)); } }
+    ]);
+  }).catch(function (e) { clear(el).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+};
 function providerReviewPanel(el, c) {
   const v = c.verification, reload = function () { apiCacheClear(); App.go("contractors/" + c.artisanId); };
   const box = h("div");

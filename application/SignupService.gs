@@ -113,6 +113,8 @@ function signupClientInput_(a) {
     else o.address = reqText_(a.homeAddress || a.address, "Adresse postale", 5, 300);
   }
   o.orgName = o.company ? o.company.legalName : (person.firstName + " " + person.lastName);
+  // Commercial qui accompagne le client (facultatif) : nom et prénom ou code de parrainage (SalesService.gs).
+  o.salesRef = safeText_(a.salesRef || "", 80);
   return o;
 }
 function signupProviderInput_(a) {
@@ -258,6 +260,7 @@ function signupCreateClient_(user, d) {
   });
   const plan = dbGet_("SubscriptionPlans", d.planCode);
   subCreate_(org.organizationId, plan, Number(plan.trialDays) > 0, todayStr_(), user.email);
+  if (d.salesRef) { try { salesLinkAtSignup_(org.organizationId, d.salesRef, user.email); } catch (e) { console.error("Rattachement commercial : " + e.message); } }
   notify_({ eventKey: "signup-client:" + org.organizationId, userIds: superAdminIds_(), type: "SIGNUP", organizationId: "", title: "Nouvelle inscription : " + org.name,
     body: (d.profile === "AGENCY" ? "Agence" : "Propriétaire") + " · forfait " + plan.name + " · " + user.email + " · " + d.person.phone, link: "#accounts" });
   return { id: org.organizationId, orgId: org.organizationId };

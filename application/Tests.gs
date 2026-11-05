@@ -1918,6 +1918,78 @@ function TEST_GROUPS_() {
         } finally { TEST_HOOKS_.aiConfig = false; }
       }]
     ] },
+    { name: "Espace commercial (commerciaux terrain et commissions)", tests: [
+      ["Commercial créé par le super administrateur : invitation, connexion, accès limité à ses données", function (T, fx) {
+        const email = fx.mail("vendeur"), r = T.call(fx.tok.superA, "sales.repCreate", { name: "Karim Benali " + fx.run, email: email, country: "MA", territory: "Marrakech" });
+        T.ok(/^[A-Z]{1,3}-[A-Z0-9]{4}$/.test(r.code) && r.invited, "code " + r.code + " et invitation");
+        const token = T.tokenFrom(T.lastMailTo(email).body, "accept"); T.ok(token, "lien d'invitation");
+        T.pub("invite.accept", { token: token, password: "Vendeur-Pass1" });
+        const tok = T.pub("auth.login", { email: email, password: "Vendeur-Pass1" }).token;
+        const me = T.call(tok, "me.get", {});
+        T.ok(me.salesRep && me.salesRep.code === r.code, "espace commercial ouvert au commercial");
+        const mine = T.call(tok, "sales.mine", {});
+        T.ok(/action=signup&ref=/.test(mine.signupLink) && mine.simulation.length === 3, "lien de parrainage et plan");
+        ["sales.reps", "sales.clients", "sales.commissions", "sales.planSave", "prospect.dashboard", "prospect.agents", "sales.markPaid"].forEach(function (rt) { T.fails(tok, rt, { repId: r.repId }, "FORBIDDEN"); });
+        T.fails(fx.tok.ownerA, "sales.mine", {}, "FORBIDDEN");
+        fx.salesRep = { repId: r.repId, code: r.code, tok: tok, email: email };
+      }],
+      ["Inscription : la case « Votre commercial » rattache le client (code ou nom, dans les deux sens) ; sinon à rattacher", function (T, fx) {
+        T.ok(fx.salesRep, "commercial du test précédent");
+        const plan = dbGet_("SubscriptionPlans", "PRO"), mk = function (n) { const o = tOrg_("Client " + n + " " + fx.run, "OWNER_ORG"); subCreate_(o.organizationId, plan, true, todayStr_(), "test"); return o; };
+        T.eq(signupClientInput_({ profile: "OWNER", planCode: "PRO", firstName: "A", lastName: "B", phone: "+33612345678", city: "Lyon", homeAddress: "1 rue de la Paix", salesRef: fx.salesRep.code }).salesRef, fx.salesRep.code, "case transmise");
+        const a = mk("code"), b = mk("nom"), c = mk("inconnu");
+        T.ok(salesLinkAtSignup_(a.organizationId, fx.salesRep.code.toLowerCase(), "x@y.fr"), "par le code");
+        T.ok(salesLinkAtSignup_(b.organizationId, "benali karim " + fx.run, "x@y.fr"), "par « nom prénom »");
+        T.ok(!salesLinkAtSignup_(c.organizationId, "Jean Inconnu", "x@y.fr"), "inconnu : non rattaché");
+        T.eq(dbGet_("Organizations", c.organizationId).salesRepDeclared, "Jean Inconnu", "nom indiqué conservé pour le super administrateur");
+        T.ok(T.call(fx.tok.superA, "sales.clients", { filter: "TO_LINK" }).some(function (x) { return x.organizationId === c.organizationId; }), "liste « à rattacher »");
+        T.call(fx.tok.superA, "sales.assign", { organizationId: c.organizationId, repId: fx.salesRep.repId });
+        const mine = T.call(fx.salesRep.tok, "sales.mine", {});
+        T.eq(mine.clients.filter(function (x) { return / (code|nom|inconnu) /.test(x.name); }).length, 3, "le commercial voit ses 3 clients");
+        T.ok(mine.clients.every(function (x) { return x.stage === "INSCRIT" && !x.signed && x.planCode === "PRO"; }), "statut : inscrit, contrat non signé, forfait Pro");
+        fx.salesOrg = a;
+      }],
+      ["Commissions : prime en attente pendant l'essai, acquise au paiement après l'essai, mensuelles plafonnées, paiement, reprise", function (T, fx) {
+        const org = fx.salesOrg, s = salesSubOf_(org.organizationId), price = num_(s.price), pl = salesPlan_();
+        T.eq([pl.bonusRate, pl.recurringRate, pl.recurringMonths, pl.clawbackDays], [1, 0.1, 12, 90], "plan par défaut");
+        const bonus = function () { return dbAll_("SalesCommissions").find(function (c) { return c.organizationId === org.organizationId && c.kind === "SIGNUP"; }); };
+        T.eq([bonus().status, num_(bonus().amount)], ["PENDING", price], "prime en attente = 1 mois HT");
+        const pay = function (d) { return dbInsert_("Payments", { organizationId: org.organizationId, kind: "SUBSCRIPTION", refType: "SUBSCRIPTION", refId: s.subscriptionId, direction: "IN", amount: price, currency: s.currency, paidAt: d + "T08:00:00Z", status: "RECORDED", createdAt: nowIso_() }); };
+        pay("2026-01-05"); salesComputeOrg_(dbGet_("Organizations", org.organizationId));
+        T.eq(bonus().status, "PENDING", "1er paiement reçu mais essai en cours : toujours en attente");
+        dbUpdate_("Subscriptions", s.subscriptionId, { status: "ACTIVE", trialEnd: addDaysStr_(todayStr_(), -1) });
+        T.call(fx.tok.superA, "sales.recompute", {});
+        T.eq(bonus().status, "EARNED", "prime acquise après l'essai");
+        for (let i = 0; i < 14; i++) pay("2026-0" + (1 + (i % 9)) + "-1" + (i % 9));
+        salesComputeAll_(); salesComputeAll_();
+        const rec = dbAll_("SalesCommissions").filter(function (c) { return c.organizationId === org.organizationId && c.kind === "RECURRING"; });
+        T.eq([rec.length, num_(rec[0].amount)], [12, round2_(price * 0.1)], "12 commissions mensuelles de 10 %, calcul idempotent");
+        const mp = T.call(fx.tok.superA, "sales.markPaid", { repId: fx.salesRep.repId, reference: "VIR-001" });
+        T.ok(mp.count === 13 && mp.total === round2_(price + 12 * round2_(price * 0.1)), "13 commissions payées : " + mp.total);
+        dbUpdate_("Subscriptions", s.subscriptionId, { status: "CANCELLED", canceledAt: nowIso_() });
+        salesComputeAll_(); salesComputeAll_();
+        const cb = dbAll_("SalesCommissions").filter(function (c) { return c.organizationId === org.organizationId && c.kind === "CLAWBACK"; });
+        T.eq([cb.length, num_(cb[0].amount), cb[0].status], [1, -price, "EARNED"], "reprise de la prime déjà payée (client parti en moins de 90 jours)");
+        const mine = T.call(fx.salesRep.tok, "sales.mine", {});
+        T.ok(mine.commissions.length >= 14 && mine.clients.some(function (x) { return x.organizationId === org.organizationId && x.stage === "RESILIE"; }), "le commercial voit ses commissions et le client résilié");
+        T.fails(fx.tok.superA, "sales.assign", { organizationId: org.organizationId, repId: "" });
+      }],
+      ["Prospects d'un commercial : visibles par lui et le super administrateur seulement, jamais contactés par les agents", function (T, fx) {
+        const tok = fx.salesRep.tok, em = "riad." + fx.run + "@exemple.ma";
+        const id = T.call(tok, "prospect.save", { target: "CONCIERGERIE", company: "Riad Conciergerie " + fx.run, email: em, country: "MA", city: "Marrakech" }).prospectId;
+        T.eq(T.call(tok, "prospect.list", {}).items.map(function (x) { return x.prospectId; }), [id], "le commercial ne voit que son prospect");
+        T.ok(T.call(tok, "prospect.get", { prospectId: id }).ownedByRep, "fiche accessible");
+        const other = dbAll_("Prospects").find(function (x) { return !x.ownerRepId; });
+        if (other) T.fails(tok, "prospect.get", { prospectId: other.prospectId }, "NOT_FOUND");
+        T.ok(T.call(fx.tok.superA, "prospect.list", { source: "REP", q: fx.run }).items.some(function (x) { return x.prospectId === id && /Karim Benali/.test(x.repName); }), "le super administrateur le voit avec le nom du commercial");
+        const block = prospectInstructionsPayload_().payload.prospects.find(function (x) { return x.email === em; });
+        T.ok(block && block.doNotContact, "consignes : les agents ne doivent pas le contacter");
+        prospectApplyAgents_({ prospects: [{ key: em, email: em, company: "Riad Conciergerie " + fx.run, status: "a_envoyer" }], events: [{ key: em, kind: "DRAFT", summary: "x" }] }, "run-rep-" + fx.run, "agents@x.test");
+        const x = dbGet_("Prospects", id);
+        T.ok(x.status !== "a_envoyer" && !dbAll_("ProspectEvents").some(function (e) { return e.prospectId === id && e.source === "AGENTS"; }), "les agents n'y touchent pas");
+        T.fails(tok, "prospect.save", { target: "AGENCE", company: "Autre " + fx.run, email: (other || {}).email || "zz@zz.zz" }, "VALIDATION");
+      }]
+    ] },
     { name: "Cloisonnement entre clients (attaque de toutes les routes)", tests: [
       ["Un autre client et une agence sans mandat appellent TOUTES les routes avec les identifiants du client A : aucune donnée de A ne sort", function (T, fx) {
         const A = String(fx.orgA.organizationId), S = schema_();

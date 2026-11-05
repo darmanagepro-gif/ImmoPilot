@@ -60,7 +60,7 @@ function jobSummary_(r) { return { ok: !!(r && r.ok), skipped: !!(r && r.skipped
 /** Chaque jour : baux, abonnements, devis expirés, alertes incidents, rétention, arrivées imminentes, sauvegarde. */
 function jobDaily() {
   return jobSummary_(runJob_("jobDaily", { leases: leaseJob_, cardPayments: sumupChargeJob_, subscriptions: subscriptionJob_, quotes: quoteExpireJob_, incidents: incidentAlertsJob_, retention: purgeExpiredDocuments_,
-    arrivals: upcomingArrivalsJob_, providerInsurance: providerExpiryJob_, commissions: commissionDailyJob_, guestTokens: guestTokenExpireJob_, prospects: prospectDailyJob_, backup: function () { return backupDatabase_("quotidien").name; } }));
+    arrivals: upcomingArrivalsJob_, providerInsurance: providerExpiryJob_, commissions: commissionDailyJob_, guestTokens: guestTokenExpireJob_, prospects: prospectDailyJob_, salesCommissions: salesDailyJob_, backup: function () { return backupDatabase_("quotidien").name; } }));
 }
 
 /** Arrivées non enregistrées et départs dépassés (une alerte par réservation). */
