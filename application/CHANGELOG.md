@@ -1,5 +1,14 @@
 # Journal des modifications
 
+## 2.8.0 — Espace Prospects et équipe d'agents commerciaux
+
+- Nouvelle page super administrateur « Prospects » : tableau de bord (réponses à traiter, relances dues, brouillons prêts, découvertes, clients, artisans vérifiés, tunnel, résultats par territoire et par cible), listes « Clients à signer » et « Artisans à référencer » avec filtres, fiche prospect avec journal complet (brouillons, envois, réponses, relances, notes, appels, rendez-vous), changement de statut, « ne plus contacter », export CSV.
+- Import de listes : Excel, CSV et ODS lus dans le navigateur (colonnes reconnues automatiquement) ; PDF, photos, captures et cartes de visite lus par l'IA Claude (`/prospects/extract`, appel asynchrone : le serveur reste disponible). Aperçu avant enregistrement : téléphones au format international (+33 / +212), cible déduite du métier, doublons signalés (base et fichier), fusion facultative des champs vides.
+- Synchronisation avec l'équipe d'agents (tâches planifiées hors serveur) : les agents envoient chaque matin leur travail à une adresse secrète `agents-…@crm.<domaine>` reçue par Brevo (inbound parsing, webhook `/hooks/brevo-inbound/<BREVO_WEBHOOK_TOKEN>` déclaré automatiquement) ; DarPilot leur renvoie chaque jour (ou à la demande) les fiches importées ou modifiées et vos décisions. Expéditeur contrôlé, paquets idempotents, « ne plus contacter » et statuts d'arrêt jamais écrasés par les agents, échanges journalisés.
+- La clé d'IA ne quitte jamais le serveur ; toutes les routes `prospect.*` sont réservées au super administrateur ; export CSV protégé contre l'injection de formules.
+- Forfaits créés à l'installation : essai de 60 jours (au lieu de 14). Les forfaits existants se règlent dans Abonnements › Forfaits.
+- Mode d'emploi : PROSPECTS.md.
+
 ## 2.7.0 — ImmoPilot devient DarPilot
 
 - Nouveau nom commercial DarPilot, slogan « Votre bien en pilote automatique. » : interface (6 langues), e-mails, PDF, documents juridiques, assistant, page d'accueil, manifeste de l'application.

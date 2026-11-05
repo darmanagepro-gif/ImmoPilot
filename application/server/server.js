@@ -135,6 +135,21 @@ const server = http.createServer(async function (req, res) {
       let body; try { body = JSON.parse(await readBody(req, 2e6)); } catch (e) { return send(res, 400, "text/plain; charset=utf-8", "JSON invalide."); }
       return send(res, 200, "application/json; charset=utf-8", JSON.stringify({ ok: true, updated: brevoEvents(body) }));
     }
+    // Espace Prospects : e-mails des agents commerciaux reçus par Brevo (inbound parsing). Même secret d'adresse que le webhook Brevo.
+    const inb = /^\/hooks\/brevo-inbound\/([A-Za-z0-9_-]{24,128})$/.exec(url.pathname);
+    if (req.method === "POST" && inb) {
+      const ok = C.brevoWebhookToken && inb[1].length === C.brevoWebhookToken.length && crypto.timingSafeEqual(Buffer.from(inb[1]), Buffer.from(C.brevoWebhookToken));
+      if (!ok) return send(res, 404, "text/plain; charset=utf-8", "Introuvable.");
+      let body; try { body = JSON.parse(await readBody(req, 4e6)); } catch (e) { return send(res, 400, "text/plain; charset=utf-8", "JSON invalide."); }
+      let out; try { out = rt.call("prospectInboundHook_", [body]); } catch (e) { console.error("Synchronisation agents : " + e.message); return send(res, 500, "text/plain; charset=utf-8", "Erreur."); }
+      return send(res, 200, "application/json; charset=utf-8", JSON.stringify(out || { ok: true }));
+    }
+    // Espace Prospects : lecture d'une liste en PDF ou en photo par l'IA Claude (asynchrone : le serveur reste disponible pendant la lecture).
+    if (req.method === "POST" && url.pathname === "/prospects/extract") {
+      if (req.headers["x-immopilot"] !== "1" || !/application\/json/.test(String(req.headers["content-type"] || "")) || !sameOrigin(req)) return send(res, 403, "text/plain; charset=utf-8", "Refusé.");
+      const body = JSON.parse(await readBody(req, C.maxBody));
+      return send(res, 200, "application/json; charset=utf-8", JSON.stringify(await prospectExtract(body || {})));
+    }
     // Stripe Connect : paiements de factures par la plateforme. Signature HMAC vérifiée (horodatage de moins de 5 minutes).
     if (req.method === "POST" && url.pathname === "/hooks/stripe") {
       const raw = await readBody(req, 1e6);
@@ -281,6 +296,63 @@ async function brevoWebhookEnsure() {
 }
 setTimeout(brevoWebhookEnsure, 5000).unref();
 setInterval(mailTick, Number(process.env.MAIL_TICK_MS || 30000)).unref();
+
+/* ----------------------------- Espace Prospects : IA et réception Brevo ----------------------------- */
+const ANTHROPIC_API = process.env.ANTHROPIC_API_URL || "https://api.anthropic.com/v1/messages"; // ANTHROPIC_API_URL : tests uniquement
+const EXTRACT_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif"];
+/** Tableau JSON dans la réponse de l'IA (tolère un bloc ```json et une réponse tronquée). */
+function parseJsonArray(text) {
+  let s = String(text || "").replace(/```(json)?/gi, "");
+  const i = s.indexOf("["); if (i < 0) return null;
+  s = s.slice(i);
+  try { return JSON.parse(s.slice(0, s.lastIndexOf("]") + 1)); } catch (e) { /* réponse tronquée : on garde les fiches complètes */ }
+  const k = s.lastIndexOf("}"); if (k < 0) return null;
+  try { return JSON.parse(s.slice(0, k + 1) + "]"); } catch (e) { return null; }
+}
+async function prospectExtract(b) {
+  const fail = function (m) { return { ok: false, error: { code: "VALIDATION", message: m } }; };
+  if (EXTRACT_TYPES.indexOf(String(b.mimeType)) < 0) return fail("Format non pris en charge : PDF, JPEG, PNG, WEBP ou GIF. Pour Excel et CSV, l'import se fait sans IA.");
+  if (typeof b.base64 !== "string" || !b.base64 || b.base64.length > 15e6 || !/^[A-Za-z0-9+/=\s]+$/.test(b.base64.slice(0, 2000))) return fail("Fichier illisible ou trop volumineux (10 Mo au plus).");
+  const gate = rt.call("prospectExtractGate_", [String(b.token || "")]);
+  if (!gate || !gate.ok) return gate || fail("Accès refusé.");
+  const g = gate.data, block = b.mimeType === "application/pdf"
+    ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: b.base64 } }
+    : { type: "image", source: { type: "base64", media_type: b.mimeType, data: b.base64 } };
+  let records;
+  try {
+    const r = await fetch(ANTHROPIC_API, { method: "POST", signal: AbortSignal.timeout(240000), headers: { "x-api-key": g.key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: g.model, max_tokens: 16000, system: g.system, messages: [{ role: "user", content: [block, { type: "text", text: "Extrais toutes les fiches de contacts de ce document. Réponds uniquement par le tableau JSON." }] }] }) });
+    const j = await r.json().catch(function () { return {}; });
+    if (!r.ok) return fail("Service d'IA : HTTP " + r.status + (j.error && j.error.message ? " — " + String(j.error.message).slice(0, 200) : ""));
+    records = parseJsonArray((j.content || []).filter(function (c) { return c.type === "text"; }).map(function (c) { return c.text; }).join("\n"));
+  } catch (e) { return fail("Lecture par l'IA impossible : " + (e.name === "TimeoutError" ? "délai dépassé (document trop long, découpez-le)" : e.message)); }
+  if (!Array.isArray(records)) return fail("L'IA n'a trouvé aucune fiche lisible dans ce document.");
+  return rt.call("prospectExtractFinish_", [String(b.token || ""), records.slice(0, 2000), { fileName: String(b.fileName || "").slice(0, 160), defaults: b.defaults || {} }]);
+}
+/** Déclare (une fois par domaine) le webhook Brevo de réception des e-mails des agents, quand la synchronisation est activée. */
+let inboundEnsured = "";
+async function brevoInboundEnsure() {
+  if (!C.brevoApiKey || !C.brevoWebhookToken || !C.publicUrl) return;
+  const P = rt.ctx.PropertiesService.getScriptProperties();
+  if (P.getProperty("IMMO_PROSPECT_SYNC") !== "1") return;
+  let domain = ""; try { domain = rt.ctx.prospectInboundDomain_(); } catch (e) { domain = ""; }
+  if (!domain || inboundEnsured === domain) return;
+  const url = C.publicUrl.replace(/\/+$/, "") + "/hooks/brevo-inbound/" + C.brevoWebhookToken, h = { "api-key": C.brevoApiKey, accept: "application/json", "content-type": "application/json" };
+  let status;
+  try {
+    const list = await (await fetch(BREVO_API + "/webhooks?type=inbound", { headers: h, signal: AbortSignal.timeout(20000) })).json();
+    if ((list.webhooks || []).some(function (w) { return w.url === url && (!w.domain || w.domain === domain); })) status = "OK " + domain;
+    else {
+      const r = await fetch(BREVO_API + "/webhooks", { method: "POST", headers: h, signal: AbortSignal.timeout(20000), body: JSON.stringify({ type: "inbound", events: ["inboundEmailProcessed"], url: url, domain: domain, description: "DarPilot prospects " + C.publicUrl }) });
+      status = r.ok ? "OK " + domain : "ERREUR " + r.status + " " + (await r.text()).slice(0, 200);
+    }
+  } catch (e) { status = "ERREUR " + e.message; }
+  if (/^OK/.test(status)) inboundEnsured = domain;
+  P.setProperty("IMMO_PROSPECT_WEBHOOK", new Date().toISOString().slice(0, 16) + " " + status); rt.commit();
+  console.log("Webhook Brevo (réception prospects) : " + status);
+}
+setTimeout(brevoInboundEnsure, 8000).unref();
+setInterval(function () { brevoInboundEnsure().catch(function (e) { console.error(e.message); }); }, 10 * 60000).unref();
 
 /* ----------------------------- Tâches planifiées ----------------------------- */
 function localNow() {

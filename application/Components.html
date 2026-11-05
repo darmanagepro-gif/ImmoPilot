@@ -417,6 +417,7 @@ try { window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change
    carte seulement quand on l'ouvre. */
 const LIBS = {
   chart: { js: "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js", ready: function () { return !!window.Chart; }, after: function () { themeApply(themeCurrent()); } },
+  xlsx: { js: "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js", ready: function () { return !!window.XLSX; } },
   leaflet: { js: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js", css: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css", ready: function () { return !!window.L; } }
 };
 const LIB_P = {};

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-10-19T13:48:00.013Z",
+  "ranAt": "2026-11-05T12:40:47.082Z",
   "roles": [
     {
       "role": "Propriétaire",
@@ -170,7 +170,7 @@
           "empty": false
         },
         {
-          "route": "property/prop_5c64a9dc99b341a6876c69edc5d1c708",
+          "route": "property/prop_b7437d5cc3b444d3ac03136379f3c2d5",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -179,7 +179,7 @@
           "detail": true
         },
         {
-          "route": "reservation/resv_748939a8d6434cc2bec7a68a1ea1b83e",
+          "route": "reservation/resv_e197faca3f9f40d88a358458ad83ad8e",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -188,7 +188,7 @@
           "detail": true
         },
         {
-          "route": "incident/inc_5291aa42863c4f5dabdd1c20e647f5c4",
+          "route": "incident/inc_1f74a6c2a71f4e4fa7e026deee9768d1",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -197,7 +197,7 @@
           "detail": true
         },
         {
-          "route": "cleaning/cln_46ef9189e79b4659a822cf2e4e28cd0c",
+          "route": "cleaning/cln_b80e2983ece8465e89238f99cc02e9eb",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -206,7 +206,7 @@
           "detail": true
         },
         {
-          "route": "workorder/wo_c11869a5af534ed1a97af089683fa5c4",
+          "route": "workorder/wo_71d4a220548a44ab8245ed3f8dc61d48",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -215,7 +215,7 @@
           "detail": true
         },
         {
-          "route": "invoice/ivc_2dcb99771892486dbbd39c0c01925997",
+          "route": "invoice/ivc_11bd6a1c0ae64e89b5533228a78c2700",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -224,7 +224,7 @@
           "detail": true
         },
         {
-          "route": "lease/lea_028fe6fbc64645659852865e9c4cadf4",
+          "route": "lease/lea_b866947b7b944de991adf61b1b735a73",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -233,7 +233,7 @@
           "detail": true
         },
         {
-          "route": "contractors/art_549544b324e54e8c988f731e68b0cb3c",
+          "route": "contractors/art_b0267429b08247aeb3f74ea057e47c13",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -243,7 +243,7 @@
         }
       ],
       "errors": [],
-      "callsOk": 37,
+      "callsOk": 38,
       "callsFailed": []
     },
     {
@@ -408,7 +408,7 @@
           "empty": false
         },
         {
-          "route": "property/prop_5c64a9dc99b341a6876c69edc5d1c708",
+          "route": "property/prop_b7437d5cc3b444d3ac03136379f3c2d5",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -417,7 +417,7 @@
           "detail": true
         },
         {
-          "route": "reservation/resv_748939a8d6434cc2bec7a68a1ea1b83e",
+          "route": "reservation/resv_e197faca3f9f40d88a358458ad83ad8e",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -426,7 +426,7 @@
           "detail": true
         },
         {
-          "route": "incident/inc_5291aa42863c4f5dabdd1c20e647f5c4",
+          "route": "incident/inc_1f74a6c2a71f4e4fa7e026deee9768d1",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -435,7 +435,7 @@
           "detail": true
         },
         {
-          "route": "cleaning/cln_46ef9189e79b4659a822cf2e4e28cd0c",
+          "route": "cleaning/cln_b80e2983ece8465e89238f99cc02e9eb",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -444,7 +444,7 @@
           "detail": true
         },
         {
-          "route": "workorder/wo_c11869a5af534ed1a97af089683fa5c4",
+          "route": "workorder/wo_71d4a220548a44ab8245ed3f8dc61d48",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -453,7 +453,7 @@
           "detail": true
         },
         {
-          "route": "invoice/ivc_2dcb99771892486dbbd39c0c01925997",
+          "route": "invoice/ivc_11bd6a1c0ae64e89b5533228a78c2700",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -462,7 +462,7 @@
           "detail": true
         },
         {
-          "route": "lease/lea_028fe6fbc64645659852865e9c4cadf4",
+          "route": "lease/lea_b866947b7b944de991adf61b1b735a73",
           "alerts": [
             "Bail introuvable ou accès refusé."
           ],
@@ -473,7 +473,7 @@
           "detail": true
         },
         {
-          "route": "contractors/art_549544b324e54e8c988f731e68b0cb3c",
+          "route": "contractors/art_b0267429b08247aeb3f74ea057e47c13",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -483,7 +483,7 @@
         }
       ],
       "errors": [],
-      "callsOk": 35,
+      "callsOk": 36,
       "callsFailed": [
         "lease.get → FORBIDDEN Bail introuvable ou accès refusé."
       ]
@@ -615,7 +615,7 @@
           "empty": false
         },
         {
-          "route": "property/prop_5c64a9dc99b341a6876c69edc5d1c708",
+          "route": "property/prop_b7437d5cc3b444d3ac03136379f3c2d5",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -624,7 +624,7 @@
           "detail": true
         },
         {
-          "route": "reservation/resv_748939a8d6434cc2bec7a68a1ea1b83e",
+          "route": "reservation/resv_e197faca3f9f40d88a358458ad83ad8e",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -633,7 +633,7 @@
           "detail": true
         },
         {
-          "route": "incident/inc_5291aa42863c4f5dabdd1c20e647f5c4",
+          "route": "incident/inc_1f74a6c2a71f4e4fa7e026deee9768d1",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -642,7 +642,7 @@
           "detail": true
         },
         {
-          "route": "cleaning/cln_46ef9189e79b4659a822cf2e4e28cd0c",
+          "route": "cleaning/cln_b80e2983ece8465e89238f99cc02e9eb",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -651,7 +651,7 @@
           "detail": true
         },
         {
-          "route": "workorder/wo_c11869a5af534ed1a97af089683fa5c4",
+          "route": "workorder/wo_71d4a220548a44ab8245ed3f8dc61d48",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -660,7 +660,7 @@
           "detail": true
         },
         {
-          "route": "invoice/ivc_2dcb99771892486dbbd39c0c01925997",
+          "route": "invoice/ivc_11bd6a1c0ae64e89b5533228a78c2700",
           "alerts": [
             "Facture introuvable ou accès refusé."
           ],
@@ -671,7 +671,7 @@
           "detail": true
         },
         {
-          "route": "lease/lea_028fe6fbc64645659852865e9c4cadf4",
+          "route": "lease/lea_b866947b7b944de991adf61b1b735a73",
           "alerts": [
             "Bail introuvable ou accès refusé."
           ],
@@ -682,7 +682,7 @@
           "detail": true
         },
         {
-          "route": "contractors/art_549544b324e54e8c988f731e68b0cb3c",
+          "route": "contractors/art_b0267429b08247aeb3f74ea057e47c13",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -748,7 +748,7 @@
           "empty": false
         },
         {
-          "route": "property/prop_5c64a9dc99b341a6876c69edc5d1c708",
+          "route": "property/prop_b7437d5cc3b444d3ac03136379f3c2d5",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -757,7 +757,7 @@
           "detail": true
         },
         {
-          "route": "reservation/resv_748939a8d6434cc2bec7a68a1ea1b83e",
+          "route": "reservation/resv_e197faca3f9f40d88a358458ad83ad8e",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -766,7 +766,7 @@
           "detail": true
         },
         {
-          "route": "incident/inc_5291aa42863c4f5dabdd1c20e647f5c4",
+          "route": "incident/inc_1f74a6c2a71f4e4fa7e026deee9768d1",
           "alerts": [
             "Incident introuvable ou accès refusé."
           ],
@@ -777,7 +777,7 @@
           "detail": true
         },
         {
-          "route": "cleaning/cln_46ef9189e79b4659a822cf2e4e28cd0c",
+          "route": "cleaning/cln_b80e2983ece8465e89238f99cc02e9eb",
           "alerts": [
             "Mission introuvable ou accès refusé."
           ],
@@ -788,7 +788,7 @@
           "detail": true
         },
         {
-          "route": "workorder/wo_c11869a5af534ed1a97af089683fa5c4",
+          "route": "workorder/wo_71d4a220548a44ab8245ed3f8dc61d48",
           "alerts": [
             "Intervention introuvable ou accès refusé."
           ],
@@ -799,7 +799,7 @@
           "detail": true
         },
         {
-          "route": "invoice/ivc_2dcb99771892486dbbd39c0c01925997",
+          "route": "invoice/ivc_11bd6a1c0ae64e89b5533228a78c2700",
           "alerts": [
             "Facture introuvable ou accès refusé."
           ],
@@ -810,7 +810,7 @@
           "detail": true
         },
         {
-          "route": "lease/lea_028fe6fbc64645659852865e9c4cadf4",
+          "route": "lease/lea_b866947b7b944de991adf61b1b735a73",
           "alerts": [
             "Bail introuvable ou accès refusé."
           ],
@@ -821,7 +821,7 @@
           "detail": true
         },
         {
-          "route": "contractors/art_549544b324e54e8c988f731e68b0cb3c",
+          "route": "contractors/art_b0267429b08247aeb3f74ea057e47c13",
           "alerts": [
             "Prestataire introuvable ou accès refusé."
           ],
@@ -886,7 +886,7 @@
           "empty": false
         },
         {
-          "route": "property/prop_5c64a9dc99b341a6876c69edc5d1c708",
+          "route": "property/prop_b7437d5cc3b444d3ac03136379f3c2d5",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -895,7 +895,7 @@
           "detail": true
         },
         {
-          "route": "reservation/resv_748939a8d6434cc2bec7a68a1ea1b83e",
+          "route": "reservation/resv_e197faca3f9f40d88a358458ad83ad8e",
           "alerts": [
             "Réservation introuvable ou accès refusé."
           ],
@@ -906,7 +906,7 @@
           "detail": true
         },
         {
-          "route": "incident/inc_5291aa42863c4f5dabdd1c20e647f5c4",
+          "route": "incident/inc_1f74a6c2a71f4e4fa7e026deee9768d1",
           "alerts": [
             "Incident introuvable ou accès refusé."
           ],
@@ -917,7 +917,7 @@
           "detail": true
         },
         {
-          "route": "cleaning/cln_46ef9189e79b4659a822cf2e4e28cd0c",
+          "route": "cleaning/cln_b80e2983ece8465e89238f99cc02e9eb",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -926,7 +926,7 @@
           "detail": true
         },
         {
-          "route": "workorder/wo_c11869a5af534ed1a97af089683fa5c4",
+          "route": "workorder/wo_71d4a220548a44ab8245ed3f8dc61d48",
           "alerts": [
             "Intervention introuvable ou accès refusé."
           ],
@@ -937,7 +937,7 @@
           "detail": true
         },
         {
-          "route": "invoice/ivc_2dcb99771892486dbbd39c0c01925997",
+          "route": "invoice/ivc_11bd6a1c0ae64e89b5533228a78c2700",
           "alerts": [
             "Facture introuvable ou accès refusé."
           ],
@@ -948,7 +948,7 @@
           "detail": true
         },
         {
-          "route": "lease/lea_028fe6fbc64645659852865e9c4cadf4",
+          "route": "lease/lea_b866947b7b944de991adf61b1b735a73",
           "alerts": [
             "Bail introuvable ou accès refusé."
           ],
@@ -959,7 +959,7 @@
           "detail": true
         },
         {
-          "route": "contractors/art_549544b324e54e8c988f731e68b0cb3c",
+          "route": "contractors/art_b0267429b08247aeb3f74ea057e47c13",
           "alerts": [
             "Prestataire introuvable ou accès refusé."
           ],
@@ -1038,7 +1038,7 @@
           "empty": false
         },
         {
-          "route": "property/prop_5c64a9dc99b341a6876c69edc5d1c708",
+          "route": "property/prop_b7437d5cc3b444d3ac03136379f3c2d5",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1047,7 +1047,7 @@
           "detail": true
         },
         {
-          "route": "reservation/resv_748939a8d6434cc2bec7a68a1ea1b83e",
+          "route": "reservation/resv_e197faca3f9f40d88a358458ad83ad8e",
           "alerts": [
             "Réservation introuvable ou accès refusé."
           ],
@@ -1058,7 +1058,7 @@
           "detail": true
         },
         {
-          "route": "incident/inc_5291aa42863c4f5dabdd1c20e647f5c4",
+          "route": "incident/inc_1f74a6c2a71f4e4fa7e026deee9768d1",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1067,7 +1067,7 @@
           "detail": true
         },
         {
-          "route": "cleaning/cln_46ef9189e79b4659a822cf2e4e28cd0c",
+          "route": "cleaning/cln_b80e2983ece8465e89238f99cc02e9eb",
           "alerts": [
             "Mission introuvable ou accès refusé."
           ],
@@ -1078,7 +1078,7 @@
           "detail": true
         },
         {
-          "route": "workorder/wo_c11869a5af534ed1a97af089683fa5c4",
+          "route": "workorder/wo_71d4a220548a44ab8245ed3f8dc61d48",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1087,7 +1087,7 @@
           "detail": true
         },
         {
-          "route": "invoice/ivc_2dcb99771892486dbbd39c0c01925997",
+          "route": "invoice/ivc_11bd6a1c0ae64e89b5533228a78c2700",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1096,7 +1096,7 @@
           "detail": true
         },
         {
-          "route": "lease/lea_028fe6fbc64645659852865e9c4cadf4",
+          "route": "lease/lea_b866947b7b944de991adf61b1b735a73",
           "alerts": [
             "Bail introuvable ou accès refusé."
           ],
@@ -1107,7 +1107,7 @@
           "detail": true
         },
         {
-          "route": "contractors/art_549544b324e54e8c988f731e68b0cb3c",
+          "route": "contractors/art_b0267429b08247aeb3f74ea057e47c13",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1167,7 +1167,7 @@
           "empty": false
         },
         {
-          "route": "property/prop_5c64a9dc99b341a6876c69edc5d1c708",
+          "route": "property/prop_b7437d5cc3b444d3ac03136379f3c2d5",
           "alerts": [
             "Bien introuvable ou accès refusé."
           ],
@@ -1178,7 +1178,7 @@
           "detail": true
         },
         {
-          "route": "reservation/resv_748939a8d6434cc2bec7a68a1ea1b83e",
+          "route": "reservation/resv_e197faca3f9f40d88a358458ad83ad8e",
           "alerts": [
             "Réservation introuvable ou accès refusé."
           ],
@@ -1189,7 +1189,7 @@
           "detail": true
         },
         {
-          "route": "incident/inc_5291aa42863c4f5dabdd1c20e647f5c4",
+          "route": "incident/inc_1f74a6c2a71f4e4fa7e026deee9768d1",
           "alerts": [
             "Incident introuvable ou accès refusé."
           ],
@@ -1200,7 +1200,7 @@
           "detail": true
         },
         {
-          "route": "cleaning/cln_46ef9189e79b4659a822cf2e4e28cd0c",
+          "route": "cleaning/cln_b80e2983ece8465e89238f99cc02e9eb",
           "alerts": [
             "Mission introuvable ou accès refusé."
           ],
@@ -1211,7 +1211,7 @@
           "detail": true
         },
         {
-          "route": "workorder/wo_c11869a5af534ed1a97af089683fa5c4",
+          "route": "workorder/wo_71d4a220548a44ab8245ed3f8dc61d48",
           "alerts": [
             "Intervention introuvable ou accès refusé."
           ],
@@ -1222,7 +1222,7 @@
           "detail": true
         },
         {
-          "route": "invoice/ivc_2dcb99771892486dbbd39c0c01925997",
+          "route": "invoice/ivc_11bd6a1c0ae64e89b5533228a78c2700",
           "alerts": [
             "Facture introuvable ou accès refusé."
           ],
@@ -1233,7 +1233,7 @@
           "detail": true
         },
         {
-          "route": "lease/lea_028fe6fbc64645659852865e9c4cadf4",
+          "route": "lease/lea_b866947b7b944de991adf61b1b735a73",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1242,7 +1242,7 @@
           "detail": true
         },
         {
-          "route": "contractors/art_549544b324e54e8c988f731e68b0cb3c",
+          "route": "contractors/art_b0267429b08247aeb3f74ea057e47c13",
           "alerts": [
             "Prestataire introuvable ou accès refusé."
           ],
@@ -1277,7 +1277,10 @@
         "users",
         "subscriptions",
         "settings",
+        "prospects",
         "accounts",
+        "referencements",
+        "commissions",
         "admin",
         "audit"
       ],
@@ -1325,7 +1328,25 @@
           "empty": false
         },
         {
+          "route": "prospects",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
           "route": "accounts",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "referencements",
+          "alerts": [],
+          "notFound": false,
+          "empty": false
+        },
+        {
+          "route": "commissions",
           "alerts": [],
           "notFound": false,
           "empty": false
@@ -1343,7 +1364,7 @@
           "empty": false
         },
         {
-          "route": "property/prop_5c64a9dc99b341a6876c69edc5d1c708",
+          "route": "property/prop_b7437d5cc3b444d3ac03136379f3c2d5",
           "alerts": [
             "Bien introuvable ou accès refusé."
           ],
@@ -1354,7 +1375,7 @@
           "detail": true
         },
         {
-          "route": "reservation/resv_748939a8d6434cc2bec7a68a1ea1b83e",
+          "route": "reservation/resv_e197faca3f9f40d88a358458ad83ad8e",
           "alerts": [
             "Réservation introuvable ou accès refusé."
           ],
@@ -1365,7 +1386,7 @@
           "detail": true
         },
         {
-          "route": "incident/inc_5291aa42863c4f5dabdd1c20e647f5c4",
+          "route": "incident/inc_1f74a6c2a71f4e4fa7e026deee9768d1",
           "alerts": [
             "Incident introuvable ou accès refusé."
           ],
@@ -1376,7 +1397,7 @@
           "detail": true
         },
         {
-          "route": "cleaning/cln_46ef9189e79b4659a822cf2e4e28cd0c",
+          "route": "cleaning/cln_b80e2983ece8465e89238f99cc02e9eb",
           "alerts": [
             "Mission introuvable ou accès refusé."
           ],
@@ -1387,7 +1408,7 @@
           "detail": true
         },
         {
-          "route": "workorder/wo_c11869a5af534ed1a97af089683fa5c4",
+          "route": "workorder/wo_71d4a220548a44ab8245ed3f8dc61d48",
           "alerts": [
             "Intervention introuvable ou accès refusé."
           ],
@@ -1398,7 +1419,7 @@
           "detail": true
         },
         {
-          "route": "invoice/ivc_2dcb99771892486dbbd39c0c01925997",
+          "route": "invoice/ivc_11bd6a1c0ae64e89b5533228a78c2700",
           "alerts": [
             "Facture introuvable ou accès refusé."
           ],
@@ -1409,7 +1430,7 @@
           "detail": true
         },
         {
-          "route": "lease/lea_028fe6fbc64645659852865e9c4cadf4",
+          "route": "lease/lea_b866947b7b944de991adf61b1b735a73",
           "alerts": [
             "Bail introuvable ou accès refusé."
           ],
@@ -1420,19 +1441,17 @@
           "detail": true
         },
         {
-          "route": "contractors/art_549544b324e54e8c988f731e68b0cb3c",
-          "alerts": [
-            "Accès refusé aux documents de cet élément."
-          ],
+          "route": "contractors/art_b0267429b08247aeb3f74ea057e47c13",
+          "alerts": [],
           "notFound": false,
           "empty": false,
           "expected": false,
-          "denied": true,
+          "denied": false,
           "detail": true
         }
       ],
       "errors": [],
-      "callsOk": 11,
+      "callsOk": 16,
       "callsFailed": [
         "property.get → FORBIDDEN Bien introuvable ou accès refusé.",
         "resv.get → FORBIDDEN Réservation introuvable ou accès refusé.",
@@ -1440,8 +1459,7 @@
         "clean.get → FORBIDDEN Mission introuvable ou accès refusé.",
         "wo.get → FORBIDDEN Intervention introuvable ou accès refusé.",
         "inv.get → FORBIDDEN Facture introuvable ou accès refusé.",
-        "lease.get → FORBIDDEN Bail introuvable ou accès refusé.",
-        "ctr.get → FORBIDDEN Accès refusé aux documents de cet élément."
+        "lease.get → FORBIDDEN Bail introuvable ou accès refusé."
       ]
     },
     {
@@ -1613,7 +1631,7 @@
           "empty": false
         },
         {
-          "route": "property/prop_5c64a9dc99b341a6876c69edc5d1c708",
+          "route": "property/prop_b7437d5cc3b444d3ac03136379f3c2d5",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1622,7 +1640,7 @@
           "detail": true
         },
         {
-          "route": "reservation/resv_748939a8d6434cc2bec7a68a1ea1b83e",
+          "route": "reservation/resv_e197faca3f9f40d88a358458ad83ad8e",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1631,7 +1649,7 @@
           "detail": true
         },
         {
-          "route": "incident/inc_5291aa42863c4f5dabdd1c20e647f5c4",
+          "route": "incident/inc_1f74a6c2a71f4e4fa7e026deee9768d1",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1640,7 +1658,7 @@
           "detail": true
         },
         {
-          "route": "cleaning/cln_46ef9189e79b4659a822cf2e4e28cd0c",
+          "route": "cleaning/cln_b80e2983ece8465e89238f99cc02e9eb",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1649,7 +1667,7 @@
           "detail": true
         },
         {
-          "route": "workorder/wo_c11869a5af534ed1a97af089683fa5c4",
+          "route": "workorder/wo_71d4a220548a44ab8245ed3f8dc61d48",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1658,7 +1676,7 @@
           "detail": true
         },
         {
-          "route": "invoice/ivc_2dcb99771892486dbbd39c0c01925997",
+          "route": "invoice/ivc_11bd6a1c0ae64e89b5533228a78c2700",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1667,7 +1685,7 @@
           "detail": true
         },
         {
-          "route": "lease/lea_028fe6fbc64645659852865e9c4cadf4",
+          "route": "lease/lea_b866947b7b944de991adf61b1b735a73",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1676,7 +1694,7 @@
           "detail": true
         },
         {
-          "route": "contractors/art_549544b324e54e8c988f731e68b0cb3c",
+          "route": "contractors/art_b0267429b08247aeb3f74ea057e47c13",
           "alerts": [],
           "notFound": false,
           "empty": false,
@@ -1686,7 +1704,7 @@
         }
       ],
       "errors": [],
-      "callsOk": 40,
+      "callsOk": 41,
       "callsFailed": []
     }
   ],
@@ -1694,25 +1712,25 @@
     {
       "mode": "app",
       "heading": "Connexion",
-      "text": "IPImmoPilotMarrakech · MarocLa gestion locative, de l'arrivée du voyageur au dernier dirham.Réservations, ménage, maintenance, baux et finances réunis pour les ",
+      "text": "IPDarPilotMarrakech · MarocLa gestion locative, de l'arrivée du voyageur au dernier dirham.Réservations, ménage, maintenance, baux et finances réunis pour les p",
       "errors": []
     },
     {
       "mode": "guest",
       "heading": "Riad Test A",
-      "text": "Riad Test AMarrakechFrançaisEnglishالعربيةEspañolItalianoNederlandsVotre séjourArrivée08/11/2026 · à partir de 15:00Départ11/11/2026 · avant 11:00Voyageurs2Rése",
+      "text": "Riad Test AMarrakechFrançaisEnglishالعربيةEspañolItalianoNederlandsVotre séjourArrivée25/11/2026 · à partir de 15:00Départ28/11/2026 · avant 11:00Voyageurs2Rése",
       "errors": []
     },
     {
       "mode": "accept",
       "heading": "Invitation",
-      "text": "IPImmoPilotMarrakech · MarocLa gestion locative, de l'arrivée du voyageur au dernier dirham.Réservations, ménage, maintenance, baux et finances réunis pour les ",
+      "text": "IPDarPilotMarrakech · MarocLa gestion locative, de l'arrivée du voyageur au dernier dirham.Réservations, ménage, maintenance, baux et finances réunis pour les p",
       "errors": []
     },
     {
       "mode": "reset",
       "heading": "Définir votre mot de passe",
-      "text": "IPImmoPilotMarrakech · MarocLa gestion locative, de l'arrivée du voyageur au dernier dirham.Réservations, ménage, maintenance, baux et finances réunis pour les ",
+      "text": "IPDarPilotMarrakech · MarocLa gestion locative, de l'arrivée du voyageur au dernier dirham.Réservations, ménage, maintenance, baux et finances réunis pour les p",
       "errors": []
     }
   ]

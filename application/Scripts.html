@@ -36,6 +36,7 @@ const NAV = [
     { r: "users", l: "Utilisateurs", i: "☰", show: function () { return can("user.invite") || can("user.manage") || S.me.isSuper; } },
     { r: "subscriptions", l: "Abonnements", i: "◈", show: function () { return can("subscription.view") || S.me.isSuper; } },
     { r: "settings", l: "Paramètres", i: "⚙", show: function () { return true; } },
+    { r: "prospects", l: "Prospects", i: "◎", show: function () { return S.me.isSuper; } },
     { r: "accounts", l: "Comptes clients", i: "◉", show: function () { return S.me.isSuper; } },
     { r: "referencements", l: "Référencements artisans", i: "✔", show: function () { return S.me.isSuper; } },
     { r: "commissions", l: "Commissions", i: "%", show: function () { return S.me.isSuper; } },
@@ -500,6 +501,219 @@ PAGES.referencements = function (el) {
     } };
   }));
 };
+/* ------------------------------ Espace Prospects (super administrateur) ------------------------------ */
+const PROSPECT_ST = { a_qualifier: "À qualifier", froid: "Froid", qualifie: "Qualifié", a_envoyer: "Brouillon prêt", contacte: "Contacté", en_discussion: "En discussion", rdv_pris: "RDV pris",
+  demo_faite: "Démo faite", devis_envoye: "Devis envoyé", decouverte_2_mois: "Découverte 2 mois", client_payant: "Client payant", en_pause: "En pause", perdu: "Perdu", desinscrit: "Désinscrit",
+  a_contacter: "À contacter", interesse: "Intéressé", dossier_en_cours: "Dossier en cours", dossier_complet: "Dossier complet", verifie: "Vérifié", actif: "Actif", suspendu: "Suspendu", refuse: "Refusé" };
+const PROSPECT_TG = { AGENCE: "Agence immobilière", CONCIERGERIE: "Conciergerie", SYNDIC: "Syndic", PROPRIETAIRE: "Propriétaire", ARTISAN: "Artisan", AUTRE: "Autre" };
+const PROSPECT_EV = { DRAFT: "Brouillon préparé", SENT: "E-mail envoyé", REPLY: "Réponse reçue", FOLLOWUP: "Relance", STATUS: "Statut", NOTE: "Note", CALL: "Appel", MEETING: "Rendez-vous", IMPORT: "Import", SYNC: "Synchronisation", EDIT: "Modification" };
+const PROSPECT_TONE = { client_payant: "good", verifie: "good", actif: "good", decouverte_2_mois: "good", en_discussion: "info", interesse: "info", rdv_pris: "info", demo_faite: "info", devis_envoye: "info",
+  a_envoyer: "warn", perdu: "bad", desinscrit: "bad", refuse: "bad", suspendu: "bad", froid: "bad" };
+function prospectStTag(s) { return tag(t(PROSPECT_ST[s] || s || "—"), PROSPECT_TONE[s] || ""); }
+function prospectOpts(map) { return Object.keys(map).map(function (k) { return [k, t(map[k])]; }); }
+const PROSPECT_COUNTRIES = [["FR", "France"], ["MA", "Maroc"]];
+function prospectFields(isNew) {
+  return [{ k: "target", l: "Cible", t: "select", req: true, opts: prospectOpts(PROSPECT_TG) }, { k: "country", l: "Pays", t: "select", opts: PROSPECT_COUNTRIES },
+    { k: "company", l: "Structure", req: false }, { k: "contactName", l: "Contact" }, { k: "role", l: "Fonction" }, { k: "trade", l: "Métier (artisans)" },
+    { k: "email", l: "E-mail", t: "email" }, { k: "phone", l: "Téléphone", t: "tel" }, { k: "address", l: "Adresse", full: true }, { k: "city", l: "Ville" },
+    { k: "territory", l: "Département / région" }, { k: "website", l: "Site web" }, { k: "status", l: "Statut", t: "select", opts: prospectOpts(PROSPECT_ST), show: function () { return !isNew; } },
+    { k: "nextAction", l: "Prochaine action", full: true }, { k: "nextActionDate", l: "Date de la prochaine action", t: "date" },
+    { k: "consent", l: "Consentement (particuliers)", t: "select", opts: [["oui", "Oui"], ["non", "Non"]] }, { k: "notes", l: "Notes", t: "textarea", full: true }];
+}
+function prospectAddDialog(after) {
+  formModal(t("Nouveau prospect"), prospectFields(true), {}, function (v) {
+    return api("prospect.save", v).catch(function (e) {
+      if (!/Doublon probable/.test(errMsg(e))) throw e;
+      return confirmBox(errMsg(e) + " " + t("Créer quand même ?")).then(function (ok) { if (!ok) throw e; return api("prospect.save", Object.assign({ force: true }, v)); });
+    }).then(function (r) { toast(t("Prospect ajouté."), "good"); NAV_HASH.v = "prospects/" + r.prospectId; if (after) after(); });
+  }, { size: "lg" });
+}
+
+PAGES.prospects = function (el, id) {
+  if (!S.me.isSuper) { el.appendChild(h("div", { class: "alert bad" }, t("Réservé au super administrateur."))); return; }
+  if (id) return prospectDetail(el, id);
+  el.appendChild(pageHead(t("Prospects"), t("Le suivi de votre prospection DarPilot en France et au Maroc : le travail des agents, les réponses, les relances et vos imports."), [
+    btn("⇪ " + t("Importer une liste"), function () { prospectImportDialog(); }, "primary"),
+    btn("＋ " + t("Ajouter"), function () { prospectAddDialog(); }),
+    btn("⇩ " + t("Exporter"), function () { api("prospect.export", {}).then(download).catch(showErr); })]));
+  tabs(el, [
+    { id: "dash", label: t("Tableau de bord"), render: prospectDashboardTab },
+    { id: "clients", label: t("Clients à signer"), render: function (b) { prospectListTab(b, { targetGroup: "CLIENTS" }); } },
+    { id: "artisans", label: t("Artisans à référencer"), render: function (b) { prospectListTab(b, { target: "ARTISAN" }); } },
+    { id: "agents", label: t("Équipe d'agents"), render: prospectAgentsTab }
+  ]);
+};
+function prospectDashboardTab(b) {
+  b.appendChild(h("div", { class: "loading" }, t("Chargement…")));
+  api("prospect.dashboard", {}).then(function (d) {
+    clear(b);
+    b.appendChild(kpis([{ l: "Prospects suivis", v: fmtNum(d.total, 0), sub: d.clients + " " + t("clients") + " · " + d.artisans + " " + t("artisans") },
+      { l: "Réponses à traiter", v: fmtNum(d.awaitingReply, 0), tone: d.awaitingReply ? "warn" : "" }, { l: "Relances dues", v: fmtNum(d.due, 0) },
+      { l: "Brouillons prêts", v: fmtNum(d.toSend, 0) }, { l: "Découvertes 2 mois", v: fmtNum(d.trials, 0) }, { l: "Clients payants", v: fmtNum(d.won, 0), tone: d.won ? "good" : "" },
+      { l: "Artisans vérifiés", v: fmtNum(d.artisansVerified, 0) }]));
+    b.appendChild(panel("Cette semaine", kv([["Brouillons préparés par les agents", fmtNum(d.week.drafts, 0)], ["E-mails et relances envoyés", fmtNum(d.week.sent, 0)],
+      ["Réponses reçues", fmtNum(d.week.replies, 0)], ["Nouveaux prospects", fmtNum(d.week.added, 0)],
+      ["Dernier passage des agents", d.lastAgentSync ? fmtDT(d.lastAgentSync.at) + " (" + d.lastAgentSync.created + " " + t("créés") + ", " + d.lastAgentSync.updated + " " + t("mis à jour") + ")" : t("aucun pour l'instant")],
+      ["En attente d'envoi aux agents", fmtNum(d.pendingForAgents, 0)]])));
+    if (d.lastAgentSync && d.lastAgentSync.summary) b.appendChild(panel("Rapport du dernier passage des agents", h("p", { style: { whiteSpace: "pre-wrap" } }, d.lastAgentSync.summary)));
+    const fb = h("div"); b.appendChild(panel("Tunnel", fb));
+    chart(fb, { type: "bar", data: { labels: d.funnel.map(function (f) { return t(f.label); }), datasets: [{ label: t("Prospects"), data: d.funnel.map(function (f) { return f.count; }) }] }, options: { indexAxis: "y", plugins: { legend: { display: false } } } });
+    b.appendChild(panel("Par territoire", table([{ l: "Pays", f: function (r) { return r.country === "MA" ? t("Maroc") : r.country === "FR" ? t("France") : "—"; } }, { l: "Territoire", k: "territory" },
+      { l: "Prospects", num: true, k: "total" }, { l: "Contactés", num: true, k: "contacted" }, { l: "En discussion", num: true, k: "talking" }, { l: "Gagnés", num: true, k: "won" }, { l: "Artisans", num: true, k: "artisans" }],
+      d.territories, { empty: "Aucun prospect pour l'instant : importez une liste ou attendez le premier passage des agents." })));
+    b.appendChild(panel("Par cible", table([{ l: "Cible", f: function (r) { return t(PROSPECT_TG[r.key] || r.key); } }, { l: "Prospects", num: true, k: "count" }], d.byTarget, { empty: "Aucune donnée." })));
+  }).catch(function (e) { clear(b).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+}
+function prospectListTab(b, args) {
+  listView(b, { route: "prospect.list", args: args, filters: [
+      { k: "status", l: "Statut", t: "select", opts: prospectOpts(PROSPECT_ST) }, { k: "country", l: "Pays", t: "select", opts: PROSPECT_COUNTRIES },
+      args.target ? null : { k: "target", l: "Cible", t: "select", opts: prospectOpts(PROSPECT_TG).filter(function (o) { return o[0] !== "ARTISAN"; }) },
+      { k: "source", l: "Origine", t: "select", opts: [["AGENTS", t("Agents")], ["IMPORT", t("Import")], ["MANUAL", t("Saisie")]] },
+      { k: "replies", l: "Réponses à traiter", t: "checkbox" }, { k: "due", l: "Relances dues", t: "checkbox" }].filter(Boolean),
+    columns: [{ l: "Structure / contact", f: function (r) { return h("div", null, h("b", null, r.company || r.contactName || "—"), r.company && r.contactName ? h("div", { class: "small muted" }, r.contactName) : null); } },
+      { l: args.target ? "Métier" : "Cible", f: function (r) { return args.target ? (r.trade || "—") : t(PROSPECT_TG[r.target] || r.target); } },
+      { l: "Ville / territoire", f: function (r) { return [r.city, r.territory].filter(Boolean).join(" · ") + (r.country ? " (" + r.country + ")" : ""); } },
+      { l: "Contact", f: function (r) { return h("div", { class: "small" }, r.email || "", r.email && r.phone ? h("br") : null, r.phone || ""); } },
+      { l: "Statut", f: function (r) { return h("span", null, prospectStTag(r.status), r.awaitingReply ? " " : "", r.awaitingReply ? tag(t("Réponse"), "warn") : null, r.doNotContact ? " " : "", r.doNotContact ? tag(t("Ne plus contacter"), "bad") : null); } },
+      { l: "Prochaine action", f: function (r) { return r.nextActionDate ? h("span", { class: r.due ? "bad" : "" }, fmtDate(r.nextActionDate) + (r.nextAction ? " · " + r.nextAction : "")) : (r.nextAction || "—"); } },
+      { l: "Dernier contact", dt: true, k: "lastContactAt" }],
+    empty: "Aucun prospect.", onRow: function (r) { NAV_HASH.v = "prospects/" + r.prospectId; } });
+}
+function prospectDetail(el, id) {
+  return api("prospect.get", { prospectId: id }, { fresh: true }).then(function (x) {
+    const reload = function () { apiCacheClear(); App.go("prospects/" + id); }, title = x.company || x.contactName || x.email || t("Prospect");
+    $("page-title").textContent = title;
+    el.appendChild(pageHead(title, t(PROSPECT_TG[x.target] || x.target) + (x.trade ? " · " + x.trade : "") + (x.city ? " · " + x.city : ""), [prospectStTag(x.status),
+      x.email ? h("a", { class: "btn", href: "mailto:" + x.email }, "✉ " + t("E-mail")) : null, x.phone ? h("a", { class: "btn", href: "tel:" + x.phone }, "☎ " + t("Appeler")) : null,
+      x.phone ? h("a", { class: "btn", href: "https://wa.me/" + waNumber(x.phone), target: "_blank", rel: "noopener" }, "WhatsApp") : null,
+      btn(t("Modifier"), function () { formModal(t("Modifier le prospect"), prospectFields(false), x, function (v) { return api("prospect.save", Object.assign({ prospectId: id }, v)).then(reload); }, { size: "lg" }); }),
+      btn("← " + t("Prospects"), function () { NAV_HASH.v = "prospects"; })]));
+    if (x.doNotContact) el.appendChild(h("div", { class: "alert bad" }, t("Ne plus contacter : les agents ne prépareront plus aucun message pour ce prospect.")));
+    if (x.awaitingReply) el.appendChild(h("div", { class: "alert info" }, t("Réponse reçue le") + " " + fmtDT(x.lastReplyAt) + " : " + t("la réponse proposée par les agents vous attend dans vos brouillons Gmail.")));
+    el.appendChild(panel("Fiche", kv([["Structure", x.company], ["Contact", [x.contactName, x.role].filter(Boolean).join(" — ")], ["E-mail", x.email], ["Téléphone", x.phone], ["Adresse", x.address],
+      ["Ville", x.city], ["Département / région", x.territory], ["Pays", x.country === "MA" ? t("Maroc") : x.country === "FR" ? t("France") : ""],
+      ["Site web", x.website ? h("a", { href: x.website, target: "_blank", rel: "noopener" }, x.website) : ""], ["Origine", { AGENTS: t("Équipe d'agents"), IMPORT: t("Import") + (x.sourceFile ? " « " + x.sourceFile + " »" : ""), MANUAL: t("Saisie manuelle") }[x.sourceType] || ""],
+      ["Source publique", x.sourceUrl ? h("a", { href: x.sourceUrl, target: "_blank", rel: "noopener" }, x.sourceUrl) : ""], ["Base légale", x.legalBasis], ["Consentement", x.consent],
+      ["Score", isNil(x.score) ? "" : x.score + " / 100"], ["Angle d'approche", x.angle], ["Relances", isNil(x.followUps) ? "" : String(x.followUps)],
+      ["Dernier contact", x.lastContactAt ? fmtDT(x.lastContactAt) : ""], ["Dernière réponse", x.lastReplyAt ? fmtDT(x.lastReplyAt) : ""], ["Notes", x.notes]]),
+      [btn(t("Changer le statut"), function () {
+        formModal(t("Changer le statut"), [{ k: "status", l: "Statut", t: "select", req: true, opts: prospectOpts(PROSPECT_ST) }, { k: "nextAction", l: "Prochaine action", full: true },
+          { k: "nextActionDate", l: "Date", t: "date" }, { k: "note", l: "Commentaire", t: "textarea", full: true }], { status: x.status, nextAction: x.nextAction, nextActionDate: x.nextActionDate },
+        function (v) { return api("prospect.setStatus", Object.assign({ prospectId: id }, v)).then(reload); });
+      }, "primary"),
+      btn(t("Ajouter une note"), function () {
+        formModal(t("Ajouter au journal"), [{ k: "kind", l: "Type", t: "select", req: true, opts: [["NOTE", t("Note")], ["CALL", t("Appel")], ["MEETING", t("Rendez-vous")]] }, { k: "text", l: "Texte", t: "textarea", req: true, full: true }],
+          { kind: "NOTE" }, function (v) { return api("prospect.note", Object.assign({ prospectId: id }, v)).then(reload); });
+      }),
+      btn(x.doNotContact ? t("Autoriser de nouveau") : t("Ne plus contacter"), function () {
+        confirmBox(x.doNotContact ? t("Autoriser de nouveau les agents à contacter ce prospect ?") : t("Ne plus jamais contacter ce prospect ? Les agents en seront informés dans les prochaines consignes."), { danger: !x.doNotContact })
+          .then(function (ok) { if (ok) api("prospect.doNotContact", { prospectId: id, on: !x.doNotContact }).then(reload).catch(showErr); });
+      }, x.doNotContact ? "" : "danger")]));
+    el.appendChild(panel("Journal", x.events.length ? h("div", { class: "timeline" }, x.events.map(function (e) {
+      return h("div", { class: "tl-item", style: { padding: "8px 0", borderBottom: "1px solid var(--line, #e5e7eb)" } },
+        h("div", { class: "small muted" }, fmtDT(e.at) + " · " + t(PROSPECT_EV[e.kind] || e.kind) + " · " + (e.source === "AGENTS" ? t("agents") : (e.actorEmail || t("DarPilot")))),
+        h("div", { style: { whiteSpace: "pre-wrap" } }, e.summary || ""));
+    })) : h("div", { class: "empty" }, t("Aucun événement."))));
+  }).catch(function (e) { el.appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+}
+function prospectAgentsTab(b) {
+  b.appendChild(h("div", { class: "loading" }, t("Chargement…")));
+  api("prospect.agents", {}).then(function (d) {
+    clear(b);
+    const reload = function () { clear(b); prospectAgentsTab(b); };
+    b.appendChild(h("div", { class: "alert " + (d.enabled ? "good" : "info") }, d.enabled
+      ? t("Synchronisation active : chaque matin, les agents envoient leur travail à DarPilot, et DarPilot leur renvoie vos imports et vos décisions (statuts, « ne plus contacter »).")
+      : t("Synchronisation désactivée : activez-la après avoir ajouté les deux enregistrements DNS ci-dessous.")));
+    b.appendChild(panel("Connexion avec l'équipe d'agents", kv([
+      ["Domaine de réception", d.domain || t("à renseigner")], ["Adresse secrète de synchronisation", d.inbox ? h("code", null, d.inbox) : "—"],
+      ["Adresse des agents (destinataire des consignes, seule autorisée à écrire)", d.agentAddresses.join(", ") || "—"],
+      ["Webhook Brevo", d.webhook || (d.enabled ? t("déclaration en cours (10 minutes au plus)") : "—")],
+      ["Lecture IA des PDF et photos", d.aiEnabled ? t("active (Claude)") : t("clé IA à configurer sur le serveur")],
+      ["Fiches en attente d'envoi aux agents", String(d.pendingForAgents)]]),
+      [btn(d.enabled ? t("Désactiver") : t("Activer la synchronisation"), function () { api("prospect.agentsSettings", { enabled: !d.enabled }).then(reload).catch(showErr); }, d.enabled ? "" : "primary"),
+        btn(t("Réglages"), function () {
+          formModal(t("Réglages de la synchronisation"), [{ k: "domain", l: "Domaine de réception (sous-domaine dédié)", ph: "crm.darpilot.fr" }, { k: "agentAddresses", l: "Adresse Gmail des agents", t: "email" }],
+            { domain: d.domain, agentAddresses: d.agentAddresses.join(",") }, function (v) { return api("prospect.agentsSettings", v).then(reload); });
+        }),
+        d.enabled ? btn(t("Envoyer les consignes maintenant"), function () { api("prospect.sendInstructions", {}).then(function (r) { toast(r.ok ? t("Consignes envoyées") + " (" + r.sent + ")" : (r.error || r.skipped || ""), r.ok ? "good" : "bad"); reload(); }).catch(showErr); }) : null,
+        btn(t("Changer l'adresse secrète"), function () { confirmBox(t("Créer une nouvelle adresse secrète ? L'ancienne sera refusée ; les agents recevront la nouvelle avec les prochaines consignes.")).then(function (ok) { if (ok) api("prospect.agentsSettings", { rotate: true }).then(function () { return api("prospect.sendInstructions", {}); }).then(reload).catch(showErr); }); })]));
+    b.appendChild(panel("Enregistrements DNS à ajouter (une seule fois, chez votre registraire)", h("div", null,
+      table([{ l: "Nom", f: function () { return d.domain || "crm.votredomaine"; } }, { l: "Type", f: function () { return "MX"; } }, { l: "Priorité", k: "priority", num: true }, { l: "Valeur", f: function (r) { return h("code", null, r.value); } }], d.mx),
+      h("p", { class: "small muted" }, t("Le domaine principal doit être vérifié dans Brevo (expéditeur). La propagation DNS peut prendre quelques heures."))) ));
+    b.appendChild(panel("Journal des échanges", table([{ l: "Date", dt: true, k: "at" }, { l: "Sens", f: function (r) { return r.direction === "IN" ? t("Agents → DarPilot") : t("DarPilot → agents"); } },
+      { l: "Statut", f: function (r) { return tag(r.status, r.status === "OK" ? "good" : r.status === "PARTIAL" ? "warn" : "bad"); } },
+      { l: "Fiches", num: true, k: "items" }, { l: "Créées", num: true, k: "created" }, { l: "Mises à jour", num: true, k: "updated" }, { l: "Événements", num: true, k: "events" },
+      { l: "Détail", f: function (r) { return r.error || r.summary || ""; } }], d.syncs, { empty: "Aucun échange pour l'instant." })));
+  }).catch(function (e) { clear(b).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+}
+
+/* Import : Excel / CSV lus dans le navigateur ; PDF et photos lus par l'IA Claude sur le serveur (/prospects/extract). */
+function prospectReadRaw(file) {
+  return new Promise(function (res, rej) { const r = new FileReader(); r.onerror = function () { rej({ message: t("Lecture du fichier impossible.") }); };
+    r.onload = function () { res({ fileName: file.name, mimeType: file.type || "application/octet-stream", base64: String(r.result).split(",")[1] }); }; r.readAsDataURL(file); });
+}
+function prospectImportDialog() {
+  const defaults = h("div", { class: "form" });
+  const f = buildForm([{ k: "country", l: "Pays par défaut", t: "select", opts: PROSPECT_COUNTRIES }, { k: "target", l: "Cible par défaut", t: "select", opts: prospectOpts(PROSPECT_TG) },
+    { k: "territory", l: "Département / région par défaut" }, { k: "city", l: "Ville par défaut" }], {});
+  defaults.appendChild(f.el);
+  const status = h("div"), m = modal({ title: t("Importer une liste de prospects"), size: "lg", body: h("div", null,
+    h("p", { class: "muted" }, t("Excel ou CSV : lu directement. PDF, photo, capture d'écran ou carte de visite : lu par l'IA, qui détecte noms, e-mails, téléphones, adresses et métiers. Vous vérifiez tout avant l'enregistrement.")),
+    defaults, status),
+    buttons: [{ label: t("Annuler") }, { label: t("Choisir le fichier"), primary: true, onClick: function (bt) {
+      pickFiles({ accept: ".xlsx,.xls,.ods,.csv,.txt,application/pdf,image/*" }).then(function (files) {
+        const file = files[0]; if (!file) return;
+        if (file.size > 10 * 1024 * 1024) { showErr({ message: t("Fichier trop volumineux (10 Mo au plus).") }); return; }
+        const def = f.get(); bt.disabled = true;
+        clear(status).appendChild(h("div", { class: "loading" }, /\.(xlsx|xls|ods|csv|txt)$/i.test(file.name) ? t("Lecture du tableau…") : t("Lecture par l'IA… (jusqu'à 2 minutes pour un long PDF)")));
+        prospectParseFile(file, def).then(function (pv) { m.close(); prospectPreviewDialog(pv, def); })
+          .catch(function (e) { bt.disabled = false; clear(status).appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+      });
+    } }] });
+}
+function prospectParseFile(file, def) {
+  if (/\.(xlsx|xls|ods|csv|txt)$/i.test(file.name)) {
+    return Promise.all([loadLib("xlsx"), file.arrayBuffer()]).then(function (x) {
+      const wb = XLSX.read(x[1], { type: "array" });
+      let best = []; wb.SheetNames.forEach(function (n) { const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: "" }); if (rows.length > best.length) best = rows; });
+      return api("prospect.importPreview", { rows: best.slice(0, 2010), fileName: file.name, defaults: def });
+    }, function () { throw { message: t("Module de lecture Excel indisponible (connexion internet requise).") }; });
+  }
+  const read = /^image\//.test(file.type) && file.size > 3.5 * 1024 * 1024 ? fileToPayload(file) : prospectReadRaw(file);
+  return read.then(function (pl) {
+    return fetch("/prospects/extract", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-ImmoPilot": "1" },
+      body: JSON.stringify({ token: S.token, fileName: pl.fileName, mimeType: pl.mimeType, base64: pl.base64, defaults: def }) });
+  }).then(function (r) { if (r.status === 404) throw { message: t("La lecture IA est disponible sur le serveur DarPilot uniquement.") }; if (!r.ok) throw { message: t("Erreur du serveur") + " (HTTP " + r.status + ")." }; return r.json(); })
+    .then(function (r) { if (!r || !r.ok) throw (r && r.error) || { message: t("Réponse invalide.") }; return r.data; });
+}
+function prospectPreviewDialog(pv, def) {
+  const list = pv.candidates, info = h("p", { class: "small muted" });
+  const count = function () { const n = list.filter(function (c) { return c.selected; }).length; info.textContent = n + " / " + list.length + " " + t("ligne(s) sélectionnée(s)") + (pv.stats.duplicates ? " · " + pv.stats.duplicates + " " + t("doublon(s) décoché(s)") : ""); return n; };
+  const merge = h("input", { type: "checkbox" });
+  const rows = list.map(function (c) {
+    const cb = h("input", { type: "checkbox", checked: c.selected, onchange: function (e) { c.selected = e.target.checked; count(); } });
+    const d = c.data;
+    return h("tr", null, h("td", null, cb), h("td", null, h("b", null, d.company || d.contactName || "—"), d.company && d.contactName ? h("div", { class: "small muted" }, d.contactName) : null),
+      h("td", { class: "small" }, t(PROSPECT_TG[d.target] || d.target || "") + (d.trade ? " · " + d.trade : "")), h("td", { class: "small" }, [d.email, d.phone].filter(Boolean).join(" · ")),
+      h("td", { class: "small" }, [d.address, d.city, d.territory, d.country].filter(Boolean).join(", ")),
+      h("td", { class: "small" }, c.duplicateOf ? tag(t("Déjà suivi") + " : " + c.duplicateOf.label, "warn") : c.duplicateInFile ? tag(t("Doublon dans le fichier"), "warn") : "", c.issues.length ? h("div", { class: "muted" }, c.issues.join(" · ")) : null));
+  });
+  const m = modal({ title: t("Vérifier l'import") + (pv.fileName ? " — " + pv.fileName : ""), size: "lg", body: h("div", null,
+    pv.ai ? h("div", { class: "alert info" }, t("Lu par l'IA : vérifiez les coordonnées avant d'importer.")) : null,
+    pv.mapping && pv.mapping.length ? h("p", { class: "small muted" }, t("Colonnes reconnues") + " : " + pv.mapping.filter(function (x) { return x.field; }).map(function (x) { return x.header + " → " + x.field; }).join(" · ")) : null,
+    info, h("label", { class: "small", style: { display: "flex", gap: "6px", alignItems: "center" } }, merge, t("Compléter les fiches déjà suivies (champs vides seulement)")),
+    h("div", { class: "table-wrap" }, h("table", { class: "t" }, h("thead", null, h("tr", null, ["", "Structure / contact", "Cible", "Contact", "Adresse", "Contrôles"].map(function (x) { return h("th", null, x ? t(x) : ""); }))), h("tbody", null, rows))),
+    h("p", { class: "small muted" }, t("Rappel : un particulier (propriétaire) ne doit être contacté qu'avec son consentement. Les agents ne prépareront de message que pour les professionnels ou les particuliers marqués « consentement : oui »."))),
+    buttons: [{ label: t("Annuler") }, { label: t("Importer"), primary: true, onClick: function (bt, close) {
+      if (!count() && !merge.checked) { showErr({ message: t("Aucune ligne sélectionnée.") }); return; }
+      bt.disabled = true;
+      api("prospect.importCommit", { candidates: list.filter(function (c) { return c.selected || (merge.checked && c.duplicateOf); }).map(function (c) { return c.data; }), fileName: pv.fileName, defaults: def, merge: merge.checked })
+        .then(function (r) { close(); toast(r.created + " " + t("prospect(s) ajouté(s)") + (r.merged ? ", " + r.merged + " " + t("complété(s)") : "") + (r.skipped ? ", " + r.skipped + " " + t("ignoré(s)") : "") + ".", "good"); App.go("prospects"); })
+        .catch(function (e) { bt.disabled = false; showErr(e); });
+    } }] });
+  count();
+  return m;
+}
 function providerReviewPanel(el, c) {
   const v = c.verification, reload = function () { apiCacheClear(); App.go("contractors/" + c.artisanId); };
   const box = h("div");

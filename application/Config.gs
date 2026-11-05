@@ -44,8 +44,8 @@ function cur_() { return edition_().currency; }
 var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "DarPilot",
-  VERSION: "2.7.0",
-  SCHEMA_VERSION: 16,
+  VERSION: "2.8.0",
+  SCHEMA_VERSION: 17,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -165,15 +165,27 @@ var DEFAULT_SETTINGS = Object.freeze({
 });
 
 var DEFAULT_PLANS = Object.freeze([
-  { planCode: "ESSENTIEL", name: "Essentiel", price: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).plans.ESSENTIEL, periodicity: "MONTHLY", maxProperties: 5, maxUsers: 3, storageMb: 500, trialDays: 14, sortOrder: 1,
+  { planCode: "ESSENTIEL", name: "Essentiel", price: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).plans.ESSENTIEL, periodicity: "MONTHLY", maxProperties: 5, maxUsers: 3, storageMb: 500, trialDays: 60, sortOrder: 1,
     features: ["properties", "reservations", "checkin", "cleaning", "incidents", "finance_basic"] },
-  { planCode: "PRO", name: "Pro", price: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).plans.PRO, periodicity: "MONTHLY", maxProperties: 25, maxUsers: 15, storageMb: 3000, trialDays: 14, sortOrder: 2,
+  { planCode: "PRO", name: "Pro", price: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).plans.PRO, periodicity: "MONTHLY", maxProperties: 25, maxUsers: 15, storageMb: 3000, trialDays: 60, sortOrder: 2,
     features: ["properties", "reservations", "checkin", "cleaning", "incidents", "finance_basic", "finance_advanced", "leases", "contractors", "pareto", "reports", "automations", "guest_portal"] },
-  { planCode: "BUSINESS", name: "Business", price: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).plans.BUSINESS, periodicity: "MONTHLY", maxProperties: 200, maxUsers: 100, storageMb: 20000, trialDays: 14, sortOrder: 3,
+  { planCode: "BUSINESS", name: "Business", price: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).plans.BUSINESS, periodicity: "MONTHLY", maxProperties: 200, maxUsers: 100, storageMb: 20000, trialDays: 60, sortOrder: 3,
     features: ["properties", "reservations", "checkin", "cleaning", "incidents", "finance_basic", "finance_advanced", "leases", "contractors", "pareto", "reports", "automations", "guest_portal", "multi_agency", "exports_unlimited"] }
 ]);
 
+/** Espace Prospects : valeurs autorisées (voir ProspectService.gs). */
+var PROSPECT_TARGETS_ = ["AGENCE", "CONCIERGERIE", "SYNDIC", "PROPRIETAIRE", "ARTISAN", "AUTRE"];
+var PROSPECT_STATUSES_ = ["a_qualifier", "froid", "qualifie", "a_envoyer", "contacte", "en_discussion", "rdv_pris", "demo_faite", "devis_envoye", "decouverte_2_mois",
+  "client_payant", "en_pause", "perdu", "desinscrit", "a_contacter", "interesse", "dossier_en_cours", "dossier_complet", "verifie", "actif", "suspendu", "refuse"];
+var PROSPECT_EVENT_KINDS_ = ["DRAFT", "SENT", "REPLY", "FOLLOWUP", "STATUS", "NOTE", "CALL", "MEETING", "IMPORT", "SYNC", "EDIT"];
 var TABLES_SRC = {
+  // Espace Prospects (super administrateur) : voir ProspectService.gs.
+  Prospects: { pk: "prospectId", idp: "pro", req: "target", enums: { target: PROSPECT_TARGETS_, status: PROSPECT_STATUSES_, sourceType: ["AGENTS", "IMPORT", "MANUAL"], country: ["FR", "MA"] },
+    cols: "prospectId,target,status,createdAt#t,createdBy|country,territory,city,company,contactName,role,email,phone,address,website,trade,sourceType,sourceUrl,sourceFile,importId,legalBasis,consent,score#n,angle,nextAction,nextActionDate,followUps#n,lastContactAt#t,lastReplyAt#t,plan,notes,doNotContact#b,agentPending#b,externalKey,updatedAt#t,updatedBy,updatedSource" },
+  ProspectEvents: { pk: "eventId", idp: "pev", req: "prospectId,kind", enums: { kind: PROSPECT_EVENT_KINDS_ },
+    cols: "eventId,prospectId,kind,at#t,source|summary,channel,detailsJson#j,actorEmail" },
+  ProspectSyncs: { pk: "syncId", idp: "psy", req: "direction", enums: { direction: ["IN", "OUT"], status: ["OK", "PARTIAL", "REJECTED", "FAILED"] },
+    cols: "syncId,direction,at#t,status|items#n,created#n,updated#n,events#n,error,ref,detailsJson#j" },
   Organizations: { pk: "organizationId", idp: "org", org: "organizationId", req: "name", enums: { status: ["ACTIVE", "SUSPENDED", "INACTIVE"], type: ["OWNER_ORG", "AGENCY", "PROVIDER", "PLATFORM"] },
     cols: "organizationId,name,status,createdAt#t,createdBy|type,country,city,timezone,locale,planCode,billingEmail,suspendedAt#t,suspensionReason,updatedAt#t,isDemo#b,managedByOrgId,phone,address,contactName,legalJson#j,signupSource" },
   Users: { pk: "userId", idp: "usr", req: "email", enums: { status: ["ACTIVE", "SUSPENDED", "DISABLED", "INVITED"] },

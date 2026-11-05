@@ -1829,6 +1829,95 @@ function TEST_GROUPS_() {
         T.eq(dbAll_("Notifications").length, n0 + 1, "une seule notification");
       }]
     ] },
+    { name: "Espace Prospects (équipe d'agents commerciaux)", tests: [
+      ["Réservé au super administrateur : propriétaire, agence et artisan refusés sur toutes les routes prospect.*", function (T, fx) {
+        Object.keys(routes_()).filter(function (r) { return r.indexOf("prospect.") === 0; }).forEach(function (r) {
+          ["ownerA", "ag1", "artisan"].forEach(function (who) { T.fails(fx.tok[who], r, { prospectId: "pro_x", rows: [["Nom", "E-mail"], ["A", "a@b.fr"]] }, "FORBIDDEN"); });
+        });
+        T.ok(T.call(fx.tok.superA, "prospect.dashboard", {}).funnel.length === 8, "tableau de bord du super administrateur");
+      }],
+      ["Import Excel : colonnes reconnues, téléphones normalisés, doublons écartés, fusion des champs vides", function (T, fx) {
+        const tag = "imp" + fx.run;
+        const rows = [["Liste " + tag], ["Raison sociale", "Contact", "Téléphone", "Adresse mail", "Ville", "Activité"],
+          ["Agence Atlas " + tag, "Sara B.", "06 12 34 56 78", "Contact@Atlas-" + tag + ".fr", "Toulouse", "agence immobilière"],
+          ["Plomberie Nord " + tag, "", "0612345679", "plomb-" + tag + "@exemple.fr", "Blagnac", "plombier"],
+          ["Agence Atlas " + tag, "", "", "contact@atlas-" + tag + ".fr", "Toulouse", ""],
+          ["Sans contact " + tag, "", "", "", "Albi", ""]];
+        const pv = T.call(fx.tok.superA, "prospect.importPreview", { rows: rows, fileName: "liste.xlsx", defaults: { country: "FR", territory: "31 Haute-Garonne" } });
+        T.eq(pv.candidates.length, 4, "4 lignes de données (titre et en-tête ignorés)");
+        const a = pv.candidates[0].data;
+        T.eq([a.email, a.phone, a.target, a.country, a.territory], ["contact@atlas-" + tag + ".fr", "+33612345678", "AGENCE", "FR", "31 Haute-Garonne"], "fiche nettoyée");
+        T.eq(pv.candidates[1].data.target, "ARTISAN", "plombier → artisan");
+        T.ok(pv.candidates[2].duplicateInFile && !pv.candidates[2].selected, "doublon dans le fichier décoché");
+        T.ok(!pv.candidates[3].selected && pv.candidates[3].issues.length, "ligne sans e-mail ni téléphone décochée");
+        const r = T.call(fx.tok.superA, "prospect.importCommit", { candidates: pv.candidates.filter(function (c) { return c.selected; }), fileName: "liste.xlsx", defaults: { country: "FR" } });
+        T.eq([r.created, r.skipped], [2, 0], "2 prospects créés");
+        const again = T.call(fx.tok.superA, "prospect.importPreview", { records: [{ company: "Agence Atlas " + tag, email: "contact@atlas-" + tag + ".fr", website: "atlas-" + tag + ".fr" }], defaults: {} });
+        T.ok(again.candidates[0].duplicateOf && !again.candidates[0].selected, "déjà suivi : signalé");
+        const m = T.call(fx.tok.superA, "prospect.importCommit", { candidates: again.candidates, merge: true, fileName: "maj.csv" });
+        T.eq(m.merged, 1, "fiche complétée");
+        const x = dbAll_("Prospects").find(function (p) { return p.email === "contact@atlas-" + tag + ".fr"; });
+        T.eq([x.website, x.contactName, bool_(x.agentPending)], ["https://atlas-" + tag + ".fr", "Sara B.", true], "site ajouté, contact conservé, à transmettre aux agents");
+        T.fails(fx.tok.superA, "prospect.save", { target: "AGENCE", company: "Agence Atlas " + tag, city: "Toulouse", email: "autre@atlas.fr" }, "VALIDATION");
+      }],
+      ["Synchronisation : seuls les e-mails à l'adresse secrète et venant des agents sont appliqués, une seule fois ; « ne plus contacter » prime", function (T, fx) {
+        const P = PropertiesService.getScriptProperties(), tag = "syn" + fx.run, agent = "agents." + tag + "@gmail.test";
+        P.setProperty("IMMO_PROSPECT_DOMAIN", "crm.example.test"); P.setProperty("IMMO_PROSPECT_AGENT_FROM", agent);
+        const info = T.call(fx.tok.superA, "prospect.agents", {});
+        T.ok(/^agents-[a-f0-9]{24}@crm\.example\.test$/.test(info.inbox), "adresse secrète générée : " + info.inbox);
+        const payload = { version: 1, runId: "run-" + tag, prospects: [{ key: "c1@" + tag + ".fr", company: "Conciergerie Riad " + tag, email: "c1@" + tag + ".fr", country: "MA", territory: "Marrakech-Safi", target: "CONCIERGERIE", status: "a_envoyer", score: 72, notes: "12 annonces Airbnb" }],
+          events: [{ key: "c1@" + tag + ".fr", kind: "DRAFT", at: "2026-11-06T06:50:00Z", summary: "1er e-mail préparé" }], summary: { text: "Marrakech-Safi : 1 brouillon" } };
+        const mail = function (to, from, p2) { return { items: [{ Uuid: Utilities.getUuid(), MessageId: "<" + Utilities.getUuid() + ">", From: { Address: from }, To: [{ Address: to }], Subject: "sync",
+          RawTextBody: "Bonjour\n" + PROSPECT_SYNC_BEGIN_ + "\n" + JSON.stringify(p2 || payload) + "\n" + PROSPECT_SYNC_END_ } ] }; };
+        P.setProperty("IMMO_PROSPECT_SYNC", "0");
+        T.eq(prospectInboundHook_(mail(info.inbox, agent)).results[0].ok, false, "désactivée : refusé");
+        T.call(fx.tok.superA, "prospect.agentsSettings", { enabled: true });
+        T.eq(prospectInboundHook_(mail("autre@crm.example.test", agent)).results[0].ok, false, "mauvaise adresse : refusé");
+        T.eq(prospectInboundHook_(mail(info.inbox, "pirate@example.test")).results[0].ok, false, "expéditeur inconnu : refusé");
+        T.eq(dbAll_("Prospects").filter(function (p) { return p.email === "c1@" + tag + ".fr"; }).length, 0, "rien créé par les envois refusés");
+        const ok = prospectInboundHook_(mail(info.inbox, agent)).results[0];
+        T.eq([ok.ok, ok.created, ok.events], [true, 1, 1], "paquet des agents appliqué");
+        T.ok(prospectInboundHook_(mail(info.inbox, agent)).results[0].duplicate, "même runId : ignoré");
+        const x = dbAll_("Prospects").find(function (p) { return p.email === "c1@" + tag + ".fr"; });
+        T.eq([x.status, x.score, x.sourceType], ["a_envoyer", 72, "AGENTS"], "fiche créée par les agents");
+        T.call(fx.tok.superA, "prospect.doNotContact", { prospectId: x.prospectId, on: true });
+        const p2 = JSON.parse(JSON.stringify(payload)); p2.runId = "run2-" + tag; p2.prospects[0].status = "contacte";
+        p2.events = [{ key: "c1@" + tag + ".fr", kind: "SENT", at: "2026-11-06T09:00:00Z", summary: "envoyé" }, { key: "c1@" + tag + ".fr", kind: "REPLY", at: "2026-11-06T11:00:00Z", summary: "Intéressé, rappelez-moi" }];
+        prospectInboundHook_(mail(info.inbox, agent, p2));
+        const y = T.call(fx.tok.superA, "prospect.get", { prospectId: x.prospectId });
+        T.eq([y.status, y.doNotContact, y.awaitingReply], ["desinscrit", true, true], "décision DarPilot conservée, réponse signalée");
+        T.ok(y.events.some(function (e) { return e.kind === "REPLY" && e.source === "AGENTS"; }) && y.events.some(function (e) { return e.kind === "NOTE" && /12 annonces/.test(e.summary); }), "journal alimenté");
+        T.ok(T.call(fx.tok.superA, "prospect.list", { replies: true, q: tag }).total === 1, "filtre « réponses à traiter »");
+        T.ok(/Marrakech-Safi : 1 brouillon/.test(T.call(fx.tok.superA, "prospect.dashboard", {}).lastAgentSync.summary), "rapport des agents au tableau de bord");
+        T.ok(T.call(fx.tok.superA, "prospect.agents", {}).syncs.some(function (x) { return x.status === "REJECTED" && /Expéditeur non autorisé/.test(x.error); }), "envois refusés journalisés");
+      }],
+      ["Consignes aux agents : fiches importées ou modifiées et adresse de synchronisation, envoyées une fois", function (T, fx) {
+        const P = PropertiesService.getScriptProperties(), agent = "consignes." + fx.run + "@gmail.test";
+        P.setProperty("IMMO_PROSPECT_DOMAIN", "crm.example.test"); P.setProperty("IMMO_PROSPECT_AGENT_FROM", agent); P.setProperty("IMMO_PROSPECT_SYNC", "1");
+        T.call(fx.tok.superA, "prospect.save", { target: "SYNDIC", company: "Syndic Test " + fx.run, email: "syndic." + fx.run + "@exemple.fr", country: "FR", city: "Lyon" });
+        const r = T.call(fx.tok.superA, "prospect.sendInstructions", {});
+        T.ok(r.ok && r.sent >= 1, "consignes envoyées");
+        const m = T.lastMailTo(agent);
+        T.ok(m && /^\[DarPilot-Consignes\]/.test(m.subject), "e-mail de consignes aux agents");
+        const block = prospectSyncBlock_(m.body);
+        T.ok(block && block.syncAddress === prospectInboxAddress_() && block.prospects.some(function (p) { return p.email === "syndic." + fx.run + "@exemple.fr"; }), "bloc JSON lisible avec l'adresse et la fiche");
+        T.eq(dbAll_("Prospects").filter(function (x) { return bool_(x.agentPending); }).length, 0, "plus rien en attente");
+        T.ok(prospectDailyJob_().skipped, "tâche quotidienne : rien de nouveau, aucun e-mail");
+      }],
+      ["Lecture IA (PDF / photos) : clé réservée au serveur et au super administrateur, résultat contrôlé comme un import", function (T, fx) {
+        T.ok(!prospectExtractGate_(fx.tok.ownerA).ok, "propriétaire refusé");
+        const g0 = prospectExtractGate_(fx.tok.superA);
+        T.ok(!g0.ok && g0.error.code === "CONFIG", "sans clé IA : message de configuration");
+        TEST_HOOKS_.aiConfig = { provider: "anthropic", key: "sk-test", model: "claude-test" };
+        try {
+          const g = prospectExtractGate_(fx.tok.superA);
+          T.ok(g.ok && g.data.key === "sk-test" && /JSON/.test(g.data.system), "configuration transmise à server.js");
+          const f = prospectExtractFinish_(fx.tok.superA, [{ company: "Clim Express " + fx.run, phone: "06 61 22 33 44", trade: "climatisation", city: "Casablanca" }, "x"], { fileName: "carte.jpg", defaults: { country: "MA" } });
+          T.ok(f.ok && f.data.ai && f.data.candidates.length === 1, "aperçu");
+          T.eq([f.data.candidates[0].data.phone, f.data.candidates[0].data.target], ["+212661223344", "ARTISAN"], "numéro marocain et cible");
+        } finally { TEST_HOOKS_.aiConfig = false; }
+      }]
+    ] },
     { name: "Cloisonnement entre clients (attaque de toutes les routes)", tests: [
       ["Un autre client et une agence sans mandat appellent TOUTES les routes avec les identifiants du client A : aucune donnée de A ne sort", function (T, fx) {
         const A = String(fx.orgA.organizationId), S = schema_();

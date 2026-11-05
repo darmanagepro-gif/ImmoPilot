@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-10-27T12:52:02.045Z",
-  "durationMs": 14280,
+  "ranAt": "2026-11-05T12:53:57.831Z",
+  "durationMs": 38921,
   "node": "v22.23.4",
   "filesLoaded": [
     "Code.gs",
@@ -10,6 +10,7 @@
     "Auth.gs",
     "CheckInOutService.gs",
     "CleaningService.gs",
+    "CommissionService.gs",
     "Compat.gs",
     "Config.gs",
     "ContractorService.gs",
@@ -30,10 +31,16 @@
     "ParetoService.gs",
     "Permissions.gs",
     "PropertyService.gs",
+    "ProspectService.gs",
     "RentAutomationService.gs",
     "ReportsService.gs",
     "ReservationService.gs",
+    "SignatureService.gs",
+    "SignupService.gs",
+    "StripeService.gs",
     "SubscriptionService.gs",
+    "SumUpService.gs",
+    "TemplateService.gs",
     "Tests.gs",
     "Triggers.gs",
     "UserService.gs",
@@ -41,11 +48,11 @@
     "WorkOrderService.gs"
   ],
   "summary": {
-    "total": 77,
-    "passed": 77,
+    "total": 92,
+    "passed": 92,
     "failed": 0,
     "skipped": 0,
-    "ranAt": "2026-10-27T12:51:54.667Z"
+    "ranAt": "2026-11-05T12:53:37.777Z"
   },
   "results": [
     {
@@ -403,6 +410,12 @@
       "detail": ""
     },
     {
+      "group": "Missions confiées à l'agence (longue durée)",
+      "name": "Agence : baux, locataires et états des lieux seulement ; loyers et incidents restent au propriétaire",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
       "group": "Tutoriel et intégration d'un locataire",
       "name": "Tutoriel : terminé ou désactivé, mémorisé sur le compte, conservé par la mise à jour du profil",
       "status": "PASS",
@@ -458,7 +471,55 @@
     },
     {
       "group": "Abonnements",
+      "name": "Prélèvement automatique par carte (SumUp simulé) : enregistrement, débit, renouvellement, refus, anti-double débit",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Abonnements",
+      "name": "Cours de change automatique (SumUp) : cours du jour, garde-fous, secours",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Abonnements",
       "name": "Quota de biens du forfait appliqué",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Inscription en ligne et référencement",
+      "name": "Sessions : expiration après 2 h d'inactivité, durée maximale bornée (1 à 24 h), jeton stocké seulement haché",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Inscription en ligne et référencement",
+      "name": "Limite par adresse IP : essais de connexion et de « mot de passe oublié » sur de nombreux comptes bloqués",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Inscription en ligne et référencement",
+      "name": "Inscription propriétaire : code e-mail, compte + organisation + essai, contrat à signer ; e-mail déjà pris refusé ; mauvais code",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Inscription en ligne et référencement",
+      "name": "Agence : rôles agence + propriétaire, identifiant légal contrôlé (SIRET / ICE)",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Inscription en ligne et référencement",
+      "name": "Artisan : fiche en attente, invisible des clients, pièces exigées, contrôle et référencement par le super administrateur",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Commissions de mise en relation",
+      "name": "Lien SumUp à l'artisan (paiement direct), récapitulatif mensuel prélevé sur la carte, paiement en ligne Stripe avec commission retenue",
       "status": "PASS",
       "detail": ""
     },
@@ -509,12 +570,48 @@
       "name": "Notifications sans doublon (clé d'événement)",
       "status": "PASS",
       "detail": ""
+    },
+    {
+      "group": "Espace Prospects (équipe d'agents commerciaux)",
+      "name": "Réservé au super administrateur : propriétaire, agence et artisan refusés sur toutes les routes prospect.*",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Espace Prospects (équipe d'agents commerciaux)",
+      "name": "Import Excel : colonnes reconnues, téléphones normalisés, doublons écartés, fusion des champs vides",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Espace Prospects (équipe d'agents commerciaux)",
+      "name": "Synchronisation : seuls les e-mails à l'adresse secrète et venant des agents sont appliqués, une seule fois ; « ne plus contacter » prime",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Espace Prospects (équipe d'agents commerciaux)",
+      "name": "Consignes aux agents : fiches importées ou modifiées et adresse de synchronisation, envoyées une fois",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Espace Prospects (équipe d'agents commerciaux)",
+      "name": "Lecture IA (PDF / photos) : clé réservée au serveur et au super administrateur, résultat contrôlé comme un import",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "group": "Cloisonnement entre clients (attaque de toutes les routes)",
+      "name": "Un autre client et une agence sans mandat appellent TOUTES les routes avec les identifiants du client A : aucune donnée de A ne sort",
+      "status": "PASS",
+      "detail": ""
     }
   ],
   "routes": {
-    "serverRoutes": 198,
-    "publicRoutes": 13,
-    "clientCalls": 44,
+    "serverRoutes": 239,
+    "publicRoutes": 17,
+    "clientCalls": 80,
     "missingOnServer": [],
     "notReferencedByUi": [
       "admin.accounts",
@@ -529,6 +626,7 @@
       "doc.archive",
       "admin.errors",
       "admin.jobs",
+      "admin.mails",
       "audit.list",
       "property.list",
       "property.get",
@@ -664,9 +762,13 @@
       "inspection.finalize",
       "inspection.send",
       "inspection.cancel",
+      "inspection.sign",
+      "inspection.depositLetter",
       "sub.list",
+      "inv.payOnline",
       "assistant.kb",
       "assistant.ask",
+      "prospect.list",
       "dash.get",
       "pareto.run",
       "pareto.export",
@@ -686,7 +788,7 @@
       {
         "name": "setupProject() crée la base, le dossier privé et le schéma",
         "status": "PASS",
-        "detail": "base ss_4aa54bdd941277d7a4acd32b2, 3 migrations"
+        "detail": "base ss_859b8d5fc5f09c046c20a2272, 3 migrations"
       },
       {
         "name": "Avant déploiement : pas de lien envoyé, message explicite",
@@ -776,7 +878,7 @@
       {
         "name": "Suite complète de tests sur la version 2 fichiers",
         "status": "PASS",
-        "detail": "77/77"
+        "detail": "92/92"
       },
       {
         "name": "La page contient toute l'interface (aucune inclusion restante)",
