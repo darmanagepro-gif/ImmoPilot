@@ -702,12 +702,32 @@ var DEMO_SALES_ = { email: "demo.commercial@example.test", name: "Yassine Amrani
 function demoEnsureSales_() {
   try {
     const props = PropertiesService.getScriptProperties();
-    if (props.getProperty("IMMO_DEMO_SALES") === "1" && props.getProperty("IMMO_DEMO_SALES_KPI") === "1") return;
+    if (props.getProperty("IMMO_DEMO_SALES") === "1" && props.getProperty("IMMO_DEMO_SALES_KPI") === "1" && props.getProperty("IMMO_DEMO_TRIAL60") === "1") return;
     withLock_(function () {
       if (props.getProperty("IMMO_DEMO_SALES") !== "1" && demoSales_() === "ok") props.setProperty("IMMO_DEMO_SALES", "1");
       if (props.getProperty("IMMO_DEMO_SALES") === "1" && props.getProperty("IMMO_DEMO_SALES_KPI") !== "1" && demoSalesClients_() === "ok") props.setProperty("IMMO_DEMO_SALES_KPI", "1");
+      if (props.getProperty("IMMO_DEMO_TRIAL60") !== "1" && demoTrial60_() === "ok") props.setProperty("IMMO_DEMO_TRIAL60", "1");
     }, 30000);
   } catch (e) { console.error("Démo commercial terrain : " + e.message); }
+}
+/** Démo uniquement : essai de 60 jours (2 mois offerts) sur les forfaits, sauf le forfait 001 (jamais modifié),
+ *  et les essais déjà en cours de la démo recalés sur 60 jours. */
+function demoTrial60_() {
+  const now = nowIso_(), today = todayStr_(), keep = {};
+  dbAll_("SubscriptionPlans").forEach(function (pl) {
+    if (/001/.test(String(pl.planCode) + " " + String(pl.name))) { keep[pl.planCode] = true; return; }
+    if (Number(pl.trialDays) > 0 && Number(pl.trialDays) !== 60) dbUpdate_("SubscriptionPlans", pl.planCode, { trialDays: 60, updatedAt: now, updatedBy: "demo" });
+  });
+  dbAll_("Subscriptions").forEach(function (s) {
+    if (!s.trialEnd || !s.startDate || keep[s.planCode] || ["CANCELLED", "EXPIRED", "SUSPENDED"].indexOf(s.status) >= 0) return;
+    const end = addDaysStr_(String(s.startDate).slice(0, 10), 60); if (String(s.trialEnd) === end) return;
+    const patch = { trialEnd: end, updatedAt: now };
+    if (String(s.periodEnd) === String(s.trialEnd)) patch.periodEnd = end;
+    if (String(s.nextDueDate) === String(s.trialEnd)) patch.nextDueDate = end;
+    if (end > today && ["ACTIVE", "PAST_DUE"].indexOf(s.status) >= 0) patch.status = "TRIAL";
+    dbUpdate_("Subscriptions", s.subscriptionId, patch);
+  });
+  return "ok";
 }
 /** Clients fictifs du commercial de démonstration, étalés sur 6 mois, pour que ses indicateurs parlent
  *  (prime au 1er paiement = 3e mois, 10 % × 12 cumulés au paiement du 4e mois). Données entièrement inventées. */

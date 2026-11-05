@@ -581,6 +581,7 @@ function TEST_GROUPS_() {
           const ind = mine.indicators;
           T.ok(mine.clients.length >= 9 && ind.clients.paying >= 5 && ind.clients.lost >= 1 && ind.gains.paid > 0 && ind.gains.earned > 0 && ind.mrr > 0, "indicateurs de démonstration renseignés : " + JSON.stringify({ n: mine.clients.length, c: ind.clients, g: ind.gains, mrr: ind.mrr, st: mine.clients.map(function (x) { return x.stage + "/" + x.payments; }) }));
           T.ok(ind.evolution.filter(function (m) { return m.signups > 0; }).length >= 4 && mine.commissions.some(function (c) { return c.period === "CUMUL"; }), "évolution sur plusieurs mois et versement cumulé du 4e mois");
+          T.ok(dbAll_("SubscriptionPlans").filter(function (pl) { return Number(pl.trialDays) > 0 && !/001/.test(pl.planCode + " " + pl.name); }).every(function (pl) { return Number(pl.trialDays) === 60; }), "démo : essai de 60 jours sur les forfaits");
           T.fails(sv.token, "sales.repCreate", { email: "x@example.test", name: "Pirate" }, "DEMO_READONLY");
           T.eq(T.pub("demo.views", {}).views.length, 6, "mise en place une seule fois (rien de dupliqué)");
           T.eq(dbAll_("Organizations").filter(function (o) { return / \(démo\)$/.test(o.name) && String(o.salesRepId) === String(mine.rep.repId); }).length, 7, "clients fictifs créés une seule fois");

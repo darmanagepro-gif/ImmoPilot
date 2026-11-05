@@ -1980,7 +1980,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "56f2caa79249";
+var IMMO_BUILD_ = "f9fc21c2acf5";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -3752,12 +3752,32 @@ var DEMO_SALES_ = { email: "demo.commercial@example.test", name: "Yassine Amrani
 function demoEnsureSales_() {
   try {
     const props = PropertiesService.getScriptProperties();
-    if (props.getProperty("IMMO_DEMO_SALES") === "1" && props.getProperty("IMMO_DEMO_SALES_KPI") === "1") return;
+    if (props.getProperty("IMMO_DEMO_SALES") === "1" && props.getProperty("IMMO_DEMO_SALES_KPI") === "1" && props.getProperty("IMMO_DEMO_TRIAL60") === "1") return;
     withLock_(function () {
       if (props.getProperty("IMMO_DEMO_SALES") !== "1" && demoSales_() === "ok") props.setProperty("IMMO_DEMO_SALES", "1");
       if (props.getProperty("IMMO_DEMO_SALES") === "1" && props.getProperty("IMMO_DEMO_SALES_KPI") !== "1" && demoSalesClients_() === "ok") props.setProperty("IMMO_DEMO_SALES_KPI", "1");
+      if (props.getProperty("IMMO_DEMO_TRIAL60") !== "1" && demoTrial60_() === "ok") props.setProperty("IMMO_DEMO_TRIAL60", "1");
     }, 30000);
   } catch (e) { console.error("Démo commercial terrain : " + e.message); }
+}
+/** Démo uniquement : essai de 60 jours (2 mois offerts) sur les forfaits, sauf le forfait 001 (jamais modifié),
+ *  et les essais déjà en cours de la démo recalés sur 60 jours. */
+function demoTrial60_() {
+  const now = nowIso_(), today = todayStr_(), keep = {};
+  dbAll_("SubscriptionPlans").forEach(function (pl) {
+    if (/001/.test(String(pl.planCode) + " " + String(pl.name))) { keep[pl.planCode] = true; return; }
+    if (Number(pl.trialDays) > 0 && Number(pl.trialDays) !== 60) dbUpdate_("SubscriptionPlans", pl.planCode, { trialDays: 60, updatedAt: now, updatedBy: "demo" });
+  });
+  dbAll_("Subscriptions").forEach(function (s) {
+    if (!s.trialEnd || !s.startDate || keep[s.planCode] || ["CANCELLED", "EXPIRED", "SUSPENDED"].indexOf(s.status) >= 0) return;
+    const end = addDaysStr_(String(s.startDate).slice(0, 10), 60); if (String(s.trialEnd) === end) return;
+    const patch = { trialEnd: end, updatedAt: now };
+    if (String(s.periodEnd) === String(s.trialEnd)) patch.periodEnd = end;
+    if (String(s.nextDueDate) === String(s.trialEnd)) patch.nextDueDate = end;
+    if (end > today && ["ACTIVE", "PAST_DUE"].indexOf(s.status) >= 0) patch.status = "TRIAL";
+    dbUpdate_("Subscriptions", s.subscriptionId, patch);
+  });
+  return "ok";
 }
 /** Clients fictifs du commercial de démonstration, étalés sur 6 mois, pour que ses indicateurs parlent
  *  (prime au 1er paiement = 3e mois, 10 % × 12 cumulés au paiement du 4e mois). Données entièrement inventées. */
@@ -11807,6 +11827,7 @@ function TEST_GROUPS_() {
           const ind = mine.indicators;
           T.ok(mine.clients.length >= 9 && ind.clients.paying >= 5 && ind.clients.lost >= 1 && ind.gains.paid > 0 && ind.gains.earned > 0 && ind.mrr > 0, "indicateurs de démonstration renseignés : " + JSON.stringify({ n: mine.clients.length, c: ind.clients, g: ind.gains, mrr: ind.mrr, st: mine.clients.map(function (x) { return x.stage + "/" + x.payments; }) }));
           T.ok(ind.evolution.filter(function (m) { return m.signups > 0; }).length >= 4 && mine.commissions.some(function (c) { return c.period === "CUMUL"; }), "évolution sur plusieurs mois et versement cumulé du 4e mois");
+          T.ok(dbAll_("SubscriptionPlans").filter(function (pl) { return Number(pl.trialDays) > 0 && !/001/.test(pl.planCode + " " + pl.name); }).every(function (pl) { return Number(pl.trialDays) === 60; }), "démo : essai de 60 jours sur les forfaits");
           T.fails(sv.token, "sales.repCreate", { email: "x@example.test", name: "Pirate" }, "DEMO_READONLY");
           T.eq(T.pub("demo.views", {}).views.length, 6, "mise en place une seule fois (rien de dupliqué)");
           T.eq(dbAll_("Organizations").filter(function (o) { return / \(démo\)$/.test(o.name) && String(o.salesRepId) === String(mine.rep.repId); }).length, 7, "clients fictifs créés une seule fois");
