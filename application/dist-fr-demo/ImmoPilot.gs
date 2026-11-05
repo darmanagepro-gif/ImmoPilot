@@ -1980,7 +1980,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "2a50b87eb97e";
+var IMMO_BUILD_ = "9b19a0e923fd";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -3748,7 +3748,7 @@ var DEMO_VIEWS_ = [
   { id: "admin", label: "Super administrateur", who: function () { return DEMO_SPEC_.superAdmin; } }
 ];
 /** Commercial terrain de démonstration : ses clients sont les deux comptes de la démo (propriétaire et agence). */
-var DEMO_SALES_ = { email: "ecosynergy31+commercial@gmail.com", name: "Yassine Amrani (commercial démo)" };
+var DEMO_SALES_ = { email: "demo.commercial@example.test", name: "Yassine Amrani (commercial démo)" };
 function demoEnsureSales_() {
   try {
     const props = PropertiesService.getScriptProperties();

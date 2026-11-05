@@ -698,7 +698,7 @@ var DEMO_VIEWS_ = [
   { id: "admin", label: "Super administrateur", who: function () { return DEMO_SPEC_.superAdmin; } }
 ];
 /** Commercial terrain de démonstration : ses clients sont les deux comptes de la démo (propriétaire et agence). */
-var DEMO_SALES_ = { email: "ecosynergy31+commercial@gmail.com", name: "Yassine Amrani (commercial démo)" };
+var DEMO_SALES_ = { email: "demo.commercial@example.test", name: "Yassine Amrani (commercial démo)" };
 function demoEnsureSales_() {
   try {
     const props = PropertiesService.getScriptProperties();
