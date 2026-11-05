@@ -20,10 +20,22 @@ const INSTANCES = [
   { name: "Démo Maroc", unit: "immopilot-demo-ma", env: "/etc/immopilot/demo-ma.env", host: "demo-ma." + DOMAIN, demo: true }
 ];
 
-if (!NOW && !NOMAIL) {
-  const h = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", hour12: false }).format(new Date());
-  if (Number(h) !== 6) process.exit(0); // l'autre déclenchement (heure d'été / d'hiver) ne fait rien
+// cron fournit un PATH minimal : sans /usr/sbin, des outils comme ufw seraient introuvables.
+process.env.PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+
+/** Heure à Paris (0-23), lue champ par champ : le format français affiche « 06 h », illisible comme nombre. */
+function parisHour(d) {
+  const p = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Paris", hour: "numeric", hourCycle: "h23" }).formatToParts(d || new Date()).find(function (x) { return x.type === "hour"; });
+  return p ? Number(p.value) : -1;
 }
+if (ARGS.indexOf("--self-test") >= 0) {
+  // Contrôle de la règle d'envoi : 6 h à Paris, en hiver (UTC+1) comme en été (UTC+2).
+  const cases = [["2026-11-05T05:00:00Z", 6], ["2026-11-05T04:00:00Z", 5], ["2026-07-05T04:00:00Z", 6], ["2026-07-05T05:00:00Z", 7]];
+  const bad = cases.filter(function (c) { return parisHour(new Date(c[0])) !== c[1]; });
+  console.log(bad.length ? "ECHEC : " + JSON.stringify(bad) : "OK : envoi à 6 h (heure de Paris) en hiver et en été");
+  process.exit(bad.length ? 1 : 0);
+}
+if (!NOW && !NOMAIL && parisHour() !== 6) process.exit(0); // l'autre déclenchement (heure d'été / d'hiver) ne fait rien
 
 function readEnv(f) { const o = {}; try { fs.readFileSync(f, "utf8").split("\n").forEach(function (l) { const m = /^([A-Z0-9_]+)=(.*)$/.exec(l.trim()); if (m) o[m[1]] = m[2].replace(/^["']|["']$/g, ""); }); } catch (e) { /* absent */ } return o; }
 function sh(cmd) { try { return cp.execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 60000 }).trim(); } catch (e) { return (e.stdout || "").toString().trim(); } }
