@@ -702,9 +702,48 @@ var DEMO_SALES_ = { email: "demo.commercial@example.test", name: "Yassine Amrani
 function demoEnsureSales_() {
   try {
     const props = PropertiesService.getScriptProperties();
-    if (props.getProperty("IMMO_DEMO_SALES") === "1") return;
-    withLock_(function () { if (props.getProperty("IMMO_DEMO_SALES") === "1") return; if (demoSales_() === "ok") props.setProperty("IMMO_DEMO_SALES", "1"); }, 30000);
+    if (props.getProperty("IMMO_DEMO_SALES") === "1" && props.getProperty("IMMO_DEMO_SALES_KPI") === "1") return;
+    withLock_(function () {
+      if (props.getProperty("IMMO_DEMO_SALES") !== "1" && demoSales_() === "ok") props.setProperty("IMMO_DEMO_SALES", "1");
+      if (props.getProperty("IMMO_DEMO_SALES") === "1" && props.getProperty("IMMO_DEMO_SALES_KPI") !== "1" && demoSalesClients_() === "ok") props.setProperty("IMMO_DEMO_SALES_KPI", "1");
+    }, 30000);
   } catch (e) { console.error("Démo commercial terrain : " + e.message); }
+}
+/** Clients fictifs du commercial de démonstration, étalés sur 6 mois, pour que ses indicateurs parlent
+ *  (prime au 1er paiement = 3e mois, 10 % × 12 cumulés au paiement du 4e mois). Données entièrement inventées. */
+function demoSalesClients_() {
+  const rep = dbAll_("SalesReps").find(function (r) { return normalizeEmail_(r.email) === normalizeEmail_(DEMO_SALES_.email); }); if (!rep) return "pas de commercial de démo";
+  const plans = dbAll_("SubscriptionPlans").filter(function (pl) { return pl.status === "ACTIVE" && num_(pl.price) > 0; }).sort(function (a, b) { return num_(a.sortOrder) - num_(b.sortOrder); });
+  if (!plans.length) return "pas de forfait";
+  const ma = edition_().code === "MA", city = ma ? "Marrakech" : "Toulouse";
+  const iso = function (d) { return d.toISOString(); }, day = function (monthsAgo, d) { const x = new Date(); x.setUTCMonth(x.getUTCMonth() - monthsAgo, d); x.setUTCHours(9, 0, 0, 0); return x; };
+  // [nom, contact, mois écoulés depuis l'inscription, nombre de paiements, résilié, versements déjà réglés au commercial]
+  const list = ma ? [["Riad Yasmine (démo)", "Salma Idrissi", 5, 3, false, true], ["Dar Zitoun (démo)", "Omar Tazi", 4, 2, false, true], ["Villa Atlas (démo)", "Nadia Berrada", 3, 2, false, false],
+      ["Appartements Gueliz (démo)", "Hamza Alaoui", 2, 1, false, false], ["Riad Nour (démo)", "Leila Fassi", 1, 1, false, false], ["Maison Agdal (démo)", "Youssef Kettani", 1, 0, true, false], ["Dar Amane (démo)", "Imane Chraibi", 0, 1, false, false]]
+    : [["Gîte des Tilleuls (démo)", "Claire Martin", 5, 3, false, true], ["Studio Capitole (démo)", "Hugo Bernard", 4, 2, false, true], ["Villa des Pins (démo)", "Sophie Laurent", 3, 2, false, false],
+      ["Appartements Carmes (démo)", "Lucas Petit", 2, 1, false, false], ["Maison Saint-Cyprien (démo)", "Emma Roux", 1, 1, false, false], ["T2 Compans (démo)", "Thomas Faure", 1, 0, true, false], ["Loft Minimes (démo)", "Julie Moreau", 0, 1, false, false]];
+  list.forEach(function (c, i) {
+    if (dbAll_("Organizations").some(function (o) { return o.name === c[0]; })) return;
+    const plan = plans[i % plans.length], price = num_(plan.price); let start = day(c[2], 3 + i); if (start > new Date()) start = new Date(Date.now() - 3600000);
+    const o = dbInsert_("Organizations", { name: c[0], status: "ACTIVE", type: "OWNER_ORG", city: city, contactName: c[1], createdAt: iso(start), createdBy: "demo", signupSource: "SELF",
+      salesRepId: rep.repId, salesRepDeclared: rep.code, salesLinkedAt: iso(start), salesLinkedBy: "demo" });
+    const s = subCreate_(o.organizationId, plan, true, iso(start).slice(0, 10), "demo");
+    const pays = [];
+    for (let k = 0; k < c[3]; k++) { const pd = k === 0 ? start : day(Math.max(0, c[2] - 3 - (k - 1)), 2); if (pd > new Date()) break;
+      pays.push(dbInsert_("Payments", { organizationId: o.organizationId, kind: "SUBSCRIPTION", refType: "SUBSCRIPTION", refId: s.subscriptionId, direction: "IN", amount: price, currency: s.currency, paidAt: iso(pd), status: "RECORDED", createdAt: iso(pd) })); }
+    const trialOver = String(s.trialEnd) <= todayStr_();
+    dbUpdate_("Subscriptions", s.subscriptionId, { status: c[4] ? "CANCELLED" : (trialOver ? (pays.length ? "ACTIVE" : "PAST_DUE") : "TRIAL"), canceledAt: c[4] ? nowIso_() : "", updatedAt: nowIso_() });
+    salesComputeOrg_(dbGet_("Organizations", o.organizationId));
+    // Dates réelles d'acquisition (paiement concerné) et versements déjà réglés pour les plus anciens.
+    dbAll_("SalesCommissions").filter(function (x) { return String(x.organizationId) === String(o.organizationId); }).forEach(function (x) {
+      const pay = x.kind === "SIGNUP" ? pays[0] : x.kind === "RECURRING" ? pays[1] : null; if (!pay || x.status !== "EARNED") return;
+      const due = new Date(pay.paidAt); const paidAt = new Date(Date.UTC(due.getUTCFullYear(), due.getUTCMonth() + 1, 0, 16));
+      const patch = { earnedAt: pay.paidAt, createdAt: pay.paidAt, note: String(x.note || "").replace(/fin [a-zéû]+ \d{4}/, "fin " + salesMonthLabel_(pay.paidAt)) };
+      if (c[5] && paidAt < new Date()) Object.assign(patch, { status: "PAID", paidAt: iso(paidAt), paidRef: "VIR-DEMO-" + (i + 1) });
+      dbUpdate_("SalesCommissions", x.commissionId, patch);
+    });
+  });
+  return "ok";
 }
 function demoSales_() {
   const pf = platformOrgId_(); if (!pf) return "pas d'organisation plateforme";

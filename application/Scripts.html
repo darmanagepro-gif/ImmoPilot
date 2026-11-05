@@ -710,7 +710,7 @@ function prospectPreviewDialog(pv, def) {
 /* ------------------------------ Espace commercial : commerciaux terrain et commissions ------------------------------ */
 const SALES_STAGE = { INSCRIT: ["Inscrit, contrat non signé", "warn"], SIGNE: ["Contrat signé, carte à enregistrer", "info"], ESSAI_PAYE: ["Signé et payé, en essai", "good"], ACTIF: ["Abonné actif", "good"],
   SUSPENDU: ["Suspendu", "bad"], RESILIE: ["Résilié", "bad"] };
-const SALES_KIND = { SIGNUP: "Prime de signature", RECURRING: "Commission mensuelle", CLAWBACK: "Reprise", ADJUST: "Ajustement" };
+const SALES_KIND = { SIGNUP: "Prime du 3e mois", RECURRING: "Commission mensuelle", CLAWBACK: "Reprise", ADJUST: "Ajustement" };
 const SALES_ST = { PENDING: ["En attente", "warn"], EARNED: ["Acquise, à payer", "info"], PAID: ["Payée", "good"], CANCELLED: ["Annulée", "bad"] };
 function salesStageTag(s) { const x = SALES_STAGE[s] || [s, ""]; return tag(t(x[0]), x[1]); }
 function salesStTag(s) { const x = SALES_ST[s] || [s, ""]; return tag(t(x[0]), x[1]); }
@@ -730,18 +730,38 @@ function salesClientColumns(admin) {
     { l: "Commission", f: function (r) { return h("div", { class: "small" }, r.commissionPending ? t("en attente") + " " + salesMoney(r.commissionPending, r.currency) : "", r.commissionEarned ? h("div", null, t("à payer") + " " + salesMoney(r.commissionEarned, r.currency)) : null, r.commissionPaid ? h("div", null, t("payée") + " " + salesMoney(r.commissionPaid, r.currency)) : null); } }].filter(Boolean);
 }
 function salesCommissionColumns(admin) {
-  return [admin ? { l: "Commercial", k: "repName" } : null, { l: "Client", k: "clientName" }, { l: "Type", f: function (r) { return t(SALES_KIND[r.kind] || r.kind) + (r.period ? " · " + r.period : ""); } },
+  return [admin ? { l: "Commercial", k: "repName" } : null, { l: "Client", k: "clientName" }, { l: "Type", f: function (r) { return r.kind === "RECURRING" && r.period === "CUMUL" ? t("10 % cumulés sur 12 mois (versés au 4e mois)") : t(SALES_KIND[r.kind] || r.kind) + (r.period ? " · " + r.period : ""); } },
     { l: "Forfait", k: "planCode" }, { l: "Base HT", f: function (r) { return salesMoney(r.baseAmount, r.currency); } }, { l: "Taux", f: function (r) { return Math.round(r.rate * 1000) / 10 + " %"; } },
     { l: "Montant", f: function (r) { return h("b", null, salesMoney(r.amount, r.currency)); } }, { l: "Statut", f: function (r) { return salesStTag(r.status); } },
     { l: "Détail", f: function (r) { return h("span", { class: "small muted" }, (r.paidAt ? t("payée le") + " " + fmtDate(r.paidAt) + (r.paidRef ? " (" + r.paidRef + ")" : "") + " · " : "") + (r.note || "")); } }].filter(Boolean);
 }
 function salesSimulationTable(sim, rates) {
   return h("div", null, table([{ l: "Forfait", k: "name" }, { l: "Prix mensuel HT", f: function (r) { return salesMoney(r.price, r.currency); } },
-    { l: "Prime de signature", f: function (r) { return h("b", null, salesMoney(r.bonus, r.currency)); } }, { l: "Par mois ensuite", f: function (r) { return salesMoney(r.recurring, r.currency) + " × " + r.months; } },
+    { l: "Prime au 3e mois", f: function (r) { return h("b", null, salesMoney(r.bonus, r.currency)); } }, { l: "Versement cumulé au 4e mois", f: function (r) { return h("div", null, h("b", null, salesMoney(r.cumul, r.currency)), h("div", { class: "small muted" }, salesMoney(r.recurring, r.currency) + " × " + r.months)); } },
     { l: "Total sur la 1re année", f: function (r) { return h("b", null, salesMoney(r.firstYear, r.currency)); } }], sim, { empty: "Aucun forfait." }),
-    h("p", { class: "small muted" }, t("Prime de signature") + " : " + Math.round(rates.bonusRate * 100) + " % " + t("du prix mensuel HT du forfait (hors options), acquise quand le client a payé et que son essai se termine sans résiliation.") + " " +
-      t("Commission mensuelle") + " : " + Math.round(rates.recurringRate * 1000) / 10 + " % " + t("sur chacun des") + " " + rates.recurringMonths + " " + t("paiements suivants.") +
-      (rates.clawbackDays ? " " + t("Reprise si le client part dans les") + " " + rates.clawbackDays + " " + t("jours suivant l'acquisition de la prime.") : "")));
+    h("p", { class: "small muted" }, t("Rien à la signature : les 2 premiers mois sont offerts au client, le 3e mois est son 1er mois payé.") + " " +
+      t("Prime") + " : " + Math.round(rates.bonusRate * 100) + " % " + t("du prix mensuel HT du forfait (hors options), versée en une fois quand le client paie son 3e mois.") + " " +
+      t("Commission") + " : " + Math.round(rates.recurringRate * 1000) / 10 + " % × " + rates.recurringMonths + " " + t("mois (du 3e au") + " " + (Number(rates.recurringMonths) + 2) + t("e mois), cumulés et versés en une fois quand le client paie son 4e mois, sans reprise ensuite.") +
+      (rates.clawbackDays ? " " + t("La prime du 3e mois est reprise si le client part dans les") + " " + rates.clawbackDays + " " + t("jours qui suivent.") : "")));
+}
+/** Indicateurs de l'espace commercial : gains, clients, chiffre apporté, évolution sur 6 mois. */
+function salesIndicatorsPanel(ind) {
+  if (!ind) return h("div");
+  const cur = ind.currency, g = ind.gains, c = ind.clients, box = h("div");
+  box.appendChild(h("h3", { class: "section-title" }, t("Mes gains")));
+  box.appendChild(kpis([{ l: "À venir", v: salesMoney(g.pending, cur), sub: t("clients pas encore au 3e/4e mois") }, { l: "Acquis, à payer", v: salesMoney(g.earned, cur), tone: g.earned ? "warn" : "" },
+    { l: "Déjà payés", v: salesMoney(g.paid, cur), tone: "good" }, { l: "Total gagné cette année", v: salesMoney(g.year, cur), tone: "good" }]));
+  box.appendChild(h("h3", { class: "section-title" }, t("Mes clients et mon chiffre apporté")));
+  box.appendChild(kpis([{ l: "Inscrits", v: fmtNum(c.signedUp, 0) }, { l: "En essai (2 mois offerts)", v: fmtNum(c.trial, 0) }, { l: "Payants", v: fmtNum(c.paying, 0), tone: "good" },
+    { l: "Résiliés ou suspendus", v: fmtNum(c.lost, 0), tone: c.lost ? "bad" : "" }, { l: "Conversion essai → payant", v: c.conversion === null ? "—" : fmtNum(c.conversion, 1) + " %" },
+    { l: "Chiffre apporté par mois (HT)", v: salesMoney(ind.mrr, cur), sub: t("abonnements de vos clients payants"), tone: "good" }]));
+  const ev = ind.evolution || [], cb = h("div");
+  box.appendChild(panel("Évolution sur 6 mois", cb));
+  const lab = ev.map(function (m) { const p = m.month.split("-"); return new Date(Number(p[0]), Number(p[1]) - 1, 1).toLocaleDateString(locale(), { month: "short", year: "2-digit" }); });
+  chart(cb, { type: "bar", data: { labels: lab, datasets: [{ label: t("Inscriptions"), data: ev.map(function (m) { return m.signups; }), yAxisID: "y" },
+    { type: "line", label: t("Gains acquis") + " (" + (cur === "EUR" ? "€" : cur) + ")", data: ev.map(function (m) { return m.gains; }), yAxisID: "y1", tension: 0.3 }] },
+    options: { scales: { y: { beginAtZero: true, position: "left", ticks: { precision: 0 } }, y1: { beginAtZero: true, position: "right", grid: { drawOnChartArea: false } } } } });
+  return box;
 }
 function salesRepChoices() { return api("sales.reps", {}).then(function (l) { return l.map(function (r) { return [r.repId, r.name + " (" + r.code + ")"]; }); }); }
 
@@ -771,7 +791,7 @@ function salesOverviewBlock(b) {
 function salesRepCreateDialog(after) {
   formModal(t("Nouveau commercial terrain"), [{ k: "name", l: "Nom et prénom", req: true }, { k: "email", l: "E-mail", t: "email", req: true }, { k: "phone", l: "Téléphone", t: "tel" },
     { k: "country", l: "Pays", t: "select", req: true, opts: PROSPECT_COUNTRIES }, { k: "territory", l: "Secteur (départements, villes…)", full: true },
-    { k: "bonusRate", l: "Prime de signature particulière (%, vide = plan)", t: "number" }, { k: "recurringRate", l: "Commission mensuelle particulière (%, vide = plan)", t: "number" },
+    { k: "bonusRate", l: "Prime du 3e mois particulière (%, vide = plan)", t: "number" }, { k: "recurringRate", l: "Commission cumulée particulière (% par mois, vide = plan)", t: "number" },
     { k: "recurringMonths", l: "Nombre de mois particulier (vide = plan)", t: "number" }], { country: "FR" }, function (v) {
     ["bonusRate", "recurringRate"].forEach(function (k) { if (v[k] !== "" && v[k] != null) v[k] = Number(v[k]) / 100; });
     return api("sales.repCreate", v).then(function (r) { toast(t("Commercial créé, code") + " " + r.code + (r.invited ? " · " + t("invitation envoyée par e-mail") : ""), "good"); if (after) after(); else App.go("commercial"); });
@@ -800,7 +820,7 @@ PAGES.salesrep = function (el, id) {
       r.phone ? h("a", { class: "btn", href: "tel:" + r.phone }, "☎ " + t("Appeler")) : null, h("a", { class: "btn", href: "mailto:" + r.email }, "✉ " + t("E-mail")),
       btn(t("Modifier"), function () {
         formModal(t("Modifier le commercial"), [{ k: "name", l: "Nom et prénom", req: true }, { k: "phone", l: "Téléphone", t: "tel" }, { k: "country", l: "Pays", t: "select", opts: PROSPECT_COUNTRIES },
-          { k: "territory", l: "Secteur", full: true }, { k: "bonusRate", l: "Prime de signature particulière (%, vide = plan)", t: "number" }, { k: "recurringRate", l: "Commission mensuelle particulière (%, vide = plan)", t: "number" },
+          { k: "territory", l: "Secteur", full: true }, { k: "bonusRate", l: "Prime du 3e mois particulière (%, vide = plan)", t: "number" }, { k: "recurringRate", l: "Commission cumulée particulière (% par mois, vide = plan)", t: "number" },
           { k: "recurringMonths", l: "Nombre de mois particulier (vide = plan)", t: "number" }], { name: r.name, phone: r.phone, country: r.country, territory: r.territory },
         function (v) { ["bonusRate", "recurringRate"].forEach(function (k) { if (v[k] !== "" && v[k] != null) v[k] = Number(v[k]) / 100; }); return api("sales.repUpdate", Object.assign({ repId: id }, v)).then(reload); });
       }),
@@ -841,8 +861,8 @@ function salesPlanTab(b) {
   api("sales.planGet", {}).then(function (d) {
     const pl = d.plan;
     clear(b).appendChild(panel("Plan de commissionnement des commerciaux terrain", salesSimulationTable(d.simulation, pl), [btn(t("Modifier le plan"), function () {
-      formModal(t("Plan de commissionnement"), [{ k: "bonusRate", l: "Prime de signature (% du 1er mois HT)", t: "number", req: true }, { k: "recurringRate", l: "Commission mensuelle (% du prix HT)", t: "number", req: true },
-        { k: "recurringMonths", l: "Pendant combien de mois", t: "number", req: true }, { k: "clawbackDays", l: "Reprise de la prime si le client part dans les (jours)", t: "number", req: true }],
+      formModal(t("Plan de commissionnement"), [{ k: "bonusRate", l: "Prime au 3e mois (% du prix mensuel HT)", t: "number", req: true }, { k: "recurringRate", l: "Commission (% du prix mensuel HT, cumulée et versée au 4e mois)", t: "number", req: true },
+        { k: "recurringMonths", l: "Nombre de mois cumulés", t: "number", req: true }, { k: "clawbackDays", l: "Reprise de la prime du 3e mois si le client part dans les (jours)", t: "number", req: true }],
         { bonusRate: Math.round(pl.bonusRate * 100), recurringRate: Math.round(pl.recurringRate * 1000) / 10, recurringMonths: pl.recurringMonths, clawbackDays: pl.clawbackDays },
         function (v) { return api("sales.planSave", { bonusRate: Number(v.bonusRate) / 100, recurringRate: Number(v.recurringRate) / 100, recurringMonths: v.recurringMonths, clawbackDays: v.clawbackDays }).then(function () { toast(t("Plan enregistré."), "good"); App.go("commercial"); }); },
         { intro: t("S'applique aux prochaines commissions ; les commissions déjà acquises ne changent pas. Un commercial peut avoir des taux particuliers (sa fiche).") });
@@ -866,7 +886,7 @@ PAGES.sales = function (el) {
         h("a", { class: "btn", href: "https://wa.me/?text=" + encodeURIComponent(t("Inscrivez-vous à DarPilot (2 mois offerts) :") + " " + link), target: "_blank", rel: "noopener" }, "WhatsApp")) : null)));
     el.appendChild(kpis([{ l: "Mes clients", v: fmtNum(d.kpis.clients, 0) }, { l: "Contrat à signer", v: fmtNum(d.kpis.notSigned, 0), tone: d.kpis.notSigned ? "warn" : "" },
       { l: "En essai", v: fmtNum(d.kpis.trial, 0) }, { l: "Actifs et payés", v: fmtNum(d.kpis.active, 0), tone: "good" }, { l: "Mes prospects", v: fmtNum(d.kpis.prospects, 0), sub: d.kpis.prospectsTalking + " " + t("en discussion") }]));
-    el.appendChild(salesTotalsKpis(d.totals));
+    el.appendChild(salesIndicatorsPanel(d.indicators));
     tabs(el, [
       { id: "clients", label: t("Mes clients"), render: function (b) { b.appendChild(table(salesClientColumns(false), d.clients, { empty: "Aucun client pour l'instant : partagez votre lien d'inscription." })); } },
       { id: "prospects", label: t("Mes prospects"), render: function (b) { prospectListTab(b, {}, false); } },

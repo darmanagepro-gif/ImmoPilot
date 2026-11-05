@@ -5,15 +5,18 @@
  *  - Rattachement d'un client : à l'inscription en ligne, champ facultatif « Votre commercial » (nom et prénom ou code,
  *    pré-rempli par le lien ?action=signup&ref=CODE) ; sinon le super administrateur rattache le client à la main.
  *  - Plan de commissionnement (PlatformSettings « sales.plan », modifiable par le super administrateur) :
- *      prime de signature = bonusRate × prix mensuel HT du forfait (hors options), ACQUISE quand le 1er paiement est reçu
- *        et que l'essai est terminé sans résiliation ;
- *      commission récurrente = recurringRate × prix mensuel HT, sur chacun des recurringMonths paiements suivants ;
- *      reprise : client résilié ou suspendu dans les clawbackDays après la prime → prime annulée (ou déduite si déjà payée).
- *  - Le calcul est refait chaque jour (jobDaily) et à la demande ; il est idempotent (une prime par client, une commission par paiement).
+ *      les 2 premiers mois sont offerts ; le client paie à la souscription son 1er mois payant (= le 3e mois) ;
+ *      prime = bonusRate × prix mensuel HT du forfait (hors options), ACQUISE à ce 1er paiement, versée en une fois à la fin du mois ;
+ *      commission récurrente = recurringRate × prix mensuel HT × recurringMonths (mois 3 à 14), CUMULÉE et versée en une fois,
+ *        ACQUISE au 2e paiement (le client a payé son 4e mois), versée à la fin de ce mois ; aucune reprise sur ce versement ;
+ *      reprise de la prime : client résilié ou suspendu dans les clawbackDays après la prime → prime annulée (ou déduite si déjà payée).
+ *  - Le calcul est refait chaque jour (jobDaily) et à la demande ; il est idempotent (une prime et un versement cumulé par client).
  *  Les commerciaux ne voient que leurs clients, leurs commissions et leurs prospects.
  */
 
 var SALES_DEFAULT_PLAN_ = { bonusRate: 1, recurringRate: 0.10, recurringMonths: 12, clawbackDays: 90 };
+/** Marqueur du versement cumulé des commissions mensuelles (une seule ligne par client et par commercial). */
+var SALES_CUMUL_PERIOD_ = "CUMUL";
 
 /* ------------------------------ plan, commercial courant ------------------------------ */
 function salesPlan_() {
@@ -103,25 +106,25 @@ function salesComputeOrg_(org) {
   const rep = dbGet_("SalesReps", org.salesRepId); if (!rep) return { changed: 0 };
   const rates = salesRates_(rep), pl = salesPlan_(), s = salesSubOf_(org.organizationId);
   const mine = dbAll_("SalesCommissions").filter(function (c) { return String(c.organizationId) === String(org.organizationId) && String(c.repId) === String(rep.repId); });
-  const today = todayStr_(), now = nowIso_();
+  const now = nowIso_();
   let changed = 0;
   if (!s) return { changed: 0 };
   const price = num_(s.price), cur = s.currency || cur_(), pays = salesPaymentsOf_(org.organizationId);
   const live = pays.filter(function (x) { return x.status === "RECORDED"; });
   const ended = ["CANCELLED", "EXPIRED", "SUSPENDED"].indexOf(s.status) >= 0;
-  // Prime de signature : une seule par client et par commercial.
+  // Prime du 3e mois (1er paiement) : une seule par client et par commercial.
   let bonus = mine.find(function (c) { return c.kind === "SIGNUP"; });
   if (!bonus) {
     bonus = dbInsert_("SalesCommissions", { repId: rep.repId, organizationId: org.organizationId, subscriptionId: s.subscriptionId, planCode: s.planCode, kind: "SIGNUP",
       baseAmount: price, rate: rates.bonusRate, amount: round2_(price * rates.bonusRate), currency: cur, status: "PENDING", createdAt: now, updatedAt: now,
-      note: s.trialEnd ? "Acquise après l'essai (jusqu'au " + s.trialEnd + ") et le 1er paiement" : "Acquise au 1er paiement" });
+      note: "Acquise au 1er paiement du client (son 3e mois), versée à la fin du mois" });
     changed++;
   }
   if (bonus.status === "PENDING") {
-    if (ended) { dbUpdate_("SalesCommissions", bonus.commissionId, { status: "CANCELLED", note: "Client résilié ou suspendu avant la fin de l'essai", updatedAt: now }); changed++; }
-    else if (live.length && (!s.trialEnd || today >= String(s.trialEnd)) && ["ACTIVE", "PAST_DUE", "TRIAL"].indexOf(s.status) >= 0) {
+    if (ended && !live.length) { dbUpdate_("SalesCommissions", bonus.commissionId, { status: "CANCELLED", note: "Client résilié ou suspendu avant tout paiement", updatedAt: now }); changed++; }
+    else if (live.length && ["ACTIVE", "PAST_DUE", "TRIAL"].indexOf(s.status) >= 0) {
       dbUpdate_("SalesCommissions", bonus.commissionId, { status: "EARNED", earnedAt: now, subscriptionId: s.subscriptionId, planCode: s.planCode, baseAmount: price, amount: round2_(price * num_(bonus.rate)),
-        currency: cur, paymentId: live[0].paymentId, note: "Prime de signature acquise", updatedAt: now }); changed++;
+        currency: cur, paymentId: live[0].paymentId, note: "Prime acquise au 1er paiement du client (3e mois) — à verser fin " + salesMonthLabel_(live[0].paidAt || now), updatedAt: now }); changed++;
     } else if (num_(bonus.baseAmount) !== price || bonus.planCode !== s.planCode) { dbUpdate_("SalesCommissions", bonus.commissionId, { baseAmount: price, planCode: s.planCode, subscriptionId: s.subscriptionId, amount: round2_(price * num_(bonus.rate)), updatedAt: now }); changed++; }
   }
   // Reprise : résiliation ou suspension dans le délai après l'acquisition de la prime.
@@ -135,19 +138,29 @@ function salesComputeOrg_(org) {
         amount: -round2_(num_(fresh.amount)), currency: fresh.currency, status: "EARNED", earnedAt: now, createdAt: now, updatedAt: now, note: "Reprise de la prime : client parti dans les " + pl.clawbackDays + " jours" }); changed++;
     }
   }
-  // Commissions récurrentes : paiements suivant le 1er (couvert par la prime), dans la limite de recurringMonths.
-  const byPay = {}; mine.forEach(function (c) { if (c.kind === "RECURRING" && c.paymentId) byPay[String(c.paymentId)] = c; });
-  pays.slice(1).forEach(function (x, i) {
-    const c = byPay[String(x.paymentId)];
-    if (x.status !== "RECORDED") { if (c && c.status === "EARNED") { dbUpdate_("SalesCommissions", c.commissionId, { status: "CANCELLED", note: "Paiement annulé", updatedAt: now }); changed++; } return; }
-    if (c || i >= rates.recurringMonths || rates.recurringRate <= 0) return;
-    dbInsert_("SalesCommissions", { repId: rep.repId, organizationId: org.organizationId, subscriptionId: x.refId, planCode: s.planCode, kind: "RECURRING", period: String(x.paidAt || x.createdAt).slice(0, 7),
-      baseAmount: price, rate: rates.recurringRate, amount: round2_(price * rates.recurringRate), currency: x.currency || cur, status: "EARNED", earnedAt: now, paymentId: x.paymentId,
-      createdAt: now, updatedAt: now, note: "Paiement " + (i + 2) + " (récurrente " + (i + 1) + "/" + rates.recurringMonths + ")" });
-    changed++;
+  // Commission mensuelle CUMULÉE : recurringRate × prix × recurringMonths (mois 3 à 14), versée en une fois quand le client
+  // a payé son 4e mois (2e paiement après l'essai). Aucune reprise ensuite. Les anciennes commissions mois par mois non payées
+  // (ancien plan) sont remplacées ; celles déjà payées sont déduites du versement cumulé.
+  const cumul = mine.find(function (c) { return c.kind === "RECURRING" && c.period === SALES_CUMUL_PERIOD_; });
+  mine.filter(function (c) { return c.kind === "RECURRING" && c.period !== SALES_CUMUL_PERIOD_ && c.status === "EARNED"; }).forEach(function (c) {
+    dbUpdate_("SalesCommissions", c.commissionId, { status: "CANCELLED", note: "Remplacée par le versement cumulé des 10 % (nouveau plan)", updatedAt: now }); changed++;
   });
+  if (cumul && cumul.status === "EARNED" && live.length < 2) {
+    dbUpdate_("SalesCommissions", cumul.commissionId, { status: "CANCELLED", note: "Paiement du 4e mois annulé", updatedAt: now }); changed++;
+  } else if (!cumul && live.length >= 2 && rates.recurringRate > 0 && rates.recurringMonths > 0) {
+    const alreadyPaid = round2_(mine.filter(function (c) { return c.kind === "RECURRING" && c.status === "PAID"; }).reduce(function (t, c) { return t + num_(c.amount); }, 0));
+    const total = round2_(price * rates.recurringRate * rates.recurringMonths);
+    dbInsert_("SalesCommissions", { repId: rep.repId, organizationId: org.organizationId, subscriptionId: s.subscriptionId, planCode: s.planCode, kind: "RECURRING", period: SALES_CUMUL_PERIOD_,
+      baseAmount: price, rate: rates.recurringRate, amount: Math.max(0, round2_(total - alreadyPaid)), currency: cur, status: "EARNED", earnedAt: now, paymentId: live[1].paymentId,
+      createdAt: now, updatedAt: now, note: Math.round(rates.recurringRate * 1000) / 10 + " % × " + rates.recurringMonths + " mois (du 3e au " + (rates.recurringMonths + 2) + "e mois), cumulés, acquis au paiement du 4e mois — à verser fin " + salesMonthLabel_(live[1].paidAt || now) +
+        (alreadyPaid ? " (déjà versé : " + alreadyPaid + " " + cur + ")" : "") });
+    changed++;
+  }
   return { changed: changed };
 }
+const SALES_MONTHS_FR_ = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+/** « avril 2027 » à partir d'une date ISO (mois de versement au commercial). */
+function salesMonthLabel_(iso) { const m = /^(\d{4})-(\d{2})/.exec(String(iso || "")); return m ? SALES_MONTHS_FR_[Number(m[2]) - 1] + " " + m[1] : ""; }
 function salesComputeAll_() {
   let orgs = 0, changed = 0;
   dbAll_("Organizations").forEach(function (o) { if (!o.salesRepId) return; orgs++; changed += salesComputeOrg_(o).changed; });
@@ -191,8 +204,36 @@ function salesTotals_(coms) {
 function salesSimulation_(rates) {
   return dbAll_("SubscriptionPlans").filter(function (pl) { return pl.status === "ACTIVE"; }).sort(function (a, b) { return num_(a.sortOrder) - num_(b.sortOrder); }).map(function (pl) {
     const pr = num_(pl.price), bonus = round2_(pr * rates.bonusRate), rec = round2_(pr * rates.recurringRate);
-    return { planCode: pl.planCode, name: pl.name, price: pr, currency: pl.currency || cur_(), bonus: bonus, recurring: rec, months: rates.recurringMonths, firstYear: round2_(bonus + rec * rates.recurringMonths) };
+    const cumul = round2_(rec * rates.recurringMonths);
+    return { planCode: pl.planCode, name: pl.name, price: pr, currency: pl.currency || cur_(), bonus: bonus, recurring: rec, months: rates.recurringMonths, cumul: cumul, firstYear: round2_(bonus + cumul) };
   });
+}
+/** Indicateurs de l'espace commercial : gains, clients, chiffre apporté, évolution sur 6 mois. */
+function salesIndicators_(clients, coms) {
+  const now = new Date(), year = String(now.getFullYear());
+  const live = coms.filter(function (c) { return c.status !== "CANCELLED"; });
+  const sumSt = function (st) { return round2_(live.filter(function (c) { return c.status === st; }).reduce(function (t, c) { return t + num_(c.amount); }, 0)); };
+  const gainDate = function (c) { return String(c.earnedAt || c.createdAt || ""); };
+  const won = live.filter(function (c) { return c.status === "EARNED" || c.status === "PAID"; });
+  const paying = clients.filter(function (c) { return c.payments > 0 && c.stage !== "RESILIE" && c.stage !== "SUSPENDU"; });
+  const lost = clients.filter(function (c) { return c.stage === "RESILIE" || c.stage === "SUSPENDU"; });
+  const trial = clients.filter(function (c) { return c.subStatus === "TRIAL" && !c.payments; });
+  const decided = clients.filter(function (c) { return c.payments > 0 || c.subStatus !== "TRIAL"; });
+  const converted = decided.filter(function (c) { return c.payments > 0; });
+  const months = [];
+  for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push(d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2)); }
+  return {
+    currency: (clients[0] && clients[0].currency) || (coms[0] && coms[0].currency) || cur_(),
+    gains: { pending: sumSt("PENDING"), earned: sumSt("EARNED"), paid: sumSt("PAID"),
+      year: round2_(won.filter(function (c) { return gainDate(c).slice(0, 4) === year; }).reduce(function (t, c) { return t + num_(c.amount); }, 0)) },
+    clients: { signedUp: clients.length, trial: trial.length, paying: paying.length, lost: lost.length,
+      conversion: decided.length ? Math.round(converted.length / decided.length * 1000) / 10 : null },
+    mrr: round2_(paying.reduce(function (t, c) { return t + num_(c.price); }, 0)),
+    evolution: months.map(function (m) {
+      return { month: m, signups: clients.filter(function (c) { return String(c.createdAt || "").slice(0, 7) === m; }).length,
+        gains: round2_(won.filter(function (c) { return gainDate(c).slice(0, 7) === m; }).reduce(function (t, c) { return t + num_(c.amount); }, 0)) };
+    })
+  };
 }
 
 /* ------------------------------ routes : commercial ------------------------------ */
@@ -209,7 +250,7 @@ function salesMine_(p, a) {
     kpis: { clients: clients.length, trial: clients.filter(function (c) { return c.subStatus === "TRIAL"; }).length, active: clients.filter(function (c) { return c.stage === "ACTIF" || c.stage === "ESSAI_PAYE"; }).length,
       notSigned: clients.filter(function (c) { return !c.signed && c.stage !== "RESILIE"; }).length, lost: clients.filter(function (c) { return c.stage === "RESILIE" || c.stage === "SUSPENDU"; }).length,
       prospects: pros.length, prospectsTalking: pros.filter(function (x) { return ["en_discussion", "rdv_pris", "demo_faite", "devis_envoye"].indexOf(x.status) >= 0; }).length },
-    totals: salesTotals_(coms), clients: clients, commissions: coms.slice(0, 500).map(function (c) { return salesCommissionOut_(c, orgs, null); }) };
+    totals: salesTotals_(coms), indicators: salesIndicators_(clients, coms), clients: clients, commissions: coms.slice(0, 500).map(function (c) { return salesCommissionOut_(c, orgs, null); }) };
 }
 
 /* ------------------------------ routes : super administrateur ------------------------------ */
@@ -354,7 +395,7 @@ function salesCommissionExport_(p, a) {
 function salesPlanGet_(p, a) { requireSuper_(p); const pl = salesPlan_(); return { plan: pl, simulation: salesSimulation_(pl) }; }
 function salesPlanSave_(p, a) {
   requireSuper_(p);
-  const pl = { bonusRate: salesRateInput_(a.bonusRate, "Prime de signature", 5), recurringRate: salesRateInput_(a.recurringRate, "Commission récurrente", 1),
+  const pl = { bonusRate: salesRateInput_(a.bonusRate, "Prime du 3e mois", 5), recurringRate: salesRateInput_(a.recurringRate, "Commission récurrente", 1),
     recurringMonths: salesRateInput_(a.recurringMonths, "Durée", 60), clawbackDays: salesRateInput_(a.clawbackDays, "Délai de reprise", 365) };
   Object.keys(pl).forEach(function (k) { if (pl[k] === "") pl[k] = SALES_DEFAULT_PLAN_[k]; });
   pl.recurringMonths = Math.round(pl.recurringMonths); pl.clawbackDays = Math.round(pl.clawbackDays);

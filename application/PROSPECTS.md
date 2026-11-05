@@ -28,11 +28,11 @@ Chaque fiche montre le journal complet (brouillons préparés, e-mails envoyés,
 
 | | Règle |
 |---|---|
-| Prime de signature | 100 % du prix mensuel HT du forfait (hors options), **acquise** quand le client a payé et que son essai de 2 mois se termine sans résiliation |
-| Commission mensuelle | 10 % du prix mensuel HT sur chacun des 12 paiements suivants |
-| Reprise | si le client part dans les 90 jours suivant l'acquisition : prime annulée, ou déduite si elle a déjà été payée |
+| Prime du 3e mois | 100 % du prix mensuel HT du forfait (hors options). Les 2 premiers mois sont offerts au client ; il paie à la souscription son 1er mois payant (= le 3e mois). La prime est **acquise** à ce paiement et versée en une fois à la fin du mois |
+| Commissions 10 % cumulées | 10 % du prix mensuel HT × 12 mois (du 3e au 14e mois), **cumulés** et versés en une fois quand le client paie son 4e mois (à la fin de ce mois). Aucune reprise ensuite |
+| Reprise | seulement sur la prime du 3e mois : si le client part dans les 90 jours qui suivent, prime annulée, ou déduite si elle a déjà été payée |
 
-Exemple France, forfait Pro (59 € HT) : 59 € à la signature puis 5,90 € par mois pendant 12 mois, soit 129,80 € la première année. Le calcul est refait chaque nuit et par « Recalculer ». Les commissions se paient au commercial sur facture : marquez-les payées depuis sa fiche avec la référence du virement. Faites valider le contrat de commercial ou d'apporteur d'affaires par un professionnel du droit.
+Exemple France, forfait Pro (59 € HT) : le client s'inscrit le 1er janvier et paie 59 € (son mois de mars, janvier et février étant offerts) → le commercial touche 59 € fin janvier ; le 1er avril le client paie son 4e mois → le commercial touche 12 × 5,90 € = 70,80 € fin avril. Total : 129,80 €. Le calcul est refait chaque nuit et par « Recalculer ». Les commissions se paient au commercial sur facture : marquez-les payées depuis sa fiche avec la référence du virement. Faites valider le contrat de commercial ou d'apporteur d'affaires par un professionnel du droit.
 
 Chaque édition (France, Maroc) a ses propres commerciaux et commissions, dans sa devise.
 

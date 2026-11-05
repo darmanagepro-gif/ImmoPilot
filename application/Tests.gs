@@ -578,8 +578,12 @@ function TEST_GROUPS_() {
           T.ok(sv.me.salesRep && sv.me.salesRep.code, "fiche commercial et code de parrainage");
           const mine = T.call(sv.token, "sales.mine", {});
           T.ok(JSON.stringify(mine).indexOf(DEMO_SPEC_.owner.org) >= 0 && JSON.stringify(mine).indexOf(DEMO_SPEC_.agency.org) >= 0, "les deux clients de démonstration rattachés");
+          const ind = mine.indicators;
+          T.ok(mine.clients.length >= 9 && ind.clients.paying >= 5 && ind.clients.lost >= 1 && ind.gains.paid > 0 && ind.gains.earned > 0 && ind.mrr > 0, "indicateurs de démonstration renseignés : " + JSON.stringify({ n: mine.clients.length, c: ind.clients, g: ind.gains, mrr: ind.mrr, st: mine.clients.map(function (x) { return x.stage + "/" + x.payments; }) }));
+          T.ok(ind.evolution.filter(function (m) { return m.signups > 0; }).length >= 4 && mine.commissions.some(function (c) { return c.period === "CUMUL"; }), "évolution sur plusieurs mois et versement cumulé du 4e mois");
           T.fails(sv.token, "sales.repCreate", { email: "x@example.test", name: "Pirate" }, "DEMO_READONLY");
           T.eq(T.pub("demo.views", {}).views.length, 6, "mise en place une seule fois (rien de dupliqué)");
+          T.eq(dbAll_("Organizations").filter(function (o) { return / \(démo\)$/.test(o.name) && String(o.salesRepId) === String(mine.rep.repId); }).length, 7, "clients fictifs créés une seule fois");
           T.eq(dbAll_("SalesReps").filter(function (r) { return normalizeEmail_(r.email) === normalizeEmail_(DEMO_SALES_.email); }).length, 1, "un seul commercial de démo");
           T.eq(T.call(e.token, "property.list", {}).items.length, 3, "le propriétaire fictif voit ses 3 biens");
           const pid = T.call(e.token, "property.list", {}).items[0].propertyId;
@@ -1957,29 +1961,38 @@ function TEST_GROUPS_() {
         T.ok(mine.clients.every(function (x) { return x.stage === "INSCRIT" && !x.signed && x.planCode === "PRO"; }), "statut : inscrit, contrat non signé, forfait Pro");
         fx.salesOrg = a;
       }],
-      ["Commissions : prime en attente pendant l'essai, acquise au paiement après l'essai, mensuelles plafonnées, paiement, reprise", function (T, fx) {
+      ["Commissions : prime au 1er paiement (3e mois), 10 % × 12 cumulés au 4e mois, idempotent, indicateurs, reprise de la prime seule", function (T, fx) {
         const org = fx.salesOrg, s = salesSubOf_(org.organizationId), price = num_(s.price), pl = salesPlan_();
         T.eq([pl.bonusRate, pl.recurringRate, pl.recurringMonths, pl.clawbackDays], [1, 0.1, 12, 90], "plan par défaut");
         const bonus = function () { return dbAll_("SalesCommissions").find(function (c) { return c.organizationId === org.organizationId && c.kind === "SIGNUP"; }); };
-        T.eq([bonus().status, num_(bonus().amount)], ["PENDING", price], "prime en attente = 1 mois HT");
+        const rec = function () { return dbAll_("SalesCommissions").filter(function (c) { return c.organizationId === org.organizationId && c.kind === "RECURRING" && c.status !== "CANCELLED"; }); };
+        T.eq([bonus().status, num_(bonus().amount)], ["PENDING", price], "rien à la signature : prime en attente = 1 mois HT");
         const pay = function (d) { return dbInsert_("Payments", { organizationId: org.organizationId, kind: "SUBSCRIPTION", refType: "SUBSCRIPTION", refId: s.subscriptionId, direction: "IN", amount: price, currency: s.currency, paidAt: d + "T08:00:00Z", status: "RECORDED", createdAt: nowIso_() }); };
-        pay("2026-01-05"); salesComputeOrg_(dbGet_("Organizations", org.organizationId));
-        T.eq(bonus().status, "PENDING", "1er paiement reçu mais essai en cours : toujours en attente");
+        // Ancien plan : une commission mensuelle déjà acquise non payée doit être remplacée par le versement cumulé.
+        dbInsert_("SalesCommissions", { repId: fx.salesRep.repId, organizationId: org.organizationId, subscriptionId: s.subscriptionId, planCode: s.planCode, kind: "RECURRING", period: "2026-01", baseAmount: price, rate: 0.1, amount: round2_(price * 0.1), currency: s.currency, status: "EARNED", earnedAt: nowIso_(), createdAt: nowIso_(), updatedAt: nowIso_() });
+        pay("2026-01-01"); salesComputeOrg_(dbGet_("Organizations", org.organizationId));
+        T.eq(bonus().status, "EARNED", "paiement à la souscription (= 3e mois) : prime acquise, même pendant les 2 mois offerts");
+        T.ok(/fin janvier 2026/.test(bonus().note), "prime à verser fin janvier : " + bonus().note);
+        T.eq(rec().length, 0, "pas encore de versement cumulé (4e mois non payé) et ancienne mensuelle annulée");
         dbUpdate_("Subscriptions", s.subscriptionId, { status: "ACTIVE", trialEnd: addDaysStr_(todayStr_(), -1) });
-        T.call(fx.tok.superA, "sales.recompute", {});
-        T.eq(bonus().status, "EARNED", "prime acquise après l'essai");
-        for (let i = 0; i < 14; i++) pay("2026-0" + (1 + (i % 9)) + "-1" + (i % 9));
-        salesComputeAll_(); salesComputeAll_();
-        const rec = dbAll_("SalesCommissions").filter(function (c) { return c.organizationId === org.organizationId && c.kind === "RECURRING"; });
-        T.eq([rec.length, num_(rec[0].amount)], [12, round2_(price * 0.1)], "12 commissions mensuelles de 10 %, calcul idempotent");
+        pay("2026-04-01"); salesComputeAll_(); salesComputeAll_(); T.call(fx.tok.superA, "sales.recompute", {});
+        T.eq([rec().length, rec()[0].period, num_(rec()[0].amount)], [1, "CUMUL", round2_(price * 0.1 * 12)], "4e mois payé : un seul versement cumulé de 10 % × 12");
+        T.ok(/fin avril 2026/.test(rec()[0].note), "versement cumulé à verser fin avril : " + rec()[0].note);
+        for (let i = 0; i < 5; i++) pay("2026-0" + (5 + i) + "-01");
+        salesComputeAll_();
+        T.eq(rec().length, 1, "paiements suivants : rien de plus (idempotent)");
+        const mine0 = T.call(fx.salesRep.tok, "sales.mine", {}), ind = mine0.indicators;
+        T.ok(ind && ind.gains.earned >= round2_(price + price * 1.2) && ind.clients.paying >= 1 && ind.mrr >= price && ind.evolution.length === 6, "indicateurs : gains, clients, chiffre apporté, évolution 6 mois");
+        T.ok(mine0.simulation.every(function (x) { return x.cumul === round2_(round2_(x.price * 0.1) * 12); }), "simulation : versement cumulé");
         const mp = T.call(fx.tok.superA, "sales.markPaid", { repId: fx.salesRep.repId, reference: "VIR-001" });
-        T.ok(mp.count === 13 && mp.total === round2_(price + 12 * round2_(price * 0.1)), "13 commissions payées : " + mp.total);
+        T.ok(mp.count === 2 && mp.total === round2_(price + price * 0.1 * 12), "2 versements payés : " + mp.total);
         dbUpdate_("Subscriptions", s.subscriptionId, { status: "CANCELLED", canceledAt: nowIso_() });
         salesComputeAll_(); salesComputeAll_();
         const cb = dbAll_("SalesCommissions").filter(function (c) { return c.organizationId === org.organizationId && c.kind === "CLAWBACK"; });
-        T.eq([cb.length, num_(cb[0].amount), cb[0].status], [1, -price, "EARNED"], "reprise de la prime déjà payée (client parti en moins de 90 jours)");
+        T.eq([cb.length, num_(cb[0].amount), cb[0].status], [1, -price, "EARNED"], "reprise de la prime seule (client parti en moins de 90 jours)");
+        T.eq([rec().length, rec()[0].status], [1, "PAID"], "aucune reprise sur le versement cumulé");
         const mine = T.call(fx.salesRep.tok, "sales.mine", {});
-        T.ok(mine.commissions.length >= 14 && mine.clients.some(function (x) { return x.organizationId === org.organizationId && x.stage === "RESILIE"; }), "le commercial voit ses commissions et le client résilié");
+        T.ok(mine.commissions.length >= 3 && mine.clients.some(function (x) { return x.organizationId === org.organizationId && x.stage === "RESILIE"; }), "le commercial voit ses commissions et le client résilié");
         T.fails(fx.tok.superA, "sales.assign", { organizationId: org.organizationId, repId: "" });
       }],
       ["Prospects d'un commercial : visibles par lui et le super administrateur seulement, jamais contactés par les agents", function (T, fx) {
