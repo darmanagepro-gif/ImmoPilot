@@ -1980,7 +1980,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "efe6cdb2d907";
+var IMMO_BUILD_ = "2a50b87eb97e";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -3744,8 +3744,36 @@ var DEMO_VIEWS_ = [
   { id: "agency", label: "Agence", who: function () { return DEMO_SPEC_.agency; } },
   { id: "guard", label: "Gardien", who: function () { return DEMO_SPEC_.properties[0].guard; } },
   { id: "provider", label: "Prestataire (ménage et travaux)", who: function () { return DEMO_SPEC_.provider; } },
+  { id: "sales", label: "Commercial terrain", who: function () { return DEMO_SALES_; } },
   { id: "admin", label: "Super administrateur", who: function () { return DEMO_SPEC_.superAdmin; } }
 ];
+/** Commercial terrain de démonstration : ses clients sont les deux comptes de la démo (propriétaire et agence). */
+var DEMO_SALES_ = { email: "ecosynergy31+commercial@gmail.com", name: "Yassine Amrani (commercial démo)" };
+function demoEnsureSales_() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    if (props.getProperty("IMMO_DEMO_SALES") === "1") return;
+    withLock_(function () { if (props.getProperty("IMMO_DEMO_SALES") === "1") return; if (demoSales_() === "ok") props.setProperty("IMMO_DEMO_SALES", "1"); }, 30000);
+  } catch (e) { console.error("Démo commercial terrain : " + e.message); }
+}
+function demoSales_() {
+  const pf = platformOrgId_(); if (!pf) return "pas d'organisation plateforme";
+  const email = normalizeEmail_(DEMO_SALES_.email), now = nowIso_();
+  let user = dbAll_("Users").find(function (u) { return normalizeEmail_(u.email) === email; });
+  if (!user) user = dbInsert_("Users", { email: email, displayName: DEMO_SALES_.name, status: "ACTIVE", createdAt: now, createdBy: "demo", locale: "fr", updatedAt: now });
+  if (!dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(user.userId) && r.role === "SALES" && r.status === "ACTIVE"; }))
+    dbInsert_("UserRoles", { userId: user.userId, organizationId: pf, role: "SALES", status: "ACTIVE", createdAt: now, createdBy: "demo" });
+  let rep = dbAll_("SalesReps").find(function (r) { return normalizeEmail_(r.email) === email; });
+  if (!rep) rep = dbInsert_("SalesReps", { displayName: DEMO_SALES_.name, email: email, userId: user.userId, code: salesNewCode_(DEMO_SALES_.name), phone: "", country: edition_().code,
+    territory: edition_().code === "MA" ? "Marrakech" : "Toulouse", status: "ACTIVE", createdAt: now, createdBy: "demo", updatedAt: now });
+  else if (!rep.userId) dbUpdate_("SalesReps", rep.repId, { userId: user.userId, updatedAt: now });
+  // Clients rattachés : les organisations de démonstration du propriétaire et de l'agence (commissions calculées par le moteur normal).
+  [DEMO_SPEC_.owner.org, DEMO_SPEC_.agency.org].forEach(function (name) {
+    const o = dbAll_("Organizations").find(function (x) { return x.name === name; });
+    if (o && !o.salesRepId) salesLinkOrg_(o.organizationId, rep, DEMO_SALES_.name, "demo");
+  });
+  return "ok";
+}
 var DEMO_READ_RE_ = /\.(list|get|choices|orgChoices|calendar|today|history|summary|mine|kb|caps|availability|accounts|run|boot)$/;
 var DEMO_DOC_RE_ = /\.(pdf|orderPdf|reportPdf|contractPdf|sheet|receipt|export|policeForms|preview)$/;
 function demoRouteAllowed_(route) {
@@ -3765,6 +3793,7 @@ function demoViewList_() {
 }
 function demoPublicViews_() {
   if (!IMMO_PUBLIC_DEMO_) throw new AppError("NOT_FOUND", "Fonction inconnue.");
+  demoEnsureSales_();
   const views = demoViewList_();
   return { views: views, ready: views.length > 0, note: views.length ? "" : "La démonstration n'est pas encore créée : exécutez creerEnvironnementDemo puis creerHistoriqueDemo dans l'éditeur." };
 }
@@ -3815,6 +3844,7 @@ function demoEnter_(a) {
   if (!IMMO_PUBLIC_DEMO_) throw new AppError("NOT_FOUND", "Fonction inconnue.");
   rateLimit_("demo-enter", 900, 3600);
   demoEnsureLongTerm_();
+  demoEnsureSales_();
   const v = DEMO_VIEWS_.find(function (x) { return x.id === String(a && a.view || ""); });
   assert_(v, "Vue inconnue.");
   const x = demoViewUser_(v);
@@ -11686,9 +11716,17 @@ function TEST_GROUPS_() {
           T.eq(apiPublic("demo.enter", { view: "owner" }).error.code, "NOT_FOUND", "paquet officiel : entrée sans compte refusée");
           IMMO_PUBLIC_DEMO_ = true;
           const v = T.pub("demo.views", {});
-          T.eq(v.views.map(function (x) { return x.id; }), ["owner", "agency", "guard", "provider", "admin"], "5 vues proposées");
+          T.eq(v.views.map(function (x) { return x.id; }), ["owner", "agency", "guard", "provider", "sales", "admin"], "6 vues proposées (dont commercial terrain)");
           const e = T.pub("demo.enter", { view: "owner" });
-          T.ok(e.token && e.me.demoView === "owner" && e.me.demoViews.length === 5, "jeton de démonstration et sélecteur de vues");
+          T.ok(e.token && e.me.demoView === "owner" && e.me.demoViews.length === 6, "jeton de démonstration et sélecteur de vues");
+          // Vue commercial terrain : son espace, son lien d'inscription, ses clients (propriétaire et agence de démo), en lecture seule.
+          const sv = T.pub("demo.enter", { view: "sales" });
+          T.ok(sv.me.salesRep && sv.me.salesRep.code, "fiche commercial et code de parrainage");
+          const mine = T.call(sv.token, "sales.mine", {});
+          T.ok(JSON.stringify(mine).indexOf(DEMO_SPEC_.owner.org) >= 0 && JSON.stringify(mine).indexOf(DEMO_SPEC_.agency.org) >= 0, "les deux clients de démonstration rattachés");
+          T.fails(sv.token, "sales.repCreate", { email: "x@example.test", name: "Pirate" }, "DEMO_READONLY");
+          T.eq(T.pub("demo.views", {}).views.length, 6, "mise en place une seule fois (rien de dupliqué)");
+          T.eq(dbAll_("SalesReps").filter(function (r) { return normalizeEmail_(r.email) === normalizeEmail_(DEMO_SALES_.email); }).length, 1, "un seul commercial de démo");
           T.eq(T.call(e.token, "property.list", {}).items.length, 3, "le propriétaire fictif voit ses 3 biens");
           const pid = T.call(e.token, "property.list", {}).items[0].propertyId;
           T.fails(e.token, "resv.create", { propertyId: pid, checkIn: tDays_(400), checkOut: tDays_(401), guestName: "X" }, "DEMO_READONLY");

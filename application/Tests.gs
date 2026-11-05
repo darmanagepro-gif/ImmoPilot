@@ -570,9 +570,17 @@ function TEST_GROUPS_() {
           T.eq(apiPublic("demo.enter", { view: "owner" }).error.code, "NOT_FOUND", "paquet officiel : entrée sans compte refusée");
           IMMO_PUBLIC_DEMO_ = true;
           const v = T.pub("demo.views", {});
-          T.eq(v.views.map(function (x) { return x.id; }), ["owner", "agency", "guard", "provider", "admin"], "5 vues proposées");
+          T.eq(v.views.map(function (x) { return x.id; }), ["owner", "agency", "guard", "provider", "sales", "admin"], "6 vues proposées (dont commercial terrain)");
           const e = T.pub("demo.enter", { view: "owner" });
-          T.ok(e.token && e.me.demoView === "owner" && e.me.demoViews.length === 5, "jeton de démonstration et sélecteur de vues");
+          T.ok(e.token && e.me.demoView === "owner" && e.me.demoViews.length === 6, "jeton de démonstration et sélecteur de vues");
+          // Vue commercial terrain : son espace, son lien d'inscription, ses clients (propriétaire et agence de démo), en lecture seule.
+          const sv = T.pub("demo.enter", { view: "sales" });
+          T.ok(sv.me.salesRep && sv.me.salesRep.code, "fiche commercial et code de parrainage");
+          const mine = T.call(sv.token, "sales.mine", {});
+          T.ok(JSON.stringify(mine).indexOf(DEMO_SPEC_.owner.org) >= 0 && JSON.stringify(mine).indexOf(DEMO_SPEC_.agency.org) >= 0, "les deux clients de démonstration rattachés");
+          T.fails(sv.token, "sales.repCreate", { email: "x@example.test", name: "Pirate" }, "DEMO_READONLY");
+          T.eq(T.pub("demo.views", {}).views.length, 6, "mise en place une seule fois (rien de dupliqué)");
+          T.eq(dbAll_("SalesReps").filter(function (r) { return normalizeEmail_(r.email) === normalizeEmail_(DEMO_SALES_.email); }).length, 1, "un seul commercial de démo");
           T.eq(T.call(e.token, "property.list", {}).items.length, 3, "le propriétaire fictif voit ses 3 biens");
           const pid = T.call(e.token, "property.list", {}).items[0].propertyId;
           T.fails(e.token, "resv.create", { propertyId: pid, checkIn: tDays_(400), checkOut: tDays_(401), guestName: "X" }, "DEMO_READONLY");
