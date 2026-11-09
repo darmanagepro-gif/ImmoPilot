@@ -6,5 +6,5 @@
   "main": "server.js",
   "scripts": { "start": "node server.js", "test": "node smoke-test.js" },
   "engines": { "node": ">=22.13" },
-  "dependencies": { "nodemailer": "10.1.7" }
+  "dependencies": { "nodemailer": "10.2.1" }
 }
