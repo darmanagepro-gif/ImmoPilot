@@ -669,7 +669,7 @@ function ocrWorker(lang, onStep) {
   const o = window.IMMO_OCR || {};
   return ocrLib().then(function (T) {
     return T.createWorker(lang, 1, Object.assign({ logger: function (m) { if (m.status === "recognizing text") onStep(t("Lecture de la pièce…") + " " + Math.round((m.progress || 0) * 100) + " %"); } },
-      o.workerPath ? { workerPath: o.workerPath } : {}, o.corePath ? { corePath: o.corePath } : {}, o.langPath ? { langPath: o.langPath } : {}));
+      o.workerPath ? { workerPath: o.workerPath } : {}, o.corePath ? { corePath: o.corePath } : {}, o.langPath ? { langPath: o.langPath } : {}, o.workerBlobURL === false ? { workerBlobURL: false } : {}));
   });
 }
 /** Adresse imprimée (verso de la CNIE marocaine, verso de la CNI française) : ligne « Adresse / Domicile » et la suivante. */

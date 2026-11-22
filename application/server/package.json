@@ -4,7 +4,18 @@
   "private": true,
   "description": "ImmoPilot sur serveur dédié (VPS) : même code que la version Google Apps Script, données SQLite, e-mails SMTP, PDF Chromium.",
   "main": "server.js",
-  "scripts": { "start": "node server.js", "test": "node smoke-test.js" },
-  "engines": { "node": ">=22.13" },
-  "dependencies": { "nodemailer": "10.1.7" }
+  "scripts": {
+    "start": "node server.js",
+    "test": "node smoke-test.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/fra": "1.0.0",
+    "nodemailer": "10.1.7",
+    "tesseract.js": "5.1.1",
+    "tesseract.js-core": "5.1.1"
+  }
 }

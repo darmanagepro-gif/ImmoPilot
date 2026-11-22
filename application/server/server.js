@@ -33,7 +33,7 @@ const TZ = rt.ctx.IMMO_CONFIG.TIMEZONE, EDITION = rt.ctx.IMMO_EDITION_;
 
 /* ----------------------------- En-têtes de sécurité ----------------------------- */
 function securityHeaders(res, frameAncestors) {
-  res.setHeader("Content-Security-Policy", ["default-src 'self'", "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://gateway.sumup.com",
+  res.setHeader("Content-Security-Policy", ["default-src 'self'", "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://gateway.sumup.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://*.sumup.com", "font-src 'self' data: https://fonts.gstatic.com https://*.sumup.com",
     "img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://*.sumup.com", "connect-src 'self' https://*.sumup.com", "frame-src https:", "object-src 'none'", "base-uri 'self'", "form-action 'self' https:",
     "frame-ancestors " + (frameAncestors && frameAncestors.length ? frameAncestors.join(" ") : "'none'")].join("; "));
@@ -43,6 +43,20 @@ function securityHeaders(res, frameAncestors) {
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   if (!frameAncestors || !frameAncestors.length) res.setHeader("X-Frame-Options", "DENY");
 }
+/* -------- Lecture des pièces d'identité (Tesseract.js) servie par le serveur : rien n'est chargé depuis un service extérieur -------- */
+function ocrDir(pkg) { try { return path.dirname(require.resolve(pkg + "/package.json")); } catch (e) { return ""; } }
+const OCR = { js: ocrDir("tesseract.js"), core: ocrDir("tesseract.js-core"), eng: ocrDir("@tesseract.js-data/eng"), fra: ocrDir("@tesseract.js-data/fra") };
+const OCR_READY = !!(OCR.js && OCR.core && OCR.eng && OCR.fra);
+function ocrFile(name) {
+  if (!OCR_READY) return null;
+  if (name === "tesseract.min.js" || name === "worker.min.js") return path.join(OCR.js, "dist", name);
+  let m = /^core\/(tesseract-core(?:-simd)?(?:-lstm)?\.wasm\.js)$/.exec(name);
+  if (m) return path.join(OCR.core, m[1]);
+  m = /^lang\/(eng|fra)\.traineddata\.gz$/.exec(name);
+  if (m) return path.join(OCR[m[1]], "4.0.0_best_int", m[1] + ".traineddata.gz");
+  return null;
+}
+const OCR_CONF = OCR_READY ? "<script>window.IMMO_OCR={script:\"/vendor/ocr/tesseract.min.js\",workerPath:\"/vendor/ocr/worker.min.js\",corePath:\"/vendor/ocr/core\",langPath:\"/vendor/ocr/lang\",workerBlobURL:false};</script>" : "";
 function send(res, code, type, body, extra) {
   res.writeHead(code, Object.assign({ "Content-Type": type, "Cache-Control": "no-store" }, extra || {}));
   res.end(body);
@@ -73,7 +87,7 @@ function renderPage(query) {
   const parameter = {}; query.forEach(function (v, k) { parameter[k] = v; });
   const out = rt.call("doGet", [{ parameter: parameter, parameters: {} }]);
   let html = out.getContent();
-  const head = SHIM + "<link rel=\"manifest\" href=\"/manifest.webmanifest\"><link rel=\"icon\" type=\"image/png\" href=\"/icons/favicon-32.png\"><link rel=\"apple-touch-icon\" href=\"/icons/apple-touch-icon.png\">" +
+  const head = SHIM + OCR_CONF + "<link rel=\"manifest\" href=\"/manifest.webmanifest\"><link rel=\"icon\" type=\"image/png\" href=\"/icons/favicon-32.png\"><link rel=\"apple-touch-icon\" href=\"/icons/apple-touch-icon.png\">" +
     "<meta name=\"theme-color\" content=\"#13233d\">" + (out.metas || []).map(function (m) { return "<meta name=\"" + m[0] + "\" content=\"" + String(m[1]).replace(/"/g, "&quot;") + "\">"; }).join("");
   html = html.replace(/<head>/i, "<head>" + head);
   if (out.title) html = html.replace(/<title>[^<]*<\/title>/i, "<title>" + out.title.replace(/</g, "&lt;") + "</title>");
@@ -196,6 +210,12 @@ const server = http.createServer(async function (req, res) {
     if (LEGAL_PATHS[url.pathname]) return send(res, 302, "text/plain; charset=utf-8", "", { Location: "/?action=legal&doc=" + LEGAL_PATHS[url.pathname] });
     if (url.pathname === "/manifest.webmanifest") return send(res, 200, "application/manifest+json; charset=utf-8", manifest(), { "Cache-Control": "public, max-age=3600" });
     if (url.pathname === "/robots.txt") return send(res, 200, "text/plain; charset=utf-8", "User-agent: *\nAllow: /$\nDisallow: /rpc\n");
+    const ocr = /^\/vendor\/ocr\/(.+)$/.exec(url.pathname);
+    if (ocr) {
+      const f = ocrFile(ocr[1]);
+      if (!f || !fs.existsSync(f)) return send(res, 404, "text/plain; charset=utf-8", "Introuvable.");
+      return send(res, 200, /\.js$/.test(f) ? "application/javascript; charset=utf-8" : "application/octet-stream", fs.readFileSync(f), { "Cache-Control": "public, max-age=604800" });
+    }
     const icon = /^\/icons\/([a-z0-9-]+\.png)$/.exec(url.pathname);
     if (icon) {
       const p = path.join(ICON_DIR, icon[1]);
