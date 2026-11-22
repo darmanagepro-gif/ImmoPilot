@@ -20,7 +20,7 @@ var DOC_TEMPLATES_ = {
     tags: { bailleur: "Nom du bailleur", bailleur_adresse: "Adresse du bailleur", locataire: "Nom du locataire", bien: "Nom du bien", adresse: "Adresse du logement",
       type: "Type de logement", surface: "Surface (m²)", periode: "Période (ex. mars 2026)", du: "Début de la période", au: "Fin de la période", echeance: "Date d'échéance",
       loyer: "Loyer", charges: "Charges", total: "Total réglé", date_paiement: "Date(s) de paiement", mode_paiement: "Mode(s) de paiement",
-      reference: "Référence de l'échéance", date: "Date du jour", ville: "Ville du bien" }, blocks: ["[entete]", "[bien]", "[tableau]", "[coupon]", "[signatures]"],
+      reference: "Référence de l'échéance", date: "Date du jour", ville: "Ville du bien" }, blocks: ["[entete]", "[bien]", "[tableau]", "[coupon]"], noSignatures: true,
     sample: { bailleur: "SCI Exemple", bailleur_adresse: "12 rue des Lilas, 31000 Toulouse", locataire: "Jean Martin", bien: "Appartement T2", adresse: "5 avenue de la Gare, 3e étage, 31000 Toulouse",
       type: "Appartement", surface: "48", periode: "mars 2026", du: "01/03/2026", au: "31/03/2026", echeance: "05/03/2026", loyer: "750,00", charges: "50,00", total: "800,00", date_paiement: "03/03/2026", mode_paiement: "Virement", reference: "LOY-202603-A1B2C3", date: "05/03/2026", ville: "Toulouse" } },
   lease: { key: "template.lease", title: "Contrat de location", signers: ["Le bailleur", "Le locataire"],
@@ -47,7 +47,7 @@ function docTemplateDefault_(kind) {
     "[entete]", "[bien]",
     "Je soussigné(e), **{{bailleur}}**, bailleur du logement désigné ci-dessus, déclare avoir reçu de **{{locataire}}** la somme de **{{total}}** au titre du loyer et des charges de la période du {{du}} au {{au}} (**{{periode}}**), et lui en donne quittance, sous réserve de tous mes droits.",
     "", "[tableau]", "Paiement reçu le {{date_paiement}} ({{mode_paiement}}).", "",
-    "Cette quittance annule tous les reçus partiels qui auraient pu être donnés pour la même période.", "", "Fait à {{ville}}, le {{date}}.", "", "[signatures]", "[coupon]"].join("\n");
+    "Cette quittance annule tous les reçus partiels qui auraient pu être donnés pour la même période.", "", "Fait à {{ville}}, le {{date}}.", "", "[coupon]"].join("\n");
   if (kind === "lease") return ["[entete]", "[clauses]", "", "Fait à {{ville}}, le {{date}}, en deux exemplaires originaux, dont un remis à chaque partie.", "", "[signatures]"].join("\n");
   return [
     "# Réservation {{reference}}", "Loueur : **{{loueur}}**", "Bien : **{{bien}}**, {{adresse}}", "Voyageur : **{{voyageur}}** ({{voyageurs}} personne(s))", "",
@@ -75,6 +75,7 @@ function docTemplateHtml_(kind, text, map) {
     const blk = line.trim().toLowerCase();
     if (blk === "[clauses]") { flush(); out.push(String(map.__clausesHtml || "")); return; }
     if (blk === "[entete]" || blk === "[bien]" || blk === "[tableau]" || blk === "[coupon]") { flush(); out.push(docTemplateBlock_(blk, val)); return; }
+    if (line.trim().toLowerCase() === "[signatures]" && def.noSignatures) { flush(); return; } // quittance : pas de cadre de signature
     if (line.trim().toLowerCase() === "[signatures]") { flush(); out.push("<table class='sign' style='margin-top:14px'><tr><td><b>" + escapeHtml_(def.signers[0]) + "</b><br><span class='muted'>Lu et approuvé</span></td><td><b>" +
       escapeHtml_(def.signers[1]) + "</b><br><span class='muted'>Lu et approuvé</span></td></tr></table>"); return; }
     para.push(inline(line));

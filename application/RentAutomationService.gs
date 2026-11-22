@@ -134,7 +134,7 @@ function rentCallPdf_(c, s) {
     "<p>Madame, Monsieur,</p><p>Nous vous prions de bien vouloir régler le loyer et les charges de la période <b>" + escapeHtml_(rentPeriodLabel_(s)) + "</b> (" + escapeHtml_(per) + ") pour le logement désigné ci-dessus, <b>au plus tard le " + pdfDate_(s.dueDate) + "</b>.</p>" +
     table + "<p>Référence à indiquer avec votre règlement : <b>" + escapeHtml_(ref) + "</b></p>" + rentPayInfoHtml_(c, total, ref) +
     "<p class='muted'>Cet appel de loyer ne vaut pas quittance. La quittance vous sera adressée après encaissement de la totalité de l'échéance.</p>" +
-    "<p style='margin-top:14px'>Fait le " + pdfDate_(today) + ".<br>Le bailleur, " + escapeHtml_(c.org.name || "") + "</p>" + coupon;
+    "<p style='margin-top:14px'>Fait le " + pdfDate_(today) + ".</p>" + coupon;
   return htmlToPdf_(pdfShell_("Appel de loyer — " + rentPeriodLabel_(s), inner, { noHead: true, subtitle: "Échéance du " + pdfDate_(s.dueDate), ref: "APL-" + ref.replace(/^LOY-/, ""),
     footer: "Document émis par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Appel_loyer_" + s.period + "_" + String(c.l.leaseId).slice(-6));
 }
@@ -158,11 +158,12 @@ function rentReminderPdf_(c, unpaid, level) {
     footer: "Document émis par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Relance_" + lvl + "_" + today + "_" + String(c.l.leaseId).slice(-6));
 }
 /** Quittance d'une échéance entièrement réglée (modèle de l'organisation, sinon gabarit intégré). */
-function rentReceiptPdf_(c, s) {
+function rentReceiptPdf_(c, s, asOf) {
+  const issued = asOf || todayStr_();
   const cur = cur_(), pays = dbAll_("Payments").filter(function (z) { return z.refType === "RENT_SCHEDULE" && String(z.refId) === String(s.scheduleId) && z.status === "RECORDED" && z.kind === "RENT"; });
   const tpl = getSetting_("template.receiptDocId", c.l.organizationId);
   const map = { bailleur: c.org.name, locataire: c.t.fullName, bien: c.prop.name, adresse: rentAddress_(c.prop), periode: s.period, loyer: s.rentAmount, charges: s.chargesAmount, total: s.amountDue,
-    date_paiement: pays.map(function (z) { return pdfDate_(z.paidAt); }).join(", "), date: pdfDate_(todayStr_()) };
+    date_paiement: pays.map(function (z) { return pdfDate_(z.paidAt); }).join(", "), date: pdfDate_(issued) };
   const text = docTemplateOf_("receipt", c.l.organizationId) || (tpl ? "" : docTemplateDefault_("receipt"));
   const y = parseInt(String(s.period).slice(0, 4), 10), mo = parseInt(String(s.period).slice(5, 7), 10);
   const lastDay = new Date(Date.UTC(y, mo, 0)).getUTCDate(), pad = function (n) { return (n < 10 ? "0" : "") + n; };
@@ -171,7 +172,7 @@ function rentReceiptPdf_(c, s) {
     adresse: rentAddress_(c.prop), type: TYPES[c.prop.propertyType] || c.prop.propertyType || "", surface: c.prop.surfaceM2 || "",
     du: y && mo ? "01/" + pad(mo) + "/" + y : "", au: y && mo ? pad(lastDay) + "/" + pad(mo) + "/" + y : "", echeance: pdfDate_(s.dueDate), periode: rentPeriodLabel_(s), loyer: fmtAmount_(s.rentAmount, cur), charges: fmtAmount_(s.chargesAmount, cur), total: fmtAmount_(s.amountDue, cur),
     date_paiement: map.date_paiement, mode_paiement: pays.map(function (z) { return PDF_PAY_METHODS_[z.method] || z.method; }).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).join(", "),
-    reference: rentReference_(c.l, s), date: pdfDate_(todayStr_()), ville: c.prop.city || "" },
+    reference: rentReference_(c.l, s), date: pdfDate_(issued), ville: c.prop.city || "" },
     { name: "Quittance_" + s.period + "_" + String(c.l.leaseId).slice(-6), subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org), ref: "QUIT-" + rentReference_(c.l, s).replace(/^LOY-/, ""),
       footer: "Quittance délivrée gratuitement par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." });
   if (tpl) return docFromTemplate_(tpl, map, propertyFolder_(c.l.organizationId, c.l.propertyId, "LEASE"), "Quittance_" + s.period + "_" + c.l.leaseId).pdf;
@@ -180,9 +181,36 @@ function rentReceiptPdf_(c, s) {
     htmlTable_(["Poste", "Montant"], [["Loyer", fmtAmount_(s.rentAmount, cur)], ["Charges", fmtAmount_(s.chargesAmount, cur)], ["Total réglé", fmtAmount_(s.amountDue, cur)]]) +
     "<h2>Paiement(s) reçu(s)</h2>" + htmlTable_(["Date", "Mode", "Référence", "Montant"], pays.map(function (z) { return [pdfDate_(z.paidAt), PDF_PAY_METHODS_[z.method] || z.method, z.reference || "—", fmtAmount_(z.amount, cur)]; })) +
     "<p class='muted'>Cette quittance annule tous les reçus partiels qui auraient pu être donnés pour la même période.</p>" +
-    "<p style='margin-top:18px'>Fait le " + pdfDate_(todayStr_()) + ".<br>Le bailleur, " + escapeHtml_(c.org.name || "") + "</p>";
+    "<p style='margin-top:18px'>Fait le " + pdfDate_(issued) + ".</p>";
   return htmlToPdf_(pdfShell_("Quittance de loyer", inner, { subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org),
     footer: "Quittance délivrée gratuitement par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Quittance_" + s.period + "_" + String(c.l.leaseId).slice(-6));
+}
+
+/**
+ * Régénère les quittances déjà enregistrées d'une organisation avec la mise en page actuelle (sans signature).
+ * Le document garde le même identifiant (liens, envois) et sa date d'émission d'origine ; l'ancien fichier part à la corbeille.
+ */
+function rentRefreshReceipts_(p, a) {
+  const orgId = safeText_(a.organizationId, 120);
+  if (!p.isSuper) assertOrgCap_(p, orgId, "lease.manage");
+  assertOrgWritable_(orgId);
+  const mails = dbAll_("RentMailings"); let done = 0, skipped = 0;
+  dbAll_("Documents").filter(function (d) { return String(d.organizationId) === orgId && d.ownerType === "LEASE" && d.category === "RECEIPT" && d.status === "ACTIVE"; }).forEach(function (d) {
+    const l = dbGet_("Leases", d.ownerId); if (!l) { skipped++; return; }
+    const m = mails.find(function (x) { return String(x.documentId) === String(d.documentId) && x.scheduleId; });
+    const per = (String(d.fileName || "").match(/Quittance_(\d{4}-\d{2})/) || [])[1];
+    const s = m ? dbGet_("RentSchedules", m.scheduleId) : dbAll_("RentSchedules").find(function (x) { return String(x.leaseId) === String(l.leaseId) && x.period === per && x.status !== "CANCELLED"; });
+    if (!s || rentStatus_(s).status !== "PAID") { skipped++; return; }
+    const blob = rentReceiptPdf_(rentCtx_(l), s, String(d.createdAt || "").slice(0, 10) || todayStr_());
+    const nd = storeFile_({ propertyId: l.propertyId, organizationId: l.organizationId }, "LEASE", l.leaseId, "RECEIPT", { mimeType: "application/pdf", fileName: blob.getName(), base64: Utilities.base64Encode(blob.getBytes()) }, p.email);
+    const fresh = dbGet_("Documents", nd.documentId);
+    try { DriveApp.getFileById(d.fileId).setTrashed(true); } catch (e) { /* ancien fichier déjà absent */ }
+    dbUpdate_("Documents", d.documentId, { fileId: fresh.fileId, fileName: fresh.fileName, sizeBytes: fresh.sizeBytes, sha256: fresh.sha256 });
+    dbDelete_("Documents", nd.documentId);
+    done++;
+  });
+  audit_("RENT_RECEIPTS_REFRESHED", "Organization", orgId, orgId, { refreshed: done, skipped: skipped });
+  return { ok: true, refreshed: done, skipped: skipped };
 }
 
 /* ------------------------------ Envoi et journal ------------------------------ */

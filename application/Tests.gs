@@ -1046,10 +1046,16 @@ function TEST_GROUPS_() {
         T.ok(!ti.current && /\{\{locataire\}\}/.test(ti.defaultText) && ti.tags.length >= 10, "texte de départ et balises proposés");
         T.ok(T.call(fx.tok.ownerA, "template.preview", { organizationId: orgA, kind: "reservation", text: "" }).base64, "aperçu PDF (données d'exemple)");
         const th = docTemplateHtml_("receipt", "# Titre\n**{{locataire}}** <script>x</script> {{inconnue}}\n[signatures]", { locataire: "A&B" });
-        T.ok(th.indexOf("<b>A&amp;B</b>") >= 0 && th.indexOf("<script>") < 0 && th.indexOf("{{inconnue}}") >= 0 && th.indexOf("<h2>Titre</h2>") >= 0 && th.indexOf("class='sign'") > 0, "modèle échappé, balises remplacées, mise en forme");
+        T.ok(th.indexOf("<b>A&amp;B</b>") >= 0 && th.indexOf("<script>") < 0 && th.indexOf("{{inconnue}}") >= 0 && th.indexOf("<h2>Titre</h2>") >= 0 && th.indexOf("class='sign'") < 0, "modèle échappé, balises remplacées, mise en forme, quittance sans cadre de signature");
         T.call(fx.tok.ownerA, "settings.set", { organizationId: orgA, key: "template.receipt", value: "Quittance {{periode}} pour **{{locataire}}** : {{total}}.\n[signatures]" });
         T.ok(T.call(fx.tok.tenant, "lease.receipt", { scheduleId: s0.scheduleId }).base64, "quittance depuis le modèle personnalisé");
         T.call(fx.tok.ownerA, "settings.set", { organizationId: orgA, key: "template.receipt", value: "" });
+        // Quittances déjà enregistrées : régénérées sans signature, même identifiant de document
+        const q0 = T.call(fx.tok.ownerA, "lease.receipt", { scheduleId: s0.scheduleId }), f0 = dbGet_("Documents", q0.documentId).fileId;
+        T.fails(fx.tok.tenant, "rent.refreshReceipts", { organizationId: orgA }, "FORBIDDEN");
+        const rf = T.call(fx.tok.ownerA, "rent.refreshReceipts", { organizationId: orgA });
+        T.ok(rf.refreshed >= 1 && dbGet_("Documents", q0.documentId).status === "ACTIVE" && dbGet_("Documents", q0.documentId).fileId !== f0, "quittance régénérée sous le même identifiant");
+        T.ok(T.call(fx.tok.ownerA, "doc.get", { documentId: q0.documentId }).base64, "quittance régénérée lisible");
         // Lien de paiement par carte du bailleur (montant et référence insérés).
         T.fails(fx.tok.ownerA, "settings.set", { organizationId: orgA, key: "rent.cardPaymentUrl", value: "http://pay.example.test" }, "VALIDATION");
         T.call(fx.tok.ownerA, "settings.set", { organizationId: orgA, key: "rent.cardPaymentUrl", value: "https://pay.example.test/p?m={montant}&r={reference}" });
