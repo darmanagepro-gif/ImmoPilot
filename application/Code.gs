@@ -51,7 +51,7 @@ function routes_() { return {
   "exp.create": "expCreate_", "exp.cancel": "expCancel_", "exp.list": "expList_", "rev.create": "revCreate_",
   "tenant.list": "tenantList_", "tenant.create": "tenantCreate_", "tenant.update": "tenantUpdate_", "tenant.delete": "tenantDelete_",
   "lease.list": "leaseList_", "lease.get": "leaseGet_", "lease.create": "leaseCreate_", "lease.update": "leaseUpdate_", "lease.activate": "leaseActivate_", "lease.notice": "leaseNotice_",
-  "lease.end": "leaseEnd_", "lease.renew": "leaseRenew_", "lease.depositReturn": "leaseDepositReturn_", "lease.receipt": "leaseReceipt_", "lease.document": "leaseDocument_", "lease.mine": function (p) { return leaseMine_(p); },
+  "lease.end": "leaseEnd_", "lease.renew": "leaseRenew_", "lease.depositReturn": "leaseDepositReturn_", "lease.setDeposit": "leaseSetDeposit_", "lease.receipt": "leaseReceipt_", "lease.document": "leaseDocument_", "lease.mine": function (p) { return leaseMine_(p); },
   "lease.automation": "leaseAutomationSet_", "rent.sendCall": "rentSendCallRoute_", "rent.sendReminder": "rentSendReminderRoute_", "rent.sendReceipt": "rentSendReceiptRoute_", "rent.preview": "rentPreview_",
   "leasedoc.draft": "leaseDocDraft_", "leasedoc.get": "leaseDocGet_", "leasedoc.update": "leaseDocUpdate_", "leasedoc.pdf": "leaseDocPdf_", "leasedoc.finalize": "leaseDocFinalize_",
   "leasedoc.send": "leaseDocSend_", "leasedoc.cancel": "leaseDocCancel_",

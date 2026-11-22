@@ -1504,7 +1504,7 @@ function routes_() { return {
   "exp.create": "expCreate_", "exp.cancel": "expCancel_", "exp.list": "expList_", "rev.create": "revCreate_",
   "tenant.list": "tenantList_", "tenant.create": "tenantCreate_", "tenant.update": "tenantUpdate_", "tenant.delete": "tenantDelete_",
   "lease.list": "leaseList_", "lease.get": "leaseGet_", "lease.create": "leaseCreate_", "lease.update": "leaseUpdate_", "lease.activate": "leaseActivate_", "lease.notice": "leaseNotice_",
-  "lease.end": "leaseEnd_", "lease.renew": "leaseRenew_", "lease.depositReturn": "leaseDepositReturn_", "lease.receipt": "leaseReceipt_", "lease.document": "leaseDocument_", "lease.mine": function (p) { return leaseMine_(p); },
+  "lease.end": "leaseEnd_", "lease.renew": "leaseRenew_", "lease.depositReturn": "leaseDepositReturn_", "lease.setDeposit": "leaseSetDeposit_", "lease.receipt": "leaseReceipt_", "lease.document": "leaseDocument_", "lease.mine": function (p) { return leaseMine_(p); },
   "lease.automation": "leaseAutomationSet_", "rent.sendCall": "rentSendCallRoute_", "rent.sendReminder": "rentSendReminderRoute_", "rent.sendReceipt": "rentSendReceiptRoute_", "rent.preview": "rentPreview_",
   "leasedoc.draft": "leaseDocDraft_", "leasedoc.get": "leaseDocGet_", "leasedoc.update": "leaseDocUpdate_", "leasedoc.pdf": "leaseDocPdf_", "leasedoc.finalize": "leaseDocFinalize_",
   "leasedoc.send": "leaseDocSend_", "leasedoc.cancel": "leaseDocCancel_",
@@ -1981,7 +1981,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "bc76958ad929";
+var IMMO_BUILD_ = "0639d4ca3007";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -6139,6 +6139,15 @@ function leaseCreate_(p, a) {
     depositStatus: num_(d.deposit) > 0 ? "EXPECTED" : "NONE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_(), updatedBy: p.email }));
   audit_("LEASE_CREATED", "Lease", l.leaseId, prop.organizationId, { monthlyRent: l.monthlyRent, startDate: l.startDate });
   return { ok: true, leaseId: l.leaseId, id: l.leaseId };
+}
+/** Correction du montant de la caution d'un bail en cours (erreur de saisie), avec motif obligatoire et trace dans le journal. */
+function leaseSetDeposit_(p, a) {
+  const x = leaseLoad_(p, a.leaseId, "lease.manage");
+  assert_(["ACTIVE", "NOTICE"].indexOf(x.l.status) >= 0, "Bail en brouillon : modifiez la caution directement ; bail terminé : non modifiable.");
+  const amount = money_(a.deposit, "Caution"), reason = reqText_(a.reason, "Motif", 3, 300);
+  dbUpdate_("Leases", x.l.leaseId, { deposit: amount, depositStatus: amount > 0 ? (x.l.depositStatus === "NONE" ? "EXPECTED" : x.l.depositStatus) : "NONE", updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("LEASE_DEPOSIT_CORRECTED", "Lease", x.l.leaseId, x.l.organizationId, { from: num_(x.l.deposit), to: amount, reason: reason });
+  return { ok: true, deposit: amount, depositHeld: leaseDepositHeld_(x.l.leaseId) };
 }
 function leaseUpdate_(p, a) {
   const x = leaseLoad_(p, a.leaseId, "lease.manage");
@@ -12780,6 +12789,13 @@ function TEST_GROUPS_() {
         const p2 = T.call(O.tok, "property.create", { organizationId: org, name: "Studio Sans Mail", city: "Marrakech", rentalMode: "LONG_TERM", rooms: ["Séjour"] }).propertyId;
         const l2 = T.call(O.tok, "lease.create", { propertyId: p2, tenantId: t2.tenantId, startDate: tDays_(1), monthlyRent: 3000, dueDay: 5 });
         T.fails(O.tok, "inspection.delegate", { inspectionId: T.call(O.tok, "inspection.create", { leaseId: l2.leaseId, type: "ENTRY" }).inspectionId }, "VALIDATION");
+        // Correction de la caution d'un bail actif (erreur de saisie)
+        T.call(O.tok, "lease.activate", { leaseId: l.leaseId });
+        T.fails(O.tok, "lease.update", { leaseId: l.leaseId, deposit: 6000 }, "VALIDATION");
+        T.fails(O.tok, "lease.setDeposit", { leaseId: l.leaseId, deposit: 6000 }, "VALIDATION");
+        T.fails(TT, "lease.setDeposit", { leaseId: l.leaseId, deposit: 6000, reason: "Erreur" }, "FORBIDDEN");
+        T.eq(T.call(O.tok, "lease.setDeposit", { leaseId: l.leaseId, deposit: 6000, reason: "Erreur de saisie" }).deposit, 6000, "caution corrigée");
+        T.eq(T.call(O.tok, "lease.get", { leaseId: l.leaseId }).deposit, 6000, "nouveau montant sur le bail");
       }]
     ] },
     { name: "Missions confiées à l'agence (longue durée)", tests: [

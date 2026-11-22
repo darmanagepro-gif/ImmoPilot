@@ -1347,6 +1347,13 @@ function TEST_GROUPS_() {
         const p2 = T.call(O.tok, "property.create", { organizationId: org, name: "Studio Sans Mail", city: "Marrakech", rentalMode: "LONG_TERM", rooms: ["Séjour"] }).propertyId;
         const l2 = T.call(O.tok, "lease.create", { propertyId: p2, tenantId: t2.tenantId, startDate: tDays_(1), monthlyRent: 3000, dueDay: 5 });
         T.fails(O.tok, "inspection.delegate", { inspectionId: T.call(O.tok, "inspection.create", { leaseId: l2.leaseId, type: "ENTRY" }).inspectionId }, "VALIDATION");
+        // Correction de la caution d'un bail actif (erreur de saisie)
+        T.call(O.tok, "lease.activate", { leaseId: l.leaseId });
+        T.fails(O.tok, "lease.update", { leaseId: l.leaseId, deposit: 6000 }, "VALIDATION");
+        T.fails(O.tok, "lease.setDeposit", { leaseId: l.leaseId, deposit: 6000 }, "VALIDATION");
+        T.fails(TT, "lease.setDeposit", { leaseId: l.leaseId, deposit: 6000, reason: "Erreur" }, "FORBIDDEN");
+        T.eq(T.call(O.tok, "lease.setDeposit", { leaseId: l.leaseId, deposit: 6000, reason: "Erreur de saisie" }).deposit, 6000, "caution corrigée");
+        T.eq(T.call(O.tok, "lease.get", { leaseId: l.leaseId }).deposit, 6000, "nouveau montant sur le bail");
       }]
     ] },
     { name: "Missions confiées à l'agence (longue durée)", tests: [

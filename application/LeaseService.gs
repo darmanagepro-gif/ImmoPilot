@@ -264,6 +264,15 @@ function leaseCreate_(p, a) {
   audit_("LEASE_CREATED", "Lease", l.leaseId, prop.organizationId, { monthlyRent: l.monthlyRent, startDate: l.startDate });
   return { ok: true, leaseId: l.leaseId, id: l.leaseId };
 }
+/** Correction du montant de la caution d'un bail en cours (erreur de saisie), avec motif obligatoire et trace dans le journal. */
+function leaseSetDeposit_(p, a) {
+  const x = leaseLoad_(p, a.leaseId, "lease.manage");
+  assert_(["ACTIVE", "NOTICE"].indexOf(x.l.status) >= 0, "Bail en brouillon : modifiez la caution directement ; bail terminé : non modifiable.");
+  const amount = money_(a.deposit, "Caution"), reason = reqText_(a.reason, "Motif", 3, 300);
+  dbUpdate_("Leases", x.l.leaseId, { deposit: amount, depositStatus: amount > 0 ? (x.l.depositStatus === "NONE" ? "EXPECTED" : x.l.depositStatus) : "NONE", updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("LEASE_DEPOSIT_CORRECTED", "Lease", x.l.leaseId, x.l.organizationId, { from: num_(x.l.deposit), to: amount, reason: reason });
+  return { ok: true, deposit: amount, depositHeld: leaseDepositHeld_(x.l.leaseId) };
+}
 function leaseUpdate_(p, a) {
   const x = leaseLoad_(p, a.leaseId, "lease.manage");
   if (x.l.status !== "DRAFT") ["startDate", "monthlyRent", "charges", "deposit", "dueDay"].forEach(function (k) { assert_(a[k] === undefined, "Bail actif : « " + k + " » n'est modifiable que par renouvellement ou avenant."); });
