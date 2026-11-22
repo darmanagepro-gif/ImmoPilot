@@ -1980,7 +1980,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "f9fc21c2acf5";
+var IMMO_BUILD_ = "17466f7154ce";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -2019,7 +2019,7 @@ var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "DarPilot",
   VERSION: "2.8.0",
-  SCHEMA_VERSION: 18,
+  SCHEMA_VERSION: 19,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -2272,7 +2272,7 @@ var TABLES_SRC = {
   ScheduledJobs: { pk: "jobRunId", idp: "job", req: "jobName", cols: "jobRunId,jobName,startedAt#t,finishedAt#t,status,resultJson#j,error" },
   MigrationHistory: { pk: "migrationId", idp: "mig", req: "version", cols: "migrationId,version#n,name,appliedAt#t,appliedBy,status,detailsJson#j" },
   SubscriptionPlans: { pk: "planCode", idp: "pln", req: "planCode,name", enums: { status: ["ACTIVE", "RETIRED"], periodicity: ["MONTHLY", "QUARTERLY", "YEARLY"] },
-    cols: "planCode,name,price#n,currency,periodicity,maxProperties#n,maxUsers#n,storageMb#n,featuresJson#j,quotasJson#j,trialDays#n,status,sortOrder#n,updatedAt#t,updatedBy,agencyOptionPrice#n" },
+    cols: "planCode,name,price#n,currency,periodicity,maxProperties#n,maxUsers#n,storageMb#n,featuresJson#j,quotasJson#j,trialDays#n,status,sortOrder#n,updatedAt#t,updatedBy,agencyOptionPrice#n,signupVisibility" },
   Subscriptions: { pk: "subscriptionId", idp: "sub", org: "organizationId", req: "organizationId,planCode",
     enums: { status: ["TRIAL", "ACTIVE", "PAST_DUE", "SUSPENDED", "CANCELLED", "EXPIRED"] },
     cols: "subscriptionId,organizationId,planCode,status,startDate#d,nextDueDate#d,createdAt#t,createdBy|periodEnd#d,trialEnd#d,cancelAtPeriodEnd#b,price#n,currency,periodicity,canceledAt#t,suspendedAt#t,paidThrough#d,updatedAt#t,updatedBy,lastReminderKey,agencyOptionPrice#n" },
@@ -9572,7 +9572,7 @@ function salesTotals_(coms) {
 }
 /** Simulation du plan pour chaque forfait (affichée au commercial et au super administrateur). */
 function salesSimulation_(rates) {
-  return dbAll_("SubscriptionPlans").filter(function (pl) { return pl.status === "ACTIVE"; }).sort(function (a, b) { return num_(a.sortOrder) - num_(b.sortOrder); }).map(function (pl) {
+  return dbAll_("SubscriptionPlans").filter(planPublic_).sort(function (a, b) { return num_(a.sortOrder) - num_(b.sortOrder); }).map(function (pl) {
     const pr = num_(pl.price), bonus = round2_(pr * rates.bonusRate), rec = round2_(pr * rates.recurringRate);
     const cumul = round2_(rec * rates.recurringMonths);
     return { planCode: pl.planCode, name: pl.name, price: pr, currency: pl.currency || cur_(), bonus: bonus, recurring: rec, months: rates.recurringMonths, cumul: cumul, firstYear: round2_(bonus + cumul) };
@@ -10030,7 +10030,7 @@ function companyLegalInput_(a, kind) {
 function signupClientInput_(a) {
   const profile = oneOf_(String(a.profile || ""), ["OWNER", "AGENCY"], "Profil");
   const plan = dbGet_("SubscriptionPlans", safeText_(a.planCode, 30));
-  assert_(plan && plan.status === "ACTIVE", "Choisissez un forfait.");
+  assert_(plan && planPublic_(plan), "Choisissez un forfait.");
   const person = { firstName: reqText_(a.firstName, "Prénom", 1, 80), lastName: reqText_(a.lastName, "Nom", 1, 80), phone: reqText_(a.phone, "Téléphone", 6, 30), city: reqText_(a.city, "Ville", 2, 80) };
   assert_(intlPhone_(person.phone), "Numéro de téléphone invalide.");
   const o = { profile: profile, planCode: plan.planCode, person: person };
@@ -10073,7 +10073,7 @@ function signupProviderInput_(a) {
 
 /* --------------------------- Routes publiques --------------------------- */
 function signupInfo_() {
-  const plans = dbAll_("SubscriptionPlans").filter(function (pl) { return pl.status === "ACTIVE"; }).sort(function (x, y) { return num_(x.sortOrder) - num_(y.sortOrder); }).map(planOut_);
+  const plans = dbAll_("SubscriptionPlans").filter(planPublic_).sort(function (x, y) { return num_(x.sortOrder) - num_(y.sortOrder); }).map(planOut_);
   const e = edition_();
   return { country: e.code, countryName: e.countryName, currency: e.currency, plans: plans, status: platformStatusText_(), legalForms: signupLegalForms_(), trades: PROVIDER_TRADES_,
     decennaleTrades: e.code === "FR" ? DECENNALE_TRADES_ : [], docRules: { AE: providerDocRules_("AE", [], false), COMPANY: providerDocRules_("COMPANY", [], false) },
@@ -10540,9 +10540,21 @@ var PAYMENT_PROVIDERS_ = {
   }
 };
 
+/**
+ * Forfait proposé à l'inscription en ligne et aux demandes de changement des clients ?
+ * signupVisibility : "PUBLIC" ou "ADMIN" (attribué uniquement par le super administrateur, ECO SYNERGY).
+ * Forfait ancien sans réglage : public, sauf le forfait personnel « LOULOU » qui reste réservé à l'administrateur.
+ */
+function planPublic_(pl) {
+  if (!pl || pl.status !== "ACTIVE") return false;
+  const v = String(pl.signupVisibility || "").toUpperCase();
+  if (v === "PUBLIC") return true;
+  if (v === "ADMIN") return false;
+  return !/loulou/i.test(String(pl.planCode || "") + " " + String(pl.name || ""));
+}
 function planOut_(pl) {
   return { planCode: pl.planCode, name: pl.name, price: pl.price, currency: pl.currency || cur_(), periodicity: pl.periodicity, maxProperties: pl.maxProperties, maxUsers: pl.maxUsers, storageMb: pl.storageMb,
-    features: parseJson_(pl.featuresJson, []), quotas: parseJson_(pl.quotasJson, {}), trialDays: pl.trialDays, status: pl.status, sortOrder: pl.sortOrder, agencyOptionPrice: num_(pl.agencyOptionPrice) };
+    features: parseJson_(pl.featuresJson, []), quotas: parseJson_(pl.quotasJson, {}), trialDays: pl.trialDays, status: pl.status, sortOrder: pl.sortOrder, agencyOptionPrice: num_(pl.agencyOptionPrice), publicSignup: planPublic_(pl) };
 }
 function subOut_(s, orgs) {
   const today = todayStr_();
@@ -10565,7 +10577,7 @@ function subUsage_(orgId) {
 
 /* ------------------------------ Forfaits ------------------------------ */
 function planList_(p, a) {
-  return dbAll_("SubscriptionPlans").filter(function (pl) { return p.isSuper || pl.status === "ACTIVE"; }).sort(function (x, y) { return num_(x.sortOrder) - num_(y.sortOrder); }).map(planOut_);
+  return dbAll_("SubscriptionPlans").filter(function (pl) { return p.isSuper || planPublic_(pl); }).sort(function (x, y) { return num_(x.sortOrder) - num_(y.sortOrder); }).map(planOut_);
 }
 var PLAN_FEATURES_ = ["properties", "reservations", "checkin", "cleaning", "incidents", "finance_basic", "finance_advanced", "leases", "contractors", "pareto", "reports", "automations", "guest_portal", "multi_agency", "exports_unlimited"];
 function planSave_(p, a) {
@@ -10575,7 +10587,8 @@ function planSave_(p, a) {
   const data = { name: reqText_(a.name, "Nom", 2, 60), price: money_(a.price, "Prix"), currency: cur_(), periodicity: oneOf_(a.periodicity || "MONTHLY", Object.keys(PERIOD_MONTHS_), "Périodicité"),
     maxProperties: Math.max(0, parseInt(a.maxProperties, 10) || 0), maxUsers: Math.max(0, parseInt(a.maxUsers, 10) || 0), storageMb: Math.max(0, parseInt(a.storageMb, 10) || 0),
     featuresJson: (Array.isArray(a.features) ? a.features : []).filter(function (f) { return PLAN_FEATURES_.indexOf(f) >= 0; }), quotasJson: { exportRows: Math.min(Math.max(parseInt((a.quotas || {}).exportRows, 10) || 1000, 100), IMMO_CONFIG.MAX_EXPORT_ROWS) },
-    trialDays: Math.max(0, parseInt(a.trialDays, 10) || 0), agencyOptionPrice: a.agencyOptionPrice === "" || a.agencyOptionPrice == null ? 0 : money_(a.agencyOptionPrice, "Option agences"), status: oneOf_(a.status || "ACTIVE", ["ACTIVE", "RETIRED"], "Statut"), sortOrder: parseInt(a.sortOrder, 10) || 9, updatedAt: nowIso_(), updatedBy: p.email };
+    trialDays: Math.max(0, parseInt(a.trialDays, 10) || 0), agencyOptionPrice: a.agencyOptionPrice === "" || a.agencyOptionPrice == null ? 0 : money_(a.agencyOptionPrice, "Option agences"), status: oneOf_(a.status || "ACTIVE", ["ACTIVE", "RETIRED"], "Statut"), sortOrder: parseInt(a.sortOrder, 10) || 9,
+    signupVisibility: a.publicSignup === false || a.publicSignup === "false" ? "ADMIN" : "PUBLIC", updatedAt: nowIso_(), updatedBy: p.email };
   if (dbGet_("SubscriptionPlans", code)) dbUpdate_("SubscriptionPlans", code, data); else dbInsert_("SubscriptionPlans", Object.assign({ planCode: code }, data));
   audit_("PLAN_SAVED", "SubscriptionPlan", code, "", { price: data.price, features: data.featuresJson.length });
   return { ok: true, planCode: code };
@@ -10680,7 +10693,7 @@ function subRequestChange_(p, a) {
   const orgId = safeText_(a.organizationId, 120);
   assertOrgCap_(p, orgId, "subscription.view");
   const plan = dbGet_("SubscriptionPlans", safeText_(a.planCode, 30));
-  assert_(plan && plan.status === "ACTIVE", "Forfait inconnu.");
+  assert_(plan && planPublic_(plan), "Forfait inconnu.");
   notify_({ eventKey: "sub-change:" + orgId + ":" + plan.planCode + ":" + todayStr_(), userIds: superAdminIds_(), type: "SUBSCRIPTION_REQUEST", organizationId: "",
     title: "Demande de changement de forfait", body: ((dbGet_("Organizations", orgId) || {}).name || orgId) + " souhaite le forfait " + plan.name + ". " + safeText_(a.message, 500), link: "#subscriptions" });
   audit_("SUBSCRIPTION_CHANGE_REQUESTED", "Organization", orgId, orgId, { planCode: plan.planCode });
@@ -12840,6 +12853,20 @@ function TEST_GROUPS_() {
           for (let j = 0; j < 10; j++) T.pub("auth.requestReset", { email: fx.mail("ipreset" + j) });
           T.fails(null, "auth.requestReset", { email: fx.mail("ipreset-last") }, "RATE_LIMIT");
         } finally { g.REQUEST_META_ = prev; }
+      }],
+      ["Forfait réservé à l'administrateur (LOULOU) : absent de l'inscription et des demandes clients, attribuable par le super administrateur", function (T, fx) {
+        T.call(fx.tok.superA, "plan.save", { planCode: "LOULOU", name: "Forfait Loulou", price: 1, periodicity: "MONTHLY", maxProperties: 999, maxUsers: 99, storageMb: 1000, trialDays: 0, status: "ACTIVE", sortOrder: 99, publicSignup: false, features: [] });
+        dbInsert_("SubscriptionPlans", { planCode: "LOULOU2", name: "Ancien forfait loulou", price: 1, currency: cur_(), periodicity: "MONTHLY", maxProperties: 5, maxUsers: 3, storageMb: 100, trialDays: 0, status: "ACTIVE", sortOrder: 98 });
+        const codes = T.pub("signup.info", {}).plans.map(function (x) { return x.planCode; });
+        T.ok(codes.indexOf("LOULOU") < 0 && codes.indexOf("LOULOU2") < 0 && codes.indexOf("PRO") >= 0, "inscription : forfaits publics seulement (" + codes.join(", ") + ")");
+        T.fails(null, "signup.start", { kind: "CLIENT", profile: "OWNER", ownerType: "INDIVIDUAL", planCode: "LOULOU", firstName: "X", lastName: "Y", phone: "0612345678", city: "Ville",
+          homeAddress: "1 rue du Test, Ville", email: fx.mail("signup-loulou"), password: "MotDePasse2026", acceptTerms: true, acceptStatus: true, acceptPrivacy: true }, "VALIDATION");
+        T.ok(T.call(fx.tok.ownerA, "plan.list", {}).every(function (x) { return x.planCode !== "LOULOU" && x.planCode !== "LOULOU2"; }), "un client ne voit pas les forfaits réservés");
+        T.fails(fx.tok.ownerA, "sub.requestChange", { organizationId: fx.orgA.organizationId, planCode: "LOULOU" }, "VALIDATION");
+        const adm = T.call(fx.tok.superA, "plan.list", {}).filter(function (x) { return x.planCode === "LOULOU"; })[0];
+        T.ok(adm && adm.publicSignup === false, "le super administrateur voit le forfait réservé");
+        T.ok(T.call(fx.tok.superA, "plan.list", {}).filter(function (x) { return x.planCode === "PRO"; })[0].publicSignup === true, "PRO reste public");
+        dbUpdate_("SubscriptionPlans", "LOULOU", { status: "RETIRED" }); dbUpdate_("SubscriptionPlans", "LOULOU2", { status: "RETIRED" });
       }],
       ["Inscription propriétaire : code e-mail, compte + organisation + essai, contrat à signer ; e-mail déjà pris refusé ; mauvais code", function (T, fx) {
         const fr = IMMO_EDITION_ === "FR", email = fx.mail("signup-owner");

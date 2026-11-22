@@ -202,7 +202,7 @@ function salesTotals_(coms) {
 }
 /** Simulation du plan pour chaque forfait (affichée au commercial et au super administrateur). */
 function salesSimulation_(rates) {
-  return dbAll_("SubscriptionPlans").filter(function (pl) { return pl.status === "ACTIVE"; }).sort(function (a, b) { return num_(a.sortOrder) - num_(b.sortOrder); }).map(function (pl) {
+  return dbAll_("SubscriptionPlans").filter(planPublic_).sort(function (a, b) { return num_(a.sortOrder) - num_(b.sortOrder); }).map(function (pl) {
     const pr = num_(pl.price), bonus = round2_(pr * rates.bonusRate), rec = round2_(pr * rates.recurringRate);
     const cumul = round2_(rec * rates.recurringMonths);
     return { planCode: pl.planCode, name: pl.name, price: pr, currency: pl.currency || cur_(), bonus: bonus, recurring: rec, months: rates.recurringMonths, cumul: cumul, firstYear: round2_(bonus + cumul) };

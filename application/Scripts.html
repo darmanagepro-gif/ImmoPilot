@@ -283,7 +283,7 @@ PAGES.subscriptions = function (el) {
     { id: "plans", label: "Forfaits", render: function (b) {
       const box = h("div"); b.appendChild(h("div", { class: "actions", style: { marginBottom: "10px" } }, btn("+ " + t("Nouveau forfait"), function () { planDialog({}).then(load); }, "primary"))); b.appendChild(box);
       const load = function () { api("plan.list").then(function (pl) { clear(box).appendChild(table([{ l: "Code", k: "planCode" }, { l: "Nom", k: "name" }, { l: "Prix", money: true, k: "price" }, { l: "Périodicité", f: function (x) { return st(x.periodicity); } },
-        { l: "Biens max.", num: true, k: "maxProperties" }, { l: "Utilisateurs max.", num: true, k: "maxUsers" }, { l: "Stockage (Mo)", num: true, k: "storageMb" }, { l: "Essai (j)", num: true, k: "trialDays" }, { l: "Statut", status: true, k: "status" },
+        { l: "Biens max.", num: true, k: "maxProperties" }, { l: "Utilisateurs max.", num: true, k: "maxUsers" }, { l: "Stockage (Mo)", num: true, k: "storageMb" }, { l: "Essai (j)", num: true, k: "trialDays" }, { l: "Statut", status: true, k: "status" }, { l: "Inscription", f: function (x) { return x.publicSignup ? t("Publique") : t("Réservé admin"); } },
         { l: "Fonctionnalités", f: function (x) { return x.features.map(function (f) { return st("feat." + f); }).join(", "); } }], pl, { onRow: function (x) { planDialog(x).then(load); } })); }).catch(showErr); };
       load();
     } }
@@ -293,8 +293,9 @@ function planDialog(p) {
   return formModal(p.planCode ? t("Forfait") + " " + p.planCode : t("Nouveau forfait"), [{ k: "planCode", l: "Code", req: true }, { k: "name", l: "Nom", req: true }, { k: "price", l: "Prix (MAD)", t: "number", req: true }, { k: "agencyOptionPrice", l: "Option agences : prix par agence et par période (MAD)", t: "number", min: 0, help: "Agences créées par un propriétaire : facturées sur son abonnement, pas d'abonnement propre." },
     { k: "periodicity", l: "Périodicité", t: "select", opts: ["MONTHLY", "QUARTERLY", "YEARLY"] }, { k: "maxProperties", l: "Nombre de biens", t: "number" }, { k: "maxUsers", l: "Nombre d'utilisateurs", t: "number" },
     { k: "storageMb", l: "Stockage (Mo)", t: "number" }, { k: "trialDays", l: "Jours d'essai", t: "number" }, { k: "exportRows", l: "Lignes d'export max.", t: "number" }, { k: "sortOrder", l: "Ordre d'affichage", t: "number" },
-    { k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "RETIRED"] }, { k: "features", l: "Fonctionnalités", t: "multi", opts: (S.meta.planFeatures || []).map(function (f) { return [f, st("feat." + f)]; }) }],
-  Object.assign({}, p, { exportRows: (p.quotas || {}).exportRows }), function (v) { v.quotas = { exportRows: v.exportRows }; return api("plan.save", v); }, { success: "Forfait enregistré." });
+    { k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "RETIRED"] },
+    { k: "publicSignup", l: "Proposé à l'inscription en ligne", t: "checkbox", help: "Décoché : forfait réservé, attribué uniquement par l'administrateur (ECO SYNERGY)." }, { k: "features", l: "Fonctionnalités", t: "multi", opts: (S.meta.planFeatures || []).map(function (f) { return [f, st("feat." + f)]; }) }],
+  Object.assign({ publicSignup: true }, p, { exportRows: (p.quotas || {}).exportRows }), function (v) { v.quotas = { exportRows: v.exportRows }; return api("plan.save", v); }, { success: "Forfait enregistré." });
 }
 function assignPlan(orgId) {
   return Promise.all([api("org.list", { pageSize: 200 }), api("plan.list")]).then(function (r) {

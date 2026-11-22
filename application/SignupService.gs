@@ -100,7 +100,7 @@ function companyLegalInput_(a, kind) {
 function signupClientInput_(a) {
   const profile = oneOf_(String(a.profile || ""), ["OWNER", "AGENCY"], "Profil");
   const plan = dbGet_("SubscriptionPlans", safeText_(a.planCode, 30));
-  assert_(plan && plan.status === "ACTIVE", "Choisissez un forfait.");
+  assert_(plan && planPublic_(plan), "Choisissez un forfait.");
   const person = { firstName: reqText_(a.firstName, "Prénom", 1, 80), lastName: reqText_(a.lastName, "Nom", 1, 80), phone: reqText_(a.phone, "Téléphone", 6, 30), city: reqText_(a.city, "Ville", 2, 80) };
   assert_(intlPhone_(person.phone), "Numéro de téléphone invalide.");
   const o = { profile: profile, planCode: plan.planCode, person: person };
@@ -143,7 +143,7 @@ function signupProviderInput_(a) {
 
 /* --------------------------- Routes publiques --------------------------- */
 function signupInfo_() {
-  const plans = dbAll_("SubscriptionPlans").filter(function (pl) { return pl.status === "ACTIVE"; }).sort(function (x, y) { return num_(x.sortOrder) - num_(y.sortOrder); }).map(planOut_);
+  const plans = dbAll_("SubscriptionPlans").filter(planPublic_).sort(function (x, y) { return num_(x.sortOrder) - num_(y.sortOrder); }).map(planOut_);
   const e = edition_();
   return { country: e.code, countryName: e.countryName, currency: e.currency, plans: plans, status: platformStatusText_(), legalForms: signupLegalForms_(), trades: PROVIDER_TRADES_,
     decennaleTrades: e.code === "FR" ? DECENNALE_TRADES_ : [], docRules: { AE: providerDocRules_("AE", [], false), COMPANY: providerDocRules_("COMPANY", [], false) },

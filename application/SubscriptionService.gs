@@ -23,9 +23,21 @@ var PAYMENT_PROVIDERS_ = {
   }
 };
 
+/**
+ * Forfait proposé à l'inscription en ligne et aux demandes de changement des clients ?
+ * signupVisibility : "PUBLIC" ou "ADMIN" (attribué uniquement par le super administrateur, ECO SYNERGY).
+ * Forfait ancien sans réglage : public, sauf le forfait personnel « LOULOU » qui reste réservé à l'administrateur.
+ */
+function planPublic_(pl) {
+  if (!pl || pl.status !== "ACTIVE") return false;
+  const v = String(pl.signupVisibility || "").toUpperCase();
+  if (v === "PUBLIC") return true;
+  if (v === "ADMIN") return false;
+  return !/loulou/i.test(String(pl.planCode || "") + " " + String(pl.name || ""));
+}
 function planOut_(pl) {
   return { planCode: pl.planCode, name: pl.name, price: pl.price, currency: pl.currency || cur_(), periodicity: pl.periodicity, maxProperties: pl.maxProperties, maxUsers: pl.maxUsers, storageMb: pl.storageMb,
-    features: parseJson_(pl.featuresJson, []), quotas: parseJson_(pl.quotasJson, {}), trialDays: pl.trialDays, status: pl.status, sortOrder: pl.sortOrder, agencyOptionPrice: num_(pl.agencyOptionPrice) };
+    features: parseJson_(pl.featuresJson, []), quotas: parseJson_(pl.quotasJson, {}), trialDays: pl.trialDays, status: pl.status, sortOrder: pl.sortOrder, agencyOptionPrice: num_(pl.agencyOptionPrice), publicSignup: planPublic_(pl) };
 }
 function subOut_(s, orgs) {
   const today = todayStr_();
@@ -48,7 +60,7 @@ function subUsage_(orgId) {
 
 /* ------------------------------ Forfaits ------------------------------ */
 function planList_(p, a) {
-  return dbAll_("SubscriptionPlans").filter(function (pl) { return p.isSuper || pl.status === "ACTIVE"; }).sort(function (x, y) { return num_(x.sortOrder) - num_(y.sortOrder); }).map(planOut_);
+  return dbAll_("SubscriptionPlans").filter(function (pl) { return p.isSuper || planPublic_(pl); }).sort(function (x, y) { return num_(x.sortOrder) - num_(y.sortOrder); }).map(planOut_);
 }
 var PLAN_FEATURES_ = ["properties", "reservations", "checkin", "cleaning", "incidents", "finance_basic", "finance_advanced", "leases", "contractors", "pareto", "reports", "automations", "guest_portal", "multi_agency", "exports_unlimited"];
 function planSave_(p, a) {
@@ -58,7 +70,8 @@ function planSave_(p, a) {
   const data = { name: reqText_(a.name, "Nom", 2, 60), price: money_(a.price, "Prix"), currency: cur_(), periodicity: oneOf_(a.periodicity || "MONTHLY", Object.keys(PERIOD_MONTHS_), "Périodicité"),
     maxProperties: Math.max(0, parseInt(a.maxProperties, 10) || 0), maxUsers: Math.max(0, parseInt(a.maxUsers, 10) || 0), storageMb: Math.max(0, parseInt(a.storageMb, 10) || 0),
     featuresJson: (Array.isArray(a.features) ? a.features : []).filter(function (f) { return PLAN_FEATURES_.indexOf(f) >= 0; }), quotasJson: { exportRows: Math.min(Math.max(parseInt((a.quotas || {}).exportRows, 10) || 1000, 100), IMMO_CONFIG.MAX_EXPORT_ROWS) },
-    trialDays: Math.max(0, parseInt(a.trialDays, 10) || 0), agencyOptionPrice: a.agencyOptionPrice === "" || a.agencyOptionPrice == null ? 0 : money_(a.agencyOptionPrice, "Option agences"), status: oneOf_(a.status || "ACTIVE", ["ACTIVE", "RETIRED"], "Statut"), sortOrder: parseInt(a.sortOrder, 10) || 9, updatedAt: nowIso_(), updatedBy: p.email };
+    trialDays: Math.max(0, parseInt(a.trialDays, 10) || 0), agencyOptionPrice: a.agencyOptionPrice === "" || a.agencyOptionPrice == null ? 0 : money_(a.agencyOptionPrice, "Option agences"), status: oneOf_(a.status || "ACTIVE", ["ACTIVE", "RETIRED"], "Statut"), sortOrder: parseInt(a.sortOrder, 10) || 9,
+    signupVisibility: a.publicSignup === false || a.publicSignup === "false" ? "ADMIN" : "PUBLIC", updatedAt: nowIso_(), updatedBy: p.email };
   if (dbGet_("SubscriptionPlans", code)) dbUpdate_("SubscriptionPlans", code, data); else dbInsert_("SubscriptionPlans", Object.assign({ planCode: code }, data));
   audit_("PLAN_SAVED", "SubscriptionPlan", code, "", { price: data.price, features: data.featuresJson.length });
   return { ok: true, planCode: code };
@@ -163,7 +176,7 @@ function subRequestChange_(p, a) {
   const orgId = safeText_(a.organizationId, 120);
   assertOrgCap_(p, orgId, "subscription.view");
   const plan = dbGet_("SubscriptionPlans", safeText_(a.planCode, 30));
-  assert_(plan && plan.status === "ACTIVE", "Forfait inconnu.");
+  assert_(plan && planPublic_(plan), "Forfait inconnu.");
   notify_({ eventKey: "sub-change:" + orgId + ":" + plan.planCode + ":" + todayStr_(), userIds: superAdminIds_(), type: "SUBSCRIPTION_REQUEST", organizationId: "",
     title: "Demande de changement de forfait", body: ((dbGet_("Organizations", orgId) || {}).name || orgId) + " souhaite le forfait " + plan.name + ". " + safeText_(a.message, 500), link: "#subscriptions" });
   audit_("SUBSCRIPTION_CHANGE_REQUESTED", "Organization", orgId, orgId, { planCode: plan.planCode });
