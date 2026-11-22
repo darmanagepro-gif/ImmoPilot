@@ -221,6 +221,18 @@ function payVoid_(p, a) {
   audit_("PAYMENT_VOIDED", "Payment", pay.paymentId, pay.organizationId, { reason: reason, amount: pay.amount });
   return { ok: true };
 }
+/** Suppression définitive d'un paiement DÉJÀ ANNULÉ (erreur de saisie). Irréversible : confirmation « SUPPRIMER » et trace dans le journal. */
+function payDelete_(p, a) {
+  const pay = dbGet_("Payments", safeText_(a.paymentId, 120));
+  if (!pay || pay.kind === "SUBSCRIPTION") notFound_("Paiement");
+  const t = paymentTarget_(p, pay.refType, pay.refId, pay.kind);
+  assertOrgWritable_(t.organizationId);
+  assert_(pay.status === "VOID", "Seul un paiement annulé peut être supprimé : annulez-le d'abord.");
+  assert_(String(a.confirm || "") === "SUPPRIMER", "Tapez SUPPRIMER pour confirmer la suppression définitive.");
+  withLock_(function () { dbDelete_("Payments", pay.paymentId); });
+  audit_("PAYMENT_DELETED", "Payment", pay.paymentId, pay.organizationId, { kind: pay.kind, refType: pay.refType, refId: pay.refId, amount: pay.amount, paidAt: pay.paidAt, note: pay.note });
+  return { ok: true };
+}
 /** Rapprochement bancaire MANUEL (aucune connexion bancaire automatique n'existe). */
 function payReconcile_(p, a) {
   const pay = dbGet_("Payments", safeText_(a.paymentId, 120));

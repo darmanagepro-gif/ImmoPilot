@@ -47,7 +47,7 @@ function routes_() { return {
   "wo.create": "woCreate_", "wo.respond": "woRespond_", "wo.schedule": "woSchedule_", "wo.start": "woStart_", "wo.complete": "woComplete_", "wo.verify": "woVerify_", "wo.cancel": "woCancel_",
   "wo.list": "woList_", "wo.get": "woGet_", "wo.pdf": "woOrderPdf_",
   "inv.submit": "invSubmit_", "inv.approve": "invApprove_", "inv.reject": "invReject_", "inv.list": "invList_", "inv.get": "invGet_", "inv.pdf": "invoicePdf_",
-  "fin.summary": "finSummary_", "pay.record": "payRecord_", "pay.void": "payVoid_", "pay.reconcile": "payReconcile_", "pay.list": "payList_",
+  "fin.summary": "finSummary_", "pay.record": "payRecord_", "pay.void": "payVoid_", "pay.delete": "payDelete_", "pay.reconcile": "payReconcile_", "pay.list": "payList_",
   "exp.create": "expCreate_", "exp.cancel": "expCancel_", "exp.list": "expList_", "rev.create": "revCreate_",
   "tenant.list": "tenantList_", "tenant.create": "tenantCreate_", "tenant.update": "tenantUpdate_", "tenant.delete": "tenantDelete_",
   "lease.list": "leaseList_", "lease.get": "leaseGet_", "lease.create": "leaseCreate_", "lease.update": "leaseUpdate_", "lease.activate": "leaseActivate_", "lease.notice": "leaseNotice_",

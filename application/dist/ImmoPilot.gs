@@ -1500,7 +1500,7 @@ function routes_() { return {
   "wo.create": "woCreate_", "wo.respond": "woRespond_", "wo.schedule": "woSchedule_", "wo.start": "woStart_", "wo.complete": "woComplete_", "wo.verify": "woVerify_", "wo.cancel": "woCancel_",
   "wo.list": "woList_", "wo.get": "woGet_", "wo.pdf": "woOrderPdf_",
   "inv.submit": "invSubmit_", "inv.approve": "invApprove_", "inv.reject": "invReject_", "inv.list": "invList_", "inv.get": "invGet_", "inv.pdf": "invoicePdf_",
-  "fin.summary": "finSummary_", "pay.record": "payRecord_", "pay.void": "payVoid_", "pay.reconcile": "payReconcile_", "pay.list": "payList_",
+  "fin.summary": "finSummary_", "pay.record": "payRecord_", "pay.void": "payVoid_", "pay.delete": "payDelete_", "pay.reconcile": "payReconcile_", "pay.list": "payList_",
   "exp.create": "expCreate_", "exp.cancel": "expCancel_", "exp.list": "expList_", "rev.create": "revCreate_",
   "tenant.list": "tenantList_", "tenant.create": "tenantCreate_", "tenant.update": "tenantUpdate_", "tenant.delete": "tenantDelete_",
   "lease.list": "leaseList_", "lease.get": "leaseGet_", "lease.create": "leaseCreate_", "lease.update": "leaseUpdate_", "lease.activate": "leaseActivate_", "lease.notice": "leaseNotice_",
@@ -1981,7 +1981,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "39d3238a7979";
+var IMMO_BUILD_ = "270ddd11bad0";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -4436,6 +4436,18 @@ function payVoid_(p, a) {
   const reason = reqText_(a.reason, "Motif", 3, 300);
   withLock_(function () { dbUpdate_("Payments", pay.paymentId, { status: "VOID", voidedAt: nowIso_(), voidedBy: p.email, note: safeText_((pay.note ? pay.note + " | " : "") + "Annulé : " + reason, 500) }); paymentRefresh_(pay); });
   audit_("PAYMENT_VOIDED", "Payment", pay.paymentId, pay.organizationId, { reason: reason, amount: pay.amount });
+  return { ok: true };
+}
+/** Suppression définitive d'un paiement DÉJÀ ANNULÉ (erreur de saisie). Irréversible : confirmation « SUPPRIMER » et trace dans le journal. */
+function payDelete_(p, a) {
+  const pay = dbGet_("Payments", safeText_(a.paymentId, 120));
+  if (!pay || pay.kind === "SUBSCRIPTION") notFound_("Paiement");
+  const t = paymentTarget_(p, pay.refType, pay.refId, pay.kind);
+  assertOrgWritable_(t.organizationId);
+  assert_(pay.status === "VOID", "Seul un paiement annulé peut être supprimé : annulez-le d'abord.");
+  assert_(String(a.confirm || "") === "SUPPRIMER", "Tapez SUPPRIMER pour confirmer la suppression définitive.");
+  withLock_(function () { dbDelete_("Payments", pay.paymentId); });
+  audit_("PAYMENT_DELETED", "Payment", pay.paymentId, pay.organizationId, { kind: pay.kind, refType: pay.refType, refId: pay.refId, amount: pay.amount, paidAt: pay.paidAt, note: pay.note });
   return { ok: true };
 }
 /** Rapprochement bancaire MANUEL (aucune connexion bancaire automatique n'existe). */
@@ -12796,6 +12808,12 @@ function TEST_GROUPS_() {
         T.fails(TT, "lease.setDeposit", { leaseId: l.leaseId, deposit: 6000, reason: "Erreur" }, "FORBIDDEN");
         T.eq(T.call(O.tok, "lease.setDeposit", { leaseId: l.leaseId, deposit: 6000, reason: "Erreur de saisie" }).deposit, 6000, "caution corrigée");
         T.eq(T.call(O.tok, "lease.get", { leaseId: l.leaseId }).deposit, 6000, "nouveau montant sur le bail");
+        const dp = T.call(O.tok, "pay.record", { refType: "LEASE", refId: l.leaseId, kind: "DEPOSIT", amount: 600, paidAt: tDays_(0) }).paymentId;
+        T.fails(O.tok, "pay.delete", { paymentId: dp, confirm: "SUPPRIMER" }, "VALIDATION");
+        T.call(O.tok, "pay.void", { paymentId: dp, reason: "Montant erroné" });
+        T.fails(O.tok, "pay.delete", { paymentId: dp }, "VALIDATION");
+        T.fails(TT, "pay.delete", { paymentId: dp, confirm: "SUPPRIMER" }, "FORBIDDEN");
+        T.ok(T.call(O.tok, "pay.delete", { paymentId: dp, confirm: "SUPPRIMER" }).ok && !dbGet_("Payments", dp), "paiement annulé supprimé définitivement");
       }]
     ] },
     { name: "Missions confiées à l'agence (longue durée)", tests: [

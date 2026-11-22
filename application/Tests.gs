@@ -1354,6 +1354,12 @@ function TEST_GROUPS_() {
         T.fails(TT, "lease.setDeposit", { leaseId: l.leaseId, deposit: 6000, reason: "Erreur" }, "FORBIDDEN");
         T.eq(T.call(O.tok, "lease.setDeposit", { leaseId: l.leaseId, deposit: 6000, reason: "Erreur de saisie" }).deposit, 6000, "caution corrigée");
         T.eq(T.call(O.tok, "lease.get", { leaseId: l.leaseId }).deposit, 6000, "nouveau montant sur le bail");
+        const dp = T.call(O.tok, "pay.record", { refType: "LEASE", refId: l.leaseId, kind: "DEPOSIT", amount: 600, paidAt: tDays_(0) }).paymentId;
+        T.fails(O.tok, "pay.delete", { paymentId: dp, confirm: "SUPPRIMER" }, "VALIDATION");
+        T.call(O.tok, "pay.void", { paymentId: dp, reason: "Montant erroné" });
+        T.fails(O.tok, "pay.delete", { paymentId: dp }, "VALIDATION");
+        T.fails(TT, "pay.delete", { paymentId: dp, confirm: "SUPPRIMER" }, "FORBIDDEN");
+        T.ok(T.call(O.tok, "pay.delete", { paymentId: dp, confirm: "SUPPRIMER" }).ok && !dbGet_("Payments", dp), "paiement annulé supprimé définitivement");
       }]
     ] },
     { name: "Missions confiées à l'agence (longue durée)", tests: [
