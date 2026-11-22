@@ -1980,7 +1980,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "c5bcc7ab4596";
+var IMMO_BUILD_ = "f78b5b5a924f";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -2246,7 +2246,7 @@ var TABLES_SRC = {
     cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t|birthDate#d,birthPlace,idNumber,idExpiry#d,address,idDocumentId,idDocumentBackId,coFullName,coEmail,coPhone,coNationality,coIdType,coIdNumber,coIdExpiry#d,coBirthDate#d,coBirthPlace,coAddress,coIdDocumentId,coIdDocumentBackId" },
   Leases: { pk: "leaseId", idp: "lea", org: "organizationId", req: "propertyId,tenantId,startDate,monthlyRent",
     enums: { status: ["DRAFT", "ACTIVE", "NOTICE", "ENDED", "RENEWED", "CANCELLED"] },
-    cols: "leaseId,organizationId,propertyId,tenantId,startDate#d,endDate#d,durationMonths#n,monthlyRent#n,charges#n,deposit#n,dueDay#n,indexationRate#n,nextIndexationDate#d,terms,documentId,status,noticeDate#d,noticeBy,depositStatus,depositReturned#n,depositDeductions#n,renewedFromLeaseId,endReason,createdAt#t,createdBy,updatedAt#t,updatedBy|automationJson#j" },
+    cols: "leaseId,organizationId,propertyId,tenantId,startDate#d,endDate#d,durationMonths#n,monthlyRent#n,charges#n,deposit#n,dueDay#n,indexationRate#n,nextIndexationDate#d,terms,documentId,status,noticeDate#d,noticeBy,depositStatus,depositReturned#n,depositDeductions#n,renewedFromLeaseId,endReason,createdAt#t,createdBy,updatedAt#t,updatedBy|automationJson#j,noticeMonths#n,chargesIncluded" },
   RentSchedules: { pk: "scheduleId", idp: "rsc", org: "organizationId", req: "leaseId,period", enums: { status: ["OPEN", "CANCELLED"] },
     cols: "scheduleId,organizationId,propertyId,leaseId,period,dueDate#d,rentAmount#n,chargesAmount#n,amountDue#n,status,createdAt#t,uniqueKey" },
   // Envois au locataire (appels de loyer, relances, quittances, documents) : une ligne par envoi, clé unique contre les doublons.
@@ -5182,7 +5182,8 @@ function laContractWarnings_(c, inp) {
     if (num_(l.indexationRate) > 0) w.push("Le bail prévoit une indexation annuelle de " + num_(l.indexationRate) + " % : au Maroc, la loi n° 67-12 (articles 31 à 38) ne permet de réviser le loyer qu'au plus tôt tous les trois ans, dans la limite de " + (inp.usage === "MIXED" ? "8 % (habitation) et 10 % (autres locaux)" : "8 % pour l'habitation") + ". Le contrat reprend la règle légale ; ajustez l'indexation du bail dans DarPilot.");
     w.push("Faites signer le contrat en deux exemplaires et légaliser les signatures pour lui donner date certaine.");
   } else {
-    const maxDep = inp.furnished ? 2 : 1;
+    const maxDep = inp.furnished ? 2 : 1, legal = inp.furnished ? 1 : 3, nm = parseInt(l.noticeMonths, 10) || 0;
+    if (nm > legal) w.push("Préavis du locataire de " + nm + " mois : la loi le fixe à " + legal + " mois pour un logement " + (inp.furnished ? "meublé" : "vide") + " ; une clause plus longue est réputée non écrite.");
     if (rent > 0 && dep > rent * maxDep + 0.01) w.push("Dépôt de garantie de " + laMoney_(dep) + " : la loi limite le dépôt à " + maxDep + " mois de loyer hors charges pour un logement " + (inp.furnished ? "meublé" : "vide") + ".");
     if (months !== null && months < (inp.furnished ? 11.9 : 35.9)) w.push("Durée de " + Math.round(months) + " mois : la durée minimale est de " + (inp.furnished ? "1 an pour un meublé (9 mois pour un étudiant)" : "3 ans pour un logement vide loué par un particulier (6 ans par une société)") + ".");
     w.push("Annexez les diagnostics obligatoires (dossier de diagnostic technique) et la notice d'information prévue par l'arrêté du 29 mai 2015.");
@@ -5237,13 +5238,17 @@ function laContractTemplate_(c, inp) {
       : "La durée d'un bail vide est d'au moins trois ans lorsque le bailleur est une personne physique (ou une société civile familiale) et de six ans lorsqu'il est une personne morale. À défaut de congé, il est reconduit tacitement pour la même durée."));
   add("Loyer et paiement", "Le loyer mensuel est fixé à " + laMoney_(rent) + (ch > 0 ? " hors charges" : "") + ".\n\nIl est payable d'avance, au plus tard le " + (num_(l.dueDay) || 5) + " de chaque mois, par virement, carte bancaire ou tout autre moyen convenu. " +
     "Un appel de loyer est adressé au locataire avant chaque échéance ; le bailleur lui remet gratuitement une quittance détaillant le loyer et les charges pour chaque paiement intégral" + (ma ? " (article 11 de la loi n° 67-12)." : "."));
-  add("Charges et consommations", (ch > 0 ? "En sus du loyer, le locataire verse chaque mois une provision pour charges de " + laMoney_(ch) +
+  const incl = String(l.chargesIncluded || "").trim(), nm = parseInt(l.noticeMonths, 10) || 0;
+  const monthsTxt = function (n) { return ["", "un (1) mois", "deux (2) mois", "trois (3) mois", "quatre (4) mois", "cinq (5) mois", "six (6) mois"][n] || n + " mois"; };
+  if (incl) add("Charges et consommations", "En sus du loyer, le locataire verse chaque mois un forfait de charges de " + laMoney_(ch) + ", qui comprend : " + incl + ". " +
+    "Ce forfait n'est pas régularisé. Les autres consommations et abonnements (téléphone, internet, etc.) sont à la charge du locataire, sauf accord contraire écrit.");
+  else add("Charges et consommations", (ch > 0 ? "En sus du loyer, le locataire verse chaque mois une provision pour charges de " + laMoney_(ch) +
       (ma ? ", destinée aux charges communes prévues au présent contrat (entretien des parties communes, gardiennage, ascenseur le cas échéant)." : fu ? ", sous forme de provision régularisée chaque année sur justificatifs (ou de forfait si les parties l'ont expressément convenu)." : " ; elle fait l'objet d'une régularisation annuelle sur justificatifs, les pièces étant tenues à la disposition du locataire.") + "\n\n" : "") +
     "Les consommations individuelles (eau, électricité, gaz, téléphone, internet) sont à la charge du locataire, qui souscrit les abonnements correspondants, sauf accord contraire écrit.");
   add("Révision du loyer", ma ? "Conformément aux articles 31 à 38 de la loi n° 67-12, le loyer ne peut être révisé qu'au terme d'une période d'au moins trois ans à compter de sa dernière fixation, et l'augmentation ne peut excéder 8 % pour un local à usage d'habitation" + (inp.usage === "MIXED" ? " (10 % pour la partie à usage professionnel)" : "") + ". À défaut d'accord entre les parties, la révision est fixée par le tribunal compétent."
     : (num_(l.indexationRate) > 0 ? "Le loyer est révisé chaque année à la date anniversaire du bail selon la variation de l'indice de référence des loyers (IRL) publié par l'INSEE, l'indice de référence étant celui du dernier trimestre connu à la date de signature du bail. La révision n'est pas rétroactive : le bailleur dispose d'un an pour la demander."
       : "Le présent bail ne comporte pas de clause de révision annuelle : le loyer n'est pas révisé en cours de bail."));
-  add("Dépôt de garantie", (dep > 0 ? "Un dépôt de garantie de " + laMoney_(dep) + (rent > 0 ? " (soit " + Math.round(dep / rent * 10) / 10 + " mois de loyer)" : "") + " est versé à la signature. " : "Aucun dépôt de garantie n'est demandé. ") +
+  add("Dépôt de garantie", (dep > 0 ? "Un dépôt de garantie de " + laMoney_(dep) + (rent > 0 ? " (soit " + Math.round(dep / rent * 10) / 10 + " mois de loyer" + (ch > 0 ? " hors charges" : "") + ")" : "") + " est versé à la signature. " : "Aucun dépôt de garantie n'est demandé. ") +
     (ma ? "Conformément à l'article 20 de la loi n° 67-12, son montant ne peut excéder deux mois de loyer. Il est restitué au locataire dans un délai d'un mois à compter de la remise des clés, déduction faite des sommes dont il serait redevable et dûment justifiées."
       : "Son montant ne peut excéder " + (fu ? "deux mois" : "un mois") + " de loyer hors charges. Il n'est pas productif d'intérêts et ne peut être imputé sur le dernier loyer. Il est restitué dans un délai d'un mois à compter de la remise des clés si l'état des lieux de sortie est conforme à celui d'entrée, de deux mois dans le cas contraire, déduction faite des sommes restant dues et justifiées ; à défaut, le solde est majoré de 10 % du loyer mensuel hors charges pour chaque mois de retard commencé."));
   add("Obligations des parties", "Le bailleur délivre un logement décent, en bon état d'usage et de réparation, avec les équipements prévus en bon état de fonctionnement ; il assure au locataire la jouissance paisible des lieux, les garantit contre les vices et défauts qui en empêchent l'usage, et effectue les réparations autres que locatives.\n\n" +
@@ -5251,12 +5256,12 @@ function laContractTemplate_(c, inp) {
     "ne transforme pas les lieux sans l'accord écrit du bailleur ; et laisse exécuter les travaux nécessaires." + (ma ? "" : " Il s'assure contre les risques locatifs et en justifie chaque année."));
   // Congé : délais légaux et formes de notification (cœur de la demande).
   if (ma) add("Congé, préavis et formes de notification",
-    "Congé donné par le locataire : le locataire peut mettre fin au bail à tout moment en respectant un préavis d'un (1) mois. Le loyer et les charges restent dus jusqu'à l'expiration du préavis.\n\n" +
+    "Congé donné par le locataire : le locataire peut mettre fin au bail à tout moment en respectant un préavis de " + monthsTxt(nm || 1) + ". Le loyer et les charges restent dus jusqu'à l'expiration du préavis.\n\n" +
     "Congé donné par le bailleur : conformément aux articles 44 à 52 de la loi n° 67-12, le bailleur ne peut donner congé que pour l'un des motifs prévus par la loi (notamment la reprise du logement pour y habiter lui-même ou y loger un proche dans les conditions légales, la démolition ou des travaux importants nécessitant l'évacuation des lieux, ou un manquement grave du locataire). " +
     "Le congé est écrit, motivé, porte sur la totalité des lieux et accorde au locataire un délai d'au moins deux (2) mois à compter de sa notification. Il ouvre droit, le cas échéant, aux indemnités prévues par la loi et, à défaut d'exécution, doit être validé par le tribunal.\n\n" +
     "Forme : tout congé est notifié par écrit avec date certaine — par l'intermédiaire d'un commissaire judiciaire (huissier de justice) conformément aux articles 37 à 39 du Code de procédure civile, par lettre recommandée avec accusé de réception, ou par remise en main propre contre décharge datée et signée. Le délai court à compter de la réception.");
   else add("Congé, préavis et formes de notification",
-    "Congé donné par le locataire : le locataire peut donner congé à tout moment. Le préavis est " + (fu ? "d'un (1) mois." : "de trois (3) mois ; il est réduit à un (1) mois lorsque le logement est situé en zone tendue, ou en cas d'obtention d'un premier emploi, de mutation, de perte d'emploi ou de nouvel emploi consécutif à une perte d'emploi, d'état de santé justifiant un changement de domicile, pour le bénéficiaire du RSA ou de l'AAH, ou en cas d'attribution d'un logement social ; le locataire précise alors le motif et le justifie lors de l'envoi du congé.") +
+    "Congé donné par le locataire : le locataire peut donner congé à tout moment. Le préavis est " + (nm ? "de " + monthsTxt(nm) + "." : fu ? "d'un (1) mois." : "de trois (3) mois ; il est réduit à un (1) mois lorsque le logement est situé en zone tendue, ou en cas d'obtention d'un premier emploi, de mutation, de perte d'emploi ou de nouvel emploi consécutif à une perte d'emploi, d'état de santé justifiant un changement de domicile, pour le bénéficiaire du RSA ou de l'AAH, ou en cas d'attribution d'un logement social ; le locataire précise alors le motif et le justifie lors de l'envoi du congé.") +
     " Le loyer et les charges restent dus pendant le préavis, sauf si le logement est reloué plus tôt avec l'accord du bailleur.\n\n" +
     "Congé donné par le bailleur : le bailleur ne peut donner congé que pour le terme du bail, avec un préavis de " + (fu ? "trois (3) mois" : "six (6) mois") + ", et uniquement pour reprendre le logement afin d'y habiter ou d'y loger un proche dans les conditions légales, pour le vendre" + (fu ? "" : " (le locataire bénéficiant alors d'un droit de préemption)") + ", ou pour un motif légitime et sérieux, notamment l'inexécution par le locataire de l'une de ses obligations. Le congé indique son motif." +
     (fu ? "" : " Le locataire âgé de plus de 65 ans et aux ressources modestes bénéficie de la protection prévue par l'article 15 III de la loi.") + "\n\n" +
@@ -5840,6 +5845,7 @@ function leaseOut_(p, l, props, tenants) {
   const sched = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(l.leaseId) && s.status === "OPEN"; }).map(function (s) { return rentStatus_(s); });
   return { leaseId: l.leaseId, propertyId: l.propertyId, propertyName: prop.name, tenantId: l.tenantId, tenantName: tenantName_(t), tenantEmail: t.email, coTenantName: t.coFullName || "", coTenantEmail: t.coEmail || "", tenantPhone: t.phone, startDate: l.startDate, endDate: l.endDate,
     durationMonths: l.durationMonths, monthlyRent: l.monthlyRent, charges: l.charges, deposit: l.deposit, dueDay: l.dueDay, indexationRate: l.indexationRate, nextIndexationDate: l.nextIndexationDate, terms: l.terms,
+    noticeMonths: l.noticeMonths, chargesIncluded: l.chargesIncluded || "",
     status: l.status, noticeDate: l.noticeDate, noticeBy: l.noticeBy, depositStatus: l.depositStatus, depositHeld: leaseDepositHeld_(l.leaseId), depositReturned: l.depositReturned, depositDeductions: l.depositDeductions,
     documentId: l.documentId, endReason: l.endReason, renewedFromLeaseId: l.renewedFromLeaseId,
     arrears: sumBy_(sched.filter(function (s) { return s.status === "LATE"; }), function (s) { return s.remaining; }), lateCount: sched.filter(function (s) { return s.status === "LATE"; }).length,
@@ -5961,6 +5967,9 @@ function leaseInput_(a, l) {
   if (a.indexationRate !== undefined) o.indexationRate = a.indexationRate === "" ? 0 : rate_(a.indexationRate, "Indexation");
   if (a.nextIndexationDate !== undefined) o.nextIndexationDate = a.nextIndexationDate ? dateOnly_(a.nextIndexationDate, "Date d'indexation") : "";
   if (a.terms !== undefined) o.terms = safeText_(a.terms, 20000);
+  // Préavis du locataire (en mois, vide = délai légal) et charges comprises dans le forfait mensuel (ex. eau, électricité, charges communes).
+  if (a.noticeMonths !== undefined) { const n = a.noticeMonths === "" || a.noticeMonths === null ? "" : parseInt(a.noticeMonths, 10); assert_(n === "" || (n >= 1 && n <= 6), "Préavis du locataire : de 1 à 6 mois."); o.noticeMonths = n; }
+  if (a.chargesIncluded !== undefined) o.chargesIncluded = safeText_(a.chargesIncluded, 300).trim();
   const s = o.startDate || (l && l.startDate), e = o.endDate !== undefined ? o.endDate : (l && l.endDate);
   if (s && e) { assert_(e > s, "La fin doit être postérieure au début."); o.durationMonths = Math.max(1, Math.round(diffDays_(s, e) / 30.44)); }
   else if (o.endDate === "") o.durationMonths = "";
@@ -12691,6 +12700,16 @@ function TEST_GROUPS_() {
         rentAutomationJob_({ force: true, batch: 50 });
         const call = TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return m.to === e1 && /Appel de loyer/.test(m.subject); })[0];
         T.ok(call && call.cc === e2 && /Karim Bennani et Salma Bennani/.test(call.body), "appel de loyer aux deux noms, second locataire en copie");
+        // Préavis de 3 mois et forfait de charges (électricité, eau, charges communes, ordures), modifiables sur un bail actif
+        T.fails(O.tok, "lease.update", { leaseId: l.leaseId, noticeMonths: 9 }, "VALIDATION");
+        T.fails(O.tok, "lease.update", { leaseId: l.leaseId, deposit: 1 }, "VALIDATION");
+        T.call(O.tok, "lease.update", { leaseId: l.leaseId, noticeMonths: 3, chargesIncluded: "électricité, eau, charges communes et ordures ménagères" });
+        const lg = T.call(O.tok, "lease.get", { leaseId: l.leaseId });
+        T.ok(lg.noticeMonths === 3 && /ordures/.test(lg.chargesIncluded), "préavis et charges comprises enregistrés");
+        const l2 = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: tDays_(400), monthlyRent: 4000, charges: 600, deposit: 4000, dueDay: 1, noticeMonths: 3, chargesIncluded: "électricité, eau, charges communes et ordures ménagères" });
+        const d2 = T.call(O.tok, "leasedoc.draft", { leaseId: l2.leaseId, docType: "LEASE_CONTRACT", furnished: true });
+        const h2 = Utilities.newBlob(Utilities.base64Decode(T.call(O.tok, "leasedoc.finalize", { leaseDocId: d2.leaseDocId }).base64)).getDataAsString();
+        T.ok(/préavis de trois \(3\) mois/.test(h2) && /forfait de charges/.test(h2) && /ordures ménagères/.test(h2) && /1 mois de loyer hors charges/.test(h2), "contrat : préavis de 3 mois, forfait de charges, caution d'un mois hors charges");
         T.call(O.tok, "tenant.update", { tenantId: t.tenantId, coFullName: "", coEmail: "", coIdNumber: "" });
         T.eq(T.call(O.tok, "lease.get", { leaseId: l.leaseId }).tenantName, "Karim Bennani", "second locataire retiré");
       }]

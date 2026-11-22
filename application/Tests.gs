@@ -1389,6 +1389,16 @@ function TEST_GROUPS_() {
         rentAutomationJob_({ force: true, batch: 50 });
         const call = TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return m.to === e1 && /Appel de loyer/.test(m.subject); })[0];
         T.ok(call && call.cc === e2 && /Karim Bennani et Salma Bennani/.test(call.body), "appel de loyer aux deux noms, second locataire en copie");
+        // Préavis de 3 mois et forfait de charges (électricité, eau, charges communes, ordures), modifiables sur un bail actif
+        T.fails(O.tok, "lease.update", { leaseId: l.leaseId, noticeMonths: 9 }, "VALIDATION");
+        T.fails(O.tok, "lease.update", { leaseId: l.leaseId, deposit: 1 }, "VALIDATION");
+        T.call(O.tok, "lease.update", { leaseId: l.leaseId, noticeMonths: 3, chargesIncluded: "électricité, eau, charges communes et ordures ménagères" });
+        const lg = T.call(O.tok, "lease.get", { leaseId: l.leaseId });
+        T.ok(lg.noticeMonths === 3 && /ordures/.test(lg.chargesIncluded), "préavis et charges comprises enregistrés");
+        const l2 = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: tDays_(400), monthlyRent: 4000, charges: 600, deposit: 4000, dueDay: 1, noticeMonths: 3, chargesIncluded: "électricité, eau, charges communes et ordures ménagères" });
+        const d2 = T.call(O.tok, "leasedoc.draft", { leaseId: l2.leaseId, docType: "LEASE_CONTRACT", furnished: true });
+        const h2 = Utilities.newBlob(Utilities.base64Decode(T.call(O.tok, "leasedoc.finalize", { leaseDocId: d2.leaseDocId }).base64)).getDataAsString();
+        T.ok(/préavis de trois \(3\) mois/.test(h2) && /forfait de charges/.test(h2) && /ordures ménagères/.test(h2) && /1 mois de loyer hors charges/.test(h2), "contrat : préavis de 3 mois, forfait de charges, caution d'un mois hors charges");
         T.call(O.tok, "tenant.update", { tenantId: t.tenantId, coFullName: "", coEmail: "", coIdNumber: "" });
         T.eq(T.call(O.tok, "lease.get", { leaseId: l.leaseId }).tenantName, "Karim Bennani", "second locataire retiré");
       }]

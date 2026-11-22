@@ -66,6 +66,7 @@ function leaseOut_(p, l, props, tenants) {
   const sched = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(l.leaseId) && s.status === "OPEN"; }).map(function (s) { return rentStatus_(s); });
   return { leaseId: l.leaseId, propertyId: l.propertyId, propertyName: prop.name, tenantId: l.tenantId, tenantName: tenantName_(t), tenantEmail: t.email, coTenantName: t.coFullName || "", coTenantEmail: t.coEmail || "", tenantPhone: t.phone, startDate: l.startDate, endDate: l.endDate,
     durationMonths: l.durationMonths, monthlyRent: l.monthlyRent, charges: l.charges, deposit: l.deposit, dueDay: l.dueDay, indexationRate: l.indexationRate, nextIndexationDate: l.nextIndexationDate, terms: l.terms,
+    noticeMonths: l.noticeMonths, chargesIncluded: l.chargesIncluded || "",
     status: l.status, noticeDate: l.noticeDate, noticeBy: l.noticeBy, depositStatus: l.depositStatus, depositHeld: leaseDepositHeld_(l.leaseId), depositReturned: l.depositReturned, depositDeductions: l.depositDeductions,
     documentId: l.documentId, endReason: l.endReason, renewedFromLeaseId: l.renewedFromLeaseId,
     arrears: sumBy_(sched.filter(function (s) { return s.status === "LATE"; }), function (s) { return s.remaining; }), lateCount: sched.filter(function (s) { return s.status === "LATE"; }).length,
@@ -187,6 +188,9 @@ function leaseInput_(a, l) {
   if (a.indexationRate !== undefined) o.indexationRate = a.indexationRate === "" ? 0 : rate_(a.indexationRate, "Indexation");
   if (a.nextIndexationDate !== undefined) o.nextIndexationDate = a.nextIndexationDate ? dateOnly_(a.nextIndexationDate, "Date d'indexation") : "";
   if (a.terms !== undefined) o.terms = safeText_(a.terms, 20000);
+  // Préavis du locataire (en mois, vide = délai légal) et charges comprises dans le forfait mensuel (ex. eau, électricité, charges communes).
+  if (a.noticeMonths !== undefined) { const n = a.noticeMonths === "" || a.noticeMonths === null ? "" : parseInt(a.noticeMonths, 10); assert_(n === "" || (n >= 1 && n <= 6), "Préavis du locataire : de 1 à 6 mois."); o.noticeMonths = n; }
+  if (a.chargesIncluded !== undefined) o.chargesIncluded = safeText_(a.chargesIncluded, 300).trim();
   const s = o.startDate || (l && l.startDate), e = o.endDate !== undefined ? o.endDate : (l && l.endDate);
   if (s && e) { assert_(e > s, "La fin doit être postérieure au début."); o.durationMonths = Math.max(1, Math.round(diffDays_(s, e) / 30.44)); }
   else if (o.endDate === "") o.durationMonths = "";
