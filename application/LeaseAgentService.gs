@@ -408,7 +408,8 @@ function laDefaultRooms_(prop, furnished) {
 function laDefaultKeys_() { return [{ label: "Clés de la porte d'entrée", count: "" }, { label: "Clés de la boîte aux lettres", count: "" }, { label: "Badges ou télécommandes", count: "" }]; }
 function inspectionOut_(r, full) {
   const o = { inspectionId: r.inspectionId, leaseId: r.leaseId, type: r.type, inspectionDate: r.inspectionDate, status: r.status, engine: r.engine, documentId: r.documentId,
-    createdAt: r.createdAt, updatedAt: r.updatedAt, finalizedAt: r.finalizedAt, sentAt: r.sentAt, sentTo: r.sentTo };
+    createdAt: r.createdAt, updatedAt: r.updatedAt, finalizedAt: r.finalizedAt, sentAt: r.sentAt, sentTo: r.sentTo,
+    delegateStatus: r.status === "DRAFT" ? (r.delegateStatus || "") : "", delegatedAt: r.delegatedAt || "", tenantUpdatedAt: r.tenantUpdatedAt || "", tenantSubmittedAt: r.tenantSubmittedAt || "" };
   if (full) { o.rooms = parseJson_(r.roomsJson, []); o.meters = parseJson_(r.metersJson, {}); o.keys = parseJson_(r.keysJson, []); o.generalNote = r.generalNote; o.attendees = r.attendees; o.summary = parseJson_(r.summaryJson, null);
     o.tenantNewAddress = r.tenantNewAddress || ""; o.entryDate = r.entryDate || ""; o.metersEntry = parseJson_(r.metersEntryJson, {});
     o.signatures = { landlord: r.landlordSignDocId ? { name: r.landlordSignName, at: r.landlordSignedAt, documentId: r.landlordSignDocId } : null,
@@ -416,13 +417,13 @@ function inspectionOut_(r, full) {
   return o;
 }
 function inspectionsOf_(leaseId, finalOnly) {
-  return dbAll_("LeaseInspections").filter(function (r) { return String(r.leaseId) === String(leaseId) && r.status !== "CANCELLED" && (!finalOnly || r.status === "FINAL"); })
+  return dbAll_("LeaseInspections").filter(function (r) { return String(r.leaseId) === String(leaseId) && r.status !== "CANCELLED" && (!finalOnly || r.status === "FINAL" || inspectionDelegated_(r)); })
     .sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); }).map(function (r) { return inspectionOut_(r, false); });
 }
 function inspectionLoad_(p, id, cap) {
   const r = dbGet_("LeaseInspections", safeText_(id, 120)); if (!r || r.status === "CANCELLED") notFound_("État des lieux");
   const c = laCtx_(p, r.leaseId, cap);
-  if (c.self) assert_(r.status === "FINAL", "État des lieux non disponible.", "FORBIDDEN");
+  if (c.self && !canProp_(p, c.prop, "inspection.manage")) assert_(r.status === "FINAL" || inspectionDelegated_(r), "État des lieux non disponible.", "FORBIDDEN");
   return { r: r, c: c };
 }
 function inspectionEntryOf_(leaseId) {
@@ -451,6 +452,8 @@ function inspectionCreate_(p, a) {
 function inspectionGet_(p, a) {
   const x = inspectionLoad_(p, a.inspectionId, "lease.view"), o = inspectionOut_(x.r, true);
   o.propertyName = x.c.prop.name; o.tenantName = x.c.t.fullName; o.canManage = canProp_(p, x.c.prop, "inspection.manage"); o.canLetter = canProp_(p, x.c.prop, "lease.manage"); o.ai = !!aiConfig_(); o.deposit = num_(x.c.l.deposit);
+  o.tenantEdit = !o.canManage && x.c.self && x.r.status === "DRAFT" && x.r.delegateStatus === "OPEN"; o.tenantEmail = x.c.t.email || "";
+  if (!o.canManage) { o.ai = false; o.deposit = 0; }
   return o;
 }
 function laCond_(v) { v = String(v || ""); return LA_CONDITIONS_.indexOf(v) >= 0 ? v : ""; }
@@ -645,6 +648,98 @@ function inspectionCancel_(p, a) {
   assert_(x.r.status === "DRAFT", "Un état des lieux validé ne peut pas être supprimé.");
   dbUpdate_("LeaseInspections", x.r.inspectionId, { status: "CANCELLED", updatedAt: nowIso_(), updatedBy: p.email });
   return { ok: true };
+}
+
+/* ------------------------- État des lieux confié au locataire ------------------------- */
+/** Un brouillon confié au locataire (en cours ou renvoyé) lui est visible ; il ne peut le remplir que tant qu'il est « OPEN ». */
+function inspectionDelegated_(r) { return r.status === "DRAFT" && ["OPEN", "SUBMITTED"].indexOf(String(r.delegateStatus || "")) >= 0; }
+/** Le bailleur confie le brouillon au locataire : il le remplit depuis son espace (états, observations, photos, compteurs, clés). */
+function inspectionDelegate_(p, a) {
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
+  assert_(x.r.status === "DRAFT", "État des lieux déjà validé.");
+  const email = x.c.t.email ? normalizeEmail_(x.c.t.email) : "";
+  assert_(email, "Le locataire n'a pas d'adresse e-mail : ajoutez-la dans « Locataires » pour lui confier l'état des lieux.");
+  dbUpdate_("LeaseInspections", x.r.inspectionId, { delegateStatus: "OPEN", delegatedAt: nowIso_(), delegatedBy: p.email, tenantSubmittedAt: "", updatedAt: nowIso_(), updatedBy: p.email });
+  // Compte locataire : invitation automatique si la personne n'a pas encore accès à DarPilot.
+  const hasAccount = !!x.c.t.userId || dbAll_("Users").some(function (u) { return normalizeEmail_(u.email) === email && dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(u.userId) && r.role === "TENANT" && r.status === "ACTIVE"; }); });
+  let invited = false, inviteError = "";
+  if (!hasAccount) {
+    const pending = dbAll_("Invitations").some(function (i) { return normalizeEmail_(i.email) === email && String(i.organizationId) === String(x.c.l.organizationId) && i.role === "TENANT" && i.status === "PENDING" && parseTs_(i.expiresAt) && parseTs_(i.expiresAt).getTime() > Date.now(); });
+    if (pending) invited = true;
+    else try {
+      const org = assertCanGrantRole_(p, x.c.l.organizationId, "TENANT"); assertQuota_(x.c.l.organizationId, "users");
+      const inv = invitationInsertAndSend_(p, { email: email, displayName: x.c.t.fullName, organizationId: x.c.l.organizationId, role: "TENANT", propertyId: x.c.l.propertyId }, org);
+      invited = !!inv.emailSent; if (!inv.emailSent) inviteError = inv.emailError || "e-mail non envoyé";
+    } catch (e) { inviteError = e.message; }
+  }
+  const label = x.r.type === "EXIT" ? "l'état des lieux de sortie" : "l'état des lieux d'entrée";
+  let sent = false;
+  try {
+    const r = sendMailSafe_(email, "État des lieux à compléter — " + (x.c.prop.name || ""), "Bonjour " + (x.c.t.fullName || "") + ",\n\n" + (x.c.org.name || "Votre bailleur") + " vous invite à remplir " + label +
+      " du logement « " + (x.c.prop.name || "") + " » depuis votre espace DarPilot (rubrique « Mon bail »).\n\nPour chaque pièce, indiquez l'état de chaque élément, ajoutez vos observations et prenez des photos. Relevez aussi les compteurs et comptez les clés. Quand vous avez terminé, appuyez sur « Envoyer au bailleur ».\n\n" +
+      "Votre bailleur relira l'état des lieux, puis vous le signerez tous les deux avant sa validation.\n\n" + (hasAccount ? "Ouvrir DarPilot : " + safeAppUrl_() + "#inspection/" + x.r.inspectionId : "Vous allez recevoir un second e-mail pour créer votre accès à DarPilot.") + "\n\nDarPilot",
+      "inspection-delegate:" + x.r.inspectionId + ":" + nowIso_(), x.c.l.organizationId);
+    sent = !!r.ok;
+  } catch (e) { sent = false; }
+  if (x.c.t.userId) notify_({ eventKey: "inspection-delegate:" + x.r.inspectionId + ":" + nowIso_(), userIds: [x.c.t.userId], type: "INSPECTION", organizationId: x.c.l.organizationId, email: false,
+    title: "État des lieux à compléter : " + (x.c.prop.name || ""), body: "Remplissez " + label + " avec vos photos, puis envoyez-le à votre bailleur.", link: "#inspection/" + x.r.inspectionId });
+  audit_("INSPECTION_DELEGATED", "Lease", x.c.l.leaseId, x.c.l.organizationId, { inspectionId: x.r.inspectionId, invited: invited, emailSent: sent });
+  const o = inspectionOut_(dbGet_("LeaseInspections", x.r.inspectionId), true);
+  o.sentTo = sent ? email : ""; o.invited = invited; o.hasAccount = hasAccount; o.inviteError = inviteError;
+  return o;
+}
+/** Le bailleur reprend la main : le locataire ne peut plus modifier le brouillon (il ne le voit plus). */
+function inspectionUndelegate_(p, a) {
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
+  assert_(x.r.status === "DRAFT", "État des lieux déjà validé.");
+  dbUpdate_("LeaseInspections", x.r.inspectionId, { delegateStatus: "", updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("INSPECTION_UNDELEGATED", "Lease", x.c.l.leaseId, x.c.l.organizationId, { inspectionId: x.r.inspectionId });
+  return inspectionOut_(dbGet_("LeaseInspections", x.r.inspectionId), true);
+}
+function inspectionTenantLoad_(p, id) {
+  const x = inspectionLoad_(p, id, "lease.view");
+  assert_(x.c.self, "Réservé au locataire.", "FORBIDDEN");
+  assert_(x.r.status === "DRAFT" && x.r.delegateStatus === "OPEN", "Cet état des lieux n'est plus modifiable : votre bailleur l'a repris ou validé.", "FORBIDDEN");
+  assertOrgWritable_(x.c.l.organizationId);
+  return x;
+}
+/**
+ * Enregistrement par le locataire. Il renseigne l'état, les observations et les photos des éléments existants, les compteurs, les clés
+ * et les observations générales. Les pièces, les éléments, la date, les retenues et le compte rendu restent du ressort du bailleur.
+ */
+function inspectionTenantSave_(p, a) {
+  const x = inspectionTenantLoad_(p, a.inspectionId), leaseId = x.r.leaseId;
+  const photos = function (ids, max) { const list = (Array.isArray(ids) ? ids : []).slice(0, max).map(function (d) { return safeText_(d, 120); }); assertDocsOf_(list, "LEASE", leaseId);
+    list.forEach(function (d) { assert_((dbGet_("Documents", d) || {}).category === "INSPECTION", "Photo non rattachée à l'état des lieux."); }); return list; };
+  const cur = parseJson_(x.r.roomsJson, []), inRooms = Array.isArray(a.rooms) ? a.rooms : [];
+  const rooms = cur.map(function (room, ri) {
+    const ir = inRooms[ri] || {}, inItems = Array.isArray(ir.items) ? ir.items : [];
+    return Object.assign({}, room, { note: ir.note !== undefined ? safeText_(ir.note, 1000) : room.note || "", photoDocIds: ir.photoDocIds !== undefined ? photos(ir.photoDocIds, 12) : room.photoDocIds || [],
+      items: (room.items || []).map(function (i, ii) { const ii2 = inItems[ii]; if (!ii2) return i;
+        return Object.assign({}, i, { condition: laCond_(ii2.condition), note: safeText_(ii2.note, 500), photoDocIds: photos(ii2.photoDocIds, 3) }); }) });
+  });
+  const patch = { roomsJson: rooms, tenantUpdatedAt: nowIso_(), updatedAt: nowIso_(), updatedBy: p.email,
+    landlordSignDocId: "", landlordSignName: "", landlordSignedAt: "", tenantSignDocId: "", tenantSignName: "", tenantSignedAt: "" };
+  if (a.meters !== undefined) { const m = a.meters || {}; patch.metersJson = { electricity: safeText_(m.electricity, 40), water: safeText_(m.water, 40), gas: safeText_(m.gas, 40), other: safeText_(m.other, 120) }; }
+  if (Array.isArray(a.keys)) { const ck = parseJson_(x.r.keysJson, []);
+    patch.keysJson = ck.map(function (k, i) { const n = a.keys[i]; if (!n) return k; return Object.assign({}, k, { count: n.count !== "" && n.count != null ? Math.max(0, Math.min(99, parseInt(n.count, 10) || 0)) : "" }); }); }
+  if (a.generalNote !== undefined) patch.generalNote = safeText_(a.generalNote, 3000);
+  if (x.r.type === "EXIT" && a.tenantNewAddress !== undefined) patch.tenantNewAddress = safeText_(a.tenantNewAddress, 300);
+  dbUpdate_("LeaseInspections", x.r.inspectionId, patch);
+  return inspectionOut_(dbGet_("LeaseInspections", x.r.inspectionId), true);
+}
+/** Le locataire a terminé : le bailleur est prévenu ; le brouillon reste visible au locataire en lecture seule. */
+function inspectionTenantSubmit_(p, a) {
+  const x = inspectionTenantLoad_(p, a.inspectionId);
+  const blank = parseJson_(x.r.roomsJson, []).reduce(function (n, room) { return n + (room.items || []).filter(function (i) { return !i.condition; }).length; }, 0);
+  assert_(!blank || a.allowIncomplete === true, blank + " élément(s) sans état : complétez-les (ou choisissez « Sans objet ») avant d'envoyer.");
+  dbUpdate_("LeaseInspections", x.r.inspectionId, { delegateStatus: "SUBMITTED", tenantSubmittedAt: nowIso_(), updatedAt: nowIso_(), updatedBy: p.email });
+  const label = x.r.type === "EXIT" ? "État des lieux de sortie" : "État des lieux d'entrée";
+  notify_({ eventKey: "inspection-submitted:" + x.r.inspectionId + ":" + nowIso_(), userIds: propertyManagers_(x.c.prop, "canManageLeases"), type: "INSPECTION", organizationId: x.c.l.organizationId,
+    title: label + " rempli par le locataire : " + (x.c.prop.name || ""), body: (x.c.t.fullName || "Le locataire") + " a terminé l'état des lieux" + (blank ? " (" + blank + " élément(s) sans état)" : "") +
+      ". Relisez-le, corrigez si besoin, puis signez-le ensemble et validez-le.", link: "#inspection/" + x.r.inspectionId });
+  audit_("INSPECTION_TENANT_SUBMITTED", "Lease", x.c.l.leaseId, x.c.l.organizationId, { inspectionId: x.r.inspectionId, blank: blank });
+  return inspectionOut_(dbGet_("LeaseInspections", x.r.inspectionId), true);
 }
 
 /* ------------------------- Signature sur l'écran ------------------------- */

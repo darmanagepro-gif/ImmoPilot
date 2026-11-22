@@ -1510,6 +1510,7 @@ function routes_() { return {
   "leasedoc.send": "leaseDocSend_", "leasedoc.cancel": "leaseDocCancel_",
   "inspection.create": "inspectionCreate_", "inspection.get": "inspectionGet_", "inspection.save": "inspectionSave_", "inspection.write": "inspectionWrite_", "inspection.pdf": "inspectionPdf_",
   "inspection.finalize": "inspectionFinalize_", "inspection.send": "inspectionSend_", "inspection.cancel": "inspectionCancel_", "inspection.sign": "inspectionSign_", "inspection.depositLetter": "inspectionDepositLetter_",
+  "inspection.delegate": "inspectionDelegate_", "inspection.undelegate": "inspectionUndelegate_", "inspection.tenantSave": "inspectionTenantSave_", "inspection.tenantSubmit": "inspectionTenantSubmit_",
   "plan.list": "planList_", "plan.save": "planSave_", "sub.assign": "subAssign_", "sub.recordPayment": "subRecordPayment_", "sub.setStatus": "subSetStatus_", "sub.list": "subList_",
   "sub.mine": function (p) { return subMine_(p); }, "provider.me": function (p) { return providerMe_(p); }, "provider.payoutInfo": function (p) { return providerPayoutInfo_(p); }, "provider.payoutSetup": function (p) { return providerPayoutSetup_(p); }, "inv.payOnline": "invPayOnline_", "commission.mine": function (p) { return commissionMine_(p); }, "commission.statements": function (p) { return commissionStatements_(p); }, "commission.statementPdf": "commissionStatementPdf_", "commission.adminList": "commissionAdminList_", "commission.resend": "commissionResend_", "commission.markPaid": "commissionMarkPaid_", "commission.cancel": "commissionCancel_", "commission.runMonthly": function (p) { return commissionRunMonthly_(p); }, "provider.save": "providerSave_", "provider.submit": function (p) { return providerSubmit_(p); }, "provider.reviewList": "providerReviewList_", "provider.reviewDoc": "providerReviewDoc_", "provider.decide": "providerDecide_", "sub.requestChange": "subRequestChange_", "sub.cardSetup": "subCardSetup_", "template.info": "templateInfo_", "template.preview": "templatePreview_", "sub.signStart": "subSignStart_", "sub.signConfirm": "subSignConfirm_", "sub.cardConfirm": "subCardConfirm_", "sub.cardRemove": "subCardRemove_", "sub.chargeNow": "subChargeNow_", "sub.contractPdf": "subContractPdf_", "assistant.kb": "assistantKb_", "assistant.ask": "assistantAsk_",
   "prospect.dashboard": "prospectDashboard_", "prospect.list": "prospectList_", "prospect.get": "prospectGet_", "prospect.save": "prospectSave_", "prospect.setStatus": "prospectSetStatus_",
@@ -1980,7 +1981,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "921e32b74550";
+var IMMO_BUILD_ = "cc3ad281e305";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -2019,7 +2020,7 @@ var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "DarPilot",
   VERSION: "2.8.0",
-  SCHEMA_VERSION: 20,
+  SCHEMA_VERSION: 21,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -2260,7 +2261,7 @@ var TABLES_SRC = {
   // États des lieux d'entrée et de sortie : relevé pièce par pièce, compteurs, clés, photos, rédaction de l'agent.
   LeaseInspections: { pk: "inspectionId", idp: "edl", org: "organizationId", req: "leaseId,type",
     enums: { type: ["ENTRY", "EXIT"], status: ["DRAFT", "FINAL", "CANCELLED"] },
-    cols: "inspectionId,organizationId,propertyId,leaseId,type,inspectionDate#d,status,roomsJson#j,metersJson#j,keysJson#j,generalNote,attendees,summaryJson#j,engine,documentId,createdAt#t,createdBy,updatedAt#t,updatedBy,finalizedAt#t,finalizedBy,sentAt#t,sentTo|tenantNewAddress,entryDate#d,metersEntryJson#j,landlordSignDocId,landlordSignName,landlordSignedAt#t,tenantSignDocId,tenantSignName,tenantSignedAt#t,signIp" },
+    cols: "inspectionId,organizationId,propertyId,leaseId,type,inspectionDate#d,status,roomsJson#j,metersJson#j,keysJson#j,generalNote,attendees,summaryJson#j,engine,documentId,createdAt#t,createdBy,updatedAt#t,updatedBy,finalizedAt#t,finalizedBy,sentAt#t,sentTo,delegateStatus,delegatedAt#t,delegatedBy,tenantUpdatedAt#t,tenantSubmittedAt#t|tenantNewAddress,entryDate#d,metersEntryJson#j,landlordSignDocId,landlordSignName,landlordSignedAt#t,tenantSignDocId,tenantSignName,tenantSignedAt#t,signIp" },
   Expenses: { pk: "expenseId", idp: "exp", org: "organizationId", req: "category,amount", enums: { status: ["PLANNED", "INVOICED", "PAID", "CANCELLED"] },
     cols: "expenseId,organizationId,propertyId,category,description,supplier,amount#n,vatAmount#n,currency,expenseDate#d,status,paidAt#t,refType,refId,uniqueKey,documentId,createdAt#t,createdBy" },
   RevenueRecords: { pk: "revenueId", idp: "rev", org: "organizationId", req: "category,amount", enums: { status: ["EXPECTED", "RECEIVED", "CANCELLED"] },
@@ -4012,7 +4013,8 @@ function docOwnerCtx_(p, ownerType, ownerId, category) {
     const pr = setProp(propId); if (!pr) return ctx;
     const self = l && myTenantIds_(p).indexOf(String(l.tenantId)) >= 0;
     ctx.canRead = canProp_(p, pr, "lease.view") || canProp_(p, pr, "finance.view") || canProp_(p, pr, "inspection.manage") || !!self;
-    ctx.canWrite = canProp_(p, pr, "lease.manage") || canProp_(p, pr, "inspection.manage") || canProp_(p, pr, "rent.manage") || canProp_(p, pr, "finance.manage") || (self && category === "PAYMENT_PROOF");
+    ctx.canWrite = canProp_(p, pr, "lease.manage") || canProp_(p, pr, "inspection.manage") || canProp_(p, pr, "rent.manage") || canProp_(p, pr, "finance.manage") || (self && category === "PAYMENT_PROOF") ||
+      (self && category === "INSPECTION" && dbAll_("LeaseInspections").some(function (r) { return String(r.leaseId) === String(l.leaseId) && r.status === "DRAFT" && r.delegateStatus === "OPEN"; }));
   } else if (ownerType === "TENANT") {
     const t = dbGet_("Tenants", ownerId); if (!t) return ctx; ctx.organizationId = t.organizationId; ctx.sensitive = true;
     ctx.canRead = hasOrgCap_(p, t.organizationId, "lease.manage") || myTenantIds_(p).indexOf(String(t.tenantId)) >= 0;
@@ -5500,7 +5502,8 @@ function laDefaultRooms_(prop, furnished) {
 function laDefaultKeys_() { return [{ label: "Clés de la porte d'entrée", count: "" }, { label: "Clés de la boîte aux lettres", count: "" }, { label: "Badges ou télécommandes", count: "" }]; }
 function inspectionOut_(r, full) {
   const o = { inspectionId: r.inspectionId, leaseId: r.leaseId, type: r.type, inspectionDate: r.inspectionDate, status: r.status, engine: r.engine, documentId: r.documentId,
-    createdAt: r.createdAt, updatedAt: r.updatedAt, finalizedAt: r.finalizedAt, sentAt: r.sentAt, sentTo: r.sentTo };
+    createdAt: r.createdAt, updatedAt: r.updatedAt, finalizedAt: r.finalizedAt, sentAt: r.sentAt, sentTo: r.sentTo,
+    delegateStatus: r.status === "DRAFT" ? (r.delegateStatus || "") : "", delegatedAt: r.delegatedAt || "", tenantUpdatedAt: r.tenantUpdatedAt || "", tenantSubmittedAt: r.tenantSubmittedAt || "" };
   if (full) { o.rooms = parseJson_(r.roomsJson, []); o.meters = parseJson_(r.metersJson, {}); o.keys = parseJson_(r.keysJson, []); o.generalNote = r.generalNote; o.attendees = r.attendees; o.summary = parseJson_(r.summaryJson, null);
     o.tenantNewAddress = r.tenantNewAddress || ""; o.entryDate = r.entryDate || ""; o.metersEntry = parseJson_(r.metersEntryJson, {});
     o.signatures = { landlord: r.landlordSignDocId ? { name: r.landlordSignName, at: r.landlordSignedAt, documentId: r.landlordSignDocId } : null,
@@ -5508,13 +5511,13 @@ function inspectionOut_(r, full) {
   return o;
 }
 function inspectionsOf_(leaseId, finalOnly) {
-  return dbAll_("LeaseInspections").filter(function (r) { return String(r.leaseId) === String(leaseId) && r.status !== "CANCELLED" && (!finalOnly || r.status === "FINAL"); })
+  return dbAll_("LeaseInspections").filter(function (r) { return String(r.leaseId) === String(leaseId) && r.status !== "CANCELLED" && (!finalOnly || r.status === "FINAL" || inspectionDelegated_(r)); })
     .sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); }).map(function (r) { return inspectionOut_(r, false); });
 }
 function inspectionLoad_(p, id, cap) {
   const r = dbGet_("LeaseInspections", safeText_(id, 120)); if (!r || r.status === "CANCELLED") notFound_("État des lieux");
   const c = laCtx_(p, r.leaseId, cap);
-  if (c.self) assert_(r.status === "FINAL", "État des lieux non disponible.", "FORBIDDEN");
+  if (c.self && !canProp_(p, c.prop, "inspection.manage")) assert_(r.status === "FINAL" || inspectionDelegated_(r), "État des lieux non disponible.", "FORBIDDEN");
   return { r: r, c: c };
 }
 function inspectionEntryOf_(leaseId) {
@@ -5543,6 +5546,8 @@ function inspectionCreate_(p, a) {
 function inspectionGet_(p, a) {
   const x = inspectionLoad_(p, a.inspectionId, "lease.view"), o = inspectionOut_(x.r, true);
   o.propertyName = x.c.prop.name; o.tenantName = x.c.t.fullName; o.canManage = canProp_(p, x.c.prop, "inspection.manage"); o.canLetter = canProp_(p, x.c.prop, "lease.manage"); o.ai = !!aiConfig_(); o.deposit = num_(x.c.l.deposit);
+  o.tenantEdit = !o.canManage && x.c.self && x.r.status === "DRAFT" && x.r.delegateStatus === "OPEN"; o.tenantEmail = x.c.t.email || "";
+  if (!o.canManage) { o.ai = false; o.deposit = 0; }
   return o;
 }
 function laCond_(v) { v = String(v || ""); return LA_CONDITIONS_.indexOf(v) >= 0 ? v : ""; }
@@ -5737,6 +5742,98 @@ function inspectionCancel_(p, a) {
   assert_(x.r.status === "DRAFT", "Un état des lieux validé ne peut pas être supprimé.");
   dbUpdate_("LeaseInspections", x.r.inspectionId, { status: "CANCELLED", updatedAt: nowIso_(), updatedBy: p.email });
   return { ok: true };
+}
+
+/* ------------------------- État des lieux confié au locataire ------------------------- */
+/** Un brouillon confié au locataire (en cours ou renvoyé) lui est visible ; il ne peut le remplir que tant qu'il est « OPEN ». */
+function inspectionDelegated_(r) { return r.status === "DRAFT" && ["OPEN", "SUBMITTED"].indexOf(String(r.delegateStatus || "")) >= 0; }
+/** Le bailleur confie le brouillon au locataire : il le remplit depuis son espace (états, observations, photos, compteurs, clés). */
+function inspectionDelegate_(p, a) {
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
+  assert_(x.r.status === "DRAFT", "État des lieux déjà validé.");
+  const email = x.c.t.email ? normalizeEmail_(x.c.t.email) : "";
+  assert_(email, "Le locataire n'a pas d'adresse e-mail : ajoutez-la dans « Locataires » pour lui confier l'état des lieux.");
+  dbUpdate_("LeaseInspections", x.r.inspectionId, { delegateStatus: "OPEN", delegatedAt: nowIso_(), delegatedBy: p.email, tenantSubmittedAt: "", updatedAt: nowIso_(), updatedBy: p.email });
+  // Compte locataire : invitation automatique si la personne n'a pas encore accès à DarPilot.
+  const hasAccount = !!x.c.t.userId || dbAll_("Users").some(function (u) { return normalizeEmail_(u.email) === email && dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(u.userId) && r.role === "TENANT" && r.status === "ACTIVE"; }); });
+  let invited = false, inviteError = "";
+  if (!hasAccount) {
+    const pending = dbAll_("Invitations").some(function (i) { return normalizeEmail_(i.email) === email && String(i.organizationId) === String(x.c.l.organizationId) && i.role === "TENANT" && i.status === "PENDING" && parseTs_(i.expiresAt) && parseTs_(i.expiresAt).getTime() > Date.now(); });
+    if (pending) invited = true;
+    else try {
+      const org = assertCanGrantRole_(p, x.c.l.organizationId, "TENANT"); assertQuota_(x.c.l.organizationId, "users");
+      const inv = invitationInsertAndSend_(p, { email: email, displayName: x.c.t.fullName, organizationId: x.c.l.organizationId, role: "TENANT", propertyId: x.c.l.propertyId }, org);
+      invited = !!inv.emailSent; if (!inv.emailSent) inviteError = inv.emailError || "e-mail non envoyé";
+    } catch (e) { inviteError = e.message; }
+  }
+  const label = x.r.type === "EXIT" ? "l'état des lieux de sortie" : "l'état des lieux d'entrée";
+  let sent = false;
+  try {
+    const r = sendMailSafe_(email, "État des lieux à compléter — " + (x.c.prop.name || ""), "Bonjour " + (x.c.t.fullName || "") + ",\n\n" + (x.c.org.name || "Votre bailleur") + " vous invite à remplir " + label +
+      " du logement « " + (x.c.prop.name || "") + " » depuis votre espace DarPilot (rubrique « Mon bail »).\n\nPour chaque pièce, indiquez l'état de chaque élément, ajoutez vos observations et prenez des photos. Relevez aussi les compteurs et comptez les clés. Quand vous avez terminé, appuyez sur « Envoyer au bailleur ».\n\n" +
+      "Votre bailleur relira l'état des lieux, puis vous le signerez tous les deux avant sa validation.\n\n" + (hasAccount ? "Ouvrir DarPilot : " + safeAppUrl_() + "#inspection/" + x.r.inspectionId : "Vous allez recevoir un second e-mail pour créer votre accès à DarPilot.") + "\n\nDarPilot",
+      "inspection-delegate:" + x.r.inspectionId + ":" + nowIso_(), x.c.l.organizationId);
+    sent = !!r.ok;
+  } catch (e) { sent = false; }
+  if (x.c.t.userId) notify_({ eventKey: "inspection-delegate:" + x.r.inspectionId + ":" + nowIso_(), userIds: [x.c.t.userId], type: "INSPECTION", organizationId: x.c.l.organizationId, email: false,
+    title: "État des lieux à compléter : " + (x.c.prop.name || ""), body: "Remplissez " + label + " avec vos photos, puis envoyez-le à votre bailleur.", link: "#inspection/" + x.r.inspectionId });
+  audit_("INSPECTION_DELEGATED", "Lease", x.c.l.leaseId, x.c.l.organizationId, { inspectionId: x.r.inspectionId, invited: invited, emailSent: sent });
+  const o = inspectionOut_(dbGet_("LeaseInspections", x.r.inspectionId), true);
+  o.sentTo = sent ? email : ""; o.invited = invited; o.hasAccount = hasAccount; o.inviteError = inviteError;
+  return o;
+}
+/** Le bailleur reprend la main : le locataire ne peut plus modifier le brouillon (il ne le voit plus). */
+function inspectionUndelegate_(p, a) {
+  const x = inspectionLoad_(p, a.inspectionId, "inspection.manage");
+  assert_(x.r.status === "DRAFT", "État des lieux déjà validé.");
+  dbUpdate_("LeaseInspections", x.r.inspectionId, { delegateStatus: "", updatedAt: nowIso_(), updatedBy: p.email });
+  audit_("INSPECTION_UNDELEGATED", "Lease", x.c.l.leaseId, x.c.l.organizationId, { inspectionId: x.r.inspectionId });
+  return inspectionOut_(dbGet_("LeaseInspections", x.r.inspectionId), true);
+}
+function inspectionTenantLoad_(p, id) {
+  const x = inspectionLoad_(p, id, "lease.view");
+  assert_(x.c.self, "Réservé au locataire.", "FORBIDDEN");
+  assert_(x.r.status === "DRAFT" && x.r.delegateStatus === "OPEN", "Cet état des lieux n'est plus modifiable : votre bailleur l'a repris ou validé.", "FORBIDDEN");
+  assertOrgWritable_(x.c.l.organizationId);
+  return x;
+}
+/**
+ * Enregistrement par le locataire. Il renseigne l'état, les observations et les photos des éléments existants, les compteurs, les clés
+ * et les observations générales. Les pièces, les éléments, la date, les retenues et le compte rendu restent du ressort du bailleur.
+ */
+function inspectionTenantSave_(p, a) {
+  const x = inspectionTenantLoad_(p, a.inspectionId), leaseId = x.r.leaseId;
+  const photos = function (ids, max) { const list = (Array.isArray(ids) ? ids : []).slice(0, max).map(function (d) { return safeText_(d, 120); }); assertDocsOf_(list, "LEASE", leaseId);
+    list.forEach(function (d) { assert_((dbGet_("Documents", d) || {}).category === "INSPECTION", "Photo non rattachée à l'état des lieux."); }); return list; };
+  const cur = parseJson_(x.r.roomsJson, []), inRooms = Array.isArray(a.rooms) ? a.rooms : [];
+  const rooms = cur.map(function (room, ri) {
+    const ir = inRooms[ri] || {}, inItems = Array.isArray(ir.items) ? ir.items : [];
+    return Object.assign({}, room, { note: ir.note !== undefined ? safeText_(ir.note, 1000) : room.note || "", photoDocIds: ir.photoDocIds !== undefined ? photos(ir.photoDocIds, 12) : room.photoDocIds || [],
+      items: (room.items || []).map(function (i, ii) { const ii2 = inItems[ii]; if (!ii2) return i;
+        return Object.assign({}, i, { condition: laCond_(ii2.condition), note: safeText_(ii2.note, 500), photoDocIds: photos(ii2.photoDocIds, 3) }); }) });
+  });
+  const patch = { roomsJson: rooms, tenantUpdatedAt: nowIso_(), updatedAt: nowIso_(), updatedBy: p.email,
+    landlordSignDocId: "", landlordSignName: "", landlordSignedAt: "", tenantSignDocId: "", tenantSignName: "", tenantSignedAt: "" };
+  if (a.meters !== undefined) { const m = a.meters || {}; patch.metersJson = { electricity: safeText_(m.electricity, 40), water: safeText_(m.water, 40), gas: safeText_(m.gas, 40), other: safeText_(m.other, 120) }; }
+  if (Array.isArray(a.keys)) { const ck = parseJson_(x.r.keysJson, []);
+    patch.keysJson = ck.map(function (k, i) { const n = a.keys[i]; if (!n) return k; return Object.assign({}, k, { count: n.count !== "" && n.count != null ? Math.max(0, Math.min(99, parseInt(n.count, 10) || 0)) : "" }); }); }
+  if (a.generalNote !== undefined) patch.generalNote = safeText_(a.generalNote, 3000);
+  if (x.r.type === "EXIT" && a.tenantNewAddress !== undefined) patch.tenantNewAddress = safeText_(a.tenantNewAddress, 300);
+  dbUpdate_("LeaseInspections", x.r.inspectionId, patch);
+  return inspectionOut_(dbGet_("LeaseInspections", x.r.inspectionId), true);
+}
+/** Le locataire a terminé : le bailleur est prévenu ; le brouillon reste visible au locataire en lecture seule. */
+function inspectionTenantSubmit_(p, a) {
+  const x = inspectionTenantLoad_(p, a.inspectionId);
+  const blank = parseJson_(x.r.roomsJson, []).reduce(function (n, room) { return n + (room.items || []).filter(function (i) { return !i.condition; }).length; }, 0);
+  assert_(!blank || a.allowIncomplete === true, blank + " élément(s) sans état : complétez-les (ou choisissez « Sans objet ») avant d'envoyer.");
+  dbUpdate_("LeaseInspections", x.r.inspectionId, { delegateStatus: "SUBMITTED", tenantSubmittedAt: nowIso_(), updatedAt: nowIso_(), updatedBy: p.email });
+  const label = x.r.type === "EXIT" ? "État des lieux de sortie" : "État des lieux d'entrée";
+  notify_({ eventKey: "inspection-submitted:" + x.r.inspectionId + ":" + nowIso_(), userIds: propertyManagers_(x.c.prop, "canManageLeases"), type: "INSPECTION", organizationId: x.c.l.organizationId,
+    title: label + " rempli par le locataire : " + (x.c.prop.name || ""), body: (x.c.t.fullName || "Le locataire") + " a terminé l'état des lieux" + (blank ? " (" + blank + " élément(s) sans état)" : "") +
+      ". Relisez-le, corrigez si besoin, puis signez-le ensemble et validez-le.", link: "#inspection/" + x.r.inspectionId });
+  audit_("INSPECTION_TENANT_SUBMITTED", "Lease", x.c.l.leaseId, x.c.l.organizationId, { inspectionId: x.r.inspectionId, blank: blank });
+  return inspectionOut_(dbGet_("LeaseInspections", x.r.inspectionId), true);
 }
 
 /* ------------------------- Signature sur l'écran ------------------------- */
@@ -12627,6 +12724,62 @@ function TEST_GROUPS_() {
         const g = T.call(O.tok, "lease.get", { leaseId: l.leaseId });
         T.eq(g.inspections.length, 2, "états des lieux listés sur le bail");
         T.fails(fx.tok.ownerB, "inspection.get", { inspectionId: x.inspectionId }, "FORBIDDEN");
+      }],
+      ["État des lieux confié au locataire : saisie limitée, photos, renvoi au bailleur, reprise en main, validation", function (T, fx) {
+        const O = tLeaseOwner_(T, fx), org = O.org.organizationId, TT = fx.tok.tenant;
+        const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        const prop = T.call(O.tok, "property.create", { organizationId: org, name: "Appartement Confié", city: "Marrakech", rentalMode: "LONG_TERM", rooms: ["Séjour", "Chambre"] }).propertyId;
+        const t = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Samir Confié", email: fx.users.tenant.email });
+        const l = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: tDays_(1), monthlyRent: 6000, dueDay: 5 });
+        TEST_HOOKS_.aiConfig = false;
+        const e = T.call(O.tok, "inspection.create", { leaseId: l.leaseId, type: "ENTRY" });
+        T.fails(TT, "inspection.get", { inspectionId: e.inspectionId }, "FORBIDDEN");
+        T.fails(TT, "doc.upload", { ownerType: "LEASE", ownerId: l.leaseId, category: "INSPECTION", mimeType: "image/png", fileName: "a.png", base64: png }, "FORBIDDEN");
+        T.fails(TT, "inspection.delegate", { inspectionId: e.inspectionId }, "FORBIDDEN");
+        const m0 = TEST_HOOKS_.mailSink.length;
+        const dg = T.call(O.tok, "inspection.delegate", { inspectionId: e.inspectionId });
+        T.eq(dg.delegateStatus, "OPEN", "confié au locataire");
+        T.ok(TEST_HOOKS_.mailSink.slice(m0).some(function (m) { return m.to === fx.users.tenant.email && /État des lieux à compléter/.test(m.subject); }), "locataire prévenu par e-mail");
+        T.ok(T.call(TT, "lease.get", { leaseId: l.leaseId }).inspections.some(function (r) { return r.inspectionId === e.inspectionId && r.delegateStatus === "OPEN"; }), "visible dans « Mon bail »");
+        const g = T.call(TT, "inspection.get", { inspectionId: e.inspectionId });
+        T.ok(g.tenantEdit && !g.canManage, "le locataire peut remplir, sans droits de gestion");
+        T.fails(TT, "inspection.save", { inspectionId: e.inspectionId, generalNote: "x" }, "FORBIDDEN");
+        T.fails(TT, "inspection.finalize", { inspectionId: e.inspectionId }, "FORBIDDEN");
+        T.fails(TT, "inspection.sign", { inspectionId: e.inspectionId, role: "TENANT", name: "Samir", image: "x" }, "FORBIDDEN");
+        const ph = T.call(TT, "doc.upload", { ownerType: "LEASE", ownerId: l.leaseId, category: "INSPECTION", mimeType: "image/png", fileName: "sejour.png", base64: png });
+        T.fails(TT, "doc.upload", { ownerType: "LEASE", ownerId: l.leaseId, category: "LEASE_CONTRACT", mimeType: "image/png", fileName: "b.png", base64: png }, "FORBIDDEN");
+        const rooms = g.rooms.map(function (r) { return Object.assign({}, r, { name: "Renommée", items: r.items.map(function (i) { return Object.assign({}, i, { name: "Autre", condition: "GOOD", note: "RAS" }); }).concat([{ name: "Ajout", condition: "BAD" }]) }); });
+        rooms[0].photoDocIds = [ph.documentId]; rooms[0].items[0].photoDocIds = [ph.documentId]; rooms[0].items[0].condition = "WORN";
+        rooms.push({ name: "Pièce ajoutée", items: [] });
+        const sv = T.call(TT, "inspection.tenantSave", { inspectionId: e.inspectionId, rooms: rooms, meters: { electricity: "4455" }, keys: [{ label: "Changée", count: 2 }, { label: "x", count: 1 }, { count: 1 }, { label: "En trop", count: 5 }], generalNote: "Tout est propre", inspectionDate: "2020-01-01" });
+        T.eq(sv.rooms.map(function (r) { return r.name; }), e.rooms.map(function (r) { return r.name; }), "pièces inchangées (ni renommage ni ajout)");
+        T.eq(sv.rooms[0].items.length, e.rooms[0].items.length, "éléments inchangés (pas d'ajout)");
+        T.ok(sv.rooms[0].items[0].name === e.rooms[0].items[0].name && sv.rooms[0].items[0].condition === "WORN" && sv.rooms[0].items[0].photoDocIds[0] === ph.documentId, "état, observation et photo enregistrés");
+        T.ok(sv.meters.electricity === "4455" && sv.keys.length === e.keys.length && sv.keys[0].label === e.keys[0].label && sv.keys[0].count === 2 && sv.generalNote === "Tout est propre", "compteurs, clés (nombre seul) et observations");
+        T.eq(sv.inspectionDate, e.inspectionDate, "date réservée au bailleur");
+        const other = T.call(O.tok, "doc.upload", { ownerType: "PROPERTY", ownerId: prop, category: "PHOTO", mimeType: "image/png", fileName: "x.png", base64: png });
+        T.fails(TT, "inspection.tenantSave", { inspectionId: e.inspectionId, rooms: [{ photoDocIds: [other.documentId] }] }, "VALIDATION");
+        T.fails(fx.tok.ownerB, "inspection.tenantSave", { inspectionId: e.inspectionId, generalNote: "x" }, "FORBIDDEN");
+        const n0 = dbAll_("Notifications").length;
+        const sb = T.call(TT, "inspection.tenantSubmit", { inspectionId: e.inspectionId });
+        T.eq(sb.delegateStatus, "SUBMITTED", "renvoyé au bailleur");
+        T.ok(dbAll_("Notifications").slice(n0).some(function (n) { return String(n.userId) === String(O.user.userId) && /rempli par le locataire/.test(n.title); }), "bailleur prévenu");
+        T.fails(TT, "inspection.tenantSave", { inspectionId: e.inspectionId, generalNote: "y" }, "FORBIDDEN");
+        T.fails(TT, "doc.upload", { ownerType: "LEASE", ownerId: l.leaseId, category: "INSPECTION", mimeType: "image/png", fileName: "c.png", base64: png }, "FORBIDDEN");
+        T.ok(!T.call(TT, "inspection.get", { inspectionId: e.inspectionId }).tenantEdit, "lecture seule après envoi");
+        T.eq(T.call(O.tok, "inspection.get", { inspectionId: e.inspectionId }).generalNote, "Tout est propre", "le bailleur retrouve la saisie");
+        T.call(O.tok, "inspection.delegate", { inspectionId: e.inspectionId });
+        T.ok(T.call(TT, "inspection.get", { inspectionId: e.inspectionId }).tenantEdit, "rouvert au locataire");
+        T.call(O.tok, "inspection.undelegate", { inspectionId: e.inspectionId });
+        T.fails(TT, "inspection.get", { inspectionId: e.inspectionId }, "FORBIDDEN");
+        T.ok(!T.call(TT, "lease.get", { leaseId: l.leaseId }).inspections.some(function (r) { return r.inspectionId === e.inspectionId; }), "plus visible après reprise en main");
+        const fe = T.call(O.tok, "inspection.finalize", { inspectionId: e.inspectionId, allowIncomplete: true });
+        T.ok(fe.documentId, "validé par le bailleur");
+        T.eq(T.call(TT, "inspection.get", { inspectionId: e.inspectionId }).status, "FINAL", "le locataire consulte la version validée");
+        const t2 = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Sans Mail" });
+        const p2 = T.call(O.tok, "property.create", { organizationId: org, name: "Studio Sans Mail", city: "Marrakech", rentalMode: "LONG_TERM", rooms: ["Séjour"] }).propertyId;
+        const l2 = T.call(O.tok, "lease.create", { propertyId: p2, tenantId: t2.tenantId, startDate: tDays_(1), monthlyRent: 3000, dueDay: 5 });
+        T.fails(O.tok, "inspection.delegate", { inspectionId: T.call(O.tok, "inspection.create", { leaseId: l2.leaseId, type: "ENTRY" }).inspectionId }, "VALIDATION");
       }]
     ] },
     { name: "Missions confiées à l'agence (longue durée)", tests: [
