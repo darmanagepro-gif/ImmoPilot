@@ -1400,6 +1400,13 @@ function TEST_GROUPS_() {
         const h2 = Utilities.newBlob(Utilities.base64Decode(T.call(O.tok, "leasedoc.finalize", { leaseDocId: d2.leaseDocId }).base64)).getDataAsString();
         T.ok(/préavis de trois \(3\) mois/.test(h2) && /forfait de charges/.test(h2) && /ordures ménagères/.test(h2) && /1 mois de loyer hors charges/.test(h2), "contrat : préavis de 3 mois, forfait de charges, caution d'un mois hors charges");
         T.call(O.tok, "tenant.update", { tenantId: t.tenantId, coFullName: "", coEmail: "", coIdNumber: "" });
+        const t9 = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Locataire Erreur" });
+        const d9 = T.call(O.tok, "doc.upload", { ownerType: "TENANT", ownerId: t9.tenantId, category: "ID_DOCUMENT", mimeType: "image/png", fileName: "x.png", base64: png }).documentId;
+        T.fails(O.tok, "tenant.delete", { tenantId: t9.tenantId }, "VALIDATION");
+        T.fails(fx.tok.ownerB, "tenant.delete", { tenantId: t9.tenantId, confirm: "SUPPRIMER" }, "FORBIDDEN");
+        T.fails(O.tok, "tenant.delete", { tenantId: t.tenantId, confirm: "SUPPRIMER" }, "VALIDATION");
+        T.eq(T.call(O.tok, "tenant.delete", { tenantId: t9.tenantId, confirm: "SUPPRIMER" }).documentsPurged, 1, "locataire sans bail supprimé, pièce purgée");
+        T.ok(!dbGet_("Tenants", t9.tenantId) && dbGet_("Documents", d9).status === "PURGED", "fiche effacée");
         T.eq(T.call(O.tok, "lease.get", { leaseId: l.leaseId }).tenantName, "Karim Bennani", "second locataire retiré");
       }]
     ] },

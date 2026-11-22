@@ -49,7 +49,7 @@ function routes_() { return {
   "inv.submit": "invSubmit_", "inv.approve": "invApprove_", "inv.reject": "invReject_", "inv.list": "invList_", "inv.get": "invGet_", "inv.pdf": "invoicePdf_",
   "fin.summary": "finSummary_", "pay.record": "payRecord_", "pay.void": "payVoid_", "pay.reconcile": "payReconcile_", "pay.list": "payList_",
   "exp.create": "expCreate_", "exp.cancel": "expCancel_", "exp.list": "expList_", "rev.create": "revCreate_",
-  "tenant.list": "tenantList_", "tenant.create": "tenantCreate_", "tenant.update": "tenantUpdate_",
+  "tenant.list": "tenantList_", "tenant.create": "tenantCreate_", "tenant.update": "tenantUpdate_", "tenant.delete": "tenantDelete_",
   "lease.list": "leaseList_", "lease.get": "leaseGet_", "lease.create": "leaseCreate_", "lease.update": "leaseUpdate_", "lease.activate": "leaseActivate_", "lease.notice": "leaseNotice_",
   "lease.end": "leaseEnd_", "lease.renew": "leaseRenew_", "lease.depositReturn": "leaseDepositReturn_", "lease.receipt": "leaseReceipt_", "lease.document": "leaseDocument_", "lease.mine": function (p) { return leaseMine_(p); },
   "lease.automation": "leaseAutomationSet_", "rent.sendCall": "rentSendCallRoute_", "rent.sendReminder": "rentSendReminderRoute_", "rent.sendReceipt": "rentSendReceiptRoute_", "rent.preview": "rentPreview_",

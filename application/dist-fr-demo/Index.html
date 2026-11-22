@@ -2563,7 +2563,9 @@ PAGES.tenants = function (el) {
       x.coIdDocumentId ? h("button", { type: "button", class: "btn sm ghost", title: t("Recto (2e locataire)"), onclick: function () { openDoc(x.coIdDocumentId); } }, "📎 " + t("Recto 2")) : null,
       x.coIdDocumentBackId ? h("button", { type: "button", class: "btn sm ghost", title: t("Verso (2e locataire)"), onclick: function () { openDoc(x.coIdDocumentBackId); } }, "📎 " + t("Verso 2")) : null) : "—"; } }, { l: "Baux actifs", num: true, k: "activeLeases" },
     { l: "Espace locataire", f: function (x) { return x.hasAccount ? tag(t("Activé"), "good") : (x.email && can("user.invite") ? btn(t("Inviter"), function () { inviteDialog({ email: x.email, displayName: x.fullName, organizationId: x.organizationId, role: "TENANT" }); }, "sm") : "—"); } },
-    { l: "Statut", status: true, k: "status" }, { l: "", f: function (x) { return can("lease.manage") ? btn(t("Modifier"), function () { tenantDialog(x).then(function (r) { if (r) lv.reload(); }); }, "sm") : null; } }] });
+    { l: "Statut", status: true, k: "status" }, { l: "", f: function (x) { return can("lease.manage") ? h("span", null, btn(t("Modifier"), function () { tenantDialog(x).then(function (r) { if (r) lv.reload(); }); }, "sm"),
+      x.activeLeases ? null : btn(t("Supprimer"), function () { formModal(t("Supprimer le locataire"), [{ k: "confirm", l: "Tapez SUPPRIMER pour confirmer", req: true }], {}, function (v) { return api("tenant.delete", { tenantId: x.tenantId, confirm: v.confirm }).then(function () { lv.reload(); }); },
+        { intro: (x.displayName || x.fullName) + " : " + t("la fiche et ses pièces d'identité seront supprimées définitivement. Impossible si le locataire a un bail."), success: "Locataire supprimé." }); }, "sm danger")) : null; } }] });
 };
 /* ---------- Locataire : saisie simplifiée avec lecture de la pièce d'identité ---------- */
 function idTypeOpts() { return ((S.meta && S.meta.idTypes) || (ED.country === "FR" ? ["CNI", "PASSPORT", "RESIDENCE_PERMIT", "DRIVING_LICENSE", "OTHER"] : ["CIN", "PASSPORT", "RESIDENCE_PERMIT", "DRIVING_LICENSE", "OTHER"])).map(function (x) { return [x, st(x)]; }); }

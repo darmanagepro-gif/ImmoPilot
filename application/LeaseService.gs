@@ -176,6 +176,27 @@ function tenantUpdate_(p, a) {
   return { ok: true };
 }
 
+/**
+ * Suppression d'un locataire saisi par erreur ou qui n'a jamais signé : interdite s'il a un bail (même terminé, pour l'historique).
+ * Ses pièces d'identité et documents sont mis à la corbeille et marqués purgés ; trace d'audit sans donnée personnelle.
+ */
+function tenantDelete_(p, a) {
+  const t = dbGet_("Tenants", safeText_(a.tenantId, 120)); if (!t) notFound_("Locataire");
+  assertOrgCap_(p, t.organizationId, "lease.manage");
+  assert_(String(a.confirm || "") === "SUPPRIMER", "Confirmation attendue : tapez SUPPRIMER.");
+  assert_(!dbAll_("Leases").some(function (l) { return String(l.tenantId) === String(t.tenantId); }), "Ce locataire a un bail : il reste dans l'historique. Passez-le en « Inactif ».");
+  let docs = 0;
+  withLock_(function () {
+    dbAll_("Documents").filter(function (d) { return d.ownerType === "TENANT" && String(d.ownerId) === String(t.tenantId) && d.status !== "PURGED"; }).forEach(function (d) {
+      try { DriveApp.getFileById(d.fileId).setTrashed(true); } catch (e) { console.error("Suppression locataire " + d.documentId + " : " + e.message); }
+      dbUpdate_("Documents", d.documentId, { status: "PURGED", purgedAt: nowIso_() }); docs++;
+    });
+    dbDelete_("Tenants", t.tenantId);
+  });
+  audit_("TENANT_DELETED", "Tenant", t.tenantId, t.organizationId, { documentsPurged: docs });
+  return { ok: true, documentsPurged: docs };
+}
+
 /* ------------------------------ Baux ------------------------------ */
 function leaseInput_(a, l) {
   const o = {};

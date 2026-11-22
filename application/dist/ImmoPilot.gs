@@ -1502,7 +1502,7 @@ function routes_() { return {
   "inv.submit": "invSubmit_", "inv.approve": "invApprove_", "inv.reject": "invReject_", "inv.list": "invList_", "inv.get": "invGet_", "inv.pdf": "invoicePdf_",
   "fin.summary": "finSummary_", "pay.record": "payRecord_", "pay.void": "payVoid_", "pay.reconcile": "payReconcile_", "pay.list": "payList_",
   "exp.create": "expCreate_", "exp.cancel": "expCancel_", "exp.list": "expList_", "rev.create": "revCreate_",
-  "tenant.list": "tenantList_", "tenant.create": "tenantCreate_", "tenant.update": "tenantUpdate_",
+  "tenant.list": "tenantList_", "tenant.create": "tenantCreate_", "tenant.update": "tenantUpdate_", "tenant.delete": "tenantDelete_",
   "lease.list": "leaseList_", "lease.get": "leaseGet_", "lease.create": "leaseCreate_", "lease.update": "leaseUpdate_", "lease.activate": "leaseActivate_", "lease.notice": "leaseNotice_",
   "lease.end": "leaseEnd_", "lease.renew": "leaseRenew_", "lease.depositReturn": "leaseDepositReturn_", "lease.receipt": "leaseReceipt_", "lease.document": "leaseDocument_", "lease.mine": function (p) { return leaseMine_(p); },
   "lease.automation": "leaseAutomationSet_", "rent.sendCall": "rentSendCallRoute_", "rent.sendReminder": "rentSendReminderRoute_", "rent.sendReceipt": "rentSendReceiptRoute_", "rent.preview": "rentPreview_",
@@ -1980,7 +1980,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "48bdee922551";
+var IMMO_BUILD_ = "3c9e78608cc0";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -5953,6 +5953,27 @@ function tenantUpdate_(p, a) {
   dbUpdate_("Tenants", t.tenantId, patch);
   audit_("TENANT_UPDATED", "Tenant", t.tenantId, t.organizationId, { fields: Object.keys(patch) });
   return { ok: true };
+}
+
+/**
+ * Suppression d'un locataire saisi par erreur ou qui n'a jamais signé : interdite s'il a un bail (même terminé, pour l'historique).
+ * Ses pièces d'identité et documents sont mis à la corbeille et marqués purgés ; trace d'audit sans donnée personnelle.
+ */
+function tenantDelete_(p, a) {
+  const t = dbGet_("Tenants", safeText_(a.tenantId, 120)); if (!t) notFound_("Locataire");
+  assertOrgCap_(p, t.organizationId, "lease.manage");
+  assert_(String(a.confirm || "") === "SUPPRIMER", "Confirmation attendue : tapez SUPPRIMER.");
+  assert_(!dbAll_("Leases").some(function (l) { return String(l.tenantId) === String(t.tenantId); }), "Ce locataire a un bail : il reste dans l'historique. Passez-le en « Inactif ».");
+  let docs = 0;
+  withLock_(function () {
+    dbAll_("Documents").filter(function (d) { return d.ownerType === "TENANT" && String(d.ownerId) === String(t.tenantId) && d.status !== "PURGED"; }).forEach(function (d) {
+      try { DriveApp.getFileById(d.fileId).setTrashed(true); } catch (e) { console.error("Suppression locataire " + d.documentId + " : " + e.message); }
+      dbUpdate_("Documents", d.documentId, { status: "PURGED", purgedAt: nowIso_() }); docs++;
+    });
+    dbDelete_("Tenants", t.tenantId);
+  });
+  audit_("TENANT_DELETED", "Tenant", t.tenantId, t.organizationId, { documentsPurged: docs });
+  return { ok: true, documentsPurged: docs };
 }
 
 /* ------------------------------ Baux ------------------------------ */
@@ -12711,6 +12732,13 @@ function TEST_GROUPS_() {
         const h2 = Utilities.newBlob(Utilities.base64Decode(T.call(O.tok, "leasedoc.finalize", { leaseDocId: d2.leaseDocId }).base64)).getDataAsString();
         T.ok(/préavis de trois \(3\) mois/.test(h2) && /forfait de charges/.test(h2) && /ordures ménagères/.test(h2) && /1 mois de loyer hors charges/.test(h2), "contrat : préavis de 3 mois, forfait de charges, caution d'un mois hors charges");
         T.call(O.tok, "tenant.update", { tenantId: t.tenantId, coFullName: "", coEmail: "", coIdNumber: "" });
+        const t9 = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Locataire Erreur" });
+        const d9 = T.call(O.tok, "doc.upload", { ownerType: "TENANT", ownerId: t9.tenantId, category: "ID_DOCUMENT", mimeType: "image/png", fileName: "x.png", base64: png }).documentId;
+        T.fails(O.tok, "tenant.delete", { tenantId: t9.tenantId }, "VALIDATION");
+        T.fails(fx.tok.ownerB, "tenant.delete", { tenantId: t9.tenantId, confirm: "SUPPRIMER" }, "FORBIDDEN");
+        T.fails(O.tok, "tenant.delete", { tenantId: t.tenantId, confirm: "SUPPRIMER" }, "VALIDATION");
+        T.eq(T.call(O.tok, "tenant.delete", { tenantId: t9.tenantId, confirm: "SUPPRIMER" }).documentsPurged, 1, "locataire sans bail supprimé, pièce purgée");
+        T.ok(!dbGet_("Tenants", t9.tenantId) && dbGet_("Documents", d9).status === "PURGED", "fiche effacée");
         T.eq(T.call(O.tok, "lease.get", { leaseId: l.leaseId }).tenantName, "Karim Bennani", "second locataire retiré");
       }]
     ] },
