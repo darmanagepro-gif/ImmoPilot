@@ -134,7 +134,7 @@ function rentCallPdf_(c, s) {
     "<p>Madame, Monsieur,</p><p>Nous vous prions de bien vouloir régler le loyer et les charges de la période <b>" + escapeHtml_(rentPeriodLabel_(s)) + "</b> (" + escapeHtml_(per) + ") pour le logement désigné ci-dessus, <b>au plus tard le " + pdfDate_(s.dueDate) + "</b>.</p>" +
     table + "<p>Référence à indiquer avec votre règlement : <b>" + escapeHtml_(ref) + "</b></p>" + rentPayInfoHtml_(c, total, ref) +
     "<p class='muted'>Cet appel de loyer ne vaut pas quittance. La quittance vous sera adressée après encaissement de la totalité de l'échéance.</p>" +
-    "<p style='margin-top:14px'>Fait le " + pdfDate_(today) + ".</p>" + coupon;
+    "<p style='margin-top:14px'>Fait à " + escapeHtml_(c.prop.city || edition_().city || "") + ", le " + pdfDate_(today) + ".</p>" + coupon;
   return htmlToPdf_(pdfShell_("Appel de loyer — " + rentPeriodLabel_(s), inner, { noHead: true, subtitle: "Échéance du " + pdfDate_(s.dueDate), ref: "APL-" + ref.replace(/^LOY-/, ""),
     footer: "Document émis par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Appel_loyer_" + s.period + "_" + String(c.l.leaseId).slice(-6));
 }
@@ -172,7 +172,7 @@ function rentReceiptPdf_(c, s, asOf) {
     adresse: rentAddress_(c.prop), type: TYPES[c.prop.propertyType] || c.prop.propertyType || "", surface: c.prop.surfaceM2 || "",
     du: y && mo ? "01/" + pad(mo) + "/" + y : "", au: y && mo ? pad(lastDay) + "/" + pad(mo) + "/" + y : "", echeance: pdfDate_(s.dueDate), periode: rentPeriodLabel_(s), loyer: fmtAmount_(s.rentAmount, cur), charges: fmtAmount_(s.chargesAmount, cur), total: fmtAmount_(s.amountDue, cur),
     date_paiement: map.date_paiement, mode_paiement: pays.map(function (z) { return PDF_PAY_METHODS_[z.method] || z.method; }).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).join(", "),
-    reference: rentReference_(c.l, s), date: pdfDate_(issued), ville: c.prop.city || "" },
+    reference: rentReference_(c.l, s), date: pdfDate_(issued), ville: c.prop.city || edition_().city || "" },
     { name: "Quittance_" + s.period + "_" + String(c.l.leaseId).slice(-6), subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org), ref: "QUIT-" + rentReference_(c.l, s).replace(/^LOY-/, ""),
       footer: "Quittance délivrée gratuitement par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." });
   if (tpl) return docFromTemplate_(tpl, map, propertyFolder_(c.l.organizationId, c.l.propertyId, "LEASE"), "Quittance_" + s.period + "_" + c.l.leaseId).pdf;
@@ -181,7 +181,7 @@ function rentReceiptPdf_(c, s, asOf) {
     htmlTable_(["Poste", "Montant"], [["Loyer", fmtAmount_(s.rentAmount, cur)], ["Charges", fmtAmount_(s.chargesAmount, cur)], ["Total réglé", fmtAmount_(s.amountDue, cur)]]) +
     "<h2>Paiement(s) reçu(s)</h2>" + htmlTable_(["Date", "Mode", "Référence", "Montant"], pays.map(function (z) { return [pdfDate_(z.paidAt), PDF_PAY_METHODS_[z.method] || z.method, z.reference || "—", fmtAmount_(z.amount, cur)]; })) +
     "<p class='muted'>Cette quittance annule tous les reçus partiels qui auraient pu être donnés pour la même période.</p>" +
-    "<p style='margin-top:18px'>Fait le " + pdfDate_(issued) + ".</p>";
+    "<p style='margin-top:18px'>Fait à " + escapeHtml_(c.prop.city || edition_().city || "") + ", le " + pdfDate_(issued) + ".</p>";
   return htmlToPdf_(pdfShell_("Quittance de loyer", inner, { subtitle: (c.prop.name || "") + " · période " + rentPeriodLabel_(s), issuer: rentIssuer_(c.org),
     footer: "Quittance délivrée gratuitement par " + (c.org.name || "le bailleur") + " via " + IMMO_CONFIG.APP_NAME + "." }), "Quittance_" + s.period + "_" + String(c.l.leaseId).slice(-6));
 }
