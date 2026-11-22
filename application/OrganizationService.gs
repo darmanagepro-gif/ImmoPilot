@@ -7,7 +7,7 @@ var ORG_TYPES_ = ["OWNER_ORG", "AGENCY", "PROVIDER", "PLATFORM"];
 
 function orgPublic_(o) {
   return { organizationId: o.organizationId, name: o.name, status: o.status, type: o.type || "", city: o.city || "", country: o.country || "",
-    planCode: o.planCode || "", billingEmail: o.billingEmail || "", createdAt: o.createdAt, suspendedAt: o.suspendedAt || "", suspensionReason: o.suspensionReason || "" };
+    planCode: o.planCode || "", billingEmail: o.billingEmail || "", address: o.address || "", phone: o.phone || "", contactName: o.contactName || "", createdAt: o.createdAt, suspendedAt: o.suspendedAt || "", suspensionReason: o.suspensionReason || "" };
 }
 
 function orgList_(p, a) {
@@ -53,6 +53,10 @@ function orgUpdate_(p, a) {
   const patch = { updatedAt: nowIso_() };
   if (a.name !== undefined) patch.name = reqText_(a.name, "Nom", 2, 120);
   if (a.city !== undefined) patch.city = safeText_(a.city, 80);
+  // Identité du bailleur reprise sur les baux, appels de loyer, quittances et états des lieux.
+  if (a.address !== undefined) patch.address = safeText_(a.address, 200);
+  if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
+  if (a.contactName !== undefined) patch.contactName = safeText_(a.contactName, 120);
   if (a.billingEmail !== undefined) patch.billingEmail = a.billingEmail ? validateEmail_(a.billingEmail) : "";
   if (a.locale !== undefined) patch.locale = oneOf_(a.locale, IMMO_LANGS_, "Langue");
   if (a.type !== undefined) { requireSuper_(p); patch.type = oneOf_(a.type, ORG_TYPES_, "Type"); }

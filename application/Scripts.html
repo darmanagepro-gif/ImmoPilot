@@ -1019,6 +1019,7 @@ PAGES.settings = function (el) {
           h("a", { href: "#settings", onclick: function (e) { e.preventDefault(); formModal(t("Supprimer mon compte"), [{ k: "reason", l: "Motif (facultatif)", t: "textarea" }], {}, function (v) {
             return api("me.requestDeletion", v).then(function (r) { toast(r.message, "good"); }); }, { intro: t("Votre demande est transmise à l'administrateur DarPilot. Le compte et les données personnelles associées sont supprimés sous 30 jours ; certaines données comptables peuvent être conservées pour des obligations légales."), submitLabel: t("Demander la suppression") }); } }, t("Supprimer mon compte")))));
     } },
+    orgAdmin.length ? { id: "identity", label: "Identité du bailleur", render: function (b) { orgIdentityPanel(b, orgAdmin); } } : null,
     orgAdmin.length || S.me.isSuper ? { id: "org", label: S.me.isSuper ? "Paramètres de la plateforme" : "Paramètres de l'organisation", render: function (b) { settingsEditor(b, S.me.isSuper && !orgAdmin.length ? "" : (orgAdmin[0] || [""])[0], orgAdmin); } } : null,
     orgAdmin.length ? { id: "support", label: "Accès d'assistance", render: function (b) {
       b.appendChild(h("p", { class: "muted" }, t("L'équipe DarPilot ne peut consulter vos données qu'avec votre accord explicite, en lecture seule, pour une durée limitée. Chaque accès est journalisé.")));
@@ -1028,6 +1029,20 @@ PAGES.settings = function (el) {
     } } : null
   ]);
 };
+/** Identité du bailleur (nom des propriétaires, adresse, téléphone, e-mail) : reprise sur les baux, appels de loyer, quittances, états des lieux. */
+function orgIdentityPanel(b, orgAdmin) {
+  b.appendChild(h("p", { class: "muted" }, t("Ces informations apparaissent comme « Bailleur » sur vos baux, appels de loyer, quittances et états des lieux. Pour un couple, indiquez les deux noms, par exemple « M. Prénom NOM et Mme Prénom NOM ».")));
+  const box = h("div"); b.appendChild(box);
+  api("org.list", { pageSize: 50 }).then(function (r) {
+    const ids = orgAdmin.map(function (x) { return x[0]; }), list = (r.items || r).filter(function (o) { return ids.indexOf(o.organizationId) >= 0; });
+    list.forEach(function (o) {
+      box.appendChild(panel(o.name, kv([["Nom du bailleur", o.name], ["Adresse", o.address || "—"], ["Code postal et ville", o.city || "—"], ["Téléphone", o.phone || "—"], ["E-mail", o.billingEmail || "—"]]),
+        [btn(t("Modifier"), function () { formModal(t("Identité du bailleur"), [{ k: "name", l: "Nom du bailleur (tel qu'il apparaît sur les documents)", req: true, full: true },
+          { k: "address", l: "Adresse", full: true, ph: "Numéro et rue" }, { k: "city", l: "Code postal et ville" }, { k: "phone", l: "Téléphone", t: "tel" }, { k: "billingEmail", l: "E-mail", t: "email" }], o,
+          function (v) { v.organizationId = o.organizationId; return api("org.update", v).then(function () { App.go("settings"); }); }, { success: "Identité du bailleur enregistrée." }); }, "primary")]));
+    });
+  }).catch(function (e) { box.appendChild(h("div", { class: "alert bad" }, errMsg(e))); });
+}
 function settingsEditor(b, orgId, orgAdmin) {
   const box = h("div");
   if (orgAdmin.length > 1 || (S.me.isSuper && orgAdmin.length)) {

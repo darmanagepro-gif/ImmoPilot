@@ -1980,7 +1980,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "ed14bcb3d5e5";
+var IMMO_BUILD_ = "2cfa37803257";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -6916,7 +6916,7 @@ var ORG_TYPES_ = ["OWNER_ORG", "AGENCY", "PROVIDER", "PLATFORM"];
 
 function orgPublic_(o) {
   return { organizationId: o.organizationId, name: o.name, status: o.status, type: o.type || "", city: o.city || "", country: o.country || "",
-    planCode: o.planCode || "", billingEmail: o.billingEmail || "", createdAt: o.createdAt, suspendedAt: o.suspendedAt || "", suspensionReason: o.suspensionReason || "" };
+    planCode: o.planCode || "", billingEmail: o.billingEmail || "", address: o.address || "", phone: o.phone || "", contactName: o.contactName || "", createdAt: o.createdAt, suspendedAt: o.suspendedAt || "", suspensionReason: o.suspensionReason || "" };
 }
 
 function orgList_(p, a) {
@@ -6962,6 +6962,10 @@ function orgUpdate_(p, a) {
   const patch = { updatedAt: nowIso_() };
   if (a.name !== undefined) patch.name = reqText_(a.name, "Nom", 2, 120);
   if (a.city !== undefined) patch.city = safeText_(a.city, 80);
+  // Identité du bailleur reprise sur les baux, appels de loyer, quittances et états des lieux.
+  if (a.address !== undefined) patch.address = safeText_(a.address, 200);
+  if (a.phone !== undefined) patch.phone = safeText_(a.phone, 30);
+  if (a.contactName !== undefined) patch.contactName = safeText_(a.contactName, 120);
   if (a.billingEmail !== undefined) patch.billingEmail = a.billingEmail ? validateEmail_(a.billingEmail) : "";
   if (a.locale !== undefined) patch.locale = oneOf_(a.locale, IMMO_LANGS_, "Langue");
   if (a.type !== undefined) { requireSuper_(p); patch.type = oneOf_(a.type, ORG_TYPES_, "Type"); }
@@ -12731,6 +12735,11 @@ function TEST_GROUPS_() {
         const d2 = T.call(O.tok, "leasedoc.draft", { leaseId: l2.leaseId, docType: "LEASE_CONTRACT", furnished: true });
         const h2 = Utilities.newBlob(Utilities.base64Decode(T.call(O.tok, "leasedoc.finalize", { leaseDocId: d2.leaseDocId }).base64)).getDataAsString();
         T.ok(/préavis de trois \(3\) mois/.test(h2) && /forfait de charges/.test(h2) && /ordures ménagères/.test(h2) && /1 mois de loyer hors charges/.test(h2), "contrat : préavis de 3 mois, forfait de charges, caution d'un mois hors charges");
+        T.call(O.tok, "org.update", { organizationId: O.org.organizationId, name: "M. Karim ALAMI et Mme Nadia ALAMI", address: "12 allée des Essais", city: "31700 Blagnac", phone: "+33 6 00 00 00 00" });
+        const d3 = T.call(O.tok, "leasedoc.draft", { leaseId: l2.leaseId, docType: "LEASE_CONTRACT" });
+        const h3 = Utilities.newBlob(Utilities.base64Decode(T.call(O.tok, "leasedoc.finalize", { leaseDocId: d3.leaseDocId }).base64)).getDataAsString();
+        T.ok(h3.indexOf("M. Karim ALAMI et Mme Nadia ALAMI") >= 0 && h3.indexOf("12 allée des Essais, 31700 Blagnac") >= 0, "contrat : noms et adresse du bailleur");
+        T.ok(T.call(O.tok, "org.list", {}).items.some(function (o) { return o.address === "12 allée des Essais" && o.phone; }), "identité du bailleur visible dans l'organisation");
         T.call(O.tok, "tenant.update", { tenantId: t.tenantId, coFullName: "", coEmail: "", coIdNumber: "" });
         const t9 = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Locataire Erreur" });
         const d9 = T.call(O.tok, "doc.upload", { ownerType: "TENANT", ownerId: t9.tenantId, category: "ID_DOCUMENT", mimeType: "image/png", fileName: "x.png", base64: png }).documentId;
