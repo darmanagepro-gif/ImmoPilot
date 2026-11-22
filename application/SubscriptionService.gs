@@ -26,12 +26,15 @@ var PAYMENT_PROVIDERS_ = {
 /**
  * Forfait proposé à l'inscription en ligne et aux demandes de changement des clients ?
  * signupVisibility : "PUBLIC" ou "ADMIN" (attribué uniquement par le super administrateur, ECO SYNERGY).
- * Forfait sans réglage (ancien forfait) : public.
+ * Forfait sans réglage : public s'il fait partie des forfaits standard (Essentiel, Pro, Business),
+ * réservé sinon (forfait créé par l'administrateur). La case « Proposé à l'inscription en ligne » prime toujours.
  */
 function planPublic_(pl) {
   if (!pl || pl.status !== "ACTIVE") return false;
   const v = String(pl.signupVisibility || "").toUpperCase();
-  return v !== "ADMIN";
+  if (v === "PUBLIC") return true;
+  if (v === "ADMIN") return false;
+  return DEFAULT_PLANS.some(function (d) { return d.planCode === pl.planCode; });
 }
 function planOut_(pl) {
   return { planCode: pl.planCode, name: pl.name, price: pl.price, currency: pl.currency || cur_(), periodicity: pl.periodicity, maxProperties: pl.maxProperties, maxUsers: pl.maxUsers, storageMb: pl.storageMb,
