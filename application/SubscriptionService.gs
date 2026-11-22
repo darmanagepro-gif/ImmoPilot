@@ -26,14 +26,12 @@ var PAYMENT_PROVIDERS_ = {
 /**
  * Forfait proposé à l'inscription en ligne et aux demandes de changement des clients ?
  * signupVisibility : "PUBLIC" ou "ADMIN" (attribué uniquement par le super administrateur, ECO SYNERGY).
- * Forfait ancien sans réglage : public, sauf le forfait personnel « LOULOU » qui reste réservé à l'administrateur.
+ * Forfait sans réglage (ancien forfait) : public.
  */
 function planPublic_(pl) {
   if (!pl || pl.status !== "ACTIVE") return false;
   const v = String(pl.signupVisibility || "").toUpperCase();
-  if (v === "PUBLIC") return true;
-  if (v === "ADMIN") return false;
-  return !/loulou/i.test(String(pl.planCode || "") + " " + String(pl.name || ""));
+  return v !== "ADMIN";
 }
 function planOut_(pl) {
   return { planCode: pl.planCode, name: pl.name, price: pl.price, currency: pl.currency || cur_(), periodicity: pl.periodicity, maxProperties: pl.maxProperties, maxUsers: pl.maxUsers, storageMb: pl.storageMb,

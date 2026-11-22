@@ -1980,7 +1980,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "bf5258245566";
+var IMMO_BUILD_ = "db5d3d40f24b";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -10543,14 +10543,12 @@ var PAYMENT_PROVIDERS_ = {
 /**
  * Forfait proposé à l'inscription en ligne et aux demandes de changement des clients ?
  * signupVisibility : "PUBLIC" ou "ADMIN" (attribué uniquement par le super administrateur, ECO SYNERGY).
- * Forfait ancien sans réglage : public, sauf le forfait personnel « LOULOU » qui reste réservé à l'administrateur.
+ * Forfait sans réglage (ancien forfait) : public.
  */
 function planPublic_(pl) {
   if (!pl || pl.status !== "ACTIVE") return false;
   const v = String(pl.signupVisibility || "").toUpperCase();
-  if (v === "PUBLIC") return true;
-  if (v === "ADMIN") return false;
-  return !/loulou/i.test(String(pl.planCode || "") + " " + String(pl.name || ""));
+  return v !== "ADMIN";
 }
 function planOut_(pl) {
   return { planCode: pl.planCode, name: pl.name, price: pl.price, currency: pl.currency || cur_(), periodicity: pl.periodicity, maxProperties: pl.maxProperties, maxUsers: pl.maxUsers, storageMb: pl.storageMb,
@@ -12854,19 +12852,18 @@ function TEST_GROUPS_() {
           T.fails(null, "auth.requestReset", { email: fx.mail("ipreset-last") }, "RATE_LIMIT");
         } finally { g.REQUEST_META_ = prev; }
       }],
-      ["Forfait réservé à l'administrateur (LOULOU) : absent de l'inscription et des demandes clients, attribuable par le super administrateur", function (T, fx) {
-        T.call(fx.tok.superA, "plan.save", { planCode: "LOULOU", name: "Forfait Loulou", price: 1, periodicity: "MONTHLY", maxProperties: 999, maxUsers: 99, storageMb: 1000, trialDays: 0, status: "ACTIVE", sortOrder: 99, publicSignup: false, features: [] });
-        dbInsert_("SubscriptionPlans", { planCode: "LOULOU2", name: "Ancien forfait loulou", price: 1, currency: cur_(), periodicity: "MONTHLY", maxProperties: 5, maxUsers: 3, storageMb: 100, trialDays: 0, status: "ACTIVE", sortOrder: 98 });
+      ["Forfait réservé à l'administrateur : absent de l'inscription et des demandes clients, attribuable par le super administrateur ; ancien forfait sans réglage public", function (T, fx) {
+        T.call(fx.tok.superA, "plan.save", { planCode: "TESTADMIN", name: "Forfait de test", price: 1, periodicity: "MONTHLY", maxProperties: 999, maxUsers: 99, storageMb: 1000, trialDays: 0, status: "ACTIVE", sortOrder: 99, publicSignup: false, features: [] });
+        dbInsert_("SubscriptionPlans", { planCode: "OLDPLAN", name: "Ancien forfait", price: 1, currency: cur_(), periodicity: "MONTHLY", maxProperties: 5, maxUsers: 3, storageMb: 100, trialDays: 0, status: "ACTIVE", sortOrder: 98 });
         const codes = T.pub("signup.info", {}).plans.map(function (x) { return x.planCode; });
-        T.ok(codes.indexOf("LOULOU") < 0 && codes.indexOf("LOULOU2") < 0 && codes.indexOf("PRO") >= 0, "inscription : forfaits publics seulement (" + codes.join(", ") + ")");
-        T.fails(null, "signup.start", { kind: "CLIENT", profile: "OWNER", ownerType: "INDIVIDUAL", planCode: "LOULOU", firstName: "X", lastName: "Y", phone: "0612345678", city: "Ville",
-          homeAddress: "1 rue du Test, Ville", email: fx.mail("signup-loulou"), password: "MotDePasse2026", acceptTerms: true, acceptStatus: true, acceptPrivacy: true }, "VALIDATION");
-        T.ok(T.call(fx.tok.ownerA, "plan.list", {}).every(function (x) { return x.planCode !== "LOULOU" && x.planCode !== "LOULOU2"; }), "un client ne voit pas les forfaits réservés");
-        T.fails(fx.tok.ownerA, "sub.requestChange", { organizationId: fx.orgA.organizationId, planCode: "LOULOU" }, "VALIDATION");
-        const adm = T.call(fx.tok.superA, "plan.list", {}).filter(function (x) { return x.planCode === "LOULOU"; })[0];
+        T.ok(codes.indexOf("TESTADMIN") < 0 && codes.indexOf("OLDPLAN") >= 0 && codes.indexOf("PRO") >= 0, "inscription : forfaits publics seulement (" + codes.join(", ") + ")");
+        T.fails(null, "signup.start", { kind: "CLIENT", profile: "OWNER", ownerType: "INDIVIDUAL", planCode: "TESTADMIN", firstName: "X", lastName: "Y", phone: "0612345678", city: "Ville",
+          homeAddress: "1 rue du Test, Ville", email: fx.mail("signup-testadmin"), password: "MotDePasse2026", acceptTerms: true, acceptStatus: true, acceptPrivacy: true }, "VALIDATION");
+        T.ok(T.call(fx.tok.ownerA, "plan.list", {}).every(function (x) { return x.planCode !== "TESTADMIN"; }), "un client ne voit pas les forfaits réservés");
+        T.fails(fx.tok.ownerA, "sub.requestChange", { organizationId: fx.orgA.organizationId, planCode: "TESTADMIN" }, "VALIDATION");
+        const adm = T.call(fx.tok.superA, "plan.list", {}).filter(function (x) { return x.planCode === "TESTADMIN"; })[0];
         T.ok(adm && adm.publicSignup === false, "le super administrateur voit le forfait réservé");
-        T.ok(T.call(fx.tok.superA, "plan.list", {}).filter(function (x) { return x.planCode === "PRO"; })[0].publicSignup === true, "PRO reste public");
-        dbUpdate_("SubscriptionPlans", "LOULOU", { status: "RETIRED" }); dbUpdate_("SubscriptionPlans", "LOULOU2", { status: "RETIRED" });
+        dbUpdate_("SubscriptionPlans", "TESTADMIN", { status: "RETIRED" }); dbUpdate_("SubscriptionPlans", "OLDPLAN", { status: "RETIRED" });
       }],
       ["Inscription propriétaire : code e-mail, compte + organisation + essai, contrat à signer ; e-mail déjà pris refusé ; mauvais code", function (T, fx) {
         const fr = IMMO_EDITION_ === "FR", email = fx.mail("signup-owner");
