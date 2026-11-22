@@ -1361,6 +1361,36 @@ function TEST_GROUPS_() {
         const fin = T.call(O.tok, "leasedoc.finalize", { leaseDocId: dr.leaseDocId });
         const html = Utilities.newBlob(Utilities.base64Decode(fin.base64)).getDataAsString();
         T.ok(html.indexOf("AB123456") >= 0 && html.indexOf("15/01/1990") >= 0 && html.indexOf("Fès") >= 0, "numéro de pièce et naissance dans le contrat");
+      }],
+      ["Couple de locataires : second locataire (nom, pièce recto/verso), contrat et documents aux deux noms, e-mails en copie", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const prop = T.call(O.tok, "property.create", { organizationId: O.org.organizationId, name: "Appartement Couple", city: "Marrakech", address: "5 rue du Couple", rentalMode: "LONG_TERM" }).propertyId;
+        const idt = IMMO_EDITION_ === "FR" ? "CNI" : "CIN", e1 = fx.mail("couple.m"), e2 = fx.mail("couple.mme");
+        T.fails(O.tok, "tenant.create", { propertyId: prop, fullName: "Karim Bennani", coFullName: "S", coEmail: e2 }, "VALIDATION");
+        T.fails(O.tok, "tenant.create", { propertyId: prop, fullName: "Karim Bennani", coFullName: "Salma Bennani", coIdNumber: "AB 1;2" }, "VALIDATION");
+        const t = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Karim Bennani", email: e1, idType: idt, idNumber: "KB111111",
+          coFullName: "Salma Bennani", coEmail: e2, coNationality: "Marocaine", coIdType: idt, coIdNumber: "sb222222", coBirthDate: "1992-03-04", coBirthPlace: "Rabat" });
+        const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        const up = function (n) { return T.call(O.tok, "doc.upload", { ownerType: "TENANT", ownerId: t.tenantId, category: "ID_DOCUMENT", mimeType: "image/png", fileName: n, base64: png }).documentId; };
+        const r1 = up("m-recto.png"), v1 = up("m-verso.png"), r2 = up("mme-recto.png"), v2 = up("mme-verso.png");
+        T.call(O.tok, "tenant.update", { tenantId: t.tenantId, idDocumentId: r1, idDocumentBackId: v1, coIdDocumentId: r2, coIdDocumentBackId: v2 });
+        const row = T.call(O.tok, "tenant.list", {}).items.find(function (x) { return x.tenantId === t.tenantId; });
+        T.ok(row.displayName === "Karim Bennani et Salma Bennani" && row.coIdNumber === "SB222222" && row.coIdDocumentId === r2 && row.coIdDocumentBackId === v2, "second locataire et ses deux faces enregistrés");
+        T.ok(T.call(O.tok, "tenant.list", { q: "Salma" }).items.some(function (x) { return x.tenantId === t.tenantId; }), "recherche par le nom du second locataire");
+        const l = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: todayStr_(), monthlyRent: 4000, dueDay: 1 });
+        T.eq(T.call(O.tok, "lease.get", { leaseId: l.leaseId }).tenantName, "Karim Bennani et Salma Bennani", "bail au nom des deux");
+        TEST_HOOKS_.aiConfig = false;
+        const dr = T.call(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LEASE_CONTRACT" });
+        const html = Utilities.newBlob(Utilities.base64Decode(T.call(O.tok, "leasedoc.finalize", { leaseDocId: dr.leaseDocId }).base64)).getDataAsString();
+        T.ok(html.indexOf("Les locataires") >= 0 && html.indexOf("KB111111") >= 0 && html.indexOf("SB222222") >= 0 && html.indexOf("04/03/1992") >= 0 && html.indexOf("solidaires") >= 0, "contrat : identité des deux locataires");
+        T.ok((html.match(/Lu et approuvé/g) || []).length === 3, "trois signatures : bailleur et deux locataires");
+        T.call(O.tok, "lease.activate", { leaseId: l.leaseId });
+        const before = TEST_HOOKS_.mailSink.length;
+        rentAutomationJob_({ force: true, batch: 50 });
+        const call = TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return m.to === e1 && /Appel de loyer/.test(m.subject); })[0];
+        T.ok(call && call.cc === e2 && /Karim Bennani et Salma Bennani/.test(call.body), "appel de loyer aux deux noms, second locataire en copie");
+        T.call(O.tok, "tenant.update", { tenantId: t.tenantId, coFullName: "", coEmail: "", coIdNumber: "" });
+        T.eq(T.call(O.tok, "lease.get", { leaseId: l.leaseId }).tenantName, "Karim Bennani", "second locataire retiré");
       }]
     ] },
     { name: "KPI et Pareto", tests: [

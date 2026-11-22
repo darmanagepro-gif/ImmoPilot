@@ -1980,7 +1980,7 @@ function installPhase4Triggers() { return installTriggers(); }
  * Suffixes de type : #n nombre, #b booléen, #d date AAAA-MM-JJ, #t horodatage ISO UTC, #j JSON (texte).
  */
 /** Empreinte de la version installée (remplacée par tests/build-bundle.js ; « dev » = fichiers séparés). */
-var IMMO_BUILD_ = "fc628a146332";
+var IMMO_BUILD_ = "c5bcc7ab4596";
 /**
  * Édition du logiciel : « MA » (Maroc, dirham) ou « FR » (France, euro). Même code, réglages et mentions propres au pays.
  * La version d'installation France est produite par : node tests/build-bundle.js --edition=fr (dossier dist-fr).
@@ -2019,7 +2019,7 @@ var IMMO_LANGS_ = ["fr", "en", "ar", "es", "it", "nl"];
 var IMMO_CONFIG = Object.freeze({
   APP_NAME: "DarPilot",
   VERSION: "2.8.0",
-  SCHEMA_VERSION: 19,
+  SCHEMA_VERSION: 20,
   TIMEZONE: (EDITIONS_[IMMO_EDITION_] || EDITIONS_.MA).timezone,
   DATABASE_PROPERTY: "IMMO_DATABASE_SPREADSHEET_ID",
   DRIVE_ROOT_PROPERTY: "IMMO_PRIVATE_ROOT_FOLDER_ID",
@@ -2243,7 +2243,7 @@ var TABLES_SRC = {
     enums: { kind: ["RESERVATION", "DEPOSIT", "REFUND", "RENT", "INVOICE", "SUBSCRIPTION", "DEPOSIT_REFUND", "OTHER"], refType: ["RESERVATION", "RENT_SCHEDULE", "INVOICE", "SUBSCRIPTION", "LEASE", "EXPENSE"], direction: ["IN", "OUT"], status: ["RECORDED", "VOID"] },
     cols: "paymentId,organizationId,propertyId,kind,refType,refId,direction,amount#n,currency,method,paidAt#t,reference,proofDocId,status,reconciled#b,reconciledAt#t,reconciledBy,note,idempotencyKey,recordedBy,createdAt#t,voidedAt#t,voidedBy" },
   Tenants: { pk: "tenantId", idp: "tnt", org: "organizationId", req: "fullName", enums: { status: ["ACTIVE", "INACTIVE"] },
-    cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t|birthDate#d,birthPlace,idNumber,idExpiry#d,address,idDocumentId,idDocumentBackId" },
+    cols: "tenantId,organizationId,userId,fullName,email,phone,nationality,idType,status,createdAt#t,createdBy,updatedAt#t|birthDate#d,birthPlace,idNumber,idExpiry#d,address,idDocumentId,idDocumentBackId,coFullName,coEmail,coPhone,coNationality,coIdType,coIdNumber,coIdExpiry#d,coBirthDate#d,coBirthPlace,coAddress,coIdDocumentId,coIdDocumentBackId" },
   Leases: { pk: "leaseId", idp: "lea", org: "organizationId", req: "propertyId,tenantId,startDate,monthlyRent",
     enums: { status: ["DRAFT", "ACTIVE", "NOTICE", "ENDED", "RENEWED", "CANCELLED"] },
     cols: "leaseId,organizationId,propertyId,tenantId,startDate#d,endDate#d,durationMonths#n,monthlyRent#n,charges#n,deposit#n,dueDay#n,indexationRate#n,nextIndexationDate#d,terms,documentId,status,noticeDate#d,noticeBy,depositStatus,depositReturned#n,depositDeductions#n,renewedFromLeaseId,endReason,createdAt#t,createdBy,updatedAt#t,updatedBy|automationJson#j" },
@@ -5400,16 +5400,26 @@ function leaseDocHtml_(c, d) {
   const sections = parseJson_(d.sectionsJson, []), draft = d.status !== "FINAL", ma = IMMO_EDITION_ === "MA", t = c.t, org = c.org, prop = c.prop;
   let inner = draft ? "<div class='box' style='border-color:#e9b341;background:#fff8e6'><b>PROJET — document non validé, à relire avant signature.</b></div>" : "";
   if (d.docType === "LEASE_CONTRACT") {
-    inner += "<h2>Entre les soussignés</h2><table><tr><th style='width:50%'>Le bailleur</th><th>Le locataire</th></tr><tr><td><b>" + escapeHtml_(org.name || "") + "</b><br>" +
-      escapeHtml_([org.address, org.city].filter(String).join(", ") || "Adresse : ____________________") + "<br>" + escapeHtml_(org.phone ? "Tél. " + org.phone : "") + "</td><td><b>" + escapeHtml_(t.fullName || "") + "</b><br>" +
-      (t.nationality ? "Nationalité : " + escapeHtml_(t.nationality) + "<br>" : "") + "Pièce d'identité : " + escapeHtml_(t.idType ? ({ CIN: "CIN", CNI: "CNI", PASSPORT: "Passeport", RESIDENCE_PERMIT: "Titre de séjour", DRIVING_LICENSE: "Permis de conduire" }[t.idType] || t.idType) : "____") +
-      " n° " + (t.idNumber ? "<b>" + escapeHtml_(t.idNumber) + "</b>" + (t.idExpiry ? " (valable jusqu'au " + pdfDate_(t.idExpiry) + ")" : "") : "____________________") + "<br>" +
-      (t.birthDate ? "Né(e) le " + pdfDate_(t.birthDate) + (t.birthPlace ? " à " + escapeHtml_(t.birthPlace) : "") + "<br>" : "") + (t.address ? "Domicile actuel : " + escapeHtml_(t.address) + "<br>" : "") +
-      escapeHtml_([t.email, t.phone].filter(String).join(" · ")) + "</td></tr></table><p>Logement : <b>" + escapeHtml_(prop.name || "") + "</b> — " + escapeHtml_(rentAddress_(prop)) + "</p>";
+    const idLabel = function (x) { return x ? ({ CIN: "CIN", CNI: "CNI", PASSPORT: "Passeport", RESIDENCE_PERMIT: "Titre de séjour", DRIVING_LICENSE: "Permis de conduire" }[x] || x) : "____"; };
+    const person = function (q) {
+      return "<b>" + escapeHtml_(q.name || "") + "</b><br>" + (q.nationality ? "Nationalité : " + escapeHtml_(q.nationality) + "<br>" : "") + "Pièce d'identité : " + escapeHtml_(idLabel(q.idType)) +
+        " n° " + (q.idNumber ? "<b>" + escapeHtml_(q.idNumber) + "</b>" + (q.idExpiry ? " (valable jusqu'au " + pdfDate_(q.idExpiry) + ")" : "") : "____________________") + "<br>" +
+        (q.birthDate ? "Né(e) le " + pdfDate_(q.birthDate) + (q.birthPlace ? " à " + escapeHtml_(q.birthPlace) : "") + "<br>" : "") + (q.address ? "Domicile actuel : " + escapeHtml_(q.address) + "<br>" : "") +
+        escapeHtml_([q.email, q.phone].filter(String).join(" · "));
+    };
+    const co = !!t.coFullName;
+    const tenantsHtml = person({ name: t.mainFullName || t.fullName, nationality: t.nationality, idType: t.idType, idNumber: t.idNumber, idExpiry: t.idExpiry, birthDate: t.birthDate, birthPlace: t.birthPlace, address: t.address, email: t.email, phone: t.phone }) +
+      (co ? "<hr style='border:0;border-top:1px solid #ddd;margin:8px 0'>" + person({ name: t.coFullName, nationality: t.coNationality, idType: t.coIdType, idNumber: t.coIdNumber, idExpiry: t.coIdExpiry,
+        birthDate: t.coBirthDate, birthPlace: t.coBirthPlace, address: t.coAddress, email: t.coEmail, phone: t.coPhone }) + "<br><i>Locataires solidaires et indivisibles.</i>" : "");
+    inner += "<h2>Entre les soussignés</h2><table><tr><th style='width:50%'>Le bailleur</th><th>" + (co ? "Les locataires" : "Le locataire") + "</th></tr><tr><td><b>" + escapeHtml_(org.name || "") + "</b><br>" +
+      escapeHtml_([org.address, org.city].filter(String).join(", ") || "Adresse : ____________________") + "<br>" + escapeHtml_(org.phone ? "Tél. " + org.phone : "") + "</td><td>" + tenantsHtml +
+      "</td></tr></table><p>Logement : <b>" + escapeHtml_(prop.name || "") + "</b> — " + escapeHtml_(rentAddress_(prop)) + "</p>";
   }
   sections.forEach(function (s) { inner += (s.title ? "<h2>" + escapeHtml_(s.title) + "</h2>" : "") + laParas_(s.body); });
   if (d.docType === "LEASE_CONTRACT") inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + (draft ? "____________" : pdfDate_(String(d.finalizedAt || todayStr_()).slice(0, 10))) + ", en deux exemplaires originaux" + (ma ? "." : ", dont un remis à chaque partie.") + "</p>" +
-    "<table class='sign'><tr><td><b>Le bailleur</b><br><span class='muted'>« Lu et approuvé », signature</span></td><td><b>Le locataire</b><br><span class='muted'>« Lu et approuvé », signature</span></td></tr></table>";
+    "<table class='sign'><tr><td><b>Le bailleur</b><br><span class='muted'>« Lu et approuvé », signature</span></td>" + (t.coFullName
+      ? "<td><b>" + escapeHtml_(t.mainFullName || "") + "</b><br><span class='muted'>« Lu et approuvé », signature</span></td><td><b>" + escapeHtml_(t.coFullName) + "</b><br><span class='muted'>« Lu et approuvé », signature</span></td>"
+      : "<td><b>Le locataire</b><br><span class='muted'>« Lu et approuvé », signature</span></td>") + "</tr></table>";
   else inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + pdfDate_(todayStr_()) + ".</p>";
   return pdfShell_(d.title || "Document", inner, { subtitle: (prop.name || "") + (d.docType === "LETTER" ? " · à l'attention de " + (t.fullName || "") : ""), issuer: rentIssuer_(org), ref: (d.docType === "LEASE_CONTRACT" ? "BAIL-" : "COUR-") + String(d.leaseDocId || d.leaseId || "").slice(-8).toUpperCase(),
     footer: draft ? "PROJET — document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; DarPilot ne garantit pas sa conformité juridique."
@@ -5828,7 +5838,7 @@ function leaseGenerateSchedules_(lease) {
 function leaseOut_(p, l, props, tenants) {
   const prop = (props || {})[String(l.propertyId)] || dbGet_("Properties", l.propertyId) || {}, t = (tenants || {})[String(l.tenantId)] || dbGet_("Tenants", l.tenantId) || {};
   const sched = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(l.leaseId) && s.status === "OPEN"; }).map(function (s) { return rentStatus_(s); });
-  return { leaseId: l.leaseId, propertyId: l.propertyId, propertyName: prop.name, tenantId: l.tenantId, tenantName: t.fullName, tenantEmail: t.email, tenantPhone: t.phone, startDate: l.startDate, endDate: l.endDate,
+  return { leaseId: l.leaseId, propertyId: l.propertyId, propertyName: prop.name, tenantId: l.tenantId, tenantName: tenantName_(t), tenantEmail: t.email, coTenantName: t.coFullName || "", coTenantEmail: t.coEmail || "", tenantPhone: t.phone, startDate: l.startDate, endDate: l.endDate,
     durationMonths: l.durationMonths, monthlyRent: l.monthlyRent, charges: l.charges, deposit: l.deposit, dueDay: l.dueDay, indexationRate: l.indexationRate, nextIndexationDate: l.nextIndexationDate, terms: l.terms,
     status: l.status, noticeDate: l.noticeDate, noticeBy: l.noticeBy, depositStatus: l.depositStatus, depositHeld: leaseDepositHeld_(l.leaseId), depositReturned: l.depositReturned, depositDeductions: l.depositDeductions,
     documentId: l.documentId, endReason: l.endReason, renewedFromLeaseId: l.renewedFromLeaseId,
@@ -5846,6 +5856,31 @@ function leaseLoad_(p, id, cap) {
 }
 
 /* ------------------------------ Locataires ------------------------------ */
+/** Nom affiché sur les documents : « Prénom Nom » ou, avec un second locataire (couple, colocation), « A et B ». */
+function tenantName_(t) {
+  t = t || {};
+  return [t.fullName, t.coFullName].map(function (x) { return String(x || "").trim(); }).filter(String).join(" et ");
+}
+/** Adresse e-mail du second locataire, mise en copie des envois (si différente de celle du locataire principal). */
+function tenantCoEmail_(t) {
+  const e = String((t || {}).coEmail || "").trim();
+  return e && normalizeEmail_(e) !== normalizeEmail_((t || {}).email || "") ? e : "";
+}
+var TENANT_CO_KEYS_ = ["coFullName", "coEmail", "coPhone", "coNationality", "coIdType", "coIdNumber", "coIdExpiry", "coBirthDate", "coBirthPlace", "coAddress"];
+/** Second locataire (co-titulaire du bail) : mêmes champs et mêmes contrôles que le locataire principal, tous facultatifs. */
+function tenantCo_(a, o) {
+  if (a.coFullName !== undefined) { const n = safeText_(a.coFullName, 120).trim(); assert_(!n || n.length >= 2, "Nom du second locataire : 2 caractères minimum."); o.coFullName = n; }
+  if (a.coEmail !== undefined) o.coEmail = a.coEmail ? validateEmail_(a.coEmail) : "";
+  if (a.coPhone !== undefined) o.coPhone = safeText_(a.coPhone, 30);
+  if (a.coNationality !== undefined) o.coNationality = safeText_(a.coNationality, 60);
+  if (a.coIdType !== undefined) o.coIdType = a.coIdType ? oneOf_(a.coIdType, idTypes_(), "Pièce du second locataire") : "";
+  if (a.coIdNumber !== undefined) { const n = safeText_(a.coIdNumber, 30).toUpperCase().replace(/\s+/g, ""); assert_(!n || /^[A-Z0-9-]{3,30}$/.test(n), "Numéro de pièce du second locataire invalide (lettres, chiffres et tirets)."); o.coIdNumber = n; }
+  if (a.coIdExpiry !== undefined) o.coIdExpiry = a.coIdExpiry ? dateOnly_(a.coIdExpiry, "Date d'expiration du second locataire") : "";
+  if (a.coBirthDate !== undefined) { o.coBirthDate = a.coBirthDate ? dateOnly_(a.coBirthDate, "Date de naissance du second locataire") : ""; if (o.coBirthDate) assert_(o.coBirthDate < todayStr_() && o.coBirthDate > "1900-01-01", "Date de naissance du second locataire invalide."); }
+  if (a.coBirthPlace !== undefined) o.coBirthPlace = safeText_(a.coBirthPlace, 80);
+  if (a.coAddress !== undefined) o.coAddress = safeText_(a.coAddress, 200);
+  return o;
+}
 function tenantList_(p, a) {
   a = a || {};
   const orgs = p.roles.filter(function (r) { return r.caps.indexOf("lease.manage") >= 0 || r.caps.indexOf("lease.view") >= 0; }).map(function (r) { return r.organizationId; });
@@ -5853,12 +5888,15 @@ function tenantList_(p, a) {
   const rows = dbAll_("Tenants").filter(function (t) {
     if (!(viaLease[String(t.tenantId)] || (orgs.indexOf(String(t.organizationId)) >= 0 && hasOrgCap_(p, t.organizationId, "lease.manage")))) return false;
     if (a.status && t.status !== a.status) return false;
-    return matchesQuery_(a.q, [t.fullName, t.email, t.phone]);
+    return matchesQuery_(a.q, [t.fullName, t.email, t.phone, t.coFullName, t.coEmail, t.coPhone]);
   }).sort(function (x, y) { return String(x.fullName).localeCompare(String(y.fullName)); })
     .map(function (t) { const mg = hasOrgCap_(p, t.organizationId, "lease.manage");
       return { tenantId: t.tenantId, organizationId: t.organizationId, fullName: t.fullName, email: t.email, phone: t.phone, nationality: t.nationality, status: t.status, hasAccount: !!t.userId,
       idType: t.idType, idNumber: mg ? t.idNumber : (t.idNumber ? "•••" + String(t.idNumber).slice(-3) : ""), idExpiry: mg ? t.idExpiry : "", birthDate: mg ? t.birthDate : "", birthPlace: mg ? t.birthPlace : "", address: mg ? t.address : "",
       idDocumentId: mg ? t.idDocumentId : "", idDocumentBackId: mg ? t.idDocumentBackId : "",
+      displayName: tenantName_(t), coFullName: t.coFullName || "", coEmail: t.coEmail || "", coPhone: t.coPhone || "", coNationality: t.coNationality || "", coIdType: t.coIdType || "",
+      coIdNumber: mg ? t.coIdNumber : (t.coIdNumber ? "•••" + String(t.coIdNumber).slice(-3) : ""), coIdExpiry: mg ? t.coIdExpiry : "", coBirthDate: mg ? t.coBirthDate : "", coBirthPlace: mg ? t.coBirthPlace : "",
+      coAddress: mg ? t.coAddress : "", coIdDocumentId: mg ? t.coIdDocumentId : "", coIdDocumentBackId: mg ? t.coIdDocumentBackId : "",
       activeLeases: dbAll_("Leases").filter(function (l) { return String(l.tenantId) === String(t.tenantId) && ["ACTIVE", "NOTICE"].indexOf(l.status) >= 0; }).length }; });
   return pageOf_(rows, a);
 }
@@ -5884,7 +5922,7 @@ function tenantCreate_(p, a) {
   const t = dbInsert_("Tenants", { organizationId: orgId, userId: u && dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(u.userId) && r.role === "TENANT" && r.status === "ACTIVE"; }) ? u.userId : "",
     fullName: reqText_(a.fullName, "Nom complet", 2, 120), email: email, phone: safeText_(a.phone, 30), nationality: safeText_(a.nationality, 60), idType: a.idType ? oneOf_(a.idType, idTypes_(), "Pièce") : "",
     status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
-  const idf = tenantIdentity_(Object.assign({}, a, { idType: undefined }), {});
+  const idf = tenantCo_(a, tenantIdentity_(Object.assign({}, a, { idType: undefined }), {}));
   if (Object.keys(idf).length) dbUpdate_("Tenants", t.tenantId, idf);
   audit_("TENANT_CREATED", "Tenant", t.tenantId, orgId, { identity: Object.keys(idf) });
   return { ok: true, tenantId: t.tenantId, id: t.tenantId };
@@ -5899,8 +5937,9 @@ function tenantUpdate_(p, a) {
   if (a.nationality !== undefined) patch.nationality = safeText_(a.nationality, 60);
   if (a.status !== undefined) patch.status = oneOf_(a.status, ["ACTIVE", "INACTIVE"], "Statut");
   tenantIdentity_(a, patch);
-  // Recto (idDocumentId) et verso (idDocumentBackId) de la pièce : documents du dossier de CE locataire uniquement.
-  ["idDocumentId", "idDocumentBackId"].forEach(function (k) {
+  tenantCo_(a, patch);
+  // Recto et verso des pièces (locataire principal et second locataire) : documents du dossier de CE locataire uniquement.
+  ["idDocumentId", "idDocumentBackId", "coIdDocumentId", "coIdDocumentBackId"].forEach(function (k) {
     if (a[k] === undefined) return;
     if (a[k]) { const d = dbGet_("Documents", safeText_(a[k], 120)); assert_(d && d.ownerType === "TENANT" && String(d.ownerId) === String(t.tenantId) && d.status === "ACTIVE", "Pièce d'identité non rattachée à ce locataire."); }
     patch[k] = safeText_(a[k], 120);
@@ -5935,7 +5974,7 @@ function leaseList_(p, a) {
     if (!(canProp_(p, props[String(l.propertyId)], "lease.view") || mine.indexOf(String(l.tenantId)) >= 0)) return false;
     if (a.status) { if (String(a.status).split(",").indexOf(l.status) < 0) return false; }
     if (a.propertyId && String(l.propertyId) !== String(a.propertyId)) return false;
-    return matchesQuery_(a.q, [(tenants[String(l.tenantId)] || {}).fullName, (props[String(l.propertyId)] || {}).name]);
+    return matchesQuery_(a.q, [tenantName_(tenants[String(l.tenantId)]), (props[String(l.propertyId)] || {}).name]);
   }).sort(function (x, y) { return String(y.startDate).localeCompare(String(x.startDate)); });
   const page = pageOf_(rows, a);
   page.items = page.items.map(function (l) { return leaseOut_(p, l, props, tenants); });
@@ -6075,7 +6114,7 @@ function leaseReceipt_(p, a) {
 function leaseDocument_(p, a) {
   const x = leaseLoad_(p, a.leaseId, "lease.manage");
   const t = dbGet_("Tenants", x.l.tenantId) || {}, org = dbGet_("Organizations", x.l.organizationId) || {};
-  const map = { bailleur: org.name, locataire: t.fullName, locataire_email: t.email, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), surface: x.prop.surfaceM2, debut: x.l.startDate,
+  const map = { bailleur: org.name, locataire: tenantName_(t), locataire_email: t.email, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), surface: x.prop.surfaceM2, debut: x.l.startDate,
     fin: x.l.endDate || "indéterminée", loyer: x.l.monthlyRent, charges: x.l.charges, caution: x.l.deposit, jour_echeance: x.l.dueDay, indexation: x.l.indexationRate, conditions: x.l.terms, date: todayStr_() };
   const tpl = getSetting_("template.leaseDocId", x.l.organizationId), text = docTemplateOf_("lease", x.l.organizationId), cur = cur_();
   // Contrat complet et conforme (meublé ou vide selon le logement), sans marque DarPilot : en-tête au nom du bailleur.
@@ -6083,7 +6122,7 @@ function leaseDocument_(p, a) {
   const base = laContractTemplate_(c, { furnished: furnished, usage: "HABITATION", clauses: ["INSURANCE_REQUIRED", "SUBLET_FORBIDDEN"], instructions: "" });
   const sections = base.sections.map(function (sc) { return { title: laFill_(sc.title, c), body: laFill_(sc.body, c) }; });
   let pdf;
-  if (text) pdf = docTemplatePdf_("lease", text, { bailleur: org.name, bailleur_adresse: [org.address, org.city].filter(String).join(", "), locataire: t.fullName, locataire_email: t.email,
+  if (text) pdf = docTemplatePdf_("lease", text, { bailleur: org.name, bailleur_adresse: [org.address, org.city].filter(String).join(", "), locataire: tenantName_(t), locataire_email: t.email,
       bien: x.prop.name, adresse: [x.prop.address, x.prop.city].filter(String).join(", "), surface: x.prop.surfaceM2,
       type: ({ APARTMENT: "Appartement", STUDIO: "Studio", HOUSE: "Maison", VILLA: "Villa", RIAD: "Riad", COMMERCIAL: "Local commercial", OTHER: "Autre" })[x.prop.propertyType] || x.prop.propertyType || "",
       debut: pdfDate_(x.l.startDate), fin: x.l.endDate ? pdfDate_(x.l.endDate) : "durée indéterminée",
@@ -6119,11 +6158,11 @@ function leaseJob_() {
       if (st.remaining > 0 && s.dueDate === addDaysStr_(today, before) && t.userId) { notify_({ eventKey: "rent-due:" + s.scheduleId, userIds: [t.userId], type: "RENT_DUE", organizationId: l.organizationId,
         title: "Échéance de loyer le " + s.dueDate, body: fmtAmount_(st.remaining) + " — " + prop.name, link: "#mylease" }); alerts++; }
       if (st.status === "LATE") { notify_({ eventKey: "rent-late:" + s.scheduleId + ":" + Math.floor(st.daysLate / 7), userIds: managers.concat(t.userId ? [t.userId] : []), type: "RENT_LATE", organizationId: l.organizationId,
-        title: "Loyer en retard (" + st.daysLate + " j) : " + prop.name, body: (t.fullName || "") + " — reste dû " + fmtAmount_(st.remaining) + " (période " + s.period + ").", link: "#lease/" + l.leaseId }); alerts++; }
+        title: "Loyer en retard (" + st.daysLate + " j) : " + prop.name, body: tenantName_(t) + " — reste dû " + fmtAmount_(st.remaining) + " (période " + s.period + ").", link: "#lease/" + l.leaseId }); alerts++; }
     });
     if (l.endDate) (getSetting_("alerts.leaseEndDays", l.organizationId) || [60, 30]).forEach(function (d) {
       if (l.endDate === addDaysStr_(today, d)) { notify_({ eventKey: "lease-end:" + l.leaseId + ":" + d, userIds: managers, type: "LEASE_ENDING", organizationId: l.organizationId,
-        title: "Fin de bail dans " + d + " jours : " + prop.name, body: (t.fullName || "") + " — fin le " + l.endDate + ". Préparez renouvellement ou état des lieux.", link: "#lease/" + l.leaseId }); alerts++; }
+        title: "Fin de bail dans " + d + " jours : " + prop.name, body: tenantName_(t) + " — fin le " + l.endDate + ". Préparez renouvellement ou état des lieux.", link: "#lease/" + l.leaseId }); alerts++; }
     });
   });
   return { schedulesCreated: created, alerts: alerts };
@@ -6654,9 +6693,10 @@ function sendMailSafe_(to, subject, body, eventKey, orgId, opts) {
     const text = String(body || "").slice(0, 20000), lay = { senderName: opts.senderName, footer: opts.footer }, html = opts.plain ? mailHtmlPlain_(text, lay) : mailHtml_(text, lay);
     const msg = { to: to, subject: safeText_(subject, 200), body: text, htmlBody: html, name: safeText_(opts.senderName || IMMO_CONFIG.APP_NAME, 80), ref: key };
     if (opts.attachments && opts.attachments.length) msg.attachments = opts.attachments;
+    if (opts.cc) msg.cc = validateEmail_(opts.cc);
     if (opts.bcc) msg.bcc = validateEmail_(opts.bcc);
     if (opts.replyTo) msg.replyTo = validateEmail_(opts.replyTo);
-    if (TEST_HOOKS_.mailSink) TEST_HOOKS_.mailSink.push({ to: to, subject: subject, body: text, htmlBody: html, bcc: msg.bcc || "", replyTo: msg.replyTo || "", name: msg.name,
+    if (TEST_HOOKS_.mailSink) TEST_HOOKS_.mailSink.push({ to: to, subject: subject, body: text, htmlBody: html, cc: msg.cc || "", bcc: msg.bcc || "", replyTo: msg.replyTo || "", name: msg.name,
       attachments: (msg.attachments || []).map(function (b) { return { name: b.getName(), mimeType: b.getContentType(), size: b.getBytes().length }; }) });
     else MailApp.sendEmail(msg);
   } catch (e) { status = "FAILED"; error = String(e.message || e).slice(0, 300); }
@@ -8471,7 +8511,9 @@ function rentAutoCfg_(lease) {
 function rentCtx_(leaseOrId) {
   const l = typeof leaseOrId === "object" ? leaseOrId : dbGet_("Leases", leaseOrId);
   if (!l) notFound_("Bail");
-  const prop = dbGet_("Properties", l.propertyId) || {}, t = dbGet_("Tenants", l.tenantId) || {}, org = dbGet_("Organizations", l.organizationId) || {};
+  const prop = dbGet_("Properties", l.propertyId) || {}, raw = dbGet_("Tenants", l.tenantId) || {}, org = dbGet_("Organizations", l.organizationId) || {};
+  // Avec un second locataire (couple, colocation), les documents et e-mails sont établis au nom des deux : « A et B ».
+  const t = Object.assign({}, raw, { fullName: tenantName_(raw), mainFullName: raw.fullName || "" });
   return { l: l, prop: prop, t: t, org: org, cfg: rentAutoCfg_(l) };
 }
 function rentIssuer_(org) {
@@ -8492,7 +8534,7 @@ function rentOpenSchedules_(leaseId, today) {
 }
 function rentReference_(l, s) { return "LOY-" + String(s.period).replace("-", "") + "-" + String(l.leaseId).slice(-6).toUpperCase(); }
 function rentParties_(c) {
-  return "<table style='margin:6px 0 10px'><tr><th style='width:50%'>Bailleur</th><th>Locataire</th></tr><tr><td><b>" + escapeHtml_(c.org.name || "") + "</b><br>" +
+  return "<table style='margin:6px 0 10px'><tr><th style='width:50%'>Bailleur</th><th>" + (c.t.coFullName ? "Locataires" : "Locataire") + "</th></tr><tr><td><b>" + escapeHtml_(c.org.name || "") + "</b><br>" +
     escapeHtml_([c.org.address, c.org.city].filter(String).join(", ")) + "</td><td><b>" + escapeHtml_(c.t.fullName || "") + "</b><br>" + escapeHtml_(c.prop.name || "") + "<br>" +
     escapeHtml_(rentAddress_(c.prop)) + "</td></tr></table>";
 }
@@ -8658,7 +8700,7 @@ function rentDeliver_(o) {
   let res = { ok: false, error: error };
   if (!error && RENT_MAIL_DRY_RUN_) res = { ok: true };
   else if (!error) res = sendMailSafe_(to, txt.subject, txt.body, "rentmail:" + base.uniqueKey + ":" + (prev ? num_(prev.attempts) + 1 : 1), c.l.organizationId,
-    { attachments: [blob], bcc: c.cfg.copyEmail || "", replyTo: c.org.billingEmail || "", senderName: c.org.name || IMMO_CONFIG.APP_NAME, plain: true,
+    { attachments: [blob], cc: tenantCoEmail_(c.t), bcc: c.cfg.copyEmail || "", replyTo: c.org.billingEmail || "", senderName: c.org.name || IMMO_CONFIG.APP_NAME, plain: true,
       footer: rentIssuer_(c.org).lines.concat(["Logement : " + (c.prop.name || "") + (rentAddress_(c.prop) ? " — " + rentAddress_(c.prop) : "")]) });
   const patch = { status: res.ok ? "SENT" : "FAILED", sentAt: res.ok ? nowIso_() : "", error: res.ok ? "" : String(res.error || error).slice(0, 300), documentId: docId, subject: safeText_(txt.subject, 200) };
   let row;
@@ -8900,7 +8942,7 @@ function reportBuild_(p, a) {
       listAll(resvList_, { from: per.from, to: per.to, propertyId: a.propertyId }).forEach(function (r) { if (num_(r.balance) > 0 && REVENUE_STATUSES_.indexOf(r.status) >= 0) rows.push(["Réservation", r.propertyName, r.guestName, r.checkIn, r.amountDue, r.paid, r.balance, r.checkIn < todayStr_() ? "EN RETARD" : "À VENIR"]); });
       const leaseProps = accessiblePropIds_(p, "lease.view");
       dbAll_("RentSchedules").filter(function (s) { return leaseProps[String(s.propertyId)] && s.status === "OPEN" && s.dueDate >= per.from && s.dueDate <= per.to && (!a.propertyId || String(s.propertyId) === String(a.propertyId)); }).forEach(function (s) {
-        const st = rentStatus_(s); if (st.remaining > 0) { const l = dbGet_("Leases", s.leaseId), t = dbGet_("Tenants", l.tenantId) || {}; rows.push(["Loyer " + s.period, (dbGet_("Properties", s.propertyId) || {}).name, t.fullName, s.dueDate, st.amountDue, st.paid, st.remaining, st.status]); }
+        const st = rentStatus_(s); if (st.remaining > 0) { const l = dbGet_("Leases", s.leaseId), t = dbGet_("Tenants", l.tenantId) || {}; rows.push(["Loyer " + s.period, (dbGet_("Properties", s.propertyId) || {}).name, tenantName_(t), s.dueDate, st.amountDue, st.paid, st.remaining, st.status]); }
       });
       R = { headers: ["Nature", "Bien", "Débiteur", "Échéance", "Dû", "Payé", "Reste", "Statut"], rows: rows, summary: { totalOutstanding: sumBy_(rows, function (r) { return r[6]; }) } };
       break;
@@ -12621,6 +12663,36 @@ function TEST_GROUPS_() {
         const fin = T.call(O.tok, "leasedoc.finalize", { leaseDocId: dr.leaseDocId });
         const html = Utilities.newBlob(Utilities.base64Decode(fin.base64)).getDataAsString();
         T.ok(html.indexOf("AB123456") >= 0 && html.indexOf("15/01/1990") >= 0 && html.indexOf("Fès") >= 0, "numéro de pièce et naissance dans le contrat");
+      }],
+      ["Couple de locataires : second locataire (nom, pièce recto/verso), contrat et documents aux deux noms, e-mails en copie", function (T, fx) {
+        const O = tLeaseOwner_(T, fx);
+        const prop = T.call(O.tok, "property.create", { organizationId: O.org.organizationId, name: "Appartement Couple", city: "Marrakech", address: "5 rue du Couple", rentalMode: "LONG_TERM" }).propertyId;
+        const idt = IMMO_EDITION_ === "FR" ? "CNI" : "CIN", e1 = fx.mail("couple.m"), e2 = fx.mail("couple.mme");
+        T.fails(O.tok, "tenant.create", { propertyId: prop, fullName: "Karim Bennani", coFullName: "S", coEmail: e2 }, "VALIDATION");
+        T.fails(O.tok, "tenant.create", { propertyId: prop, fullName: "Karim Bennani", coFullName: "Salma Bennani", coIdNumber: "AB 1;2" }, "VALIDATION");
+        const t = T.call(O.tok, "tenant.create", { propertyId: prop, fullName: "Karim Bennani", email: e1, idType: idt, idNumber: "KB111111",
+          coFullName: "Salma Bennani", coEmail: e2, coNationality: "Marocaine", coIdType: idt, coIdNumber: "sb222222", coBirthDate: "1992-03-04", coBirthPlace: "Rabat" });
+        const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        const up = function (n) { return T.call(O.tok, "doc.upload", { ownerType: "TENANT", ownerId: t.tenantId, category: "ID_DOCUMENT", mimeType: "image/png", fileName: n, base64: png }).documentId; };
+        const r1 = up("m-recto.png"), v1 = up("m-verso.png"), r2 = up("mme-recto.png"), v2 = up("mme-verso.png");
+        T.call(O.tok, "tenant.update", { tenantId: t.tenantId, idDocumentId: r1, idDocumentBackId: v1, coIdDocumentId: r2, coIdDocumentBackId: v2 });
+        const row = T.call(O.tok, "tenant.list", {}).items.find(function (x) { return x.tenantId === t.tenantId; });
+        T.ok(row.displayName === "Karim Bennani et Salma Bennani" && row.coIdNumber === "SB222222" && row.coIdDocumentId === r2 && row.coIdDocumentBackId === v2, "second locataire et ses deux faces enregistrés");
+        T.ok(T.call(O.tok, "tenant.list", { q: "Salma" }).items.some(function (x) { return x.tenantId === t.tenantId; }), "recherche par le nom du second locataire");
+        const l = T.call(O.tok, "lease.create", { propertyId: prop, tenantId: t.tenantId, startDate: todayStr_(), monthlyRent: 4000, dueDay: 1 });
+        T.eq(T.call(O.tok, "lease.get", { leaseId: l.leaseId }).tenantName, "Karim Bennani et Salma Bennani", "bail au nom des deux");
+        TEST_HOOKS_.aiConfig = false;
+        const dr = T.call(O.tok, "leasedoc.draft", { leaseId: l.leaseId, docType: "LEASE_CONTRACT" });
+        const html = Utilities.newBlob(Utilities.base64Decode(T.call(O.tok, "leasedoc.finalize", { leaseDocId: dr.leaseDocId }).base64)).getDataAsString();
+        T.ok(html.indexOf("Les locataires") >= 0 && html.indexOf("KB111111") >= 0 && html.indexOf("SB222222") >= 0 && html.indexOf("04/03/1992") >= 0 && html.indexOf("solidaires") >= 0, "contrat : identité des deux locataires");
+        T.ok((html.match(/Lu et approuvé/g) || []).length === 3, "trois signatures : bailleur et deux locataires");
+        T.call(O.tok, "lease.activate", { leaseId: l.leaseId });
+        const before = TEST_HOOKS_.mailSink.length;
+        rentAutomationJob_({ force: true, batch: 50 });
+        const call = TEST_HOOKS_.mailSink.slice(before).filter(function (m) { return m.to === e1 && /Appel de loyer/.test(m.subject); })[0];
+        T.ok(call && call.cc === e2 && /Karim Bennani et Salma Bennani/.test(call.body), "appel de loyer aux deux noms, second locataire en copie");
+        T.call(O.tok, "tenant.update", { tenantId: t.tenantId, coFullName: "", coEmail: "", coIdNumber: "" });
+        T.eq(T.call(O.tok, "lease.get", { leaseId: l.leaseId }).tenantName, "Karim Bennani", "second locataire retiré");
       }]
     ] },
     { name: "KPI et Pareto", tests: [

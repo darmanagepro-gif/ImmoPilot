@@ -793,7 +793,7 @@ PAGES.lease = function (el, id) {
     if (l.canRent && l.automation) el.appendChild(rentAutomationPanel(l, go));
     el.appendChild(leaseAgentPanel(l, go));
     el.appendChild(h("div", { class: "grid c2" }, panel("Conditions", kv([["Jour d'échéance", l.dueDay], ["Indexation", l.indexationRate ? l.indexationRate + " % / an" : "—"], ["Prochaine indexation", fmtDate(l.nextIndexationDate)], ["Préavis", l.noticeDate ? fmtDate(l.noticeDate) + " (" + st(l.noticeBy) + ")" : "—"], ["Conditions particulières", l.terms]])),
-      panel("Locataire", kv([["Nom", l.tenantName], ["E-mail", l.tenantEmail], ["Téléphone", l.tenantPhone]]))));
+      panel(l.coTenantName ? "Locataires" : "Locataire", kv([["Nom", l.tenantName], ["E-mail", l.tenantEmail], ["Téléphone", l.tenantPhone]].concat(l.coTenantName ? [["E-mail (2e locataire)", l.coTenantEmail || "—"]] : [])))));
     el.appendChild(panel("Paiements", table([{ l: "Date", date: true, k: "paidAt" }, { l: "Nature", f: function (x) { return st(x.kind); } }, { l: "Montant", money: true, k: "amount" }, { l: "Mode", f: function (x) { return st(x.method); } }, { l: "Référence", k: "reference" }, { l: "Statut", status: true, k: "status" }], l.payments)));
     el.appendChild(panel("Bail et documents", docList(l.documents), l.canManage || l.isTenant ? [btn("+ " + (l.isTenant ? t("Justificatif de paiement") : t("Document")), function () { pickFiles({ capture: "environment" }).then(function (f) { return uploadFiles(f, "LEASE", id, l.isTenant ? "PAYMENT_PROOF" : "CONTRACT"); }).then(go).catch(showErr); })] : null));
     if (l.history) el.appendChild(panel("Historique", table([{ l: "Date", dt: true, k: "timestamp" }, { l: "Par", k: "actorEmail" }, { l: "Action", k: "action" }], l.history)));
@@ -801,8 +801,10 @@ PAGES.lease = function (el, id) {
 };
 PAGES.tenants = function (el) {
   el.appendChild(pageHead(t("Locataires"), "", [can("lease.manage") ? btn("+ " + t("Locataire"), function () { tenantDialog({}).then(function (x) { if (x) lv.reload(); }); }, "primary") : null]));
-  const lv = listView(el, { route: "tenant.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "INACTIVE"] }], columns: [{ l: "Nom", k: "fullName" }, { l: "E-mail", k: "email" }, { l: "Téléphone", k: "phone" }, { l: "Pièce", f: function (x) { return x.idType ? h("span", null, st(x.idType), x.idNumber ? " " + x.idNumber : "", x.idDocumentId ? h("button", { type: "button", class: "btn sm ghost", title: t("Recto"), onclick: function () { openDoc(x.idDocumentId); } }, "📎 " + t("Recto")) : null,
-      x.idDocumentBackId ? h("button", { type: "button", class: "btn sm ghost", title: t("Verso"), onclick: function () { openDoc(x.idDocumentBackId); } }, "📎 " + t("Verso")) : null) : "—"; } }, { l: "Baux actifs", num: true, k: "activeLeases" },
+  const lv = listView(el, { route: "tenant.list", filters: [{ k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "INACTIVE"] }], columns: [{ l: "Nom", f: function (x) { return x.displayName || x.fullName; } }, { l: "E-mail", k: "email" }, { l: "Téléphone", k: "phone" }, { l: "Pièce", f: function (x) { return x.idType ? h("span", null, st(x.idType), x.idNumber ? " " + x.idNumber : "", x.idDocumentId ? h("button", { type: "button", class: "btn sm ghost", title: t("Recto"), onclick: function () { openDoc(x.idDocumentId); } }, "📎 " + t("Recto")) : null,
+      x.idDocumentBackId ? h("button", { type: "button", class: "btn sm ghost", title: t("Verso"), onclick: function () { openDoc(x.idDocumentBackId); } }, "📎 " + t("Verso")) : null,
+      x.coIdDocumentId ? h("button", { type: "button", class: "btn sm ghost", title: t("Recto (2e locataire)"), onclick: function () { openDoc(x.coIdDocumentId); } }, "📎 " + t("Recto 2")) : null,
+      x.coIdDocumentBackId ? h("button", { type: "button", class: "btn sm ghost", title: t("Verso (2e locataire)"), onclick: function () { openDoc(x.coIdDocumentBackId); } }, "📎 " + t("Verso 2")) : null) : "—"; } }, { l: "Baux actifs", num: true, k: "activeLeases" },
     { l: "Espace locataire", f: function (x) { return x.hasAccount ? tag(t("Activé"), "good") : (x.email && can("user.invite") ? btn(t("Inviter"), function () { inviteDialog({ email: x.email, displayName: x.fullName, organizationId: x.organizationId, role: "TENANT" }); }, "sm") : "—"); } },
     { l: "Statut", status: true, k: "status" }, { l: "", f: function (x) { return can("lease.manage") ? btn(t("Modifier"), function () { tenantDialog(x).then(function (r) { if (r) lv.reload(); }); }, "sm") : null; } }] });
 };
@@ -814,26 +816,54 @@ function tenantFieldDefs() {
     { k: "idExpiry", l: "Valable jusqu'au", t: "date" }, { k: "birthDate", l: "Date de naissance", t: "date" }, { k: "birthPlace", l: "Lieu de naissance" },
     { k: "address", l: "Adresse actuelle", full: true }];
 }
+/** Second locataire (co-titulaire du bail : couple, colocation) : mêmes champs, clés préfixées « co ». */
+var TENANT_KEYS = ["fullName", "email", "phone", "nationality", "idType", "idNumber", "idExpiry", "birthDate", "birthPlace", "address"];
+function coKey(k) { return "co" + k.charAt(0).toUpperCase() + k.slice(1); }
+function coTenantFieldDefs() {
+  return tenantFieldDefs().map(function (f) { return Object.assign({}, f, { k: coKey(f.k), req: false, help: f.k === "email" ? "Mis en copie des appels de loyer, relances et quittances." : f.help }); });
+}
+/** Bloc repliable « Second locataire » : case à cocher, pièce d'identité (recto/verso, lue sur l'appareil) et champs. */
+function coTenantBlock(values, state) {
+  values = values || {};
+  const f = buildForm(coTenantFieldDefs(), values);
+  const has = !!values.coFullName;
+  const inner = h("div", { class: has ? "" : "hidden", style: { marginTop: "10px" } }, idScanBox(f, state, { prefix: "co", sidesKey: "coSides", title: "Pièce d'identité du second locataire" }), f.el);
+  const cb = h("input", { type: "checkbox", checked: has, onchange: function () { inner.classList.toggle("hidden", !cb.checked); } });
+  const el = h("div", { class: "box", style: { marginTop: "12px" } }, h("label", { class: "field check full", style: { fontWeight: "600" } }, cb, " " + t("Second locataire (couple, colocation) : ajouter son nom et sa pièce d'identité")), inner);
+  return { el: el, enabled: function () { return cb.checked; }, validate: function () {
+      if (!cb.checked) return "";
+      const n = (f.inputs.coFullName.value || "").trim();
+      return n.length >= 2 ? f.validate() : t("Indiquez le nom complet du second locataire.");
+    },
+    get: function () {
+      if (cb.checked) return f.get();
+      if (!has) return {};
+      const out = {}; TENANT_KEYS.forEach(function (k) { out[coKey(k)] = ""; }); return out;
+    } };
+}
 /**
  * Bloc « Pièce d'identité » : recto et verso, chacun pris en photo OU choisi dans la galerie / les fichiers (téléphone ou ordinateur,
  * photo ou PDF). La lecture se fait sur l'appareil ; la nature de la pièce est reconnue (CNIE marocaine, CNI française, passeport…),
  * les champs reconnus sont pré-remplis et surlignés ; les deux faces sont jointes au dossier du locataire (documents sensibles).
  */
-function idScanBox(form, state) {
-  state.sides = state.sides || { recto: null, verso: null };
+function idScanBox(form, state, o) {
+  o = o || {};
+  const SK = o.sidesKey || "sides", key = function (k) { return o.prefix ? coKey(k) : k; };
+  state[SK] = state[SK] || { recto: null, verso: null };
+  const sides = state[SK];
   const status = h("div", { class: "small muted", style: { marginTop: "8px" } }, t("Ajoutez le recto et le verso : photo, image de la galerie ou PDF. Passeport : la page photo suffit."));
   const kind = h("div", { style: { marginTop: "6px" } });
   let seq = 0;
   const analyze = function () {
-    const files = ["recto", "verso"].map(function (k) { return state.sides[k] ? { side: k, file: state.sides[k] } : null; }).filter(Boolean);
+    const files = ["recto", "verso"].map(function (k) { return sides[k] ? { side: k, file: sides[k] } : null; }).filter(Boolean);
     if (!files.length) return;
     const my = ++seq; clear(kind); status.textContent = t("Lecture de la pièce…");
     idScanAnalyze(files, function (m) { if (my === seq) status.textContent = m; }).then(function (r) {
       if (my !== seq) return;
       const filled = [];
-      const put = function (k, v) { const i = form.inputs[k]; if (!i || !v) return; i.value = v; i.style.background = "rgba(46,160,67,.12)"; filled.push(k); };
+      const put = function (k0, v) { const k = key(k0), i = form.inputs[k]; if (!i || !v) return; i.value = v; i.style.background = "rgba(46,160,67,.12)"; filled.push(k); };
       if (r.mrz) { const v = idScanFields(r.mrz); Object.keys(v).forEach(function (k) { put(k, v[k]); }); kind.appendChild(tag("🪪 " + idKindLabel(r.mrz) + " · " + t("bande lue au") + " " + t(r.side), r.mrz.valid ? "good" : "warn")); }
-      if (r.address && form.inputs.address && !form.inputs.address.value) put("address", r.address);
+      if (r.address && form.inputs[key("address")] && !form.inputs[key("address")].value) put("address", r.address);
       if (!r.mrz) { status.textContent = t("Bande de lecture (lignes « <<< ») introuvable : la pièce sera jointe au dossier, complétez les champs à la main. Astuce : reprenez la photo de plus près.") + (r.address ? " " + t("Adresse trouvée et pré-remplie.") : ""); return; }
       status.textContent = (r.mrz.valid ? "✓ " + t("Pièce lue, contrôles de la bande validés") : "⚠ " + t("Pièce lue, mais certains contrôles ont échoué : vérifiez attentivement")) + " — " + filled.length + " " + t("champ(s) pré-rempli(s) (surlignés). Complétez le reste à la main.");
     }).catch(function (e) { if (my === seq) status.textContent = errMsg(e) + " " + t("Complétez les champs à la main."); });
@@ -841,46 +871,53 @@ function idScanBox(form, state) {
   const slot = function (side, label) {
     const box = h("div", { class: "id-slot" });
     const draw = function () {
-      const f = state.sides[side];
-      clear(box).appendChild(h("div", { class: "id-slot-head" }, h("b", null, t(label)), f ? h("button", { type: "button", class: "btn sm ghost", title: t("Retirer"), onclick: function () { state.sides[side] = null; draw(); analyze(); } }, "×") : null));
+      const f = sides[side];
+      clear(box).appendChild(h("div", { class: "id-slot-head" }, h("b", null, t(label)), f ? h("button", { type: "button", class: "btn sm ghost", title: t("Retirer"), onclick: function () { sides[side] = null; draw(); analyze(); } }, "×") : null));
       if (f) {
         if (/^image\//.test(f.type)) { const im = h("img", { alt: t(label), class: "id-thumb" }); im.src = URL.createObjectURL(f); box.appendChild(im); }
         else box.appendChild(h("div", { class: "id-thumb pdf" }, "PDF · " + (f.name || "")));
       } else box.appendChild(h("div", { class: "id-thumb empty" }, "🪪"));
       const take = function (capture) { pickFiles(capture ? { accept: "image/*", capture: "environment" } : { accept: "image/*,application/pdf" }).then(function (fs) {
-        const f2 = fs[0]; if (!f2) return; state.sides[side] = f2; draw(); analyze(); }).catch(showErr); };
+        const f2 = fs[0]; if (!f2) return; sides[side] = f2; draw(); analyze(); }).catch(showErr); };
       box.appendChild(h("div", { class: "id-slot-btns" }, h("button", { type: "button", class: "btn sm primary", onclick: function () { take(true); } }, "📷 " + t("Photo")),
         h("button", { type: "button", class: "btn sm", onclick: function () { take(false); } }, "🖼 " + t("Galerie ou fichier"))));
     };
     draw(); return box;
   };
-  return h("div", { class: "box id-scan" }, h("div", { class: "id-scan-title" }, "🪪 " + t("Pièce d'identité du locataire")),
+  return h("div", { class: "box id-scan" }, h("div", { class: "id-scan-title" }, "🪪 " + t(o.title || "Pièce d'identité du locataire")),
     h("div", { class: "id-slots" }, slot("recto", "Recto"), slot("verso", "Verso")), kind, status,
     h("div", { class: "small", style: { marginTop: "6px" } }, t("La lecture se fait sur votre appareil : l'image n'est envoyée à aucun service de reconnaissance. Elle est ensuite jointe au dossier du locataire, en accès restreint.")));
 }
 /** Joint le recto et le verso au dossier du locataire (documents sensibles) et les référence sur sa fiche. */
-function tenantAttachId(tenantId, state) {
-  const sides = (state && state.sides) || {}, patch = {};
-  return ["recto", "verso"].reduce(function (p, k) {
-    return p.then(function () { return sides[k] ? uploadFiles([sides[k]], "TENANT", tenantId, "ID_DOCUMENT").then(function (ids) { if (ids[0]) patch[k === "recto" ? "idDocumentId" : "idDocumentBackId"] = ids[0]; }) : null; });
+function tenantAttachId(tenantId, state, withCo) {
+  const patch = {}, jobs = [];
+  [["sides", ""], ["coSides", "co"]].forEach(function (z) {
+    if (z[1] && !withCo) return;
+    const sides = (state && state[z[0]]) || {};
+    ["recto", "verso"].forEach(function (k) { if (sides[k]) jobs.push([sides[k], z[1] ? coKey(k === "recto" ? "idDocumentId" : "idDocumentBackId") : (k === "recto" ? "idDocumentId" : "idDocumentBackId")]); });
+  });
+  return jobs.reduce(function (p, j) {
+    return p.then(function () { return uploadFiles([j[0]], "TENANT", tenantId, "ID_DOCUMENT").then(function (ids) { if (ids[0]) patch[j[1]] = ids[0]; }); });
   }, Promise.resolve()).then(function () { return Object.keys(patch).length ? api("tenant.update", Object.assign({ tenantId: tenantId }, patch)) : null; });
 }
 function tenantDialog(x) {
   const isNew = !x.tenantId, state = {};
   const fields = (isNew ? [{ k: "propertyId", l: "Bien concerné (détermine l'organisation)", t: "select", req: true, opts: function () { return propChoices("lease.manage"); } }] : []).concat(tenantFieldDefs())
     .concat(isNew ? [] : [{ k: "status", l: "Statut", t: "select", opts: ["ACTIVE", "INACTIVE"] }]);
+  const co = coTenantBlock(x, state);
   return scanFormModal(isNew ? t("Nouveau locataire") : t("Modifier le locataire"), fields, x, state, function (v) {
-    return (isNew ? api("tenant.create", v) : api("tenant.update", Object.assign(v, { tenantId: x.tenantId }))).then(function (r) { return tenantAttachId(isNew ? r.tenantId : x.tenantId, state).then(function () { return r; }); });
-  }, { success: "Locataire enregistré." });
+    Object.assign(v, co.get());
+    return (isNew ? api("tenant.create", v) : api("tenant.update", Object.assign(v, { tenantId: x.tenantId }))).then(function (r) { return tenantAttachId(isNew ? r.tenantId : x.tenantId, state, co.enabled()).then(function () { return r; }); });
+  }, { success: "Locataire enregistré.", extra: co });
 }
 /** Modale de formulaire précédée du bloc de lecture de la pièce d'identité. */
 function scanFormModal(title, fields, values, state, submit, opts) {
   opts = opts || {};
   const f = buildForm(fields, values), err = h("div", { class: "alert bad hidden" });
-  const body = h("div", null, opts.intro ? h("p", { class: "muted" }, opts.intro) : null, idScanBox(f, state), err, f.el);
+  const body = h("div", null, opts.intro ? h("p", { class: "muted" }, opts.intro) : null, idScanBox(f, state), err, f.el, opts.extra ? opts.extra.el : null);
   return new Promise(function (resolve) {
     const m = modal({ title: title, body: body, onClose: function () { resolve(null); }, buttons: [{ label: t("Annuler") }, { label: opts.submitLabel || t("Enregistrer"), primary: true, onClick: function (btn) {
-      const miss = f.validate(); if (miss) { err.textContent = miss; err.classList.remove("hidden"); return; }
+      const miss = f.validate() || (opts.extra ? opts.extra.validate() : ""); if (miss) { err.textContent = miss; err.classList.remove("hidden"); return; }
       btn.disabled = true; btn.textContent = t("Traitement…"); err.classList.add("hidden");
       Promise.resolve(submit(f.get(), f)).then(function (r) { resolve(r === undefined ? true : r); m.close(); if (opts.success) toast(t(opts.success), "good"); })
         .catch(function (e) { err.textContent = errMsg(e); err.classList.remove("hidden"); btn.disabled = false; btn.textContent = opts.submitLabel || t("Enregistrer"); });
@@ -895,11 +932,12 @@ function tenantOnboardDialog() {
     .concat([{ k: "startDate", l: "Début du bail", t: "date", req: true, def: today() }, { k: "endDate", l: "Fin du bail", t: "date", help: "Vide = durée indéterminée." },
       { k: "monthlyRent", l: "Loyer mensuel", t: "number", req: true, min: 1 }, { k: "charges", l: "Charges mensuelles", t: "number", min: 0 }, { k: "deposit", l: "Dépôt de garantie", t: "number", min: 0 },
       { k: "dueDay", l: "Jour d'échéance (1-28)", t: "number", def: 5, min: 1, max: 28 }, { k: "invite", l: "Inviter le locataire dans son espace (bail, quittances, incidents)", t: "checkbox", full: true }]);
-  const T_KEYS = ["fullName", "email", "phone", "nationality", "idType", "idNumber", "idExpiry", "birthDate", "birthPlace", "address"];
+  const co = coTenantBlock({}, state);
   return scanFormModal(t("Intégrer un nouveau locataire"), fields, {}, state, function (v) {
-    const tv = { propertyId: v.propertyId }; T_KEYS.forEach(function (k) { tv[k] = v[k]; });
+    const tv = { propertyId: v.propertyId }; TENANT_KEYS.forEach(function (k) { tv[k] = v[k]; });
+    Object.assign(tv, co.get());
     let tenantId;
-    return api("tenant.create", tv).then(function (r) { tenantId = r.tenantId; return tenantAttachId(tenantId, state); })
+    return api("tenant.create", tv).then(function (r) { tenantId = r.tenantId; return tenantAttachId(tenantId, state, co.enabled()); })
       .then(function () { return api("lease.create", { propertyId: v.propertyId, tenantId: tenantId, startDate: v.startDate, endDate: v.endDate, monthlyRent: v.monthlyRent, charges: v.charges, deposit: v.deposit, dueDay: v.dueDay }); })
       .then(function (l) {
         if (v.invite && v.email && can("user.invite")) {
@@ -910,7 +948,7 @@ function tenantOnboardDialog() {
         return l;
       });
   }, { intro: t("Ajoutez la pièce d'identité (recto et verso, photo ou fichier) : nom, nationalité, numéro, dates sont remplis automatiquement. Complétez le reste, puis le bail est créé en brouillon : vous pourrez ensuite le faire rédiger par l'agent et l'activer."),
-    submitLabel: t("Créer le locataire et le bail"), success: "Locataire et bail créés." });
+    submitLabel: t("Créer le locataire et le bail"), success: "Locataire et bail créés.", extra: co });
 }
 PAGES.mylease = function (el) {
   el.appendChild(pageHead(t("Mon bail"), t("Vos échéances, quittances et documents.")));

@@ -224,6 +224,7 @@ async function brevoSend(m, attachments) {
   const payload = { sender: { name: m.sender || "DarPilot", email: C.mailFrom }, to: [{ email: m.recipient }], subject: m.subject, textContent: m.body || " ",
     tags: ["immopilot"], headers: m.ref ? { "X-Mailin-custom": String(m.ref).slice(0, 250) } : undefined };
   if (m.html) payload.htmlContent = m.html;
+  if (m.cc && m.cc !== m.recipient) payload.cc = [{ email: m.cc }];
   if (m.bcc) payload.bcc = [{ email: m.bcc }];
   if (m.replyto) payload.replyTo = { email: m.replyto };
   if (attachments && attachments.length) payload.attachment = attachments.map(function (a) { return { name: a.name, content: a.base64 }; });
@@ -248,7 +249,7 @@ async function mailTick() {
         let providerId = "";
         if (C.brevoApiKey) providerId = await brevoSend(m, att);
         else {
-          const info = await transport.sendMail({ from: { name: m.sender || "DarPilot", address: C.mailFrom }, to: m.recipient, bcc: m.bcc || undefined, replyTo: m.replyto || undefined,
+          const info = await transport.sendMail({ from: { name: m.sender || "DarPilot", address: C.mailFrom }, to: m.recipient, cc: m.cc || undefined, bcc: m.bcc || undefined, replyTo: m.replyto || undefined,
             subject: m.subject, text: m.body, html: m.html || undefined, headers: m.ref ? { "X-Mailin-custom": String(m.ref).slice(0, 250) } : undefined,
             attachments: att.map(function (a) { return { filename: a.name, contentType: a.type, content: Buffer.from(a.base64, "base64") }; }) });
           providerId = (info && info.messageId) || "";

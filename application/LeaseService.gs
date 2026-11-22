@@ -64,7 +64,7 @@ function leaseGenerateSchedules_(lease) {
 function leaseOut_(p, l, props, tenants) {
   const prop = (props || {})[String(l.propertyId)] || dbGet_("Properties", l.propertyId) || {}, t = (tenants || {})[String(l.tenantId)] || dbGet_("Tenants", l.tenantId) || {};
   const sched = dbAll_("RentSchedules").filter(function (s) { return String(s.leaseId) === String(l.leaseId) && s.status === "OPEN"; }).map(function (s) { return rentStatus_(s); });
-  return { leaseId: l.leaseId, propertyId: l.propertyId, propertyName: prop.name, tenantId: l.tenantId, tenantName: t.fullName, tenantEmail: t.email, tenantPhone: t.phone, startDate: l.startDate, endDate: l.endDate,
+  return { leaseId: l.leaseId, propertyId: l.propertyId, propertyName: prop.name, tenantId: l.tenantId, tenantName: tenantName_(t), tenantEmail: t.email, coTenantName: t.coFullName || "", coTenantEmail: t.coEmail || "", tenantPhone: t.phone, startDate: l.startDate, endDate: l.endDate,
     durationMonths: l.durationMonths, monthlyRent: l.monthlyRent, charges: l.charges, deposit: l.deposit, dueDay: l.dueDay, indexationRate: l.indexationRate, nextIndexationDate: l.nextIndexationDate, terms: l.terms,
     status: l.status, noticeDate: l.noticeDate, noticeBy: l.noticeBy, depositStatus: l.depositStatus, depositHeld: leaseDepositHeld_(l.leaseId), depositReturned: l.depositReturned, depositDeductions: l.depositDeductions,
     documentId: l.documentId, endReason: l.endReason, renewedFromLeaseId: l.renewedFromLeaseId,
@@ -82,6 +82,31 @@ function leaseLoad_(p, id, cap) {
 }
 
 /* ------------------------------ Locataires ------------------------------ */
+/** Nom affiché sur les documents : « Prénom Nom » ou, avec un second locataire (couple, colocation), « A et B ». */
+function tenantName_(t) {
+  t = t || {};
+  return [t.fullName, t.coFullName].map(function (x) { return String(x || "").trim(); }).filter(String).join(" et ");
+}
+/** Adresse e-mail du second locataire, mise en copie des envois (si différente de celle du locataire principal). */
+function tenantCoEmail_(t) {
+  const e = String((t || {}).coEmail || "").trim();
+  return e && normalizeEmail_(e) !== normalizeEmail_((t || {}).email || "") ? e : "";
+}
+var TENANT_CO_KEYS_ = ["coFullName", "coEmail", "coPhone", "coNationality", "coIdType", "coIdNumber", "coIdExpiry", "coBirthDate", "coBirthPlace", "coAddress"];
+/** Second locataire (co-titulaire du bail) : mêmes champs et mêmes contrôles que le locataire principal, tous facultatifs. */
+function tenantCo_(a, o) {
+  if (a.coFullName !== undefined) { const n = safeText_(a.coFullName, 120).trim(); assert_(!n || n.length >= 2, "Nom du second locataire : 2 caractères minimum."); o.coFullName = n; }
+  if (a.coEmail !== undefined) o.coEmail = a.coEmail ? validateEmail_(a.coEmail) : "";
+  if (a.coPhone !== undefined) o.coPhone = safeText_(a.coPhone, 30);
+  if (a.coNationality !== undefined) o.coNationality = safeText_(a.coNationality, 60);
+  if (a.coIdType !== undefined) o.coIdType = a.coIdType ? oneOf_(a.coIdType, idTypes_(), "Pièce du second locataire") : "";
+  if (a.coIdNumber !== undefined) { const n = safeText_(a.coIdNumber, 30).toUpperCase().replace(/\s+/g, ""); assert_(!n || /^[A-Z0-9-]{3,30}$/.test(n), "Numéro de pièce du second locataire invalide (lettres, chiffres et tirets)."); o.coIdNumber = n; }
+  if (a.coIdExpiry !== undefined) o.coIdExpiry = a.coIdExpiry ? dateOnly_(a.coIdExpiry, "Date d'expiration du second locataire") : "";
+  if (a.coBirthDate !== undefined) { o.coBirthDate = a.coBirthDate ? dateOnly_(a.coBirthDate, "Date de naissance du second locataire") : ""; if (o.coBirthDate) assert_(o.coBirthDate < todayStr_() && o.coBirthDate > "1900-01-01", "Date de naissance du second locataire invalide."); }
+  if (a.coBirthPlace !== undefined) o.coBirthPlace = safeText_(a.coBirthPlace, 80);
+  if (a.coAddress !== undefined) o.coAddress = safeText_(a.coAddress, 200);
+  return o;
+}
 function tenantList_(p, a) {
   a = a || {};
   const orgs = p.roles.filter(function (r) { return r.caps.indexOf("lease.manage") >= 0 || r.caps.indexOf("lease.view") >= 0; }).map(function (r) { return r.organizationId; });
@@ -89,12 +114,15 @@ function tenantList_(p, a) {
   const rows = dbAll_("Tenants").filter(function (t) {
     if (!(viaLease[String(t.tenantId)] || (orgs.indexOf(String(t.organizationId)) >= 0 && hasOrgCap_(p, t.organizationId, "lease.manage")))) return false;
     if (a.status && t.status !== a.status) return false;
-    return matchesQuery_(a.q, [t.fullName, t.email, t.phone]);
+    return matchesQuery_(a.q, [t.fullName, t.email, t.phone, t.coFullName, t.coEmail, t.coPhone]);
   }).sort(function (x, y) { return String(x.fullName).localeCompare(String(y.fullName)); })
     .map(function (t) { const mg = hasOrgCap_(p, t.organizationId, "lease.manage");
       return { tenantId: t.tenantId, organizationId: t.organizationId, fullName: t.fullName, email: t.email, phone: t.phone, nationality: t.nationality, status: t.status, hasAccount: !!t.userId,
       idType: t.idType, idNumber: mg ? t.idNumber : (t.idNumber ? "•••" + String(t.idNumber).slice(-3) : ""), idExpiry: mg ? t.idExpiry : "", birthDate: mg ? t.birthDate : "", birthPlace: mg ? t.birthPlace : "", address: mg ? t.address : "",
       idDocumentId: mg ? t.idDocumentId : "", idDocumentBackId: mg ? t.idDocumentBackId : "",
+      displayName: tenantName_(t), coFullName: t.coFullName || "", coEmail: t.coEmail || "", coPhone: t.coPhone || "", coNationality: t.coNationality || "", coIdType: t.coIdType || "",
+      coIdNumber: mg ? t.coIdNumber : (t.coIdNumber ? "•••" + String(t.coIdNumber).slice(-3) : ""), coIdExpiry: mg ? t.coIdExpiry : "", coBirthDate: mg ? t.coBirthDate : "", coBirthPlace: mg ? t.coBirthPlace : "",
+      coAddress: mg ? t.coAddress : "", coIdDocumentId: mg ? t.coIdDocumentId : "", coIdDocumentBackId: mg ? t.coIdDocumentBackId : "",
       activeLeases: dbAll_("Leases").filter(function (l) { return String(l.tenantId) === String(t.tenantId) && ["ACTIVE", "NOTICE"].indexOf(l.status) >= 0; }).length }; });
   return pageOf_(rows, a);
 }
@@ -120,7 +148,7 @@ function tenantCreate_(p, a) {
   const t = dbInsert_("Tenants", { organizationId: orgId, userId: u && dbAll_("UserRoles").some(function (r) { return String(r.userId) === String(u.userId) && r.role === "TENANT" && r.status === "ACTIVE"; }) ? u.userId : "",
     fullName: reqText_(a.fullName, "Nom complet", 2, 120), email: email, phone: safeText_(a.phone, 30), nationality: safeText_(a.nationality, 60), idType: a.idType ? oneOf_(a.idType, idTypes_(), "Pièce") : "",
     status: "ACTIVE", createdAt: nowIso_(), createdBy: p.email, updatedAt: nowIso_() });
-  const idf = tenantIdentity_(Object.assign({}, a, { idType: undefined }), {});
+  const idf = tenantCo_(a, tenantIdentity_(Object.assign({}, a, { idType: undefined }), {}));
   if (Object.keys(idf).length) dbUpdate_("Tenants", t.tenantId, idf);
   audit_("TENANT_CREATED", "Tenant", t.tenantId, orgId, { identity: Object.keys(idf) });
   return { ok: true, tenantId: t.tenantId, id: t.tenantId };
@@ -135,8 +163,9 @@ function tenantUpdate_(p, a) {
   if (a.nationality !== undefined) patch.nationality = safeText_(a.nationality, 60);
   if (a.status !== undefined) patch.status = oneOf_(a.status, ["ACTIVE", "INACTIVE"], "Statut");
   tenantIdentity_(a, patch);
-  // Recto (idDocumentId) et verso (idDocumentBackId) de la pièce : documents du dossier de CE locataire uniquement.
-  ["idDocumentId", "idDocumentBackId"].forEach(function (k) {
+  tenantCo_(a, patch);
+  // Recto et verso des pièces (locataire principal et second locataire) : documents du dossier de CE locataire uniquement.
+  ["idDocumentId", "idDocumentBackId", "coIdDocumentId", "coIdDocumentBackId"].forEach(function (k) {
     if (a[k] === undefined) return;
     if (a[k]) { const d = dbGet_("Documents", safeText_(a[k], 120)); assert_(d && d.ownerType === "TENANT" && String(d.ownerId) === String(t.tenantId) && d.status === "ACTIVE", "Pièce d'identité non rattachée à ce locataire."); }
     patch[k] = safeText_(a[k], 120);
@@ -171,7 +200,7 @@ function leaseList_(p, a) {
     if (!(canProp_(p, props[String(l.propertyId)], "lease.view") || mine.indexOf(String(l.tenantId)) >= 0)) return false;
     if (a.status) { if (String(a.status).split(",").indexOf(l.status) < 0) return false; }
     if (a.propertyId && String(l.propertyId) !== String(a.propertyId)) return false;
-    return matchesQuery_(a.q, [(tenants[String(l.tenantId)] || {}).fullName, (props[String(l.propertyId)] || {}).name]);
+    return matchesQuery_(a.q, [tenantName_(tenants[String(l.tenantId)]), (props[String(l.propertyId)] || {}).name]);
   }).sort(function (x, y) { return String(y.startDate).localeCompare(String(x.startDate)); });
   const page = pageOf_(rows, a);
   page.items = page.items.map(function (l) { return leaseOut_(p, l, props, tenants); });
@@ -311,7 +340,7 @@ function leaseReceipt_(p, a) {
 function leaseDocument_(p, a) {
   const x = leaseLoad_(p, a.leaseId, "lease.manage");
   const t = dbGet_("Tenants", x.l.tenantId) || {}, org = dbGet_("Organizations", x.l.organizationId) || {};
-  const map = { bailleur: org.name, locataire: t.fullName, locataire_email: t.email, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), surface: x.prop.surfaceM2, debut: x.l.startDate,
+  const map = { bailleur: org.name, locataire: tenantName_(t), locataire_email: t.email, bien: x.prop.name, adresse: (x.prop.address || "") + " " + (x.prop.city || ""), surface: x.prop.surfaceM2, debut: x.l.startDate,
     fin: x.l.endDate || "indéterminée", loyer: x.l.monthlyRent, charges: x.l.charges, caution: x.l.deposit, jour_echeance: x.l.dueDay, indexation: x.l.indexationRate, conditions: x.l.terms, date: todayStr_() };
   const tpl = getSetting_("template.leaseDocId", x.l.organizationId), text = docTemplateOf_("lease", x.l.organizationId), cur = cur_();
   // Contrat complet et conforme (meublé ou vide selon le logement), sans marque DarPilot : en-tête au nom du bailleur.
@@ -319,7 +348,7 @@ function leaseDocument_(p, a) {
   const base = laContractTemplate_(c, { furnished: furnished, usage: "HABITATION", clauses: ["INSURANCE_REQUIRED", "SUBLET_FORBIDDEN"], instructions: "" });
   const sections = base.sections.map(function (sc) { return { title: laFill_(sc.title, c), body: laFill_(sc.body, c) }; });
   let pdf;
-  if (text) pdf = docTemplatePdf_("lease", text, { bailleur: org.name, bailleur_adresse: [org.address, org.city].filter(String).join(", "), locataire: t.fullName, locataire_email: t.email,
+  if (text) pdf = docTemplatePdf_("lease", text, { bailleur: org.name, bailleur_adresse: [org.address, org.city].filter(String).join(", "), locataire: tenantName_(t), locataire_email: t.email,
       bien: x.prop.name, adresse: [x.prop.address, x.prop.city].filter(String).join(", "), surface: x.prop.surfaceM2,
       type: ({ APARTMENT: "Appartement", STUDIO: "Studio", HOUSE: "Maison", VILLA: "Villa", RIAD: "Riad", COMMERCIAL: "Local commercial", OTHER: "Autre" })[x.prop.propertyType] || x.prop.propertyType || "",
       debut: pdfDate_(x.l.startDate), fin: x.l.endDate ? pdfDate_(x.l.endDate) : "durée indéterminée",
@@ -355,11 +384,11 @@ function leaseJob_() {
       if (st.remaining > 0 && s.dueDate === addDaysStr_(today, before) && t.userId) { notify_({ eventKey: "rent-due:" + s.scheduleId, userIds: [t.userId], type: "RENT_DUE", organizationId: l.organizationId,
         title: "Échéance de loyer le " + s.dueDate, body: fmtAmount_(st.remaining) + " — " + prop.name, link: "#mylease" }); alerts++; }
       if (st.status === "LATE") { notify_({ eventKey: "rent-late:" + s.scheduleId + ":" + Math.floor(st.daysLate / 7), userIds: managers.concat(t.userId ? [t.userId] : []), type: "RENT_LATE", organizationId: l.organizationId,
-        title: "Loyer en retard (" + st.daysLate + " j) : " + prop.name, body: (t.fullName || "") + " — reste dû " + fmtAmount_(st.remaining) + " (période " + s.period + ").", link: "#lease/" + l.leaseId }); alerts++; }
+        title: "Loyer en retard (" + st.daysLate + " j) : " + prop.name, body: tenantName_(t) + " — reste dû " + fmtAmount_(st.remaining) + " (période " + s.period + ").", link: "#lease/" + l.leaseId }); alerts++; }
     });
     if (l.endDate) (getSetting_("alerts.leaseEndDays", l.organizationId) || [60, 30]).forEach(function (d) {
       if (l.endDate === addDaysStr_(today, d)) { notify_({ eventKey: "lease-end:" + l.leaseId + ":" + d, userIds: managers, type: "LEASE_ENDING", organizationId: l.organizationId,
-        title: "Fin de bail dans " + d + " jours : " + prop.name, body: (t.fullName || "") + " — fin le " + l.endDate + ". Préparez renouvellement ou état des lieux.", link: "#lease/" + l.leaseId }); alerts++; }
+        title: "Fin de bail dans " + d + " jours : " + prop.name, body: tenantName_(t) + " — fin le " + l.endDate + ". Préparez renouvellement ou état des lieux.", link: "#lease/" + l.leaseId }); alerts++; }
     });
   });
   return { schedulesCreated: created, alerts: alerts };

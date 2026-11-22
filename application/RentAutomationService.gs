@@ -45,7 +45,9 @@ function rentAutoCfg_(lease) {
 function rentCtx_(leaseOrId) {
   const l = typeof leaseOrId === "object" ? leaseOrId : dbGet_("Leases", leaseOrId);
   if (!l) notFound_("Bail");
-  const prop = dbGet_("Properties", l.propertyId) || {}, t = dbGet_("Tenants", l.tenantId) || {}, org = dbGet_("Organizations", l.organizationId) || {};
+  const prop = dbGet_("Properties", l.propertyId) || {}, raw = dbGet_("Tenants", l.tenantId) || {}, org = dbGet_("Organizations", l.organizationId) || {};
+  // Avec un second locataire (couple, colocation), les documents et e-mails sont établis au nom des deux : « A et B ».
+  const t = Object.assign({}, raw, { fullName: tenantName_(raw), mainFullName: raw.fullName || "" });
   return { l: l, prop: prop, t: t, org: org, cfg: rentAutoCfg_(l) };
 }
 function rentIssuer_(org) {
@@ -66,7 +68,7 @@ function rentOpenSchedules_(leaseId, today) {
 }
 function rentReference_(l, s) { return "LOY-" + String(s.period).replace("-", "") + "-" + String(l.leaseId).slice(-6).toUpperCase(); }
 function rentParties_(c) {
-  return "<table style='margin:6px 0 10px'><tr><th style='width:50%'>Bailleur</th><th>Locataire</th></tr><tr><td><b>" + escapeHtml_(c.org.name || "") + "</b><br>" +
+  return "<table style='margin:6px 0 10px'><tr><th style='width:50%'>Bailleur</th><th>" + (c.t.coFullName ? "Locataires" : "Locataire") + "</th></tr><tr><td><b>" + escapeHtml_(c.org.name || "") + "</b><br>" +
     escapeHtml_([c.org.address, c.org.city].filter(String).join(", ")) + "</td><td><b>" + escapeHtml_(c.t.fullName || "") + "</b><br>" + escapeHtml_(c.prop.name || "") + "<br>" +
     escapeHtml_(rentAddress_(c.prop)) + "</td></tr></table>";
 }
@@ -232,7 +234,7 @@ function rentDeliver_(o) {
   let res = { ok: false, error: error };
   if (!error && RENT_MAIL_DRY_RUN_) res = { ok: true };
   else if (!error) res = sendMailSafe_(to, txt.subject, txt.body, "rentmail:" + base.uniqueKey + ":" + (prev ? num_(prev.attempts) + 1 : 1), c.l.organizationId,
-    { attachments: [blob], bcc: c.cfg.copyEmail || "", replyTo: c.org.billingEmail || "", senderName: c.org.name || IMMO_CONFIG.APP_NAME, plain: true,
+    { attachments: [blob], cc: tenantCoEmail_(c.t), bcc: c.cfg.copyEmail || "", replyTo: c.org.billingEmail || "", senderName: c.org.name || IMMO_CONFIG.APP_NAME, plain: true,
       footer: rentIssuer_(c.org).lines.concat(["Logement : " + (c.prop.name || "") + (rentAddress_(c.prop) ? " — " + rentAddress_(c.prop) : "")]) });
   const patch = { status: res.ok ? "SENT" : "FAILED", sentAt: res.ok ? nowIso_() : "", error: res.ok ? "" : String(res.error || error).slice(0, 300), documentId: docId, subject: safeText_(txt.subject, 200) };
   let row;

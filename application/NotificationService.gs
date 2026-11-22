@@ -20,9 +20,10 @@ function sendMailSafe_(to, subject, body, eventKey, orgId, opts) {
     const text = String(body || "").slice(0, 20000), lay = { senderName: opts.senderName, footer: opts.footer }, html = opts.plain ? mailHtmlPlain_(text, lay) : mailHtml_(text, lay);
     const msg = { to: to, subject: safeText_(subject, 200), body: text, htmlBody: html, name: safeText_(opts.senderName || IMMO_CONFIG.APP_NAME, 80), ref: key };
     if (opts.attachments && opts.attachments.length) msg.attachments = opts.attachments;
+    if (opts.cc) msg.cc = validateEmail_(opts.cc);
     if (opts.bcc) msg.bcc = validateEmail_(opts.bcc);
     if (opts.replyTo) msg.replyTo = validateEmail_(opts.replyTo);
-    if (TEST_HOOKS_.mailSink) TEST_HOOKS_.mailSink.push({ to: to, subject: subject, body: text, htmlBody: html, bcc: msg.bcc || "", replyTo: msg.replyTo || "", name: msg.name,
+    if (TEST_HOOKS_.mailSink) TEST_HOOKS_.mailSink.push({ to: to, subject: subject, body: text, htmlBody: html, cc: msg.cc || "", bcc: msg.bcc || "", replyTo: msg.replyTo || "", name: msg.name,
       attachments: (msg.attachments || []).map(function (b) { return { name: b.getName(), mimeType: b.getContentType(), size: b.getBytes().length }; }) });
     else MailApp.sendEmail(msg);
   } catch (e) { status = "FAILED"; error = String(e.message || e).slice(0, 300); }

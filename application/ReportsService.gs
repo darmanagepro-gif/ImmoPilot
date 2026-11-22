@@ -45,7 +45,7 @@ function reportBuild_(p, a) {
       listAll(resvList_, { from: per.from, to: per.to, propertyId: a.propertyId }).forEach(function (r) { if (num_(r.balance) > 0 && REVENUE_STATUSES_.indexOf(r.status) >= 0) rows.push(["Réservation", r.propertyName, r.guestName, r.checkIn, r.amountDue, r.paid, r.balance, r.checkIn < todayStr_() ? "EN RETARD" : "À VENIR"]); });
       const leaseProps = accessiblePropIds_(p, "lease.view");
       dbAll_("RentSchedules").filter(function (s) { return leaseProps[String(s.propertyId)] && s.status === "OPEN" && s.dueDate >= per.from && s.dueDate <= per.to && (!a.propertyId || String(s.propertyId) === String(a.propertyId)); }).forEach(function (s) {
-        const st = rentStatus_(s); if (st.remaining > 0) { const l = dbGet_("Leases", s.leaseId), t = dbGet_("Tenants", l.tenantId) || {}; rows.push(["Loyer " + s.period, (dbGet_("Properties", s.propertyId) || {}).name, t.fullName, s.dueDate, st.amountDue, st.paid, st.remaining, st.status]); }
+        const st = rentStatus_(s); if (st.remaining > 0) { const l = dbGet_("Leases", s.leaseId), t = dbGet_("Tenants", l.tenantId) || {}; rows.push(["Loyer " + s.period, (dbGet_("Properties", s.propertyId) || {}).name, tenantName_(t), s.dueDate, st.amountDue, st.paid, st.remaining, st.status]); }
       });
       R = { headers: ["Nature", "Bien", "Débiteur", "Échéance", "Dû", "Payé", "Reste", "Statut"], rows: rows, summary: { totalOutstanding: sumBy_(rows, function (r) { return r[6]; }) } };
       break;

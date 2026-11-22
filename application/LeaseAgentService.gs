@@ -308,16 +308,26 @@ function leaseDocHtml_(c, d) {
   const sections = parseJson_(d.sectionsJson, []), draft = d.status !== "FINAL", ma = IMMO_EDITION_ === "MA", t = c.t, org = c.org, prop = c.prop;
   let inner = draft ? "<div class='box' style='border-color:#e9b341;background:#fff8e6'><b>PROJET — document non validé, à relire avant signature.</b></div>" : "";
   if (d.docType === "LEASE_CONTRACT") {
-    inner += "<h2>Entre les soussignés</h2><table><tr><th style='width:50%'>Le bailleur</th><th>Le locataire</th></tr><tr><td><b>" + escapeHtml_(org.name || "") + "</b><br>" +
-      escapeHtml_([org.address, org.city].filter(String).join(", ") || "Adresse : ____________________") + "<br>" + escapeHtml_(org.phone ? "Tél. " + org.phone : "") + "</td><td><b>" + escapeHtml_(t.fullName || "") + "</b><br>" +
-      (t.nationality ? "Nationalité : " + escapeHtml_(t.nationality) + "<br>" : "") + "Pièce d'identité : " + escapeHtml_(t.idType ? ({ CIN: "CIN", CNI: "CNI", PASSPORT: "Passeport", RESIDENCE_PERMIT: "Titre de séjour", DRIVING_LICENSE: "Permis de conduire" }[t.idType] || t.idType) : "____") +
-      " n° " + (t.idNumber ? "<b>" + escapeHtml_(t.idNumber) + "</b>" + (t.idExpiry ? " (valable jusqu'au " + pdfDate_(t.idExpiry) + ")" : "") : "____________________") + "<br>" +
-      (t.birthDate ? "Né(e) le " + pdfDate_(t.birthDate) + (t.birthPlace ? " à " + escapeHtml_(t.birthPlace) : "") + "<br>" : "") + (t.address ? "Domicile actuel : " + escapeHtml_(t.address) + "<br>" : "") +
-      escapeHtml_([t.email, t.phone].filter(String).join(" · ")) + "</td></tr></table><p>Logement : <b>" + escapeHtml_(prop.name || "") + "</b> — " + escapeHtml_(rentAddress_(prop)) + "</p>";
+    const idLabel = function (x) { return x ? ({ CIN: "CIN", CNI: "CNI", PASSPORT: "Passeport", RESIDENCE_PERMIT: "Titre de séjour", DRIVING_LICENSE: "Permis de conduire" }[x] || x) : "____"; };
+    const person = function (q) {
+      return "<b>" + escapeHtml_(q.name || "") + "</b><br>" + (q.nationality ? "Nationalité : " + escapeHtml_(q.nationality) + "<br>" : "") + "Pièce d'identité : " + escapeHtml_(idLabel(q.idType)) +
+        " n° " + (q.idNumber ? "<b>" + escapeHtml_(q.idNumber) + "</b>" + (q.idExpiry ? " (valable jusqu'au " + pdfDate_(q.idExpiry) + ")" : "") : "____________________") + "<br>" +
+        (q.birthDate ? "Né(e) le " + pdfDate_(q.birthDate) + (q.birthPlace ? " à " + escapeHtml_(q.birthPlace) : "") + "<br>" : "") + (q.address ? "Domicile actuel : " + escapeHtml_(q.address) + "<br>" : "") +
+        escapeHtml_([q.email, q.phone].filter(String).join(" · "));
+    };
+    const co = !!t.coFullName;
+    const tenantsHtml = person({ name: t.mainFullName || t.fullName, nationality: t.nationality, idType: t.idType, idNumber: t.idNumber, idExpiry: t.idExpiry, birthDate: t.birthDate, birthPlace: t.birthPlace, address: t.address, email: t.email, phone: t.phone }) +
+      (co ? "<hr style='border:0;border-top:1px solid #ddd;margin:8px 0'>" + person({ name: t.coFullName, nationality: t.coNationality, idType: t.coIdType, idNumber: t.coIdNumber, idExpiry: t.coIdExpiry,
+        birthDate: t.coBirthDate, birthPlace: t.coBirthPlace, address: t.coAddress, email: t.coEmail, phone: t.coPhone }) + "<br><i>Locataires solidaires et indivisibles.</i>" : "");
+    inner += "<h2>Entre les soussignés</h2><table><tr><th style='width:50%'>Le bailleur</th><th>" + (co ? "Les locataires" : "Le locataire") + "</th></tr><tr><td><b>" + escapeHtml_(org.name || "") + "</b><br>" +
+      escapeHtml_([org.address, org.city].filter(String).join(", ") || "Adresse : ____________________") + "<br>" + escapeHtml_(org.phone ? "Tél. " + org.phone : "") + "</td><td>" + tenantsHtml +
+      "</td></tr></table><p>Logement : <b>" + escapeHtml_(prop.name || "") + "</b> — " + escapeHtml_(rentAddress_(prop)) + "</p>";
   }
   sections.forEach(function (s) { inner += (s.title ? "<h2>" + escapeHtml_(s.title) + "</h2>" : "") + laParas_(s.body); });
   if (d.docType === "LEASE_CONTRACT") inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + (draft ? "____________" : pdfDate_(String(d.finalizedAt || todayStr_()).slice(0, 10))) + ", en deux exemplaires originaux" + (ma ? "." : ", dont un remis à chaque partie.") + "</p>" +
-    "<table class='sign'><tr><td><b>Le bailleur</b><br><span class='muted'>« Lu et approuvé », signature</span></td><td><b>Le locataire</b><br><span class='muted'>« Lu et approuvé », signature</span></td></tr></table>";
+    "<table class='sign'><tr><td><b>Le bailleur</b><br><span class='muted'>« Lu et approuvé », signature</span></td>" + (t.coFullName
+      ? "<td><b>" + escapeHtml_(t.mainFullName || "") + "</b><br><span class='muted'>« Lu et approuvé », signature</span></td><td><b>" + escapeHtml_(t.coFullName) + "</b><br><span class='muted'>« Lu et approuvé », signature</span></td>"
+      : "<td><b>Le locataire</b><br><span class='muted'>« Lu et approuvé », signature</span></td>") + "</tr></table>";
   else inner += "<p style='margin-top:16px'>Fait à " + escapeHtml_(prop.city || edition_().city) + ", le " + pdfDate_(todayStr_()) + ".</p>";
   return pdfShell_(d.title || "Document", inner, { subtitle: (prop.name || "") + (d.docType === "LETTER" ? " · à l'attention de " + (t.fullName || "") : ""), issuer: rentIssuer_(org), ref: (d.docType === "LEASE_CONTRACT" ? "BAIL-" : "COUR-") + String(d.leaseDocId || d.leaseId || "").slice(-8).toUpperCase(),
     footer: draft ? "PROJET — document établi via " + IMMO_CONFIG.APP_NAME + (d.engine && d.engine !== "MODELE" ? " (rédaction assistée par IA)" : "") + ". Modèle à faire relire par un professionnel ; DarPilot ne garantit pas sa conformité juridique."
